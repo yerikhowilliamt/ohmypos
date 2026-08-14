@@ -1,7 +1,9 @@
 # OhMyPos — ERD (Entity Relationship Design)
 
-**Status:** Draft v2
-**Depends on:** PRD v1, System Design v2, ADR-001 through ADR-011
+**Status:** Draft v3
+**Depends on:** PRD v1.1, System Design v4, ADR-001 through ADR-012
+
+**Changelog (v2 → v3):** §2 (ported entities) rewritten against Kasync's literal `prisma/schema.prisma` per ADR-012 — this closes the open item v2 itself raised in §7. Corrections: `LedgerEntry.branchId` is **not** new (Kasync already has it, required); `LedgerEntry.accountId` **is** new and was missing from v2 entirely; the shared `TransactionType {INFLOW, OUTFLOW}` enum replaces v2's `enum(INCOME, EXPENSE)`; `TransactionStatus` restored to Kasync's four values; `BankTransaction` and `Allocation` regain the fields that carry import de-duplication and allocation idempotency. `User.isActive` added — ADR-011 §5 requires Owner-only deactivation, and v2 gave it nowhere to be stored. §6 gains Decimal precision rules and the inherited constraint list. §7 replaced with resolved porting notes. New entities (§3) are unchanged.
 
 **Changelog (v1 → v2):** `User` entity updated per ADR-011 (Auth & Role-Based Access Control) — `role` extended to include `ADMIN`, `refreshTokenHash` and `tokenValidFrom` added to support JWT session revocation (ported from Kasync's Auth pattern). No other entities changed. `Sale.userId` (already present in v1) confirmed sufficient for cashier audit trail — no new field added there.
 
@@ -9,61 +11,78 @@
 
 ## 1. Entity Groups
 
-Entities are grouped the same way as System Design Section 4: **ported** (adapted from Kasync, same responsibility) and **new** (built for OhMyPos). Field-level detail below should be checked against Kasync's actual `schema.prisma` when porting — the ported entities here reflect what's documented in Kasync's own ERD/ADRs, plus the specific extensions OhMyPos needs (called out explicitly where they occur).
+Entities are grouped the same way as System Design Section 4: **ported** (adapted from Kasync, same responsibility) and **new** (built for OhMyPos).
+
+Per ADR-012, the ported entities below have been reconciled field-by-field against Kasync's literal `prisma/schema.prisma`. Rows marked **new** do not exist in Kasync and must be written for OhMyPos; every unmarked row can be copied across as-is. One field is removed rather than added: Kasync's multi-tenant `userId` FK is dropped from all four ported tables (ADR-011 — single business), which also removes the `userId` parameter from every ported service method.
 
 ## 2. Ported Entities
+
+### Shared enums (verbatim from Kasync — see ADR-012)
+
+| Enum | Values |
+|---|---|
+| `AccountType` | `BANK`, `CASH`, `EWALLET` |
+| `TransactionType` | `INFLOW`, `OUTFLOW` — the single direction enum, shared by `BankTransaction`, `LedgerEntry`, and `Category`. `INFLOW` = pemasukan, `OUTFLOW` = pengeluaran; that translation lives in the UI, not the schema |
+| `TransactionStatus` | `UNRESOLVED`, `PENDING_REVIEW`, `PARTIALLY_ALLOCATED`, `MATCHED` — `trg_sync_transaction_status` writes these literals, and `MatchingEngine` uses `PENDING_REVIEW`. Do not rename |
+| `AllocationStatus` | `ACTIVE`, `REVOKED` |
+| `LedgerSourceType` | `MANUAL`, `SALE`, `PURCHASE`, `PAYABLE_SETTLEMENT` — **new**, OhMyPos only |
+| `UserRole` | `KASIR`, `ADMIN`, `OWNER` — **new**, OhMyPos only (ADR-011) |
 
 ### `Account`
 | Field | Type | Notes |
 |---|---|---|
 | id | uuid (PK) | |
 | name | string | |
-| type | enum(CASH, BANK, EWALLET) | |
-| openingBalance | Decimal | |
+| type | `AccountType` | |
+| openingBalance | Decimal(18,2) | **new** — Kas Awal per PRD §5.1; Kasync's `Account` has no balance column |
 | createdAt / updatedAt | DateTime | |
 
 ### `Category`
 | Field | Type | Notes |
 |---|---|---|
 | id | uuid (PK) | |
-| name | string | |
-| type | enum(INCOME, EXPENSE) | |
-| createdAt / updatedAt | DateTime | |
+| name | string, unique | Kasync's unique is `(userId, name)`; with `userId` dropped it becomes `name` alone |
+| type | `TransactionType` | **new** — Kasync's `Category` is `id`/`name` only |
+| createdAt / updatedAt | DateTime | **new** — Kasync's `Category` has no timestamps |
 
 ### `Branch`
 | Field | Type | Notes |
 |---|---|---|
 | id | uuid (PK) | |
-| name | string | |
-| address | string, nullable | |
-| createdAt / updatedAt | DateTime | |
+| name | string, unique | as above — `(userId, name)` collapses to `name` |
+| address | string, nullable | **new** |
+| createdAt / updatedAt | DateTime | **new** — Kasync's `Branch` has no timestamps |
 
 ### `LedgerEntry` — **extended** from Kasync
 | Field | Type | Notes |
 |---|---|---|
 | id | uuid (PK) | |
-| type | enum(INCOME, EXPENSE) | |
-| amount | Decimal | |
+| type | `TransactionType` | default `OUTFLOW`, as in Kasync |
+| amount | Decimal(18,2) | |
 | entryDate | DateTime | |
-| accountId | uuid (FK → Account) | |
-| categoryId | uuid (FK → Category), nullable | |
-| branchId | uuid (FK → Branch) | **new, required** — every entry (manual, sale-generated, or settlement-generated) is attributed to a branch, per ADR-004 |
-| sourceType | enum(MANUAL, SALE, PURCHASE, PAYABLE_SETTLEMENT) | **new** — distinguishes Kasync's original manual entries from OhMyPos's system-generated ones |
+| accountId | uuid (FK → Account) | **new, required** — Kasync's `LedgerEntry` has no account link at all (only `BankTransaction` does). Required by System Design §6.1, which tags each sale's entry with the `Account` matching the payment method used |
+| categoryId | uuid (FK → Category) | **required**, matching Kasync. Consequence: the seed must provide system categories, because a sale-generated or settlement-generated entry cannot be uncategorised (ADR-012) |
+| branchId | uuid (FK → Branch) | required — **already present in Kasync**, not an OhMyPos addition (ERD v2 said otherwise) |
+| sourceType | `LedgerSourceType` | **new** — distinguishes Kasync's original manual entries from OhMyPos's system-generated ones |
 | sourceId | uuid, nullable | **new** — points back to the `Sale`, `SupplierPurchase`, or `PayableSettlement` that generated this entry, when `sourceType != MANUAL` |
-| description | string, nullable | |
+| note | string, nullable | Kasync's field name; kept per ADR-012 (ERD v2 called this `description`, which would collide conceptually with `BankTransaction.description`) |
 | createdAt / updatedAt | DateTime | |
 
-This is the one ported table with a real schema change, not just a copy — `branchId`, `sourceType`, and `sourceId` are additions needed for ADR-004 (branch attribution) and traceability from a ledger entry back to the POS/purchase event that created it.
+This is the ported table with the most real change. Three fields are genuinely new — `accountId`, `sourceType`, `sourceId` — needed for payment-method attribution (System Design §6.1) and for tracing a ledger entry back to the POS/purchase event that created it. `branchId` is inherited from Kasync unchanged and already satisfies ADR-004's attribution requirement.
 
 ### `BankTransaction`
 | Field | Type | Notes |
 |---|---|---|
 | id | uuid (PK) | |
 | accountId | uuid (FK → Account) | |
-| amount | Decimal | |
-| description | string | |
-| transactionDate | DateTime | |
-| status | enum(UNMATCHED, PARTIALLY_MATCHED, MATCHED) | stored, trigger-synced denormalized field (unchanged pattern from Kasync) |
+| txnDate | DateTime | Kasync's field name, kept per ADR-012 |
+| amount | Decimal(18,2) | |
+| type | `TransactionType` | default `OUTFLOW`; compared against `LedgerEntry.type` during allocation and matching |
+| description | string | required, unlike `LedgerEntry.note` |
+| externalRef | string, nullable | raw reference/ID from the bank statement — half of the import de-duplication |
+| dedupHash | string, nullable | the other half; see the unique constraints in §6 |
+| status | `TransactionStatus` | default `UNRESOLVED`; stored, trigger-synced denormalized field |
+| importedAt | DateTime | |
 | createdAt / updatedAt | DateTime | |
 
 ### `Allocation`
@@ -72,11 +91,13 @@ This is the one ported table with a real schema change, not just a copy — `bra
 | id | uuid (PK) | |
 | bankTransactionId | uuid (FK → BankTransaction) | |
 | ledgerEntryId | uuid (FK → LedgerEntry) | |
-| amountPortion | Decimal | |
-| status | enum | |
-| createdAt / updatedAt | DateTime | |
+| amountPortion | Decimal(18,2) | |
+| status | `AllocationStatus` | default `ACTIVE` |
+| revokedAt | DateTime, nullable | set when `status` becomes `REVOKED` — revocation is a state change, never a delete |
+| idempotencyKey | string, nullable | drives idempotent allocation creation in `AllocationService.create` |
+| createdAt | DateTime | **append-only — no `updatedAt`** (ERD v2 listed one; Kasync has none) |
 
-Constraint (unchanged from Kasync): `sum(Allocation.amountPortion)` per `bankTransactionId` `<=` that `BankTransaction.amount`, enforced via a PostgreSQL trigger with a `FOR UPDATE` lock — this is exactly the mechanism ADR-004 relies on to resolve cross-branch cash mixing, now allocating across `LedgerEntry` rows that may belong to different branches.
+Constraint (unchanged from Kasync): `sum(Allocation.amountPortion)` per `bankTransactionId`, counting `ACTIVE` rows only, `<=` that `BankTransaction.amount` — enforced via the `trg_check_allocation_sum` PostgreSQL trigger with a `FOR UPDATE` lock on the bank transaction row. This is exactly the mechanism ADR-004 relies on to resolve cross-branch cash mixing, now allocating across `LedgerEntry` rows that may belong to different branches.
 
 ### `User` — **extended per ADR-011**
 | Field | Type | Notes |
@@ -84,12 +105,15 @@ Constraint (unchanged from Kasync): `sum(Allocation.amountPortion)` per `bankTra
 | id | uuid (PK) | |
 | name | string | |
 | email | string, unique | |
-| passwordHash | string | |
-| refreshTokenHash | string, nullable | **new** — ported from Kasync's Auth pattern, supports refresh-token rotation |
-| role | enum(KASIR, ADMIN, OWNER) | **updated** — `ADMIN` added; v1 draft only had `OWNER, CASHIER` |
-| branchId | uuid (FK → Branch), nullable | required if role = KASIR, null if role = ADMIN or OWNER (unscoped, all-branch access) |
-| tokenValidFrom | DateTime | **new** — ported from Kasync, enables immediate session revocation on logout/credential change |
+| passwordHash | string | bcrypt, matching Kasync's implementation |
+| refreshTokenHash | string, nullable | ported from Kasync's Auth pattern, supports refresh-token rotation |
+| role | `UserRole` | **new** — Kasync's `User` has no role concept |
+| branchId | uuid (FK → Branch), nullable | **new** — required if role = KASIR, null if role = ADMIN or OWNER (unscoped, all-branch access) |
+| isActive | boolean, default `true` | **new** — ADR-011 §5 gives `OWNER` the power to deactivate users; this is where that state lives. Deactivation is a soft state change, never a row delete, so `Sale.userId` audit history survives it |
+| tokenValidFrom | DateTime | ported from Kasync, enables immediate session revocation on logout/credential change — also the mechanism that kills an active session the moment a user is deactivated |
 | createdAt / updatedAt | DateTime | |
+
+Kasync's `User` also carries `photoUrl` (Cloudinary-backed); OhMyPos does not port it — see the porting notes in §7.
 
 Access rules (ADR-011): only `OWNER` may create/deactivate `User` records — no self-registration, no approval workflow. Reconciliation matching (`Allocation` create/revoke) is restricted to `ADMIN` and `OWNER`. `KASIR` access is scoped to `branchId` via `BranchScopeGuard`.
 
@@ -286,6 +310,20 @@ erDiagram
 
 ## 6. Constraints & Indexes Worth Calling Out
 
+### Decimal precision (ADR-012)
+
+- **Money** — `Decimal(18, 2)`, matching Kasync: `amount`, `amountPortion`, `openingBalance`, `unitCost`, `sellPrice`, `totalAmount`, `lineTotal`, `unitPriceAtSale`, `hppAtSale`, `originalAmount`, `remainingBalance`, `unitPrice`, `unitCostAtMovement`.
+- **Quantity** — `Decimal(18, 4)`: `quantityUsed`, `currentStock`, `lowStockThreshold`, `quantity` on `SaleItem` / `SupplierPurchaseItem` / `StockMovement` / `OpeningStock`. Two decimal places cannot represent realistic recipe quantities in kg or liter.
+
+### Inherited from Kasync (do not drop when porting)
+
+- `BankTransaction`: unique on (`accountId`, `externalRef`) **and** unique on (`accountId`, `dedupHash`) — together these prevent importing the same bank statement row twice into one account.
+- `Allocation`: unique on (`bankTransactionId`, `idempotencyKey`) — makes repeated allocation-create calls idempotent rather than duplicating.
+- `BankTransaction`: index on `txnDate`, index on `status`. `LedgerEntry`: index on `entryDate`, `categoryId`, `branchId`. `Allocation`: index on `bankTransactionId`, `ledgerEntryId`.
+- Cascade behaviour: `BankTransaction` → `Account`, and `Allocation` → both parents, are `ON DELETE CASCADE` (see Kasync's `migrations/cascades/migration.sql`).
+
+### OhMyPos-specific
+
 - `LedgerEntry`: index on (`branchId`, `entryDate`) — every report in Dashboard 3 filters by date and often by branch.
 - `StockMovement`: index on (`rawMaterialId`, `movementDate`) — drives Dashboard 5's inventory summary calculations.
 - `RawMaterial.currentStock` updates only ever happen inside the same transaction as the `StockMovement` row that justifies the change, guarded by `SELECT ... FOR UPDATE` on `RawMaterial` (ADR-007).
@@ -294,6 +332,14 @@ erDiagram
 - `OpeningStock` unique on (`rawMaterialId`, `periodMonth`) prevents recording opening stock twice for the same material in the same month.
 - `User.branchId`: index recommended — `BranchScopeGuard` filters on this for every KASIR-scoped request (ADR-011).
 
-## 7. Open Item
+## 7. Porting Notes (v2's open item, now resolved)
 
-Field-level types above (especially enums and exact `Decimal` precision/scale) should be cross-checked against Kasync's actual `schema.prisma` when this gets implemented, since this ERD was written from the documented ADRs/System Design rather than the literal Kasync schema file.
+ERD v2 closed with an open item: cross-check the field-level types against Kasync's actual `schema.prisma`. That has been done (ADR-012), and §2 above now reflects the literal schema. What follows is the residue of that exercise — traps that are invisible from the schema alone and that cost real time if discovered mid-port.
+
+1. **Strip multi-tenancy from every ported service, not just the schema.** Dropping the `userId` FK is the easy half. Kasync's services take `userId` as a parameter on *every* method and filter with `findFirst({ where: { id, userId } })` (see `accounts.service.ts`, `categories.service.ts`, `branches.service.ts`, `ledger-entries.service.ts`, `allocation.service.ts`, `matching.service.ts`). All of that scoping comes out, and `findFirst` generally becomes `findUnique`. Kasync's ported tests assert on this scoping, so they need rewriting rather than re-pointing.
+2. **Do not port `POST /auth/register`.** Kasync's is `@Public()` self-registration. ADR-011 §5 permits user creation by `OWNER` only, with no self-registration path — porting this endpoint would silently reopen the exact hole the ADR closes.
+3. **Do not port `DELETE /users/me`.** Kasync lets a user delete their own account. OhMyPos deactivation is `OWNER`-only and soft (`User.isActive`), because `Sale.userId` is an audit trail that must survive the user leaving.
+4. **Do not port `photoUrl` / `POST /users/me/photo`.** Kasync's `UsersService` depends on Cloudinary; that's outside OhMyPos's scope and would pull in a dependency for no product requirement.
+5. **`BankTransaction` is not a standalone module in Kasync.** It is a table written by the `import` module (the `BankParser` strategy pattern, with the CSV parsers under `src/modules/import/parsers/`) and read by the `reconciliation` module. Any task list naming "the BankTransaction module" means those two — see System Design §4.
+6. **Copy the triggers verbatim from the migration files, not from this document.** `trg_check_allocation_sum` and `trg_sync_transaction_status` live in `../kasync/prisma/migrations/20260808085205_init/migration.sql`, with a corrected re-definition in `20260809180000_multi_tenancy_and_triggers/migration.sql` (that later version adds a `::text` cast before the enum cast — take the later one). Their `FOR UPDATE` lock is what makes the allocation-sum invariant hold under concurrency, per Playbook §7.
+7. **Kasync validates with `class-validator`; OhMyPos does not.** Per ADR-010, every ported DTO is replaced by a Zod schema in `packages/api-contracts`. Do not carry the decorator-based DTOs across.

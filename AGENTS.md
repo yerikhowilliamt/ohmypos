@@ -1,6 +1,6 @@
 # AGENTS.md — OhMyPos
 
-**Depends on:** PRD v1, System Design v3, ADR-001–011, ERD v2, Engineering Playbook v2
+**Depends on:** PRD v1.1, System Design v4, ADR-001–012, ERD v3, Engineering Playbook v3
 
 Context for any AI agent (or future-you) working in this repo. Read this alongside the [Engineering Playbook](./docs/04%20-%20Engineering_Playbook.md) before making changes — the Playbook is the technical rulebook, this doc is the domain/project context that doesn't fit there.
 
@@ -14,6 +14,7 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 - Key locations inside it: `../kasync/prisma/schema.prisma` (schema + enums), `../kasync/prisma/migrations/` (raw SQL triggers), `../kasync/src/modules/` (service/controller/repository code per module), `../kasync/test/` (existing test suites to adapt). `../kasync/kasync-state-export.md` is a prior audit summary — useful for orientation, but read the actual source files before porting anything, per the note below.
 - Read the actual files there (`schema.prisma`, `src/modules/*`, `prisma/migrations/*`) — do not guess or reconstruct Kasync's logic from `03 - ERD.md` or `02 - ADR.md` alone; those documents summarize Kasync's design but are not a substitute for the literal source when porting code (see ERD §7, Open Item).
 - Kasync's live deployment (`https://kasync.onrender.com`) is a reference for confirming the API is up, not a data source for porting — never call it from OhMyPos code or tests.
+- **Read `03 - ERD.md` §7 (Porting Notes) before porting anything.** That source read has already been done once (ADR-012) and §7 records the traps that aren't visible from the schema alone — the multi-tenant `userId` scoping threaded through every ported service method, and the Kasync endpoints (self-registration, self-deletion, Cloudinary photo upload) that must **not** come across because they contradict ADR-011.
 
 ## AI Gatekeeper & Governance (CRITICAL)
 
@@ -37,7 +38,7 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 | Flow Indicator | The signature UI motif for any inflow/outflow number [DESIGN.md](./docs/DESIGN.md) |
 | Ported module | A module copied and adapted from Kasync, unchanged in responsibility |
 | Kasir | Cashier role — branch-scoped access only (`User.branchId` required), cannot create users or perform reconciliation matching (ADR-011) |
-| Admin | Staff role with all-branch data access, reconciliation-matching permission, and Master Data + Reconciliation frontend routes only — cannot create users (ADR-011, System Design v3 §5) |
+| Admin | Staff role with all-branch data access, reconciliation-matching permission, and Master Data + Reconciliation frontend routes only — cannot create users (ADR-011, System Design v4 §5) |
 | Owner | Business owner role — all-branch access, full back-office route access, the only role that can create/deactivate `User` records (ADR-011) |
 
 ## Known Constraints & Scope Boundaries
@@ -48,7 +49,8 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 - Reports are computed at query time, not from materialized views (ADR-008) — expect this to need revisiting once real transaction volume is known.
 - PDF bank statement parsing is out of scope, same as Kasync (PRD §10).
 - User creation is `OWNER`-only with no approval workflow or self-registration (ADR-011) — do not build an `ADMIN`-initiates/`OWNER`-approves flow without a new ADR revisiting this.
-- `ADMIN`'s frontend access is limited to `(back-office)/master-data` and `(back-office)/reconciliation` only — not reports, inventory, expenses, or user management (System Design v3 §5). This was a deliberate v1 decision, not an oversight — don't widen it without flagging it for a doc update first.
+- Ported tables use Kasync's literal schema, including its enum names — `TransactionType` is `INFLOW`/`OUTFLOW`, **not** `INCOME`/`EXPENSE`, and `TransactionStatus` has four values because the SQL triggers write those literals (ADR-012). Do not "tidy" these names; `AllocationService` and `MatchingEngine` compare `bankTransaction.type` against `ledgerEntry.type` directly.
+- `ADMIN`'s frontend access is limited to `(back-office)/master-data` and `(back-office)/reconciliation` only — not reports, inventory, expenses, or user management (System Design v4 §5). This was a deliberate v1 decision, not an oversight — don't widen it without flagging it for a doc update first.
 
 ## Contributing & Workflow
 

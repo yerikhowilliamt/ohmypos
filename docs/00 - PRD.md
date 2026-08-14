@@ -1,6 +1,8 @@
 # OhMyPos — Product Requirements Document
 
-**Status:** Draft v1
+**Status:** Draft v1.1
+
+**Changelog (v1 → v1.1):** §7 now lists the `Import`/`BankParser` module, which §5.7 already depended on but the ported-module list omitted. No requirement changed.
 
 ---
 
@@ -112,7 +114,7 @@ All reports below are computed, not manually entered, and support filtering by d
 
 ## 7. Dependencies / Ported from Kasync
 
-The following modules are ported (adapted, not called via API — see integration decision) from Kasync into OhMyPos as a starting point: `Account`, `Category`, `Branch`, `LedgerEntry`, `BankTransaction`, `Allocation`, `MatchingEngine`, `Auth`, `Users`. Kasync itself remains a standalone, independently deployed project.
+The following modules are ported (adapted, not called via API — see integration decision) from Kasync into OhMyPos as a starting point: `Account`, `Category`, `Branch`, `LedgerEntry`, `Allocation`, `MatchingEngine`, `Import` (the `BankParser` CSV strategy behind §5.7), `Reconciliation`, `Auth`, `Users`. `BankTransaction` is a table owned by `Import` and `Reconciliation`, not a module of its own. Kasync itself remains a standalone, independently deployed project.
 
 ## 8. Confirmed Branch Policy
 

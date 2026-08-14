@@ -1,7 +1,9 @@
 # OhMyPos — Project Handbook
 
-**Status:** Draft v2
-**Depends on:** PRD v1, System Design v2, ADR-001–011, ERD v2, Engineering Playbook v2
+**Status:** Draft v3
+**Depends on:** PRD v1.1, System Design v4, ADR-001–012, ERD v3, Engineering Playbook v3
+
+**Changelog (v2 → v3):** Fixed the §10 troubleshooting row that claimed a non-`OWNER` performing reconciliation matching is a bug — ADR-011 §6 and Playbook §8 both permit `ADMIN`. §7's `Admin` glossary entry and §8's constraints now carry the frontend route restriction already documented in System Design v3 §5. §5's documentation index gains the rows it was missing (`AGENTS.md` and the three logs).
 
 **Changelog (v1 → v2):** Updated for the three-role model (`KASIR`, `ADMIN`, `OWNER`) per ADR-011. Doc Index now lists 11 ADRs. Glossary and Troubleshooting entries updated to use `KASIR` instead of `CASHIER`, and a new troubleshooting entry added for role-restricted actions.
 
@@ -66,11 +68,15 @@ Core principle to keep in mind while working in this repo: **any operation that 
 |---|---|
 | `00 - PRD.md` | Problem, goals, functional requirements per dashboard, confirmed branch policy |
 | `01 - System Design.md` | Monorepo structure, module responsibilities, key flows, deployment |
-| `02 - ADR.md` | The 11 architecturally significant decisions and their rationale |
-| `03 - ERD.md` | Field-level schema, relationships, combined diagram |
+| `02 - ADR.md` | The 12 architecturally significant decisions and their rationale |
+| `03 - ERD.md` | Field-level schema, relationships, combined diagram, porting notes |
 | `04 - Engineering Playbook.md` | Day-to-day rules — transactions, branch scoping, role enforcement, testing, CI, Definition of Done |
 | `DESIGN.md` | Design tokens, accessibility rules, component expectations |
 | `05 - Project Handbook.md` (this doc) | Setup, glossary, constraints, contributing, troubleshooting |
+| `AGENTS.md` | Kasync source location, governance/approval gates, scope boundaries — context for AI agents and future-you |
+| `06 - Error_Log.md` | Real errors hit during implementation, with root cause and prevention |
+| `07 - Task_Log.md` | What each task actually did, decided, and left unfinished |
+| `08 - Tech_Debt_Log.md` | Deliberate shortcuts, each with a concrete trigger condition for paying it off |
 
 ## 6. Synthetic Data Safety
 
@@ -88,8 +94,8 @@ Seed data (`pnpm --filter api db:seed`) uses entirely fictional branches, suppli
 | Flow Indicator | The signature UI motif for any inflow/outflow number (DESIGN.md) |
 | Ported module | A module copied and adapted from Kasync, unchanged in responsibility |
 | Kasir | Cashier role — branch-scoped access only (`User.branchId` required), cannot create users or perform reconciliation matching (ADR-011) |
-| Admin | Staff role with all-branch access and reconciliation-matching permission, but cannot create users (ADR-011) |
-| Owner | Business owner role — all-branch access, the only role that can create/deactivate `User` records (ADR-011) |
+| Admin | Staff role with all-branch data access, reconciliation-matching permission, and Master Data + Reconciliation frontend routes only — cannot create users (ADR-011, System Design v4 §5) |
+| Owner | Business owner role — all-branch access, full back-office route access, the only role that can create/deactivate `User` records (ADR-011) |
 
 ## 8. Known Constraints & Scope Boundaries
 
@@ -99,6 +105,8 @@ Seed data (`pnpm --filter api db:seed`) uses entirely fictional branches, suppli
 - Reports are computed at query time, not from materialized views (ADR-008) — expect this to need revisiting once real transaction volume is known.
 - PDF bank statement parsing is out of scope, same as Kasync (PRD §10).
 - User creation is `OWNER`-only with no approval workflow or self-registration — do not build an `ADMIN`-initiates/`OWNER`-approves flow without a new ADR revisiting ADR-011.
+- `ADMIN`'s frontend access is limited to `(back-office)/master-data` and `(back-office)/reconciliation` only — not reports, inventory, expenses, or user management (System Design v4 §5). This was a deliberate v1 decision, not an oversight — don't widen it without flagging it for a doc update first.
+- Ported tables follow Kasync's literal schema, not a re-derivation (ADR-012) — including enum names (`INFLOW`/`OUTFLOW`, not `INCOME`/`EXPENSE`) and the fields that carry import de-duplication and allocation idempotency. ERD §7 lists the porting traps.
 
 ## 9. Contributing & Workflow
 
@@ -117,5 +125,5 @@ Seed data (`pnpm --filter api db:seed`) uses entirely fictional branches, suppli
 | Frontend form accepts something the backend then rejects | A Zod schema was updated on one side but not the other | ADR-010, Playbook §4 |
 | An expense shows up before money actually left the account | A `SupplierPurchase` incorrectly created a `LedgerEntry` while `paymentStatus = UNPAID` | ADR-006 |
 | A `KASIR` can see or write data for another branch | `BranchScopeGuard` missing on that endpoint | Playbook §8 |
-| A `KASIR` or `ADMIN` can create a user, or a non-`OWNER` can perform reconciliation matching | `RoleGuard` missing or misconfigured on that endpoint | ADR-011, Playbook §8 |
+| A `KASIR`/`ADMIN` can create a user, or a non-`ADMIN`/`OWNER` can perform reconciliation matching | `RoleGuard` missing or misconfigured on that endpoint | ADR-011, Playbook §8 |
 | Historical P&L changed after a raw material price update | `SaleItem.hppAtSale` wasn't snapshotted correctly at sale time | ADR-005 |

@@ -1,8 +1,10 @@
 # OhMyPos — Engineering Playbook
 
-**Status:** Draft v2
-**Depends on:** PRD v1, System Design v2, ADR-001–011, ERD v2
+**Status:** Draft v3
+**Depends on:** PRD v1.1, System Design v4, ADR-001–012, ERD v3
 **Relationship to Kasync:** This playbook adapts Kasync's Engineering Playbook v1.0 — the philosophy, exception pattern, and PII/logging rules are carried over unchanged where they still apply; sections are added or revised where the monorepo, Zod, and new domains require it.
+
+**Changelog (v2 → v3):** Section 5 now states the concrete `Decimal` precision per ADR-012 (it previously said "Decimal" without a scale, which is not actionable at schema-writing time). Section 6 gains `InvalidRoleBranchAssignmentException`, which ADR-011's `branchId`-per-role rule requires but the exception list omitted.
 
 **Changelog (v1 → v2):** Section 8 revised for the three-role model (`KASIR`, `ADMIN`, `OWNER`) per ADR-011 — previously only referenced `CASHIER`/`OWNER`. Added `RoleGuard` alongside the existing `BranchScopeGuard`, and explicit rules for user creation and reconciliation-matching permissions.
 
@@ -34,6 +36,7 @@ New domains follow the same shape as the ported ones — e.g. `SaleService` is s
 ## 5. Money & Quantity Handling
 
 - All monetary and quantity values are `Decimal` end to end — Prisma schema, service layer, Zod schemas (`z.string().refine(...)` or a decimal-safe custom type, never `z.number()` for money) — floating point is never used for anything that represents currency or stock quantity.
+- Precision is fixed by ADR-012 and is not a per-field judgement call: **money is `Decimal(18, 2)`** (matching Kasync), **quantity is `Decimal(18, 4)`**. Quantities need the extra scale because recipe amounts in kg or liter are routinely finer than two decimal places. The full field-by-field breakdown is in ERD §6.
 - Every value that crosses the Zod boundary as a string-encoded decimal is parsed back into a `Decimal` before any arithmetic — never do arithmetic on the raw string or a coerced `number`.
 
 ## 6. Domain Exception Pattern
@@ -45,6 +48,7 @@ Carried over from Kasync: each module defines its own exception classes extendin
 - `PriceOverrideNotPermittedException` (if role-based restrictions on manual price override are added later)
 - `RecipeIncompleteException` (a product has no recipe defined, so HPP can't be computed)
 - `UnauthorizedUserCreationException` (raised if a non-`OWNER` role attempts to create a `User` — see Section 8)
+- `InvalidRoleBranchAssignmentException` (raised when a `User` is created or updated with `role = KASIR` and no `branchId`, or with `role = ADMIN`/`OWNER` and a non-null `branchId` — ADR-011 §2. Prisma cannot express this conditional constraint, so it is enforced in the application/Zod layer and must throw a domain exception rather than a bare `BadRequestException`)
 
 ## 7. Transaction Boundaries
 
