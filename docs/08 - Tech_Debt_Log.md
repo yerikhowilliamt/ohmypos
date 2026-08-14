@@ -1,0 +1,70 @@
+# OhMyPos — Tech Debt Log
+
+**Purpose:** Track every deliberate shortcut or simplification taken to ship v1 faster — things that are correct and acceptable for now, but that we already know will need revisiting once the product is production-ready and stable. This log is the worklist for the post-launch cleanup pass; nothing here is urgent by definition, but nothing here should be forgotten either.
+
+**Depends on:** ADR-001–010, System Design v2 §11 (Risks / Things to Revisit)
+
+---
+
+## How to use this log
+
+- Log debt the moment it's *knowingly* taken — a deliberate "this is the simple version for now" decision, not a bug (that's the Error Log) and not a TODO comment left in passing.
+- A debt entry needs a **trigger condition** — the concrete signal that means it's time to pay it off (e.g. "when report queries exceed 500ms at real data volume," not "eventually"). Vague triggers make debt invisible until it's already hurting.
+- Debt already identified during planning (from ADR "Alternatives considered" / "Consequences" sections and System Design §11) is seeded below — these aren't hypothetical, they're decisions we already made knowing the cost.
+- When debt is paid off, don't delete the entry — mark it **Resolved**, note the date and what was done, and move it to the bottom under "Resolved." This keeps a record of what v1 actually cut corners on, for anyone auditing the project later.
+- Review this log as a whole once the product is feature-complete and production-ready, per the plan — that's the trigger to schedule a dedicated cleanup pass rather than paying off debt piecemeal mid-feature-work.
+
+---
+
+## Entry Template
+
+```
+### DEBT-XXX — <short title>
+
+- **Date logged:** YYYY-MM-DD
+- **Found during:** <task/phase, or "Planning" if identified before implementation —
+  link to Task Log entry if one exists>
+- **Description:** <what was simplified/deferred, and what the "full" version would
+  look like>
+- **Why deferred:** <the actual reason it was acceptable to defer — not enough data
+  volume yet, not enough time, waiting on a decision elsewhere, etc.>
+- **Impact if unaddressed:** <what breaks or degrades if this is never paid off>
+- **Trigger condition:** <the concrete signal that means it's time to fix this>
+- **Proposed resolution:** <what paying this off would actually involve>
+- **Priority:** Low | Medium | High
+- **Status:** Open | Resolved
+```
+
+---
+
+## Log
+
+### DEBT-001 — Reports computed at query time, no materialized views
+
+- **Date logged:** 2026-08-12
+- **Found during:** Planning (ADR-008)
+- **Description:** Dashboard 3 (P&L, top products, etc.) and Dashboard 5 (inventory summary) are computed by querying `LedgerEntry`, `SaleItem`, and `StockMovement` directly on every request, rather than from a precomputed/materialized read model.
+- **Why deferred:** Simplest possible implementation for v1, and correct by construction (no cache-invalidation logic needed). Appropriate at the transaction volume of a single small multi-branch business.
+- **Impact if unaddressed:** Report queries slow down as historical data accumulates, especially once several months/years of `LedgerEntry` and `StockMovement` rows exist.
+- **Trigger condition:** Any report route consistently exceeds ~500ms at real production data volume, or the business's transaction volume grows meaningfully beyond current expectations.
+- **Proposed resolution:** Introduce materialized views or a dedicated read-model table for the report queries, refreshed on a schedule or on write.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-002 — Pessimistic row-lock on `RawMaterial` for stock concurrency
+
+- **Date logged:** 2026-08-12
+- **Found during:** Planning (ADR-007, System Design §11)
+- **Description:** Stock decrement during `Sale` creation uses `SELECT ... FOR UPDATE` on the `RawMaterial` row, serializing concurrent sales that consume the same raw material.
+- **Why deferred:** Correct and simple; no retry-handling complexity needed. Fine at the business's actual, low concurrent-transaction volume.
+- **Impact if unaddressed:** Lock contention could become a bottleneck if multiple branches sell high-volume, shared-ingredient products at the same moment with meaningfully higher throughput than today.
+- **Trigger condition:** Observed lock wait times or timeouts on `RawMaterial` writes under real usage.
+- **Proposed resolution:** Move to optimistic concurrency (a version column on `RawMaterial`, retry on conflict) for the stock-decrement step.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
+## Resolved
+
+_(None yet.)_
