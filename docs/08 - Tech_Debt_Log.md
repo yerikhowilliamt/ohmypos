@@ -2,7 +2,7 @@
 
 **Purpose:** Track every deliberate shortcut or simplification taken to ship v1 faster — things that are correct and acceptable for now, but that we already know will need revisiting once the product is production-ready and stable. This log is the worklist for the post-launch cleanup pass; nothing here is urgent by definition, but nothing here should be forgotten either.
 
-**Depends on:** ADR-001–010, System Design v2 §11 (Risks / Things to Revisit)
+**Depends on:** ADR-001–012, System Design v4 §11 (Risks / Things to Revisit)
 
 ---
 
@@ -60,6 +60,18 @@
 - **Impact if unaddressed:** Lock contention could become a bottleneck if multiple branches sell high-volume, shared-ingredient products at the same moment with meaningfully higher throughput than today.
 - **Trigger condition:** Observed lock wait times or timeouts on `RawMaterial` writes under real usage.
 - **Proposed resolution:** Move to optimistic concurrency (a version column on `RawMaterial`, retry on conflict) for the stock-decrement step.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-003 — Two vocabularies for transaction direction
+
+- **Date logged:** 2026-08-14
+- **Found during:** TASK-001 (ADR-012)
+- **Description:** The schema and all backend code use Kasync's `TransactionType {INFLOW, OUTFLOW}`, while the product, the PRD, and the Indonesian-language UI speak in terms of pemasukan/pengeluaran (income/expense). The translation between the two lives in the presentation layer rather than in the data model.
+- **Why deferred:** Renaming the enum to `INCOME`/`EXPENSE` would have required editing the ported `AllocationService` and `MatchingEngine`, which compare `bankTransaction.type` against `ledgerEntry.type` directly — churn on the most correctness-critical path in the system, in exchange for vocabulary alone. `INFLOW`/`OUTFLOW` is also the more accurate word for a bank transaction, which has a direction rather than a category.
+- **Impact if unaddressed:** A developer reading the schema and a stakeholder reading the UI use different words for the same field, which is a standing source of small misunderstandings — and a risk of a UI label being mapped backwards without a test catching it.
+- **Trigger condition:** A third vocabulary appears for the same concept, or a UI mislabelling bug is traced to this mapping.
+- **Proposed resolution:** Centralise the mapping in one exported helper in `packages/ui` (or `packages/api-contracts`) so no screen translates the enum inline, and cover it with a test asserting both directions.
 - **Priority:** Low
 - **Status:** Open
 

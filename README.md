@@ -2,7 +2,7 @@
 
 POS + back-office system for a multi-branch F&B business, built on top of financial/reconciliation primitives ported from Kasync.
 
-**Depends on:** PRD v1, System Design v3, ADR-001–011, ERD v2, Engineering Playbook v2, Project Handbook v2
+**Depends on:** PRD v1.1, System Design v4, ADR-001–012, ERD v3, Engineering Playbook v3, Project Handbook v3
 
 ---
 
@@ -65,8 +65,8 @@ Core principle to keep in mind while working in this repo: **any operation that 
 |---|---|
 | `00 - PRD.md` | Problem, goals, functional requirements per dashboard, confirmed branch policy |
 | `01 - System Design.md` | Monorepo structure, module responsibilities, three-role routing, key flows, deployment |
-| `02 - ADR.md` | The 11 architecturally significant decisions and their rationale |
-| `03 - ERD.md` | Field-level schema, relationships, combined diagram |
+| `02 - ADR.md` | The 12 architecturally significant decisions and their rationale |
+| `03 - ERD.md` | Field-level schema, relationships, combined diagram, porting notes |
 | `04 - Engineering Playbook.md` | Day-to-day rules — transactions, branch scoping, role enforcement, testing, CI, Definition of Done |
 | `DESIGN.md` | Design tokens, accessibility rules, component expectations |
 | `AGENTS.md` | Kasync source location, glossary, scope boundaries, contributing workflow, troubleshooting — context for AI agents and future-you |

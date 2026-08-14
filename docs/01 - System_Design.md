@@ -1,8 +1,10 @@
 # OhMyPos — System Design
 
-**Status:** Draft v3
-**Depends on:** PRD v1, ADR-001–011, ERD v2
+**Status:** Draft v4
+**Depends on:** PRD v1.1, ADR-001–012, ERD v3
 **Related project:** Kasync (source of the ported financial/reconciliation modules, and precedent for the Next.js + NestJS split)
+
+**Changelog (v3 → v4):** Section 4's module table now lists `Import` and `Reconciliation`, which were missing despite PRD §5.7 requiring CSV bank statement import and Section 6.5 below describing it. The `Auth`/`Users` row is reclassified from "Ported" to "Ported pattern, re-implemented" — ADR-011 designs that module fresh, and Kasync's version carries self-registration and self-deletion paths that contradict it (ERD v3 §7).
 
 **Changelog (v2 → v3):** Sections 4, 5, and 8 updated for the three-role model (`KASIR`, `ADMIN`, `OWNER`) per ADR-011 — previously only described a binary cashier/owner split, with no defined role for `ADMIN`. `ADMIN`'s frontend access is now explicitly scoped to Reconciliation and Master Data only (not full back-office).
 
@@ -19,8 +21,10 @@ The frontend is **decoupled from the backend and consumes it purely via REST** �
 
 The backend's modules are organized into two groups:
 
-- **Ported modules** — copied and adapted from Kasync, unchanged in responsibility: `Account`, `Category`, `Branch`, `LedgerEntry`, `BankTransaction`, `Allocation`, `MatchingEngine`, `Auth`, `Users`.
+- **Ported modules** — copied and adapted from Kasync, unchanged in responsibility: `Account`, `Category`, `Branch`, `LedgerEntry`, `Allocation`, `MatchingEngine`, `Import`, `Reconciliation`, plus `Auth`/`Users` (pattern reused, module re-implemented per ADR-011).
 - **New modules** — built for OhMyPos: `Product`, `Recipe`, `RawMaterial`, `Sale`, `Supplier`, `Payable`, `StockMovement`, `Reporting`.
+
+Note that `BankTransaction` is a *table*, not a module of its own — it is written by `Import` and read by `Reconciliation` and `Allocation`, exactly as in Kasync. A task list naming "the BankTransaction module" means those modules (ERD v3 §7).
 
 Dependency direction within the backend is one-way: new modules depend on ported modules (e.g. `Sale` calls into `LedgerEntry`), but ported modules never depend on new modules. This keeps the ported modules exactly as reusable and self-contained as they are in Kasync itself.
 
@@ -57,10 +61,12 @@ This was decided in the integration discussion (see PRD background): `Sale` crea
 | `Category`          | Ported       | Classification for `LedgerEntry` (expense/income categories)                             |
 | `Branch`            | Ported       | Branch master data; attribution key on transactional records                             |
 | `LedgerEntry`       | Ported       | The financial ledger — income and expense records                                        |
-| `BankTransaction`   | Ported       | Imported bank statement rows                                                             |
+| `BankTransaction`   | Ported (table, not a module) | Imported bank statement rows — written by `Import`, read by `Reconciliation` and `Allocation`; it has no controller/service of its own in Kasync |
 | `Allocation`        | Ported       | Split-matching between `BankTransaction` and `LedgerEntry`                               |
 | `MatchingEngine`    | Ported       | Suggests matches between bank transactions and ledger entries                            |
-| `Auth` / `Users`    | Ported       | JWT auth (access + refresh, `tokenValidFrom` revocation), extended with three-role access control — `KASIR` (branch-scoped), `ADMIN` (all-branch, limited modules), `OWNER` (all-branch, unrestricted) — per ADR-011 |
+| `Import`            | Ported       | Bank statement CSV import via the `BankParser` strategy pattern — owns all `BankTransaction` writes, including import de-duplication (PRD §5.7) |
+| `Reconciliation`    | Ported       | Read-side queries backing the reconciliation dashboard                                    |
+| `Auth` / `Users`    | Ported pattern, re-implemented | JWT auth (access + refresh, `tokenValidFrom` revocation), with three-role access control — `KASIR` (branch-scoped), `ADMIN` (all-branch, limited modules), `OWNER` (all-branch, unrestricted) — per ADR-011. Kasync's auth *pattern* is reused, but the module is rebuilt: its self-registration and self-deletion endpoints contradict ADR-011 §5 and are deliberately not ported (ERD v3 §7) |
 | `Product`           | New          | Menu items — name, sell price, computed HPP                                              |
 | `Recipe`            | New          | Bill of materials: which raw materials (and quantities) compose a product                |
 | `RawMaterial`       | New          | Raw material master data, unit of measure, unit cost, current stock balance              |
