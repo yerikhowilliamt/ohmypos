@@ -2,7 +2,7 @@
 
 **Depends on:** PRD v1, System Design v3, ADR-001–011, ERD v2, Engineering Playbook v2
 
-Context for any AI agent (or future-you) working in this repo. Read this alongside the [Engineering Playbook](./04%20-%20Engineering_Playbook.md) before making changes — the Playbook is the technical rulebook, this doc is the domain/project context that doesn't fit there.
+Context for any AI agent (or future-you) working in this repo. Read this alongside the [Engineering Playbook](./docs/04%20-%20Engineering_Playbook.md) before making changes — the Playbook is the technical rulebook, this doc is the domain/project context that doesn't fit there.
 
 ---
 
@@ -34,7 +34,7 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 | Kas Awal | Opening cash — the starting cash balance, centralized (not per-branch) |
 | Reconciliation | Matching bank statement transactions against `LedgerEntry` records via `Allocation` — restricted to `ADMIN`/`OWNER` (ADR-011) |
 | Central Purchase | A `SupplierPurchase` with `branchId = null` — bought centrally, not by one branch |
-| Flow Indicator | The signature UI motif for any inflow/outflow number (DESIGN.md) |
+| Flow Indicator | The signature UI motif for any inflow/outflow number [DESIGN.md](./docs/DESIGN.md) |
 | Ported module | A module copied and adapted from Kasync, unchanged in responsibility |
 | Kasir | Cashier role — branch-scoped access only (`User.branchId` required), cannot create users or perform reconciliation matching (ADR-011) |
 | Admin | Staff role with all-branch data access, reconciliation-matching permission, and Master Data + Reconciliation frontend routes only — cannot create users (ADR-011, System Design v3 §5) |

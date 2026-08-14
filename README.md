@@ -23,7 +23,7 @@ ohmypos/
 │   └── config/           Shared ESLint/Prettier/TS config
 ```
 
-Core principle to keep in mind while working in this repo: **any operation that touches both financial state (`LedgerEntry`) and inventory state (`StockMovement`, `Payable`) happens in one database transaction.** This single rule is what ADR-004, ADR-006, and ADR-007 all depend on holding true at runtime — see [Engineering Playbook](./04%20-%20Engineering_Playbook.md) Section 7.
+Core principle to keep in mind while working in this repo: **any operation that touches both financial state (`LedgerEntry`) and inventory state (`StockMovement`, `Payable`) happens in one database transaction.** This single rule is what ADR-004, ADR-006, and ADR-007 all depend on holding true at runtime — see [Engineering Playbook](./docs/04%20-%20Engineering_Playbook.md) Section 7.
 
 ## Tech Stack
 
