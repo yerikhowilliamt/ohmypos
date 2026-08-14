@@ -2,7 +2,7 @@
 
 POS + back-office system for a multi-branch F&B business, built on top of financial/reconciliation primitives ported from Kasync.
 
-**Depends on:** PRD v1, System Design v2, ADR-001–010, ERD v1, Engineering Playbook v1
+**Depends on:** PRD v1, System Design v3, ADR-001–011, ERD v2, Engineering Playbook v2, Project Handbook v2
 
 ---
 
@@ -37,7 +37,7 @@ Core principle to keep in mind while working in this repo: **any operation that 
 | ORM | Prisma | ADR-003 |
 | Validation | Zod (`packages/api-contracts`) | ADR-010 |
 | Monorepo tooling | pnpm workspaces + Turborepo | ADR-002 |
-| Auth | JWT, HttpOnly cookies, dual-token (access + refresh) | System Design §5, §9 |
+| Auth | JWT, HttpOnly cookies, dual-token (access + refresh), role-based access (`KASIR`/`ADMIN`/`OWNER`) | System Design §5, §9, ADR-011 |
 | Deployment | Docker Compose — `web`, `api`, `postgres` | System Design §10 |
 
 ## Setup
@@ -64,12 +64,12 @@ Core principle to keep in mind while working in this repo: **any operation that 
 | Doc | Covers |
 |---|---|
 | `00 - PRD.md` | Problem, goals, functional requirements per dashboard, confirmed branch policy |
-| `01 - System Design.md` | Monorepo structure, module responsibilities, key flows, deployment |
-| `02 - ADR.md` | The 10 architecturally significant decisions and their rationale |
+| `01 - System Design.md` | Monorepo structure, module responsibilities, three-role routing, key flows, deployment |
+| `02 - ADR.md` | The 11 architecturally significant decisions and their rationale |
 | `03 - ERD.md` | Field-level schema, relationships, combined diagram |
-| `04 - Engineering Playbook.md` | Day-to-day rules — transactions, branch scoping, testing, CI, Definition of Done |
+| `04 - Engineering Playbook.md` | Day-to-day rules — transactions, branch scoping, role enforcement, testing, CI, Definition of Done |
 | `DESIGN.md` | Design tokens, accessibility rules, component expectations |
-| `AGENTS.md` | Glossary, scope boundaries, contributing workflow, troubleshooting — context for AI agents and future-you |
+| `AGENTS.md` | Kasync source location, glossary, scope boundaries, contributing workflow, troubleshooting — context for AI agents and future-you |
 | `README.md` (this doc) | Architecture overview, tech stack, setup, scripts |
 
 ## Synthetic Data Safety
