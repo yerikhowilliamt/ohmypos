@@ -34,3 +34,6 @@ pnpm-debug.log*
 
 # Prisma 7 emits the client as TypeScript into the source tree — generated, never edited by hand.
 apps/api/src/generated/
+
+# local execution prompts for future phases — not repo content
+docs/planning-prompts/
