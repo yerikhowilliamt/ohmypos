@@ -11,3 +11,7 @@ node_modules
 .env
 .env.*
 !.env.example
+# A stale incremental-build cache from the host makes tsc think its outputs
+# already exist and skip emitting them inside the image (dist/ itself is
+# excluded above, so tsc ends up trusting a cache for files that aren't there).
+**/*.tsbuildinfo
