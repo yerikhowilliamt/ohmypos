@@ -41,6 +41,31 @@
 
 ## Log
 
+### TASK-005 — Phase 3: Master Data (Product / Recipe / RawMaterial)
+
+- **Date:** 2026-08-15
+- **Module / Phase:** Phase 3 — Master Data (`RawMaterial`, `Product`, `RecipeItem`, HPP calculator)
+- **Objective:** Implement Master Data domain models, live HPP calculator, derived makeable quantity, and atomic recipe replace API shape per `docs/plannings/phase-3-master-data.md`.
+- **Relevant docs:** PRD §5.1, ADR-004, ADR-005, ADR-007, ADR-010, ADR-011, ADR-012, ADR-013, ERD v3 §3, §6, §7, Playbook §3–§10.
+- **What was done:**
+  1. Resolved DEBT-005 and recorded **ADR-013** confirming `Product` has no stored stock or `hpp` column; POS displays derived advisory makeable quantity; HPP stays recipe-based computed live from `RecipeItem.quantityUsed × RawMaterial.unitCost`. Updated `docs/DESIGN.md` mockup copy notes and marked DEBT-005 as Resolved in `docs/08 - Tech_Debt_Log.md`.
+  2. Updated `schema.prisma` with `RawMaterial`, `Product`, and `RecipeItem` models and ran migration `20260815165820_add_master_data_products_recipes_raw_materials`.
+  3. Created Zod schemas in `packages/api-contracts` (`raw-material.schema.ts`, `product.schema.ts`, `recipe.schema.ts`) with scale enforcement, positive quantity check, and duplicate raw material ID superRefine validation.
+  4. Implemented pure `calculateHpp` function in `hpp.calculator.ts` with exhaustive unit tests (`hpp.calculator.spec.ts`) asserting single/multi-item arithmetic, single rounding `HALF_UP` to 2dp, zero-cost, and null on empty recipe.
+  5. Implemented NestJS modules: `RawMaterialsModule` (CRUD, RBAC `OWNER`/`ADMIN` write, any authenticated read), `RecipesModule` (atomic `$transaction` replace using `tx`, `getRecipe`), and `ProductsModule` (Product CRUD, recipe sub-routes, eager loading + `products.mapper.ts` formatting).
+  6. Updated `seed.ts` with synthetic raw materials (`Gula`, `Kopi`), products (`Es Kopi Susu`, `Air Mineral`), and recipes for hand verification and e2e assertions.
+  7. Created auth-aware e2e test suite `master-data.e2e-spec.ts` covering RBAC, decimal scale preservation (`"4530.00"` string), atomic recipe updates, constraint checks, and live HPP recalculation when material costs update.
+- **Decisions made during this task:**
+  (1) Option A chosen for HPP: computed live at query time via `hpp.calculator.ts` to prevent staleness and guarantee identical implementation for Phase 5 `SaleItem.hppAtSale`.
+  (2) Option R1 chosen for Recipe API: `PUT /products/:id/recipe` full replace inside a single `$transaction` using `tx` to guarantee atomic recipe state and satisfy `unique(productId, rawMaterialId)`.
+  (3) Explicit scale formatting `.toFixed(scale)` on all response mappers to prevent Prisma.Decimal implicit `.toJSON()` scale truncation.
+  (4) Exception inventory kept strictly to four domain exception classes (`RawMaterialNameTakenException`, `RawMaterialInUseException`, `ProductNameTakenException`, `UnknownRawMaterialException`).
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test build` green (15/15 tasks); all 43 e2e tests (allocation, auth/RBAC, master-data) and 20 unit tests pass. **What Phase 4 (Purchases & Inventory) and Phase 5 (POS & Sales) must know:**
+  - `RawMaterial` is the single centralized stock pool (ADR-004); Phase 4 `OpeningStock` and `SupplierPurchase` alter `RawMaterial.currentStock` via `StockMovement` under `FOR UPDATE` (ADR-007).
+  - Phase 5 `Sale` flow reuses `calculateHpp` from `apps/api/src/modules/products/hpp.calculator.ts` to snapshot `SaleItem.hppAtSale` at sale time (ADR-005).
+  - Recipe items cascade when a product is deleted (`onDelete: Cascade`), while raw material deletion is restricted if referenced by any recipe (`onDelete: Restrict`).
+
 ### TASK-004 — Phase 2: Auth & three-role access control
 
 - **Date:** 2026-08-15
