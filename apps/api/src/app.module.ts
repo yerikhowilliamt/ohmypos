@@ -18,6 +18,9 @@ import { LedgerEntriesModule } from './modules/ledger-entries/ledger-entries.mod
 import { MatchingModule } from './modules/matching/matching.module';
 import { ReconciliationModule } from './modules/reconciliation/reconciliation.module';
 import { UsersModule } from './modules/users/users.module';
+import { RawMaterialsModule } from './modules/raw-materials/raw-materials.module';
+import { RecipesModule } from './modules/recipes/recipes.module';
+import { ProductsModule } from './modules/products/products.module';
 
 @Module({
   imports: [
@@ -51,7 +54,11 @@ import { UsersModule } from './modules/users/users.module';
     AllocationModule,
     MatchingModule,
     ReconciliationModule,
+    RawMaterialsModule,
+    RecipesModule,
+    ProductsModule,
   ],
+
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Registered globally so every endpoint is authenticated by default; an

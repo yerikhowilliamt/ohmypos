@@ -104,8 +104,85 @@ async function main() {
     },
   });
 
+  // Master Data fixtures per §9.8 — hand-checkable numbers for HPP calculation and e2e testing.
+  const gula = await prisma.rawMaterial.upsert({
+    where: { name: 'Gula' },
+    update: {},
+    create: {
+      name: 'Gula',
+      unit: 'kg',
+      unitCost: '12000.00',
+      currentStock: '10.0000',
+      lowStockThreshold: '2.0000',
+    },
+  });
+
+  const kopi = await prisma.rawMaterial.upsert({
+    where: { name: 'Kopi' },
+    update: {},
+    create: {
+      name: 'Kopi',
+      unit: 'kg',
+      unitCost: '85000.00',
+      currentStock: '5.0000',
+      lowStockThreshold: '1.0000',
+    },
+  });
+
+  const esKopiSusu = await prisma.product.upsert({
+    where: { name: 'Es Kopi Susu' },
+    update: {},
+    create: {
+      name: 'Es Kopi Susu',
+      sellPrice: '18000.00',
+      isActive: true,
+    },
+  });
+
+  await prisma.recipeItem.upsert({
+    where: {
+      productId_rawMaterialId: {
+        productId: esKopiSusu.id,
+        rawMaterialId: gula.id,
+      },
+    },
+    update: { quantityUsed: '0.2500' },
+    create: {
+      productId: esKopiSusu.id,
+      rawMaterialId: gula.id,
+      quantityUsed: '0.2500',
+    },
+  });
+
+  await prisma.recipeItem.upsert({
+    where: {
+      productId_rawMaterialId: {
+        productId: esKopiSusu.id,
+        rawMaterialId: kopi.id,
+      },
+    },
+    update: { quantityUsed: '0.0180' },
+    create: {
+      productId: esKopiSusu.id,
+      rawMaterialId: kopi.id,
+      quantityUsed: '0.0180',
+    },
+  });
+
+  // Product with no recipe (§9.8) to exercise null-path HPP case
+  await prisma.product.upsert({
+    where: { name: 'Air Mineral' },
+    update: {},
+    create: {
+      name: 'Air Mineral',
+      sellPrice: '5000.00',
+      isActive: true,
+    },
+  });
+
   console.log(`Seeded. Owner login: ${ownerEmail}`);
   await prisma.$disconnect();
 }
 
 void main();
+
