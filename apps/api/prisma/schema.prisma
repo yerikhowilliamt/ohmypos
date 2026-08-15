@@ -1,0 +1,260 @@
+// OhMyPos — schema for the modules ported from Kasync (ADR-001, ADR-012).
+//
+// Ported tables follow Kasync's literal schema as their baseline; OhMyPos's own
+// requirements are layered on top and marked "OhMyPos" below. See ERD v3 §2 for
+// the field-by-field reconciliation and §7 for the porting notes.
+//
+// New domain models (Product, Sale, RawMaterial, …) arrive in Phase 3.
+// The User model arrives in Phase 2 (ADR-011).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+
+  // Prisma 7 emits TypeScript into the source tree. These two options make the
+  // emitted imports compile under this app's CommonJS tsconfig; without them the
+  // generated files import with explicit `.ts` extensions, which `moduleResolution:
+  // node` rejects.
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums — verbatim from Kasync unless marked. Do not rename: the SQL triggers
+// write TransactionStatus literals, and AllocationService/MatchingEngine compare
+// TransactionType across BankTransaction and LedgerEntry (ADR-012).
+// ---------------------------------------------------------------------------
+
+enum AccountType {
+  BANK
+  CASH
+  EWALLET
+}
+
+enum TransactionType {
+  INFLOW
+  OUTFLOW
+}
+
+enum TransactionStatus {
+  UNRESOLVED // no candidate match found / zero allocation
+  PENDING_REVIEW // matching engine proposed a candidate, awaiting confirmation
+  PARTIALLY_ALLOCATED // sum(allocation) < amount
+  MATCHED // sum(allocation) == amount
+}
+
+enum AllocationStatus {
+  ACTIVE
+  REVOKED
+}
+
+/// OhMyPos — the three staff roles (ADR-011). `CASHIER` from the v1-draft ERD is
+/// superseded and must not be reintroduced (Playbook §18).
+enum UserRole {
+  KASIR
+  ADMIN
+  OWNER
+}
+
+/// OhMyPos — distinguishes Kasync's manual entries from system-generated ones.
+enum LedgerSourceType {
+  MANUAL
+  SALE
+  PURCHASE
+  PAYABLE_SETTLEMENT
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Account {
+  id String @id @default(uuid())
+
+  name String
+  type AccountType
+
+  /// OhMyPos — Kas Awal (PRD §5.1). Kasync's Account has no balance column.
+  openingBalance Decimal @default(0) @map("opening_balance") @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bankTransactions BankTransaction[]
+  ledgerEntries    LedgerEntry[]
+
+  @@map("accounts")
+}
+
+model Category {
+  id String @id @default(uuid())
+
+  /// Kasync's unique is (userId, name); with multi-tenancy dropped it collapses to name.
+  name String @unique
+
+  /// OhMyPos — Kasync's Category is id/name only.
+  type TransactionType
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ledgerEntries LedgerEntry[]
+
+  @@map("categories")
+}
+
+model Branch {
+  id String @id @default(uuid())
+
+  name    String  @unique
+  /// OhMyPos.
+  address String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ledgerEntries LedgerEntry[]
+  users         User[]
+
+  @@map("branches")
+}
+
+model LedgerEntry {
+  id String @id @default(uuid())
+
+  /// OhMyPos, required — Kasync's LedgerEntry has no account link at all.
+  /// System Design §6.1 tags each sale's entry with the payment method's Account.
+  accountId String @map("account_id")
+
+  /// Required, matching Kasync. Consequence: the seed must supply system
+  /// categories, since sale/settlement entries cannot be uncategorised (ADR-012).
+  categoryId String @map("category_id")
+
+  /// Already present in Kasync — not an OhMyPos addition (ERD v3 corrects v2 here).
+  branchId String @map("branch_id")
+
+  entryDate DateTime        @map("entry_date")
+  amount    Decimal         @db.Decimal(18, 2)
+  type      TransactionType @default(OUTFLOW)
+
+  /// OhMyPos — traceability back to the event that generated this entry.
+  sourceType LedgerSourceType @default(MANUAL) @map("source_type")
+  sourceId   String?          @map("source_id")
+
+  note String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Restrict, not Cascade: deleting an Account must never delete financial history.
+  account  Account  @relation(fields: [accountId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
+
+  allocations Allocation[]
+
+  @@index([entryDate])
+  @@index([categoryId])
+  @@index([branchId])
+  /// OhMyPos — every Dashboard 3 report filters by date and often by branch (ERD §6).
+  @@index([branchId, entryDate])
+  /// OhMyPos — trace a ledger entry back to its Sale/Purchase/Settlement.
+  @@index([sourceType, sourceId])
+  @@map("ledger_entries")
+}
+
+model BankTransaction {
+  id String @id @default(uuid())
+
+  accountId   String          @map("account_id")
+  txnDate     DateTime        @map("txn_date")
+  amount      Decimal         @db.Decimal(18, 2)
+  type        TransactionType @default(OUTFLOW)
+  description String
+
+  /// Raw reference/ID from the bank statement — half of the import de-duplication.
+  externalRef String? @map("external_ref")
+  dedupHash   String? @map("dedup_hash")
+
+  /// Stored, trigger-synced denormalized field (unchanged pattern from Kasync).
+  status TransactionStatus @default(UNRESOLVED)
+
+  importedAt DateTime @default(now()) @map("imported_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  allocations Allocation[]
+
+  // Together these prevent importing the same bank row twice into one account.
+  @@unique([accountId, externalRef])
+  @@unique([accountId, dedupHash])
+  @@index([txnDate])
+  @@index([status])
+  @@map("bank_transactions")
+}
+
+model Allocation {
+  id String @id @default(uuid())
+
+  bankTransactionId String  @map("bank_transaction_id")
+  ledgerEntryId     String  @map("ledger_entry_id")
+  amountPortion     Decimal @map("amount_portion") @db.Decimal(18, 2)
+
+  status AllocationStatus @default(ACTIVE)
+  /// Set when status becomes REVOKED — revocation is a state change, never a delete.
+  revokedAt DateTime? @map("revoked_at")
+
+  /// Makes repeated allocation-create calls idempotent rather than duplicating.
+  idempotencyKey String? @map("idempotency_key")
+
+  /// Append-only: Kasync's allocations table has no updated_at.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  bankTransaction BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  ledgerEntry     LedgerEntry     @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([bankTransactionId, idempotencyKey])
+  @@index([bankTransactionId])
+  @@index([ledgerEntryId])
+  @@map("allocations")
+}
+
+model User {
+  id String @id @default(uuid())
+
+  name         String
+  email        String @unique
+  passwordHash String @map("password_hash")
+
+  /// Ported from Kasync's Auth pattern — supports refresh-token rotation.
+  refreshTokenHash String? @map("refresh_token_hash")
+
+  role UserRole
+
+  /// Required when role = KASIR, null for ADMIN/OWNER (ADR-011 §2). Prisma cannot
+  /// express a conditional constraint, so this is enforced in Zod and the service
+  /// layer, raising InvalidRoleBranchAssignmentException (Playbook §6).
+  branchId String? @map("branch_id")
+
+  /// ADR-011 §5 — OWNER-only deactivation. Soft, never a row delete, so the
+  /// Sale.userId audit trail survives a staff member leaving.
+  isActive Boolean @default(true) @map("is_active")
+
+  /// Ported from Kasync — immediate session revocation on logout, password
+  /// change, or deactivation.
+  tokenValidFrom DateTime @default(now()) @map("token_valid_from")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  branch Branch? @relation(fields: [branchId], references: [id])
+
+  /// BranchScopeGuard filters on this for every KASIR-scoped request (ERD §6).
+  @@index([branchId])
+  @@map("users")
+}

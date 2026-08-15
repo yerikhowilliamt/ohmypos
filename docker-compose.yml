@@ -1,0 +1,96 @@
+# Local development topology (System Design §10): web, api, postgres.
+#
+# This is a dev target, not a production deploy target — both app services
+# bind-mount the repo and run in watch mode. Node modules live in anonymous
+# volumes so the container's Linux binaries are never overwritten by the host's
+# macOS ones through the bind mount.
+#
+# Day to day you will more often run `docker compose up postgres` and start the
+# apps on the host with `pnpm dev` — that loop is faster. This file exists so the
+# whole stack can be brought up with one command on a clean machine.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ohmypos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ohmypos_db
+    ports:
+      # Host port 5433, because a native PostgreSQL already owns 5432 on this
+      # machine. Inside the compose network the port is still 5432, so `api`'s
+      # DATABASE_URL below is unaffected — only host tools (psql, Prisma Studio,
+      # a host-run `pnpm dev`) need to target 5433.
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d ohmypos_db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile.dev
+    container_name: ohmypos-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 4013
+      DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/ohmypos_db?schema=public'
+      CORS_ORIGIN: 'http://localhost:3001'
+    ports:
+      - '4013:4013'
+    volumes:
+      - .:/repo
+      # Every node_modules directory is a volume, never the bind mount: the host's
+      # are macOS binaries and pnpm symlink farms that do not resolve in Linux.
+      # These are per-service — api and web install different subtrees, so a
+      # shared volume would be seeded by whichever container started first.
+      - api_root_modules:/repo/node_modules
+      - api_app_modules:/repo/apps/api/node_modules
+      - api_pkg_config:/repo/packages/config/node_modules
+      - api_pkg_contracts:/repo/packages/api-contracts/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.dev
+    container_name: ohmypos-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      # Browser-side calls resolve on the host, not the compose network.
+      NEXT_PUBLIC_API_BASE_URL: 'http://localhost:4013/api/v1'
+    ports:
+      - '3001:3001'
+    volumes:
+      - .:/repo
+      - web_root_modules:/repo/node_modules
+      - web_app_modules:/repo/apps/web/node_modules
+      - web_pkg_config:/repo/packages/config/node_modules
+      - web_pkg_contracts:/repo/packages/api-contracts/node_modules
+      - web_pkg_ui:/repo/packages/ui/node_modules
+      - web_next_cache:/repo/apps/web/.next
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  api_root_modules:
+  api_app_modules:
+  api_pkg_config:
+  api_pkg_contracts:
+  web_root_modules:
+  web_app_modules:
+  web_pkg_config:
+  web_pkg_contracts:
+  web_pkg_ui:
+  web_next_cache:

@@ -86,3 +86,22 @@ Concise, confident, implementation-focused.
 - Every recommendation should use "should".
 - Every accessibility rule must be testable in implementation.
 - Teams should prefer system consistency over local visual exceptions.
+
+## Approved Mockup
+
+A full-app mockup exists in Claude Design: project `bf321a39-26cf-49bc-b774-c75783ebdf2f`, file `OhMyPos App.dc.html` (`Sales Entry.dc.html` is a companion). It is a single 1440×900 Design Composer template covering nine states: Login, the app shell (216px sidebar + 52px topbar), Dashboard, Penjualan (POS), Data Master, Pengeluaran, Stok & Inventori, Rekonsiliasi, and Laporan.
+
+**Status: reference, not specification.** Implementation is deliberately deferred until the Phase 3 domain modules exist — five of its screens render data the system cannot yet produce. Read it for layout, density, and component anatomy; do not treat it as an access-control or data-model spec.
+
+### Where the mockup and the binding docs disagree
+
+Each of these was reviewed and resolved **in favour of the docs**. Do not "fix" the implementation to match the mockup on these points without a new ADR.
+
+| Mockup shows | Binding doc | Resolution |
+|---|---|---|
+| `text.primary` `#020817`, `surface.base` `#f1f5f9` | This doc: `#0f172a`, `#f8fafc` | This doc wins; `packages/ui` already carries the documented values. Brand, accents, border, radius and the type scale match already. |
+| Roles `owner` / `cashier` only | ADR-011 — three roles | `ADMIN` must be derived from the same visual language; it has no state in the mockup. |
+| Cashier sidebar includes Data Master and Stok | System Design v4 §5 — `KASIR` gets `(pos)/sales` only | Docs win. |
+| Branch chosen at login, plus "PIN kasir" | ADR-011 §2 — branch comes from `User.branchId`; email + password | Docs win. The mockup contradicts itself here: its own topbar correctly shows "Kemang · terkunci" for a cashier. |
+
+The mockup also introduces `--warning-foreground #b45309`, which this doc does not define. It is a reasonable addition for text on warning surfaces — add it here properly if Phase 3 needs it, rather than inlining the hex.

@@ -1,0 +1,37 @@
+{
+  "name": "web",
+  "version": "0.0.1",
+  "description": "OhMyPos frontend — Next.js App Router, consumes apps/api via REST only (System Design §5)",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "typecheck": "next typegen && tsc --noEmit -p tsconfig.json",
+    "test": "echo \"no tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.7.1",
+    "@ohmypos/api-contracts": "workspace:*",
+    "@ohmypos/ui": "workspace:*",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-hook-form": "^7.85.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@ohmypos/config": "workspace:*",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9.18.0",
+    "eslint-config-next": "16.3.0",
+    "prettier": "^3.4.2",
+    "tailwindcss": "^4",
+    "typescript": "^5.7.3"
+  }
+}
