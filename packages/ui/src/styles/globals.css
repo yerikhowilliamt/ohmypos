@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+
+/**
+ * OhMyPos design tokens — the single source for DESIGN.md's values.
+ *
+ * DESIGN.md is explicit that shadcn/ui's default radius, shadow, and gray scale
+ * must NOT be used unmodified, and that component code references semantic
+ * tokens rather than raw hex. Everything below is therefore declared as a
+ * Tailwind v4 theme variable, which generates the matching utilities
+ * (`bg-surface-base`, `text-text-secondary`, `rounded-sm`, `shadow-1`, …).
+ */
+@theme {
+  /* Typography — Plus Jakarta Sans for UI, JetBrains Mono for all numeric data */
+  /* The consuming app supplies the loaded font via next/font; the literal
+     family name is the fallback so this package renders correctly on its own. */
+  --font-sans:
+    var(--font-plus-jakarta, 'Plus Jakarta Sans'), 'Plus Jakarta Sans Fallback',
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono, 'JetBrains Mono'), ui-monospace, SFMono-Regular,
+    monospace;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+
+  /* Brand + accents. inflow/outflow drive the Flow Indicator motif. */
+  --color-brand-primary: #00bfff;
+  --color-accent-inflow: #00ffbf;
+  --color-accent-outflow: #0040ff;
+
+  /* Text */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-tertiary: #64748b;
+  --color-text-inverse: #ffffff;
+
+  /* Surface */
+  --color-surface-base: #f8fafc;
+  --color-surface-muted: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-strong: #e0f6ff;
+
+  /* Border */
+  --color-border-default: #e2e8f0;
+
+  /* Status. success deliberately reuses the inflow accent. */
+  --color-status-success: #00ffbf;
+  --color-status-warning: #f59e0b;
+  --color-status-danger: #ef4444;
+
+  /* Spacing scale — no one-off values outside this scale */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 24px;
+  --spacing-6: 32px;
+
+  /* Radius. sm is the default for cards, inputs, buttons, modals. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+
+  /* Single ambient shadow layer only — never stacked, never coloured. */
+  --shadow-1: 0px 1px 3px 0px rgba(15, 23, 42, 0.08);
+
+  --animate-duration-instant: 150ms;
+  --animate-duration-fast: 200ms;
+}
+
+:root {
+  /* Brand primary at 50% — plain rgba for broad tooling/browser compatibility. */
+  --color-focus-ring: rgba(0, 191, 255, 0.5);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-surface-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-md);
+    font-weight: 400;
+    line-height: 20px;
+  }
+
+  /* WCAG 2.2 AA: focus indicators are never hidden or suppressed. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Numeric data is tabular and monospaced wherever it appears. */
+  .numeric {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}

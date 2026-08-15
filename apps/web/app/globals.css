@@ -1,0 +1,7 @@
+/* Design tokens live in packages/ui (System Design §2, DESIGN.md) — this app
+   imports them rather than declaring its own. */
+@import '@ohmypos/ui/globals.css';
+
+/* Tailwind v4 needs to scan the shared package for class names, since it sits
+   outside this app's own source tree. */
+@source "../../../packages/ui/src";
