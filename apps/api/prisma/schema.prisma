@@ -258,3 +258,74 @@ model User {
   @@index([branchId])
   @@map("users")
 }
+
+/// OhMyPos — ERD §3. Stock lives here and nowhere else (ADR-004).
+model RawMaterial {
+  id String @id @default(uuid())
+
+  name String @unique
+  /// satuan — kg, liter, pcs. Free text (ERD §3), not an enum.
+  unit String
+
+  /// Current cost per unit. Editing this changes every dependent product's
+  /// live HPP by design (ADR-005), and never rewrites history (SaleItem.hppAtSale).
+  unitCost Decimal @map("unit_cost") @db.Decimal(18, 2)
+
+  /// Denormalized running balance, only ever written inside the same transaction
+  /// as the StockMovement that justifies it, under FOR UPDATE (ADR-007, ERD §6).
+  /// NOT writable through this module's CRUD.
+  currentStock Decimal @default(0) @map("current_stock") @db.Decimal(18, 4)
+
+  lowStockThreshold Decimal @default(0) @map("low_stock_threshold") @db.Decimal(18, 4)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  recipeItems RecipeItem[]
+
+  @@map("raw_materials")
+}
+
+/// OhMyPos — ERD §3. No `hpp` column: HPP is computed live from RecipeItem +
+/// RawMaterial.unitCost (ADR-005), and no stock column: makeable quantity is
+/// derived, never stored (ADR-013).
+model Product {
+  id String @id @default(uuid())
+
+  name      String  @unique
+  sellPrice Decimal @map("sell_price") @db.Decimal(18, 2)
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  recipeItems RecipeItem[]
+
+  @@map("products")
+}
+
+/// OhMyPos — bill of materials (ERD §3). The product's recipe is this set of
+/// rows; there is deliberately no separate Recipe table.
+model RecipeItem {
+  id String @id @default(uuid())
+
+  productId     String @map("product_id")
+  rawMaterialId String @map("raw_material_id")
+
+  quantityUsed Decimal @map("quantity_used") @db.Decimal(18, 4)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Cascade: a recipe has no meaning without its product.
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Restrict: deleting a raw material still used by a recipe must fail loudly,
+  // not silently empty out a product's cost basis.
+  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, rawMaterialId])
+  @@index([productId])
+  @@index([rawMaterialId])
+  @@map("recipe_items")
+}
+

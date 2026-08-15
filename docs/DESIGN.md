@@ -103,5 +103,6 @@ Each of these was reviewed and resolved **in favour of the docs**. Do not "fix" 
 | Roles `owner` / `cashier` only | ADR-011 — three roles | `ADMIN` must be derived from the same visual language; it has no state in the mockup. |
 | Cashier sidebar includes Data Master and Stok | System Design v4 §5 — `KASIR` gets `(pos)/sales` only | Docs win. |
 | Branch chosen at login, plus "PIN kasir" | ADR-011 §2 — branch comes from `User.branchId`; email + password | Docs win. The mockup contradicts itself here: its own topbar correctly shows "Kemang · terkunci" for a cashier. |
+| POS product stock count & moving-average costing ("HPP rata-rata bergerak") | ADR-004, ADR-005, ADR-013 — product has no stock, HPP is recipe-based | Docs win (ADR-013). POS displays derived advisory makeable quantity; HPP is calculated live from `RecipeItem.quantityUsed × RawMaterial.unitCost`. |
 
 The mockup also introduces `--warning-foreground #b45309`, which this doc does not define. It is a reasonable addition for text on warning surfaces — add it here properly if Phase 3 needs it, rather than inlining the hex.
