@@ -37,4 +37,34 @@
 
 ## Log
 
-_(No errors logged yet — this log starts once implementation begins. Add the first entry above this line, following the template.)_
+### ERR-003 — Removing the JWT skew tolerance broke every login
+
+- **Date found:** 2026-08-15
+- **Found during:** TASK-004 (Phase 2 — Auth & RBAC)
+- **Symptom:** After tightening the `tokenValidFrom` check to `iat * 1000 < tokenValidFrom`, every authenticated request in the RBAC suite returned 401 — including immediately after a successful login.
+- **Root cause:** The JWT `iat` claim has **one-second** resolution. A token minted at 10:00:00.900 carries `iat = 10:00:00`, so `iat * 1000` is up to 999 ms *earlier* than the moment the token was actually issued. Compared against a `tokenValidFrom` of 10:00:00.500, a freshly minted valid token looks older than the revocation boundary and is rejected. The original tightening was an over-correction: it was aimed at Kasync's 2000 ms allowance, which existed to absorb Node-vs-PostgreSQL clock drift, and removed the part that was compensating for `iat` truncation along with it.
+- **Resolution:** Allow exactly the claim's resolution and nothing more — `iat * 1000 + 1000 <= tokenValidFrom` — and separately eliminate the clock-drift problem at its source by writing `tokenValidFrom` from the application clock (`UsersService.create`) instead of relying on the column's database-side default.
+- **Prevention:** `test/auth-rbac.e2e-spec.ts` asserts both directions: a fresh login must work, and a token must stop working after logout. The logout test deliberately crosses a second boundary, with a comment explaining why, so the assertion tests the real guarantee rather than a race. The residual behaviour is documented in the guard: revocation is precise to the second, so a token minted in the same second as a logout may survive it.
+- **Severity:** Medium — caught in tests, never shipped, but the same misreading could equally have produced a too-loose window instead of a too-tight one.
+
+### ERR-002 — BranchScopeGuard's query injection silently did nothing on Express 5
+
+- **Date found:** 2026-08-15
+- **Found during:** TASK-004 (Phase 2 — Auth & RBAC)
+- **Symptom:** A `KASIR` listing `/ledger-entries` without a `branchId` received entries from **every** branch. The guard was supposed to inject the cashier's own branch into the query and reported success.
+- **Root cause:** The guard did `request.query[field] = user.branchId`. Express 5 exposes `req.query` as a lazily-evaluated **getter**, so the assignment did not persist; the guard then returned `true` and the request proceeded completely unscoped. The write failed silently — no error, no warning.
+- **Resolution:** Stopped mutating the request. `BranchScopeGuard` now **fails closed**: a `KASIR` calling a branch-scoped endpoint without stating a branch is rejected with 403, and must send its `branchId` explicitly. Rejecting cannot silently degrade the way injecting did.
+- **Prevention:** Two e2e tests now cover the case that previously passed while being wrong — one asserting 403 when the branch is omitted, one asserting that a stated branch returns only that branch's rows, with a second branch's data present in the database to make the assertion meaningful. General lesson: a guard that grants access by **modifying** the request has a silent-failure mode; a guard that only ever denies does not.
+- **Severity:** High — this is exactly the cross-branch data leak `BranchScopeGuard` exists to prevent (ADR-011 §4).
+
+### ERR-001 — Kasync's trigger-exception filter is silently inert on Prisma 7
+
+- **Date found:** 2026-08-15
+- **Found during:** TASK-003 (Phase 1 — porting Kasync's modules)
+- **Symptom:** Caught before it could ship. Kasync's `PostgresTriggerExceptionFilter` matches `PrismaClientKnownRequestError` codes `P2010`/`P2034` and reads the database message out of `error.meta.message`. Under Prisma 7 that branch never matches, so a rejection from `trg_check_allocation_sum` — an over-allocation, i.e. a client error — would have fallen through to the generic handler and returned **HTTP 500 instead of 400**, with the reason hidden from the caller.
+- **Root cause:** Prisma 7 replaced the Rust query engine with the Query Compiler and driver adapters, which changed how database errors surface. A PL/pgSQL `RAISE EXCEPTION` now arrives as code **`P2039`** with the real PostgreSQL error nested at `meta.driverAdapterError.cause` (`originalCode: 'P0001'`, `originalMessage: '<the RAISE text>'`). Prisma 5's flat `P2010` + `meta.message` shape no longer occurs.
+- **Resolution:** Added `src/common/errors/postgres-error.ts`, which unwraps the nested cause and returns `{ code, message }` regardless of shape, and rewrote the filter to match on the PostgreSQL SQLSTATE `P0001` rather than on a Prisma code. Confirmed empirically against Postgres 16 before any module was ported, then locked in by `test/allocation-sum.e2e-spec.ts`.
+- **Prevention:** The e2e suite asserts the **HTTP status**, not just that an error occurred — `rejects an allocation that would exceed the transaction amount` expects 400 and matches the message, so a regression to 500 fails the build. More generally: when a ported module's error handling depends on a library's error *shape*, verify that shape against the actual runtime before porting, rather than assuming the shape carried over with the code. Recorded as a decision in TASK-003.
+- **Severity:** High — it silently disables the enforcement path for the allocation-sum invariant, which is money-correctness (ADR-004, Playbook §7).
+
+_(Add the next entry above this line, following the template.)_

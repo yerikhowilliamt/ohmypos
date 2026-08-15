@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1
+# Local development image for apps/web (System Design §10).
+# Same rationale as apps/api's — bind-mounted source, Next in dev mode, and
+# dependencies installed at build time so container start is fast.
+FROM node:22-alpine
+
+RUN corepack enable
+
+WORKDIR /repo
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/config/package.json ./packages/config/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/api-contracts/package.json ./packages/api-contracts/
+
+# Only this app's subtree — the Nest toolchain has no business in this image.
+# The cache mount keeps the pnpm store across builds, so a network failure
+# part-way through resumes instead of re-downloading everything.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+  pnpm install --frozen-lockfile --filter web... \
+  --store-dir /pnpm/store \
+  --fetch-retries 5 \
+  --fetch-retry-maxtimeout 120000 \
+  --fetch-timeout 600000 \
+  --network-concurrency 4
+
+COPY . .
+
+EXPOSE 3001
+
+CMD ["pnpm", "--filter", "web", "dev"]
