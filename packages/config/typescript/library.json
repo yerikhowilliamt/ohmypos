@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "OhMyPos shared package",
+  "extends": "./base.json",
+  "_comment": "outDir/rootDir are deliberately NOT set here — relative paths in an extended config resolve against this file's directory, not the consumer's, so each package declares its own.",
+  "compilerOptions": {
+    "declarationMap": true
+  }
+}
