@@ -326,6 +326,7 @@ model RawMaterial {
   recipeItems    RecipeItem[]
   purchaseItems  SupplierPurchaseItem[]
   stockMovements StockMovement[]
+  openingStocks  OpeningStock[]
 
   @@map("raw_materials")
 }
@@ -655,4 +656,45 @@ model StockMovement {
   @@index([branchId])
   @@map("stock_movements")
 }
+
+/// OhMyPos — PRD §5.5 "Dashboard 4", ERD §3, System Design §6.4.
+///
+/// The monthly stock-take DECLARATION. The balance change it causes is a
+/// StockMovement (referenceType = OPENING) written in the same transaction, for
+/// the SIGNED DIFFERENCE between the declared figure and what the ledger already
+/// carried into the period (plan §3.2). The movement ledger stays the single
+/// source of truth; this table records what a human counted.
+model OpeningStock {
+  id String @id @default(uuid())
+
+  rawMaterialId String @map("raw_material_id")
+
+  /// First day of the month this applies to. @db.Date, not a timestamp: a month
+  /// is a calendar fact, and storing an instant here would invite a timezone
+  /// question the column cannot answer (plan §9). It is also what keeps the
+  /// unique constraint below undefeatable by a differing time-of-day.
+  periodMonth DateTime @map("period_month") @db.Date
+
+  /// The declared physical count at the START of the period — NOT a delta.
+  /// The delta is derived and lives on StockMovement (plan §3.2).
+  quantity Decimal @db.Decimal(18, 4)
+
+  /// Valuation for this declaration. Required IFF no PURCHASE movement exists
+  /// for this material in this period (PRD §5.5, plan §5); null otherwise, in
+  /// which case RawMaterial.unitCost is snapshotted onto the OPENING movement's
+  /// unitCostAtMovement instead. Nullable deviates from ERD v3 §3 — plan §10.4.
+  unitPrice Decimal? @map("unit_price") @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+
+  /// ERD §6 — one declaration per material per month; also what makes the PUT
+  /// upsert idempotent (plan §6).
+  @@unique([rawMaterialId, periodMonth])
+  @@index([periodMonth])
+  @@map("opening_stocks")
+}
+
 
