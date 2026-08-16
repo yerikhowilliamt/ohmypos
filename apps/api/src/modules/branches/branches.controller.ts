@@ -9,13 +9,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RoleGuard } from '../../common/guards/role.guard';
 import { BranchesService } from './branches.service';
 import { CreateBranchDto, UpdateBranchDto } from './branches.dto';
 
 @ApiTags('branches')
 @Controller('branches')
+@UseGuards(RoleGuard)
+@Roles('OWNER', 'ADMIN')
 export class BranchesController {
   constructor(private readonly branchesService: BranchesService) {}
 

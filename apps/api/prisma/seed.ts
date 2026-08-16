@@ -120,7 +120,11 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: ownerEmail },
-    update: {},
+    update: {
+      role: 'OWNER',
+      branchId: null,
+      isActive: true,
+    },
     create: {
       name: 'Pemilik',
       email: ownerEmail,
@@ -132,7 +136,11 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: 'admin@ohmypos.local' },
-    update: {},
+    update: {
+      role: 'ADMIN',
+      branchId: null,
+      isActive: true,
+    },
     create: {
       name: 'Admin Rekonsiliasi',
       email: 'admin@ohmypos.local',
@@ -144,7 +152,11 @@ async function main() {
 
   const kasirMelati = await prisma.user.upsert({
     where: { email: 'kasir@ohmypos.local' },
-    update: {},
+    update: {
+      role: 'KASIR',
+      branchId: branches[0].id,
+      isActive: true,
+    },
     create: {
       name: 'Kasir Melati',
       email: 'kasir@ohmypos.local',

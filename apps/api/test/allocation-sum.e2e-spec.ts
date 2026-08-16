@@ -319,6 +319,7 @@ async function resetDatabase(prisma: PrismaService) {
   await prisma.recipeItem.deleteMany({});
   await prisma.product.deleteMany({});
   await prisma.rawMaterial.deleteMany({});
+  await prisma.user.updateMany({ data: { branchId: null } });
   await prisma.user.deleteMany({ where: { email: 'alloc-admin@test.local' } });
   await prisma.allocation.deleteMany({});
   await prisma.bankTransaction.deleteMany({});
