@@ -399,3 +399,80 @@ Three flows now lock `raw_materials`: `SupplierPurchasesService.create` (via `St
 - *A single batched statement, `SELECT id FROM raw_materials WHERE id = ANY($1) ORDER BY id FOR UPDATE`*: rejected for v1 and logged as DEBT-008. It is one round trip instead of M, and the ordering is correct today because `LockRows` sits above `Sort` — but that is a query-plan dependency, and no test in this repo can pin a plan shape. A plan change would show up as an intermittent `40P01` in production against a green suite.
 - *Optimistic concurrency (version column, retry)*: rejected — ADR-007 already rejected it for v1 and DEBT-002 tracks it as the future path with a measured trigger. It would also need retry orchestration around a transaction that creates a `LedgerEntry`, so a retried sale must be idempotent or it double-writes money.
 - *Rely on ADR-007's lock without an ordering rule*: rejected — that is the status quo, and it is correct for balances and silently wrong for liveness.
+
+---
+
+## ADR-017: P&L reports a margin view and a cash view side by side; material cost is never subtracted twice
+
+**Status:** Accepted
+
+**Context:** PRD §5.4 specifies a profit & loss report as "income − COGS − expenses". Taken literally against this schema, that double-counts raw material cost, because the same cost enters the books twice by design:
+
+- ADR-005 records material cost as `SaleItem.hppAtSale`, recognised **when the product is sold**.
+- ADR-006 records the same material cost as a `LedgerEntry` OUTFLOW, recognised **when the money leaves** — either at purchase (`sourceType = PURCHASE`) or at settlement (`sourceType = PAYABLE_SETTLEMENT`).
+
+Subtracting COGS *and* all outflow deducts a sack of coffee beans once in the month it was bought and again in the month it was sold. The error is not a rounding artefact: it is the entire material spend of the period, and it biases profit downward in a way that looks plausible enough never to be questioned.
+
+A second, quieter problem forced the same decision. Under ADR-014 every central purchase's ledger entry is attributed to `Pusat (Dapur Sentral)`. A purely cash-based per-branch P&L therefore shows every outlet with revenue and almost no material cost, and the central kitchen with cost and no revenue — which makes per-branch profit meaningless.
+
+**Decision:**
+
+1. **The headline figure is the margin view:** `netProfit = totalIncome − cogs − operatingExpenses`.
+   - `totalIncome` = INFLOW entries, split on the response into `salesRevenue` (`sourceType = SALE`) and `otherIncome` (everything else).
+   - `cogs` = `ROUND(Σ (SaleItem.hppAtSale × SaleItem.quantity), 2)` over sales in the period — the ADR-005 snapshot, never live `Product` HPP.
+   - `operatingExpenses` = OUTFLOW entries with **`sourceType = MANUAL` only**. Raw material purchases and payable settlements are deliberately excluded, because their cost is already inside `cogs` for whatever has been sold.
+2. **The cash view is reported alongside it, never mixed into it:** `cash.totalInflow`, `cash.totalOutflow`, `cash.materialCashOutflow` (`PURCHASE` + `PAYABLE_SETTLEMENT`), and `cash.netCashFlow = totalIncome − totalOutflow`.
+3. **Revenue is read from `ledger_entries`, not from `sales`**, so every income figure across all five Dashboard 3 reports comes from one table and ties by construction. `Σ Sale.totalAmount = salesRevenue` is asserted as a test invariant rather than assumed.
+4. **Income by payment method is grouped from the same INFLOW rows**, so its total equals `totalIncome` by construction.
+
+**Consequences:**
+
+- (+) Each cost is subtracted exactly once *within each view*, and the two views are individually meaningful: `netCashFlow` ties to the bank and is what reconciliation matches; `netProfit` is what tells the owner whether the business makes money.
+- (+) Per-branch profit becomes meaningful, because `cogs` is attributable to the branch that sold the item (`Sale.branchId`) while material cash outflow largely is not (ADR-014).
+- (−) `netProfit` does not notice the difference between material bought and material consumed: buying a year of coffee in one month leaves it unmoved. `netCashFlow` shows it. Both figures are on the response for exactly this reason.
+- (−) Filtering a report to `Pusat (Dapur Sentral)` returns outflow with zero revenue and a `null` margin. This is the correct picture of a central kitchen, and it is pinned by an e2e case so it is not "fixed" later.
+- (−) A user reading only one of the two figures can still draw a wrong conclusion. Mitigated by labelling on the Phase 8g screen, not by collapsing the two into one number.
+
+**Alternatives considered:**
+
+- *Cash-only P&L (`netProfit = totalInflow − totalOutflow`, COGS as a memo line)*: rejected as the headline. It is trivially correct and ties perfectly to reconciliation, but it makes per-branch profit meaningless under ADR-014 and ignores PRD §5.4's explicit request for COGS. It survives as the `cash` block.
+- *Subtract COGS and all outflow (the literal reading of PRD §5.4)*: rejected — this is the double-count the ADR exists to prevent.
+- *Full accrual with inventory valuation (capitalise purchases, release as COGS)*: rejected — requires an inventory valuation model, and ADR-013 already rejected moving-average costing. There is no balance sheet in v1 and nothing asks for one.
+
+---
+
+## ADR-018: Report period boundaries and daily buckets are Asia/Jakarta; storage stays UTC
+
+**Status:** Accepted
+
+**Context:** Dashboard 3's five reports are filtered by date range, and one of them buckets income by day. Every timestamp in this repository is stored as a UTC instant in a `TIMESTAMP(3)` column without time zone and serialized with `toISOString()`. Nothing had ever needed to convert a stored instant into a *calendar day*, so the repo had no convention for it.
+
+The business runs in WIB (UTC+7). Under UTC bucketing, the day boundary falls at **07:00 WIB** — inside opening hours for an F&B business — so every morning's first sales are attributed to the previous day. There is no worse place to put a day boundary than the middle of the first service hour.
+
+The Phase 6 plan raised this same question for the Inventory Summary's month boundaries, leaned UTC for consistency with storage, and explicitly deferred the decision to Phase 7 with the instruction that it be answered once, globally. Phase 6 has not been implemented, so Phase 7 answers it first.
+
+**Decision:**
+
+1. **Report ranges are two INCLUSIVE `YYYY-MM-DD` calendar dates in `Asia/Jakarta`**, resolved server-side to a half-open UTC instant range: `from = startDate T00:00+07:00`, `to = (endDate + 1 day) T00:00+07:00`, exclusive.
+2. **Daily buckets are WIB calendar days**, produced in SQL as `to_char(((entry_date AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')::date, 'YYYY-MM-DD')`. Both conversions are required: the column is naive-UTC, so a single conversion would interpret the stored value as already being WIB and shift it the wrong way by seven hours.
+3. **Storage is unchanged.** `soldAt`, `entryDate`, `movementDate` remain UTC instants, serialized with `toISOString()`. Only report boundaries and buckets are WIB.
+4. **The rule lives in exactly one file** — `apps/api/src/common/period.ts`, exporting `REPORT_TIMEZONE`, `resolveReportRange` and `eachWibDay`. It is in `common/`, not in the reports module, because Phase 6 must import it rather than defining a second month resolver.
+5. **The timezone is a constant, not a parameter.** Not per-request (two users comparing screens would get different numbers with nothing on the page explaining why) and not an environment variable (a report's meaning must not depend on deployment config).
+6. **A range is rejected with a 400** (`InvalidReportRangeException`) when the end precedes the start, a date is malformed or unreal, or the span exceeds 366 days. A future range is allowed and returns zeros.
+
+**Consequences:**
+
+- (+) "How much did we take on the 16th" means the WIB 16th, which is what the owner means.
+- (+) WIB is a fixed UTC+7 offset with no DST, so there are no ambiguous or skipped local times and `dayCount` arithmetic is exact.
+- (+) One definition for the whole repo: Dashboard 3 and Dashboard 5 cannot disagree at a boundary.
+- (−) The daily-income bucket and the stored `entryDate` of the same row can name different calendar days (a 05:00 WIB sale is stored as the previous UTC day). Anyone reconciling a report row against a raw ledger row by eye must know this.
+- (−) `docs/plannings/phase-6-inventory.md` decision 9 leaned UTC and must be corrected before Phase 6 is executed, or Dashboard 5 will contradict this ADR.
+- (−) The 366-day cap makes a multi-year trend a client-side concern (several requests), not a single call.
+
+**Alternatives considered:**
+
+- *UTC boundaries everywhere, matching storage*: rejected — consistent with the database and wrong for the business, with the boundary landing inside opening hours. Consistency with a storage detail is not worth a daily report the owner cannot reconcile against their own till.
+- *Timezone as a request parameter*: rejected — makes the same report mean different things to different callers with no indication on the page.
+- *Timezone as an environment variable*: rejected — a report's semantics must not be a deployment concern.
+- *Converting at the frontend*: rejected — the bucketing happens inside a SQL `GROUP BY`; the server would have to return raw rows for the client to re-aggregate, which defeats the aggregation.
+

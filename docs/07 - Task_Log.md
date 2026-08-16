@@ -41,6 +41,33 @@
 
 ## Log
 
+### TASK-011 — Phase 7: Reporting Backend (Dashboard 3)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Phase 7 — Reporting Backend (Dashboard 3: P&L, Product Profit, Top Products, Income by Payment Method, Daily Income)
+- **Objective:** Implement the 5 Dashboard 3 query-time reporting endpoints per PRD §5.4, ADR-005, ADR-006, ADR-008, ADR-011, ADR-014, ADR-017, ADR-018, System Design v4 §5/§6.6/§11, and `docs/plannings/phase-7-reporting.md`.
+- **Relevant docs:** PRD §5.4, System Design v4 §5, §6.6, §11, ADR-005, ADR-006, ADR-008, ADR-011, ADR-014, ADR-017, ADR-018, Playbook §4, §8, §10.
+- **What was done:**
+  1. Authored and recorded ADR-017 (P&L dual margin & cash views) and ADR-018 (report period boundaries and daily buckets in Asia/Jakarta) in `docs/02 - ADR.md`.
+  2. Created contracts in `@ohmypos/api-contracts`: `report.schema.ts` (`ReportRangeQuerySchema`, `ReportPeriodSchema`, `ProfitLossResponseSchema`, `ProductProfitResponseSchema`, `TopProductsQuerySchema`, `TopProductsResponseSchema`, `IncomeByPaymentMethodResponseSchema`, `DailyIncomeResponseSchema`, `ProductRankBy`, `SignedMoneyString`), and re-exported in `index.ts`.
+  3. Created common period resolution helper in `apps/api/src/common/period.ts` and `apps/api/src/common/errors/invalid-report-range.error.ts` with 100% unit test coverage in `period.spec.ts`.
+  4. Created pure SQL fragment builders `report-filters.ts` (with mandatory double `AT TIME ZONE` and bound parameters) and pure arithmetic helpers `report-math.ts` with comprehensive unit tests (`report-filters.spec.ts`, `report-math.spec.ts`).
+  5. Implemented `ReportsService`, `ReportsController`, `ReportsMapper`, and `ReportsDto` in `apps/api/src/modules/reports` with strict `@Roles('OWNER')` access control and no writes. Registered `ReportsModule` in `app.module.ts`.
+  6. Implemented extensive 33-case auth-aware e2e test suite in `apps/api/test/reports.e2e-spec.ts` covering margin/cash P&L, partial month boundaries, branch filtering (including central branch), payable settlement mid-period cash movement, HPP immutability snapshot (ADR-005), WIB calendar day bucketing (ADR-018), cross-report invariants, RBAC, and validation.
+  7. Performed query execution measurements (1–3 ms on 1-month and 1-year ranges) and recorded metrics in `docs/08 - Tech_Debt_Log.md` (DEBT-001) and `docs/01 - System_Design.md` §11. Added DEBT-011 for unpaginated report rows.
+- **Decisions made during this task:**
+  1. Option 1 selected (Pure query-time SQL aggregation with shared filter builders and pure math layer).
+  2. Owner-only access strictly enforced per ADR-011 and System Design §5/§6.6.
+  3. `SignedMoneyString` used for gross profit, net profit, and net cash flow to allow valid negative balances without Zod schema validation errors.
+- **Post-review corrections (2026-08-17):**
+  - Executed work order `docs/remediations/phase-7-reporting.md`: hoisted `SignedMoneyString` from a local helper in `report.schema.ts` to a shared exported primitive in `packages/api-contracts/src/primitives.ts`, aligning with `SignedQuantityString`. Verified with full quality gate (`turbo run lint typecheck test build`, 15/15) and full e2e test suite (170/170 passed).
+- **Status:** Done
+- **Handoff notes:**
+  - ADR-017 and ADR-018 were authored and accepted.
+  - `apps/api/src/common/period.ts` is now the repository's single standard period resolver.
+  - Phase 8g (Reporting Frontend) will consume the contracts in `report.schema.ts` and call the 5 endpoints on `/api/v1/reports/*`.
+  - All 15 unit test suites (129 tests) and 7 e2e suites (170 tests) are green.
+
 ### TASK-010 — Phase 6: Inventory (Opening Stock & Inventory Summary)
 
 - **Date:** 2026-08-17
