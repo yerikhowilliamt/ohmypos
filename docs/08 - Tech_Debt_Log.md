@@ -147,6 +147,30 @@
 - **Priority:** Medium
 - **Status:** Open
 
+### DEBT-011 — Topbar branch context is a static label, not a functional selector
+
+- **Date logged:** 2026-08-17
+- **Found during:** TASK-009 (Phase 8a — Frontend Auth/Nav Infra)
+- **Description:** DESIGN.md §17/§50 call for Owner/Admin to get "All Branches" or a branch selector in the topbar. `apps/web/components/shell/Topbar.tsx` renders a static "Semua Cabang" string for Owner/Admin and a static "Cabang Terkunci" string for Kasir — neither is interactive, and there is no branch-filtering state anywhere in the frontend.
+- **Why deferred:** Stock and cash are centralized pools with no per-branch balance anywhere in the schema (ADR-004) — a working selector would have nothing to actually filter yet. Building the control before there's branch-scoped data behind it would be UI theater.
+- **Impact if unaddressed:** None currently — the static label is accurate today. Becomes misleading only once branch-scoped views/reports exist and Owner/Admin have no way to narrow to one branch from the topbar.
+- **Trigger condition:** Any future phase introduces branch-scoped reporting or data views for Owner/Admin (a schema/architecture change that would need its own ADR revisiting ADR-004 first, per AGENTS.md).
+- **Proposed resolution:** Once branch-scoped data exists, wire the topbar label into a real selector that filters the current view's query params/state.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-012 — `packages/ui`'s shadcn components reference undefined color tokens
+
+- **Date logged:** 2026-08-17
+- **Found during:** TASK-009 (Phase 8a — Frontend Auth/Nav Infra), while building the nav shell
+- **Description:** `Button`, `Card`, and `Input` in `packages/ui/src/components/ui/` use shadcn's default semantic Tailwind classes (`bg-primary`, `text-primary-foreground`, `bg-card`, `bg-destructive`, `border-input`, `bg-background`, `text-muted-foreground`, etc.), but `packages/ui/src/styles/globals.css`'s `@theme` block only defines DESIGN.md's own token set (`--color-brand-primary`, `--color-surface-*`, `--color-text-*`, `--color-border-default`, `--color-status-*`). None of the shadcn `--color-primary`/`--color-card`/`--color-destructive`/etc. variables are defined anywhere in the repo, so those utility classes don't resolve to anything — `components.json` claims `cssVariables: true` with `baseColor: "slate"`, but the mapping was never written.
+- **Why deferred:** Pre-existing since Phase 0 scaffolding (TASK-002) — not introduced by this task. Out of scope for TASK-009, which added one new component (`dropdown-menu.tsx`) written directly against the DESIGN.md tokens instead of repeating the same gap.
+- **Impact if unaddressed:** `Button` (all variants) and `Input` render with no background/foreground color from their intended variant — currently masked because existing usages (the login form) don't depend on the missing colors being correct. Any future use of `variant="destructive"`/`"secondary"`/`"outline"` or `Card`'s default styling will look visibly broken.
+- **Trigger condition:** The next task that visibly relies on `Button`'s non-default variants or `Card`'s default appearance (first candidate: the actual POS/back-office page implementations replacing today's placeholders).
+- **Proposed resolution:** Either map shadcn's semantic tokens onto DESIGN.md's palette in `globals.css` (e.g. `--color-primary: var(--color-brand-primary)`, `--color-destructive: var(--color-status-danger)`, etc.), or rewrite `Button`/`Card`/`Input` to reference DESIGN.md tokens directly, matching the pattern used by `dropdown-menu.tsx` and `login/page.tsx`.
+- **Priority:** Medium
+- **Status:** Open
+
 ---
 
 ## Resolved

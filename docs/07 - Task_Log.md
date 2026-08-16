@@ -41,6 +41,27 @@
 
 ## Log
 
+### TASK-009 — Phase 8a: Frontend — Auth/Nav Infra
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Phase 8a — `apps/web` auth/nav infrastructure (logout, refresh-on-401 interceptor, role-aware nav shell)
+- **Objective:** Close the three frontend gaps TASK-004's handoff flagged — no logout control, no token-refresh-on-401 interceptor, and no navigation between the placeholder pages.
+- **Relevant docs:** `docs/planning-prompts/phase-08a-frontend-auth-nav.md`, System Design v4 §5, ADR-011, ADR-010, DESIGN.md §15–17/§50/§52, Playbook §8/§10.
+- **What was done:**
+  1. `apps/web/lib/api.ts`: added `ApiError` (status-carrying), split into `doFetch` + `apiFetch`, added a single-flight `refreshTokenOnce()` calling the already-existing `POST /auth/refresh`, retries the original request once on a 401 (excluding `/auth/login` and `/auth/refresh` themselves), hard-redirects to `/login` if the refresh itself fails.
+  2. `apps/web/lib/nav-config.ts`: pure `getNavItems(role)` — the single source for which route-group links each role sees, mirroring System Design §5's role table.
+  3. New `apps/web/components/shell/{AppShell,Sidebar,Topbar,LogoutButton}.tsx` — role-filtered sidebar, topbar with a static branch label and a user dropdown menu, and a logout control that only redirects on a confirmed-successful `POST /auth/logout` (a failed call leaves the cookie in place, so redirecting early would just bounce back through the middleware).
+  4. New `packages/ui/src/components/ui/dropdown-menu.tsx` — a `radix-ui` `DropdownMenu` wrapper built against the project's actual DESIGN.md tokens (`bg-surface-raised`, `border-border-default`, etc.), not shadcn's default semantic tokens, which are unwired in this repo (see Decisions).
+  5. Wired `AppShell` into `(pos)/layout.tsx` and `(back-office)/layout.tsx` around the existing `requireRole` calls.
+  6. Added Vitest (+ jsdom) as `apps/web`'s first test runner (`vitest.config.mts`, `test` script), with `lib/api.test.ts` (5 tests: pass-through, single-401 refresh+retry, concurrent-401 single-flight dedup, refresh-failure redirect, no-retry on `/auth/login`) and `lib/nav-config.test.ts` (3 tests, one per role).
+- **Decisions made during this task:**
+  1. Interceptor built as a fetch-wrapper enhancement, not React Query/SWR middleware or a server-side proxy — smallest diff consistent with the existing cookie-only auth design, and it adds no new production dependency.
+  2. No new `packages/api-contracts` schemas added for `/auth/refresh`/`/auth/logout` — neither response body is consumed for typed data by the frontend (only HTTP status matters), so there was no new request/response *shape* to contract per ADR-010.
+  3. Branch selector left as a static label ("Semua Cabang" / "Cabang Terkunci") rather than functional — stock/cash are centralized pools with no per-branch balance (ADR-004), so there's nothing for a selector to filter yet.
+  4. `Button`/`Card`/`Input` in `packages/ui` reference shadcn semantic tokens (`bg-primary`, `bg-card`, etc.) that this repo's `globals.css` never defines — DESIGN.md's tokens were wired in as a parallel set instead. Pre-existing, not touched here; the new `dropdown-menu.tsx` was written directly against the DESIGN.md tokens to avoid adding a third inconsistent component.
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test build` green (15/15 tasks, including the new `web:test`). Manually verified in a real browser against the running `apps/api` for all three roles: KASIR sees only Penjualan; ADMIN sees Data Master + Rekonsiliasi, and a direct `/users` URL still server-side redirects to `/master-data` (confirms the nav is UX-only, RoleGuard/`requireRole` remain authoritative); OWNER sees all six back-office links. Logout correctly clears the session (verified by a subsequent direct nav to `/sales` bouncing back to `/login`), and a failed logout leaves the user on the page with an inline error instead of a broken redirect loop (middleware only checks cookie *presence*, so redirecting to `/login` while the cookie is still set would just bounce back into the app). **What the next frontend phase must know:** the POS sale screen and all six back-office pages are still placeholders (Phase 3 built them as stubs) — this task only added the chrome around them, no page content. `apps/web/middleware.ts` was deliberately left untouched (still presence-of-cookie only) since the interceptor problem was specifically client-side, not middleware-level. `next build` currently warns that the `middleware.ts` file convention is deprecated in favor of `proxy.ts` (Next 16) — not addressed here, worth a look before the next Next.js minor bump. `Button`/`Card`/`Input`'s unwired shadcn tokens (Decision 4 above) are pre-existing tech debt, not introduced by this task, but worth fixing before those components see more use.
+
 ### TASK-008 — Phase 5: Sales
 
 - **Date:** 2026-08-16

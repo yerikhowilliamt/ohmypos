@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/shell/AppShell';
 import { requireRole } from '@/lib/session';
 
 /**
@@ -10,6 +11,6 @@ export default async function BackOfficeLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireRole(['ADMIN', 'OWNER']);
-  return <>{children}</>;
+  const user = await requireRole(['ADMIN', 'OWNER']);
+  return <AppShell user={user}>{children}</AppShell>;
 }
