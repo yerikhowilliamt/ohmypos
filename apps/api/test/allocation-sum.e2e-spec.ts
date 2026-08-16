@@ -306,6 +306,7 @@ describe('Allocation sum constraint (e2e)', () => {
 });
 
 async function resetDatabase(prisma: PrismaService) {
+  await prisma.openingStock.deleteMany({});
   await prisma.payableSettlement.deleteMany({});
   await prisma.payable.deleteMany({});
   await prisma.supplierPurchaseItem.deleteMany({});

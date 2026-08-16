@@ -41,6 +41,31 @@
 
 ## Log
 
+### TASK-010 — Phase 6: Inventory (Opening Stock & Inventory Summary)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Phase 6 — Inventory (`OpeningStock`, `applyOpening` Stock Movements, Inventory Summary Query-time Aggregator, Worksheet Endpoint)
+- **Objective:** Implement opening stock declarations and monthly inventory summary reporting per PRD §5.5, §5.6, ADR-004, ADR-007, ADR-008, ADR-011, ADR-016, and `docs/plannings/phase-6-inventory.md`.
+- **Relevant docs:** PRD §5.5/§5.6, ADR-004, ADR-007, ADR-008, ADR-011, ADR-016, ERD v3 §3, System Design v4 §5, Playbook §5–§10.
+- **What was done:**
+  1. Extended `schema.prisma` with `OpeningStock` model (`rawMaterialId`, `periodMonth` Date, `quantity` Decimal, `unitPrice` Decimal nullable, `createdAt`/`updatedAt`, unique constraint `[rawMaterialId, periodMonth]`) and `RawMaterial.openingStocks` relation. Generated and applied migration `20260816190141_add_opening_stock` (verified SQL: purely additive `CREATE TABLE` and indexes).
+  2. Added Zod contracts in `@ohmypos/api-contracts`: `period.schema.ts` (`PeriodMonthSchema`), `opening-stock.schema.ts` (`UpsertOpeningStockSchema`, `OpeningStockWorksheetResponseSchema`), `inventory-summary.schema.ts` (`InventorySummaryQuerySchema`, `InventorySummaryResponseSchema`), `StockStatus` enum (`OK`, `LOW`, `OUT`), and `SignedQuantityString`.
+  3. Built pure domain calculators with comprehensive unit tests: `period.ts` (UTC month parsing, boundary half-open interval, future month rejection), `stock-status.ts` (boundary resolver), `inventory-summary.calculator.ts` (`assembleInventorySummary`, `sumSignedByMaterial`), `opening-stock.calculator.ts` (`computeOpeningDeltas`, deterministic ID sort for locking), and `opening-stock.rules.ts` (unit-price purchase presence assertion, non-negative stock pool invariant).
+  4. Extended `StockMovementsService` with `applyOpening` method: acquires row locks ascending via `lockRawMaterialsInIdOrder` (ADR-016), writes `OPENING` reference stock movements (`IN` or `OUT`), and mutates `RawMaterial.currentStock` atomically.
+  5. Implemented `OpeningStockService` (`upsert` with row locks and atomic compensating deltas, `findWorksheet` for Phase 8e), `InventorySummaryService` (`findByPeriod` with 3 query-time aggregation buckets in one read transaction), and controllers guarded strictly with `@Roles('OWNER')` and `RoleGuard` (no `BranchScopeGuard` per ADR-004 centralized pool).
+  6. Added synthetic seed fixture for opening stock (`seed.ts`), idempotent on re-run.
+  7. Built comprehensive e2e test suite in `apps/api/test/inventory.e2e-spec.ts` (28 test cases) covering: Case R (three-way reconciliation against arithmetic identity, independent raw-SQL oracle, and `RawMaterial.currentStock`), Case N (no-declaration carry forward and empty material OUT badge), Case M (mid-period material), Case S (status boundaries), Case D (declaration semantics, mid-period carry-forward trap 1, re-declaration compensating delta trap 2, idempotent re-send), Case V (unitPrice required/forbidden rules, negative stock 409 rejection, 404 on unknown raw material, duplicate IDs rejection, malformed/future period rejection, atomic multi-item rollback), Case G (RBAC guards: 401 unauth, 403 kasir/admin, 200 owner), and Case C (concurrent inverted-order requests deadlock-free execution).
+  8. Logged tech debts DEBT-013, DEBT-014, and DEBT-015 in `docs/08 - Tech_Debt_Log.md` and updated `docs/03 - ERD.md` §3.
+- **Decisions made during this task:**
+  1. Option S1 + O2 + C2 selected per user confirmation: query-time `groupBy` + pure TypeScript assembler for inventory summary; signed delta movements (`applyOpening`) with `OPENING` reference type; upsert with compensating delta movements for corrections.
+  2. `OpeningStock.unitPrice` is nullable (required only when no purchase exists in the period, must be omitted if a purchase exists per PRD §5.5).
+  3. All three `/inventory/*` endpoints restricted to `@Roles('OWNER')` only with no `BranchScopeGuard` (ADR-004 centralized stock pool, ADR-011).
+- **Status:** Done
+- **Handoff notes:** Full monorepo validation `pnpm turbo run lint typecheck test` (13 tasks) and all 6 backend e2e test suites (`pnpm --filter api test:e2e` — 121 tests) are green. What next phases must know:
+  - Phase 6 completes the backend data & movement ledger core (Sales, Purchases, Payables, Movements, Opening Stock, Summary).
+  - The Worksheet endpoint `GET /inventory/opening-stock?period=YYYY-MM` is ready for frontend Phase 8e (Opening Stock UI).
+  - `GET /inventory/summary?period=YYYY-MM` is ready for frontend Phase 8e / Dashboard 5.
+
 ### TASK-009 — Phase 8a: Frontend — Auth/Nav Infra
 
 - **Date:** 2026-08-17

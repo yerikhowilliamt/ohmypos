@@ -179,6 +179,33 @@ async function main() {
     },
   });
 
+  // Phase 6 §11.13 — one OpeningStock declaration for the current month, so the
+  // Dashboard 4 and Dashboard 5 screens have something to render.
+  //
+  // Declared EQUAL to Gula's seeded currentStock on purpose: the delta is then
+  // exactly 0, the seeded balance is unchanged, and adding this fixture cannot
+  // shift the absolute stock numbers that the Phase 4 and Phase 5 e2e suites
+  // assert on. A seed that moved those balances is ERR-004 happening a third
+  // time.
+  const currentPeriodStart = new Date(
+    Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+  );
+  await prisma.openingStock.upsert({
+    where: {
+      rawMaterialId_periodMonth: {
+        rawMaterialId: gula.id,
+        periodMonth: currentPeriodStart,
+      },
+    },
+    update: {},
+    create: {
+      rawMaterialId: gula.id,
+      periodMonth: currentPeriodStart,
+      quantity: '10.0000',
+      unitPrice: '12000.00',
+    },
+  });
+
   const esKopiSusu = await prisma.product.upsert({
     where: { name: 'Es Kopi Susu' },
     update: {},
