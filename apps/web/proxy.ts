@@ -6,11 +6,11 @@ const ACCESS_TOKEN_COOKIE = 'access_token';
  * First line of route gating: redirect before a page renders, so an
  * unauthenticated visitor never sees a flash of protected UI.
  *
- * Middleware cannot verify the JWT's signature without the secret, so it only
+ * Proxy cannot verify the JWT's signature without the secret, so it only
  * checks that a session cookie is present. Role-level gating happens in the
  * route-group layouts, which ask the API who the user is (System Design §5).
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const hasSession = request.cookies.has(ACCESS_TOKEN_COOKIE);
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname === '/login';

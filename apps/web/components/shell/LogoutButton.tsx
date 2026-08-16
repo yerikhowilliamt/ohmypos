@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
 
 /**
- * Only redirects on a successful logout — the middleware only checks for the
+ * Only redirects on a successful logout — the proxy only checks for the
  * presence of the `access_token` cookie, not its validity, so redirecting to
  * `/login` while the cookie is still set (e.g. on a network error) would just
  * bounce the user straight back into the app.
