@@ -10,7 +10,10 @@ import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { ProductWithHppResponse } from '@ohmypos/api-contracts';
 import { CreateProductDto, UpdateProductDto } from './products.dto';
-import { ProductNameTakenException } from './products.exceptions';
+import {
+  ProductInUseException,
+  ProductNameTakenException,
+} from './products.exceptions';
 import { toProductWithHppResponse } from './products.mapper';
 
 @Injectable()
@@ -104,9 +107,22 @@ export class ProductsService {
   async remove(id: string): Promise<void> {
     await this.findOne(id);
 
-    // onDelete: Cascade on RecipeItem means deleting a product cleans up its recipe items.
-    await this.prisma.product.delete({
-      where: { id },
-    });
+    try {
+      // onDelete: Cascade on RecipeItem means deleting a product cleans up its
+      // recipe items. onDelete: Restrict on SaleItem → Product (Phase 5, plan
+      // §9.4 decision 8) means a sold product hits P2003 instead — mapped below
+      // rather than left as a raw 500.
+      await this.prisma.product.delete({
+        where: { id },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new ProductInUseException(id);
+      }
+      throw error;
+    }
   }
 }

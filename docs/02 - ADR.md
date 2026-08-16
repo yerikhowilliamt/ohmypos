@@ -329,3 +329,73 @@ A central purchase paid up front (`paymentStatus = PAID`) or settled later via a
 - *Make `LedgerEntry.branchId` nullable*: rejected — changes ported table baseline (ADR-012), complicates query-time reporting aggregations with null buckets, and alters `BranchScopeGuard` semantics.
 - *Require client to provide a separate ledger branch ID for central purchases*: rejected — confuses clients and leaks internal accounting rules into the public API.
 
+
+---
+
+## ADR-015: `Sale.totalAmount` is the sum of line totals; `SaleItem.hppAtSale` is per-unit; stock fan-out is aggregated per raw material
+
+**Status:** Accepted
+
+**Context:** Phase 5 builds the `Sale` flow, and three questions had to be settled before the first row could be written — each of them silently irreversible once sales exist, because a stored row does not record which convention wrote it.
+
+1. **What `totalAmount` means.** DEBT-004 recorded that the approved mockup renders an 11% tax line and a `MEMBER10` discount code, neither of which has a field in ERD v3. DEBT-004 itself required tax and discount to be decided *together and before* `Sale` was built, because both change the definition of the total that every Dashboard 3 report reads.
+2. **What `SaleItem.hppAtSale` stores.** ERD §3 says "snapshot per ADR-005" without stating whether the number is the per-unit cost or the line-extended cost. The two differ by a factor of `quantity`, and a report author who assumed the wrong one would produce a COGS figure wrong by orders of magnitude with nothing to flag it.
+3. **How many `StockMovement` rows one sale writes.** A cart can reach the same raw material through several products, or through the same product twice on two lines at different prices.
+
+**Decision:**
+
+1. **No tax, no discount, no order type in v1.** `Sale.totalAmount` is exactly `Σ SaleItem.lineTotal`. There is no `subtotal`, `discountAmount`, `taxAmount`, `taxRate`, discount-code table, or `orderType` column. Discounts and negotiated prices are recorded through the per-line price override that PRD §5.2 already specifies for this purpose: `unitPriceAtSale` is what the customer actually paid and `isPriceOverridden` marks that it diverged from the master price. The income `LedgerEntry.amount` therefore equals `Sale.totalAmount` with no gross-versus-net distinction anywhere.
+2. **`SaleItem.hppAtSale` is the PER-UNIT HPP** at the moment of sale — the same number `Product.hpp` shows live, produced by the same `calculateHpp` call. COGS for a line is `hppAtSale × quantity`; the column is not the line-extended cost.
+3. **One `StockMovement` per distinct raw material per sale**, with quantities summed across every contributing line. The per-material total is computed by summing the *exact* products `quantity × quantityUsed` and rounding **once** to 4dp `HALF_UP` — rounding per line and then summing drifts, and the drift lands in `RawMaterial.currentStock` where it never washes out.
+
+**Consequences:**
+
+- (+) Decision 2 lets the `Sale` flow call `calculateHpp` verbatim, which is what ADR-005's consequence section demands: the live figure and the snapshot must never become two implementations that can drift.
+- (+) Decision 3 keeps the lock set, the sufficiency check, and the decrement one-to-one with each other. A material appearing twice would otherwise be checked against a balance the first decrement had already moved.
+- (+) Gross margin is `totalAmount − Σ(hppAtSale × quantity)`, with no tax to exclude and no discount to add back — Phase 7 reads one number.
+- (−) A "total discounts given" report is not computable in v1: only the charged price is snapshotted, not the master price at sale time. If that report is ever wanted, the cheap addition is a `masterPriceAtSale` column, not a discount model.
+- (−) Per-`SaleItem` stock traceability is lost. `StockMovement.referenceId` points at the `Sale` and there is no `saleItemId` column, so per-line granularity would record detail that cannot be read back. Recovering it later is an additive column, not a rewrite.
+- (−) Decision 1 leaves the approved mockup's tax and discount lines unimplemented. Rendering them as static UI would promise behaviour the system does not have, which DEBT-004 already judged to be worse than omitting them.
+
+**Alternatives considered:**
+
+- *Sale-level `subtotal`/`discountAmount`/`taxAmount` columns*: rejected for v1 — nothing in the PRD, System Design, any ADR, or the ERD asks for tax; it exists only in the mockup. Adding it would split every Phase 7 revenue figure into gross and net for no requirement.
+- *Full tax-rate and discount-code model*: rejected — largest schema surface, and it would need its own ADR for how tax interacts with COGS and margin.
+- *Line-extended `hppAtSale`*: rejected — it folds a quantity into a column named like a unit cost, and it would prevent reusing `calculateHpp`, which is the specific outcome ADR-005 exists to prevent.
+- *Nullable `hppAtSale` so recipeless products can be sold*: rejected — pushes a null into every COGS aggregation in Phase 7 and turns one clear error at sale time into a silent gap in every report. A product with no recipe is rejected instead, with `RecipeIncompleteException` (Playbook §6 already names it).
+- *One `StockMovement` per (sale line, raw material)*: rejected — two rows with the same `referenceType` and `referenceId` for the same material are indistinguishable when read back.
+
+---
+
+## ADR-016: Raw-material row locks are acquired in ascending `rawMaterialId` order, all before any mutation
+
+**Status:** Accepted
+
+**Context:** ADR-007 established that `RawMaterial.currentStock` is decremented under a `SELECT ... FOR UPDATE` row lock, and closed the read-then-write race. It did not say anything about *ordering*, because at the time only one flow took those locks and its line list was short.
+
+Phase 5 changes that. A sale of N products fans out through `RecipeItem` to M distinct raw materials, where M is neither supplied by the client nor derivable from the request without reading the recipes. Two concurrent transactions that lock the same two materials in opposite order deadlock: PostgreSQL aborts one with `40P01`, which surfaces to a cashier as a 500 they cannot act on, non-deterministically, at the busiest moment of the day. Under the obvious per-line implementation the lock order is the customer's cart order — so this is not a bug that care prevents, it is a bug the customer chooses.
+
+Three flows now lock `raw_materials`: `SupplierPurchasesService.create` (via `StockMovementsService.applyInbound`), `SalesService.create`, and `StockMovementsService.applyOutbound`. A central purchase and a branch sale genuinely run at the same time, so the ordering has to hold *across* flows, not just within one.
+
+**Decision:**
+
+1. **Every transaction that locks `raw_materials` acquires all of its locks before any mutation, in ascending `rawMaterialId` order.** No exceptions, no flow-local ordering.
+2. **The lock loop lives in exactly one function** — `StockMovementsService.lockRawMaterialsInIdOrder(tx, ids)` — called by `applyInbound`, by `applyOutbound`, and by `SalesService` before it reads `unitCost` for the HPP snapshot. Two copies of an invariant are two places to get it wrong.
+3. **Locks are acquired before the first read of `unitCost` or `currentStock`**, not merely before the decrement, so a sale's HPP snapshot and its stock decrement see the same version of the same rows. A concurrent master-data price edit can otherwise produce a `hppAtSale` that never coexisted with the balance that was decremented.
+4. **The ordering is produced by a pure function** (`aggregateStockRequirements`, which returns its entries sorted) so that it is asserted by a unit test with no database, rather than resting on a comment.
+
+**Consequences:**
+
+- (+) Deadlock between any two stock-touching transactions is unreachable by construction: a cycle cannot form when every participant takes locks in the same total order. Contending transactions queue instead of one being aborted.
+- (+) The rule holds between a sale and a purchase, not just between two sales.
+- (+) The correctness of the ordering is testable at two levels: a unit test on the calculator's output, and an e2e test firing overlapping carts concurrently and asserting zero 500s.
+- (−) The lock phase costs one round trip per distinct raw material. At a realistic cart (≤ 8 products → ≤ 15 materials) this is single-digit milliseconds inside a transaction that already runs ~10 statements.
+- (−) `applyInbound` changed from interleaved lock/write to lock-all-then-write. Same order, strictly safer, and already covered by `purchasing-payables.e2e-spec.ts` cases 3 and 8 — but it is a touch of shipped Phase 4 code, taken deliberately rather than duplicating the invariant.
+- (−) A transaction now holds every one of its raw-material locks for its whole duration rather than releasing them progressively (it never did release them early — Postgres holds row locks to commit — but the acquisition is earlier). This is the pessimistic cost DEBT-002 already tracks.
+
+**Alternatives considered:**
+
+- *Lock lazily, per sale line, as each product's recipe is walked*: rejected — the lock order becomes the client-controlled cart order, which is exactly the deadlock. It also re-locks a material shared by two products in the same cart, and can only ever report one shortfall when the cashier needs the whole list.
+- *A single batched statement, `SELECT id FROM raw_materials WHERE id = ANY($1) ORDER BY id FOR UPDATE`*: rejected for v1 and logged as DEBT-008. It is one round trip instead of M, and the ordering is correct today because `LockRows` sits above `Sort` — but that is a query-plan dependency, and no test in this repo can pin a plan shape. A plan change would show up as an intermittent `40P01` in production against a green suite.
+- *Optimistic concurrency (version column, retry)*: rejected — ADR-007 already rejected it for v1 and DEBT-002 tracks it as the future path with a measured trigger. It would also need retry orchestration around a transaction that creates a `LedgerEntry`, so a retried sale must be idempotent or it double-writes money.
+- *Rely on ADR-007's lock without an ordering rule*: rejected — that is the status quo, and it is correct for balances and silently wrong for liveness.

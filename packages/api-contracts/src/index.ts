@@ -27,3 +27,4 @@ export * from './supplier.schema';
 export * from './supplier-purchase.schema';
 export * from './payable.schema';
 export * from './stock-movement.schema';
+export * from './sale.schema';
