@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { API_BASE_URL } from './api';
 
 /**
- * Server-side session lookup. The middleware only sees whether a cookie exists;
+ * Server-side session lookup. The proxy only sees whether a cookie exists;
  * this asks the API who the caller actually is, which is the only answer that
  * can be trusted for role gating.
  */
