@@ -1,15 +1,19 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4013/api/v1';
 
-/**
- * The frontend talks to apps/api over REST only, never to the database
- * (ADR-002). Credentials are always included so the HttpOnly session cookies
- * travel with the request — the token is never read by JavaScript.
- */
-export async function apiFetch<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+/** Thrown by `apiFetch` for any non-2xx response; carries the HTTP status so
+ * callers — and the refresh-on-401 logic below — can branch on it. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function doFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: 'include',
@@ -23,10 +27,69 @@ export async function apiFetch<T>(
     const message = Array.isArray(body?.message)
       ? body.message.join(', ')
       : (body?.message ?? `Request failed with status ${res.status}`);
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
 
   return res.json() as Promise<T>;
+}
+
+/**
+ * Concurrent 401s share a single `/auth/refresh` call: the backend rotates
+ * the refresh token on every call, so two simultaneous refreshes would
+ * invalidate each other.
+ */
+let refreshPromise: Promise<void> | null = null;
+
+function refreshTokenOnce(): Promise<void> {
+  if (!refreshPromise) {
+    refreshPromise = doFetch('/auth/refresh', { method: 'POST' })
+      .then(() => undefined)
+      .catch((error) => {
+        if (typeof window !== 'undefined') {
+          // Runs outside a component (no router available) — a full reload
+          // is also correct here, clearing any in-memory state after a
+          // fatal auth failure.
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+          window.location.href = '/login';
+        }
+        throw error;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+/** A 401 here means bad credentials, not a stale token — refreshing won't help. */
+const NO_REFRESH_PATHS = ['/auth/login', '/auth/refresh'];
+
+/**
+ * The frontend talks to apps/api over REST only, never to the database
+ * (ADR-002). Credentials are always included so the HttpOnly session cookies
+ * travel with the request — the token is never read by JavaScript.
+ *
+ * A 401 from any other endpoint is treated as a stale access token: it
+ * triggers one silent `/auth/refresh` (deduplicated across concurrent
+ * callers) and retries the original request once before giving up.
+ */
+export async function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  try {
+    return await doFetch<T>(path, init);
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.status === 401 &&
+      !NO_REFRESH_PATHS.includes(path)
+    ) {
+      await refreshTokenOnce();
+      return doFetch<T>(path, init);
+    }
+    throw error;
+  }
 }
 
 export { API_BASE_URL };
