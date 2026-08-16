@@ -60,6 +60,8 @@
   1. Option S1 + O2 + C2 selected per user confirmation: query-time `groupBy` + pure TypeScript assembler for inventory summary; signed delta movements (`applyOpening`) with `OPENING` reference type; upsert with compensating delta movements for corrections.
   2. `OpeningStock.unitPrice` is nullable (required only when no purchase exists in the period, must be omitted if a purchase exists per PRD §5.5).
   3. All three `/inventory/*` endpoints restricted to `@Roles('OWNER')` only with no `BranchScopeGuard` (ADR-004 centralized stock pool, ADR-011).
+- **Post-review corrections (2026-08-17):** reviewed with `review-remediation` skill (`docs/remediations/phase-6-inventory.md`):
+  1. Fixed isolated test-cleanup defect in `apps/api/test/allocation-sum.e2e-spec.ts`: `resetDatabase()` and `beforeEach()` now delete `saleItem` and `sale` before `product` and `ledgerEntry`, resolving `Foreign key constraint violated on the constraint: sale_items_product_id_fkey` when run in isolation against a seeded database. All 6 e2e test suites now pass both in isolation (`db:seed` -> `test:e2e -- <suite>`) and as a full suite (`db:seed` -> `test:e2e`).
 - **Status:** Done
 - **Handoff notes:** Full monorepo validation `pnpm turbo run lint typecheck test` (13 tasks) and all 6 backend e2e test suites (`pnpm --filter api test:e2e` — 121 tests) are green. What next phases must know:
   - Phase 6 completes the backend data & movement ledger core (Sales, Purchases, Payables, Movements, Opening Stock, Summary).
