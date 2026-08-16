@@ -16,9 +16,17 @@ export const CreateBankTransactionSchema = z.object({
 });
 export type CreateBankTransaction = z.infer<typeof CreateBankTransactionSchema>;
 
+export const BankTransactionSortBySchema = z.enum([
+  'txnDate',
+  'amount',
+  'createdAt',
+]);
+export type BankTransactionSortBy = z.infer<typeof BankTransactionSortBySchema>;
+
 export const BankTransactionQuerySchema = PaginationQuerySchema.extend({
   accountId: UuidString.optional(),
   status: TransactionStatus.optional(),
+  sortBy: BankTransactionSortBySchema.optional(),
 });
 export type BankTransactionQuery = z.infer<typeof BankTransactionQuerySchema>;
 

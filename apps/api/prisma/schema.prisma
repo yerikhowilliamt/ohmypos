@@ -293,7 +293,7 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  branch Branch? @relation(fields: [branchId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
   sales  Sale[]
 
   /// BranchScopeGuard filters on this for every KASIR-scoped request (ERD §6).

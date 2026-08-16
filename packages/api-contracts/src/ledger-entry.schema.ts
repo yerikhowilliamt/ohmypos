@@ -21,11 +21,19 @@ export type CreateLedgerEntry = z.infer<typeof CreateLedgerEntrySchema>;
 export const UpdateLedgerEntrySchema = CreateLedgerEntrySchema.partial();
 export type UpdateLedgerEntry = z.infer<typeof UpdateLedgerEntrySchema>;
 
+export const LedgerEntrySortBySchema = z.enum([
+  'entryDate',
+  'amount',
+  'createdAt',
+]);
+export type LedgerEntrySortBy = z.infer<typeof LedgerEntrySortBySchema>;
+
 export const LedgerEntryQuerySchema = PaginationQuerySchema.extend({
   branchId: UuidString.optional(),
   categoryId: UuidString.optional(),
   accountId: UuidString.optional(),
   type: TransactionType.optional(),
+  sortBy: LedgerEntrySortBySchema.optional(),
 });
 export type LedgerEntryQuery = z.infer<typeof LedgerEntryQuerySchema>;
 

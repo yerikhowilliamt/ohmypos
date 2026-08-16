@@ -24,7 +24,7 @@ export class ReconciliationService {
         where: bankTxnWhere,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { txnDate: 'desc' },
+        orderBy: { [query.sortBy ?? 'txnDate']: 'desc' },
       }),
       this.prisma.bankTransaction.count({ where: bankTxnWhere }),
     ]);

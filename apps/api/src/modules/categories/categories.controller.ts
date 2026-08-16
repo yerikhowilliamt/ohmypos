@@ -9,13 +9,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RoleGuard } from '../../common/guards/role.guard';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './categories.dto';
 
 @ApiTags('categories')
 @Controller('categories')
+@UseGuards(RoleGuard)
+@Roles('OWNER', 'ADMIN')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 

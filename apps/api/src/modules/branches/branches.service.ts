@@ -53,6 +53,18 @@ export class BranchesService {
 
   async remove(id: string) {
     await this.findOne(id);
+
+    const assignedUsers = await this.prisma.user.findMany({
+      where: { branchId: id },
+      select: { name: true, email: true },
+    });
+    if (assignedUsers.length > 0) {
+      const names = assignedUsers.map((u) => u.name || u.email).join(', ');
+      throw new BadRequestException(
+        `Cannot delete branch referenced by assigned staff (${names})`,
+      );
+    }
+
     try {
       return await this.prisma.branch.delete({ where: { id } });
     } catch (error) {
@@ -61,7 +73,7 @@ export class BranchesService {
         error.code === 'P2003'
       ) {
         throw new BadRequestException(
-          'Cannot delete branch referenced by existing ledger entries',
+          'Cannot delete branch referenced by existing transactions or staff',
         );
       }
       throw error;

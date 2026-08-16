@@ -10,6 +10,7 @@ import {
   Post,
   Query,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -20,10 +21,14 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RoleGuard } from '../../common/guards/role.guard';
 import { ImportService } from './import.service';
 
 @ApiTags('import')
 @Controller('import')
+@UseGuards(RoleGuard)
+@Roles('ADMIN', 'OWNER')
 export class ImportController {
   constructor(private readonly importService: ImportService) {}
 

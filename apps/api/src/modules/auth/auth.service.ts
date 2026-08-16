@@ -7,6 +7,7 @@ import type {
 } from '@ohmypos/api-contracts';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { Prisma } from '../../generated/prisma/client';
 import type { JwtPayload } from '../../common/types/jwt-payload.interface';
 
 export interface AuthTokens {
@@ -109,8 +110,15 @@ export class AuthService {
         where: { id: userId },
         data: { refreshTokenHash: null, tokenValidFrom: new Date() },
       });
-    } catch {
-      // The user may already be gone; logout succeeds either way.
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        // The user row no longer exists; session is effectively dead.
+        return;
+      }
+      throw error;
     }
   }
 

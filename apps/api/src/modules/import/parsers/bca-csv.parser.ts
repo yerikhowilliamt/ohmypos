@@ -16,11 +16,12 @@ export class BcaCsvParser implements BankParser {
     });
 
     const parsed: ParsedTransaction[] = [];
+    const signatureCounts = new Map<string, number>();
 
     for (const record of records) {
       if (record.length < 5) continue;
 
-      const dateStr = record[0];
+      const dateStr = (record[0] ?? '').trim();
       if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
         continue;
       }
@@ -36,24 +37,41 @@ export class BcaCsvParser implements BankParser {
 
       const txnDate = new Date(Date.UTC(y, m - 1, d));
 
-      let description = record[1];
-      if (record[2] && record[2].length > 0 && record[2] !== '0000') {
-        description += ` - ${record[2]}`;
+      let description = (record[1] ?? '').trim();
+      const branchRef = (record[2] ?? '').trim();
+      if (branchRef && branchRef.length > 0 && branchRef !== '0000') {
+        description += ` - ${branchRef}`;
       }
 
-      const rawAmount = record[3].replace(/,/g, '');
+      const rawAmount = (record[3] ?? '').replace(/,/g, '').trim();
       let amount: string;
       try {
-        amount = new Decimal(rawAmount).toFixed(2);
+        const dec = new Decimal(rawAmount);
+        if (dec.isNaN() || !dec.isFinite() || dec.lessThanOrEqualTo(0)) {
+          continue;
+        }
+        amount = dec.toFixed(2);
       } catch {
         continue;
       }
 
-      const typeStr = record[4].toUpperCase();
-      const type =
-        typeStr === 'CR' ? TransactionType.INFLOW : TransactionType.OUTFLOW;
+      const typeStr = (record[4] ?? '').trim().toUpperCase();
+      let type: TransactionType;
+      if (typeStr === 'CR') {
+        type = TransactionType.INFLOW;
+      } else if (typeStr === 'DB') {
+        type = TransactionType.OUTFLOW;
+      } else {
+        // Skip unrecognised / malformed transaction types (e.g. 'CREDIT', empty string)
+        continue;
+      }
 
-      const dedupRaw = `${txnDate.toISOString()}_${description}_${amount}_${type}`;
+      const baseSignature = `${txnDate.toISOString()}_${description}_${amount}_${type}`;
+      const count = signatureCounts.get(baseSignature) ?? 0;
+      signatureCounts.set(baseSignature, count + 1);
+
+      const dedupRaw =
+        count === 0 ? baseSignature : `${baseSignature}_${count}`;
       const dedupHash = crypto
         .createHash('sha256')
         .update(dedupRaw)
