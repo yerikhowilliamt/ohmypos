@@ -76,18 +76,6 @@
 - **Priority:** Medium
 - **Status:** Partially resolved (2026-08-16) — Tax, discount, and order type decided per ADR-015 (Phase 5 planning): none get schema support in v1. `Sale.totalAmount = Σ SaleItem.lineTotal`; discounts are expressed through the existing per-line price override (`unitPriceAtSale` + `isPriceOverridden`). SKU/barcode scanning, the expense approval state, and the cashier shift remain **Open** — none of the three is touched by Phase 5 and each still needs its own approval pass.
 
-### DEBT-003 — Two vocabularies for transaction direction
-
-- **Date logged:** 2026-08-14
-- **Found during:** TASK-001 (ADR-012)
-- **Description:** The schema and all backend code use Kasync's `TransactionType {INFLOW, OUTFLOW}`, while the product, the PRD, and the Indonesian-language UI speak in terms of pemasukan/pengeluaran (income/expense). The translation between the two lives in the presentation layer rather than in the data model.
-- **Why deferred:** Renaming the enum to `INCOME`/`EXPENSE` would have required editing the ported `AllocationService` and `MatchingEngine`, which compare `bankTransaction.type` against `ledgerEntry.type` directly — churn on the most correctness-critical path in the system, in exchange for vocabulary alone. `INFLOW`/`OUTFLOW` is also the more accurate word for a bank transaction, which has a direction rather than a category.
-- **Impact if unaddressed:** A developer reading the schema and a stakeholder reading the UI use different words for the same field, which is a standing source of small misunderstandings — and a risk of a UI label being mapped backwards without a test catching it.
-- **Trigger condition:** A third vocabulary appears for the same concept, or a UI mislabelling bug is traced to this mapping.
-- **Proposed resolution:** Centralise the mapping in one exported helper in `packages/ui` (or `packages/api-contracts`) so no screen translates the enum inline, and cover it with a test asserting both directions.
-- **Priority:** Low
-- **Status:** Open
-
 ### DEBT-006 — RawMaterial.unitCost not updated by purchases
 
 - **Date logged:** 2026-08-16
@@ -160,19 +148,7 @@
 - **Priority:** Low
 - **Status:** Open
 
-### DEBT-012 — `packages/ui`'s shadcn components reference undefined color tokens
-
-- **Date logged:** 2026-08-17
-- **Found during:** TASK-009 (Phase 8a — Frontend Auth/Nav Infra), while building the nav shell
-- **Description:** `Button`, `Card`, and `Input` in `packages/ui/src/components/ui/` use shadcn's default semantic Tailwind classes (`bg-primary`, `text-primary-foreground`, `bg-card`, `bg-destructive`, `border-input`, `bg-background`, `text-muted-foreground`, etc.), but `packages/ui/src/styles/globals.css`'s `@theme` block only defines DESIGN.md's own token set (`--color-brand-primary`, `--color-surface-*`, `--color-text-*`, `--color-border-default`, `--color-status-*`). None of the shadcn `--color-primary`/`--color-card`/`--color-destructive`/etc. variables are defined anywhere in the repo, so those utility classes don't resolve to anything — `components.json` claims `cssVariables: true` with `baseColor: "slate"`, but the mapping was never written.
-- **Why deferred:** Pre-existing since Phase 0 scaffolding (TASK-002) — not introduced by this task. Out of scope for TASK-009, which added one new component (`dropdown-menu.tsx`) written directly against the DESIGN.md tokens instead of repeating the same gap.
-- **Impact if unaddressed:** `Button` (all variants) and `Input` render with no background/foreground color from their intended variant — currently masked because existing usages (the login form) don't depend on the missing colors being correct. Any future use of `variant="destructive"`/`"secondary"`/`"outline"` or `Card`'s default styling will look visibly broken.
-- **Trigger condition:** The next task that visibly relies on `Button`'s non-default variants or `Card`'s default appearance (first candidate: the actual POS/back-office page implementations replacing today's placeholders).
-- **Proposed resolution:** Either map shadcn's semantic tokens onto DESIGN.md's palette in `globals.css` (e.g. `--color-primary: var(--color-brand-primary)`, `--color-destructive: var(--color-status-danger)`, etc.), or rewrite `Button`/`Card`/`Input` to reference DESIGN.md tokens directly, matching the pattern used by `dropdown-menu.tsx` and `login/page.tsx`.
-- **Priority:** Medium
-- **Status:** Open
-
-### DEBT-011 — Report rows are unpaginated
+### DEBT-016 — Report rows are unpaginated
 
 - **Area:** `apps/api/src/modules/reports` (Dashboard 3)
 - **What:** `GET /reports/product-profit` returns one row per product sold in the range with no pagination, and `GET /reports/daily-income` one row per day (bounded at 366 by `MAX_REPORT_RANGE_DAYS`).
@@ -221,6 +197,16 @@
 
 ## Resolved
 
+### DEBT-003 — Two vocabularies for transaction direction
+
+- **Date logged:** 2026-08-14
+- **Found during:** TASK-001 (ADR-012)
+- **Description:** The schema and all backend code use Kasync's `TransactionType {INFLOW, OUTFLOW}`, while the product, the PRD, and the Indonesian-language UI speak in terms of pemasukan/pengeluaran (income/expense). The translation between the two lived ad-hoc in presentation layers rather than in a typed system mapping.
+- **Why deferred:** Renaming the enum to `INCOME`/`EXPENSE` would have required editing the ported `AllocationService` and `MatchingEngine`, which compare `bankTransaction.type` against `ledgerEntry.type` directly. `INFLOW`/`OUTFLOW` is also the more accurate word for a bank transaction.
+- **Proposed resolution:** Centralise the mapping in one exported helper in `packages/ui` and `packages/api-contracts` so no screen translates the enum inline, and cover it with a test asserting both directions.
+- **Priority:** Low
+- **Status:** Resolved (2026-08-17) — Implemented centralized type-safe mappings in `@ohmypos/api-contracts` (`vocabulary.ts`), re-exported in `apps/web/lib/vocabulary.ts` alongside Flow Indicator (`text-accent-inflow`/`text-accent-outflow`) and status badge helpers (`StockStatus`, `PaymentStatus`, `PayableStatus`, `TransactionStatus`), fully covered with 16 unit tests in Vitest (`apps/web/lib/vocabulary.test.ts`).
+
 ### DEBT-005 — Approved mockup's POS and inventory contradict the stock and costing model
 
 - **Date logged:** 2026-08-15
@@ -232,3 +218,15 @@
 - **Proposed resolution:** Decide explicitly whether the POS shows a derived "makeable quantity" (and specify how it is computed from the recipe and raw-material stock), and confirm that valuation follows ADR-005's recipe-based HPP. If moving-average costing is genuinely wanted, it supersedes ADR-005 and needs its own ADR.
 - **Priority:** High — it touches money and stock correctness, which Playbook §10 puts in the "must have thorough tests" tier.
 - **Status:** Resolved (2026-08-15) — Accepted per ADR-013. POS displays a derived advisory makeable quantity; moving-average costing is rejected; HPP stays recipe-based computed live via `hpp.calculator.ts`. `DESIGN.md` updated.
+
+### DEBT-012 — `packages/ui`'s shadcn components reference undefined color tokens
+
+- **Date logged:** 2026-08-17
+- **Found during:** TASK-009 (Phase 8a — Frontend Auth/Nav Infra), while building the nav shell
+- **Description:** `Button`, `Card`, and `Input` in `packages/ui/src/components/ui/` used shadcn's default semantic Tailwind classes (`bg-primary`, `text-primary-foreground`, `bg-card`, `bg-destructive`, `border-input`, `bg-background`, `text-muted-foreground`, etc.), but `packages/ui/src/styles/globals.css`'s `@theme` block only defined DESIGN.md's own token set (`--color-brand-primary`, `--color-surface-*`, `--color-text-*`, `--color-border-default`, `--color-status-*`). None of the shadcn `--color-primary`/`--color-card`/`--color-destructive`/etc. variables were defined anywhere in the repo.
+- **Why deferred:** Pre-existing since Phase 0 scaffolding (TASK-002) — not introduced by TASK-009.
+- **Impact if unaddressed:** `Button` (all variants) and `Input` render with no background/foreground color from their intended variant.
+- **Trigger condition:** The next task that visibly relies on `Button`'s non-default variants or `Card`'s default appearance.
+- **Proposed resolution:** Either map shadcn's semantic tokens onto DESIGN.md's palette in `globals.css` (e.g. `--color-primary: var(--color-brand-primary)`, `--color-destructive: var(--color-status-danger)`, etc.), or rewrite `Button`/`Card`/`Input` to reference DESIGN.md tokens directly, matching the pattern used by `dropdown-menu.tsx`.
+- **Priority:** Medium
+- **Status:** Resolved (2026-08-17) — Defined the complete DESIGN.md token palette (`#16A34A` success, `#00B894` inflow, `#2563EB` outflow/info, correct surfaces, radius, and shadows) and full semantic shadcn `@theme` color mappings in `packages/ui/src/styles/globals.css`. Rewrote `button.tsx`, `card.tsx`, `input.tsx`, and `label.tsx` to reference DESIGN.md semantic tokens directly. Verified with zero missing utilities and full test suite passing.
