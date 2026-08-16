@@ -59,9 +59,10 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 3.  **Role & Branch Enforcement:** Any endpoint with role or branch restrictions must apply `RoleGuard` and/or `BranchScopeGuard` explicitly (ADR-011, Playbook §8) — never rely on frontend routing alone to hide access.
 4.  **ADRs:** New ADRs follow the trigger criteria in Playbook §17. When superseding, mark "Superseded," don't delete (like ADR-009 → ADR-010 → ADR-011).
 5.  **Testing Requirement:** If a task or phase requires testing, you MUST write unit tests. For critical features, write e2e tests as well. After writing tests, run them (`turbo run lint typecheck test`) locally before pushing.
-6.  **Documentation Log:** After tests pass and the task is complete, you MUST document the work in the respective logs under `docs/`: `06 - Error_Log.md`, `07 - Task_Log.md`, and/or `08 - Tech_Debt_Log.md`.
-7.  **Database Changes:** Run `pnpm --filter api prisma migrate dev --name <name>` to migrate, then `pnpm --filter api db:seed` to reset synthetic data. Remember: schema/migration changes require approval first (see Governance above).
-8.  **Code generation & Types:** Zod schemas drive both API validation and TS types. Do not manually type request/response objects if a Zod schema exists. **NEVER use the `any` type.**
+6.  **E2E Frontend Testing (MCP Playwright):** For UI smoke tests and user-flow verification, use the Playwright MCP server directly from the agent — no spec files needed. Read the skill at `.agents/skills/e2e-playwright/SKILL.md` before starting any E2E session. Seed credentials, proven selectors, and known gotchas (especially CurrencyInput formatting behavior) are documented there.
+7.  **Documentation Log:** After tests pass and the task is complete, you MUST document the work in the respective logs under `docs/`: `06 - Error_Log.md`, `07 - Task_Log.md`, and/or `08 - Tech_Debt_Log.md`.
+8.  **Database Changes:** Run `pnpm --filter api prisma migrate dev --name <name>` to migrate, then `pnpm --filter api db:seed` to reset synthetic data. Remember: schema/migration changes require approval first (see Governance above).
+9.  **Code generation & Types:** Zod schemas drive both API validation and TS types. Do not manually type request/response objects if a Zod schema exists. **NEVER use the `any` type.**
 
 ## Troubleshooting
 
