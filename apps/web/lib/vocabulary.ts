@@ -82,11 +82,11 @@ export function getFlowIndicatorClasses(
 export function getStockStatusBadgeClasses(status: StockStatus): string {
   switch (status) {
     case 'OK':
-      return 'bg-status-success/10 text-status-success border-status-success/20';
+      return 'bg-status-success text-white border-transparent';
     case 'LOW':
-      return 'bg-status-warning/10 text-status-warning border-status-warning/20';
+      return 'bg-status-warning text-white border-transparent';
     case 'OUT':
-      return 'bg-status-danger/10 text-status-danger border-status-danger/20';
+      return 'bg-status-danger text-white border-transparent';
     default:
       return 'bg-surface-muted text-text-secondary border-border-default';
   }
@@ -98,11 +98,11 @@ export function getStockStatusBadgeClasses(status: StockStatus): string {
 export function getPaymentStatusBadgeClasses(status: PaymentStatus): string {
   switch (status) {
     case 'PAID':
-      return 'bg-status-success/10 text-status-success border-status-success/20';
+      return 'bg-status-success text-white border-transparent';
     case 'PARTIALLY_PAID':
-      return 'bg-status-warning/10 text-status-warning border-status-warning/20';
+      return 'bg-status-warning text-white border-transparent';
     case 'UNPAID':
-      return 'bg-status-danger/10 text-status-danger border-status-danger/20';
+      return 'bg-status-danger text-white border-transparent';
     default:
       return 'bg-surface-muted text-text-secondary border-border-default';
   }
@@ -116,13 +116,13 @@ export function getTransactionStatusBadgeClasses(
 ): string {
   switch (status) {
     case 'MATCHED':
-      return 'bg-status-success/10 text-status-success border-status-success/20';
+      return 'bg-status-success text-white border-transparent';
     case 'PARTIALLY_ALLOCATED':
-      return 'bg-status-warning/10 text-status-warning border-status-warning/20';
+      return 'bg-status-warning text-white border-transparent';
     case 'PENDING_REVIEW':
-      return 'bg-status-info/10 text-status-info border-status-info/20';
+      return 'bg-status-info text-white border-transparent';
     case 'UNRESOLVED':
-      return 'bg-status-danger/10 text-status-danger border-status-danger/20';
+      return 'bg-status-danger text-white border-transparent';
     default:
       return 'bg-surface-muted text-text-secondary border-border-default';
   }

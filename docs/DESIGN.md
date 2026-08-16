@@ -263,7 +263,7 @@ It must not dominate the entire interface.
 
 Operational Accent
 color.accent.inflow = #00B894
-color.accent.outflow = #2563EB
+color.accent.outflow = #7C3AED
 Inflow
 
 Represents:
@@ -283,7 +283,7 @@ Status
 color.status.success = #16A34A
 color.status.warning = #F59E0B
 color.status.danger = #EF4444
-color.status.info = #2563EB
+color.status.info = #7C3AED
 
 Do not use neon #00FFBF as the default success color.
 

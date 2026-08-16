@@ -39,10 +39,10 @@ export function Sidebar({ role }: { role: UserRole }) {
               key={item.href}
               href={item.href}
               className={cn(
-                'rounded-sm px-3 py-2 text-sm font-medium text-text-secondary transition-colors',
+                'rounded-sm px-3 py-2 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-surface-strong text-brand-primary'
-                  : 'hover:bg-surface-strong/60 hover:text-text-primary',
+                  ? 'bg-brand-primary text-white font-semibold shadow-1'
+                  : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
               )}
             >
               {item.label}

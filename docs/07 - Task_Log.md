@@ -41,6 +41,34 @@
 
 ## Log
 
+### TASK-016 — Phase 8b: Frontend Master Data Screens (Produk, Resep/BOM, Bahan Baku)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Frontend (`apps/web`) / Phase 8b: Master Data Screens
+- **Objective:** Build the `(back-office)/master-data` screens in `apps/web` for managing Raw Materials CRUD, Products CRUD with live backend HPP/margin calculation display, and interactive Recipe/BOM Editor with dynamic ingredient rows and server envelope synchronization.
+- **Relevant docs:** PRD §5.1, System Design v4 §5, DESIGN.md §6/§29, ADR-004, ADR-005, ADR-010, ADR-011, ADR-013, DEBT-004.
+- **What was done:**
+  1. **Query Infrastructure:** Configured TanStack Query (`@tanstack/react-query`) with `QueryProvider.tsx` wrapped in `apps/web/app/layout.tsx`.
+  2. **Shared UI Primitives:** Extended `@ohmypos/ui` with `Dialog`, `Tabs`, `Table`, and `Badge` primitives strictly styled per DESIGN.md tokens (`packages/ui/src/components/ui/`).
+  3. **Formatters & Math Display:** Created `apps/web/lib/formatters.ts` with `formatCurrency`, `formatQuantity`, and `formatMarginPercentage` helpers, fully covered with 9 unit tests in `apps/web/lib/formatters.test.ts`.
+  4. **Master Data Query Hooks:** Created `apps/web/hooks/useMasterData.ts` encapsulating all `raw-materials`, `products`, and `recipes` queries and mutation invalidations via `apiFetch`.
+  5. **Raw Material Management:** Built `RawMaterialsTable.tsx` and `RawMaterialFormDialog.tsx` validating against `CreateRawMaterialSchema` / `UpdateRawMaterialSchema` with low-stock warnings and safe delete confirmation (`DeleteConfirmDialog.tsx`).
+  6. **Product Management:** Built `ProductsTable.tsx` and `ProductFormDialog.tsx` validating against `CreateProductSchema` / `UpdateProductSchema`, displaying live HPP, margin %, and makeable quantity without client-side HPP recomputation.
+  7. **Interactive Recipe / BOM Editor:** Built `RecipeEditorDialog.tsx` with dynamic `useFieldArray` ingredient rows, duplicate raw material detection, positive quantity validation, and atomic server envelope synchronization on save (`PUT /products/:id/recipe`).
+  8. **Tabbed Workspace & Layout:** Built `MasterDataSummaryCards.tsx` and `MasterDataClient.tsx` integrated inside `apps/web/app/(back-office)/master-data/page.tsx` with server-side role gating (`requireRole(['ADMIN', 'OWNER'])`).
+  9. **Currency Input Masking & Formatting:** Built `CurrencyInput` primitive (`packages/ui/src/components/ui/currency-input.tsx`) and `formatThousands` / `unformatThousands` (`apps/web/lib/formatters.ts`) to visually format prices with Indonesian dot separators (e.g. `20000` -> `20.000`) while strictly keeping raw payload types for backend submissions.
+  10. **Automatic Query Refreshing:** Removed manual "Segarkan Data" button in favor of automatic background query invalidation upon any creation/update/deletion, plus window focus refetching via TanStack Query.
+  11. **Testing & Verification:** Added 5 component/unit test suites with Vitest + React Testing Library (`RecipeEditorDialog.test.tsx`, `RawMaterialFormDialog.test.tsx`, `ProductFormDialog.test.tsx`, `ProductsTable.test.tsx`, `RawMaterialsTable.test.tsx`) — 54 tests passing in `apps/web`. Full monorepo validation (`pnpm turbo run lint typecheck test build`) passed with 15/15 tasks green.
+- **Decisions made during this task:**
+  1. Approved Option 1 (Tabbed single-page hub on `/master-data`), Option 3 (TanStack Query for state and cache synchronization), and Option 1 (`useFieldArray` recipe form with backend envelope sync).
+  2. DEBT-004 Compliance: Omitted mockup fields with no backing schema (SKU, barcode scanner, tax, discount lines).
+  3. Deletion conflict handling: Display user-friendly Indonesian error messages when catching `409 Conflict` (foreign key in-use).
+  4. Automatic data synchronization: Handled reactively via TanStack Query `invalidateQueries` and window focus refetching.
+- **Status:** Done
+- **Handoff notes:**
+  - `master-data` route is fully operational for `ADMIN` and `OWNER`.
+  - Next phases can reuse `QueryProvider`, formatters, and table/dialog primitives for Expenses, Inventory, and Reconciliation screens.
+
 ### TASK-015 — Sidebar Brand Logo Integration (`logo.webp` / `logo.svg`)
 
 - **Date:** 2026-08-17

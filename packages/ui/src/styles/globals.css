@@ -1,23 +1,37 @@
 @import 'tailwindcss';
 
 /**
- * OhMyPos design tokens — the single source for DESIGN.md's values.
+ * OhMyPos Design Tokens
  *
- * DESIGN.md is explicit that shadcn/ui's default radius, shadow, and gray scale
- * must NOT be used unmodified, and that component code references semantic
- * tokens rather than raw hex. Everything below is therefore declared as a
- * Tailwind v4 theme variable, which generates the matching utilities
- * (`bg-surface-base`, `text-text-secondary`, `rounded-sm`, `shadow-1`, …).
+ * Single source of truth for the values defined in DESIGN.md.
+ *
+ * Brand:
+ *   Primary   — #00BFFF (Cyan)
+ *   Secondary — #7C3AED (Violet)
+ *   Tertiary  — #00B894 (Emerald)
+ *
+ * The consuming application supplies the loaded fonts through next/font.
+ * Components should reference semantic tokens rather than raw hex values.
  */
+
 @theme {
-  /* Typography — Plus Jakarta Sans for UI, JetBrains Mono for all numeric data */
-  /* The consuming app supplies the loaded font via next/font; the literal
-     family name is the fallback so this package renders correctly on its own. */
+  /* ============================================================
+   * Typography
+   * ============================================================ */
+
+  /* UI typography */
   --font-sans:
-    var(--font-plus-jakarta, 'Plus Jakarta Sans'), 'Plus Jakarta Sans Fallback',
-    ui-sans-serif, system-ui, sans-serif;
+    var(--font-plus-jakarta, 'Plus Jakarta Sans'),
+    'Plus Jakarta Sans Fallback',
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+
+  /* Numeric / financial data */
   --font-mono:
-    var(--font-jetbrains-mono, 'JetBrains Mono'), ui-monospace, SFMono-Regular,
+    var(--font-jetbrains-mono, 'JetBrains Mono'),
+    ui-monospace,
+    SFMono-Regular,
     monospace;
 
   --text-xs: 12px;
@@ -28,56 +42,137 @@
   --text-2xl: 24px;
   --text-3xl: 30px;
 
-  /* Brand + accents. inflow/outflow drive the Flow Indicator motif (DESIGN.md §9). */
-  --color-brand-primary: #00bfff;
-  --color-accent-inflow: #00b894;
-  --color-accent-outflow: #2563eb;
 
-  /* Text (DESIGN.md §9) */
-  --color-text-primary: #0f172a;
+  /* ============================================================
+   * Brand
+   *
+   * OhMyPos brand palette:
+   * Primary   — Cyan
+   * Secondary — Violet
+   * Tertiary  — Emerald
+   * ============================================================ */
+
+  --color-brand-primary: #00BFFF;
+  --color-brand-secondary: #7C3AED;
+  --color-brand-tertiary: #00B894;
+
+  /* Soft brand surfaces */
+  --color-brand-primary-soft: #E6F7FF;
+  --color-brand-secondary-soft: #F3E8FF;
+  --color-brand-tertiary-soft: #E8FBF7;
+
+
+  /* ============================================================
+   * Financial Accents
+   *
+   * Used by the Flow Indicator motif and financial visualizations.
+   * ============================================================ */
+
+  --color-accent-inflow: #00B894;
+  --color-accent-outflow: #7C3AED;
+
+
+  /* ============================================================
+   * Text
+   * ============================================================ */
+
+  --color-text-primary: #0F172A;
   --color-text-secondary: #334155;
-  --color-text-tertiary: #64748b;
-  --color-text-inverse: #ffffff;
+  --color-text-tertiary: #64748B;
+  --color-text-inverse: #FFFFFF;
 
-  /* Surface (DESIGN.md §9, §10) */
-  --color-surface-base: #f8fafc;
-  --color-surface-muted: #f1f5f9;
-  --color-surface-raised: #ffffff;
-  --color-surface-strong: #e0f6ff;
-  --color-surface-dark: #0f172a;
 
-  /* Border (DESIGN.md §9) */
-  --color-border-default: #e2e8f0;
-  --color-border-strong: #cbd5e1;
+  /* ============================================================
+   * Surface
+   * ============================================================ */
 
-  /* Status (DESIGN.md §9) */
-  --color-status-success: #16a34a;
-  --color-status-warning: #f59e0b;
-  --color-status-danger: #ef4444;
-  --color-status-info: #2563eb;
+  --color-surface-base: #F8FAFC;
+  --color-surface-muted: #F1F5F9;
+  --color-surface-raised: #FFFFFF;
 
-  /* Shadcn / Semantic Theme mappings onto DESIGN.md palette (DEBT-012) */
-  --color-primary: #00bfff;
-  --color-primary-foreground: #0f172a;
-  --color-destructive: #ef4444;
-  --color-destructive-foreground: #ffffff;
-  --color-secondary: #f1f5f9;
-  --color-secondary-foreground: #0f172a;
-  --color-muted: #f1f5f9;
-  --color-muted-foreground: #64748b;
-  --color-accent: #e0f6ff;
-  --color-accent-foreground: #0f172a;
-  --color-card: #ffffff;
-  --color-card-foreground: #0f172a;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #0f172a;
-  --color-border: #e2e8f0;
-  --color-input: #e2e8f0;
+  /*
+   * Strong surface is reserved for highlighted / selected states.
+   * It should not be used as the default page background.
+   */
+  --color-surface-strong: #E6F7FF;
+
+  --color-surface-dark: #0F172A;
+
+
+  /* ============================================================
+   * Border
+   * ============================================================ */
+
+  --color-border-default: #E2E8F0;
+  --color-border-strong: #CBD5E1;
+
+
+  /* ============================================================
+   * Status
+   * ============================================================ */
+
+  --color-status-success: #16A34A;
+  --color-status-warning: #F59E0B;
+  --color-status-danger: #EF4444;
+
+  /*
+   * Info intentionally uses a darker blue instead of violet.
+   * Violet is reserved for the OhMyPos brand secondary accent.
+   */
+  --color-status-info: #0284C7;
+
+
+  /* ============================================================
+   * Shadcn / Semantic Theme
+   *
+   * These are semantic UI roles and are intentionally separate
+   * from the OhMyPos brand palette.
+   * ============================================================ */
+
+  /* Primary */
+  --color-primary: #00BFFF;
+  --color-primary-foreground: #FFFFFF;
+
+  /* Secondary surface */
+  --color-secondary: #F1F5F9;
+  --color-secondary-foreground: #0F172A;
+
+  /* Muted */
+  --color-muted: #F1F5F9;
+  --color-muted-foreground: #64748B;
+
+  /* Accent */
+  --color-accent: #E6F7FF;
+  --color-accent-foreground: #0F172A;
+
+  /* Destructive */
+  --color-destructive: #EF4444;
+  --color-destructive-foreground: #FFFFFF;
+
+  /* Card */
+  --color-card: #FFFFFF;
+  --color-card-foreground: #0F172A;
+
+  /* Popover */
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: #0F172A;
+
+  /* Borders / inputs */
+  --color-border: #E2E8F0;
+  --color-input: #E2E8F0;
+
+  /* Focus ring */
   --color-ring: rgba(0, 191, 255, 0.5);
-  --color-background: #f8fafc;
-  --color-foreground: #0f172a;
 
-  /* Spacing scale (DESIGN.md §13) */
+  /* Background / foreground */
+  --color-background: #F8FAFC;
+  --color-foreground: #0F172A;
+
+
+  /* ============================================================
+   * Spacing
+   * ============================================================ */
+
   --spacing-1: 4px;
   --spacing-2: 8px;
   --spacing-3: 12px;
@@ -87,7 +182,11 @@
   --spacing-7: 40px;
   --spacing-8: 48px;
 
-  /* Radius (DESIGN.md §11) */
+
+  /* ============================================================
+   * Radius
+   * ============================================================ */
+
   --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -95,38 +194,76 @@
   --radius-xl: 20px;
   --radius-pill: 9999px;
 
-  /* Shadows (DESIGN.md §12) */
-  --shadow-1: 0px 1px 3px 0px rgba(15, 23, 42, 0.06);
-  --shadow-2: 0px 4px 12px 0px rgba(15, 23, 42, 0.08);
 
-  /* Motion (DESIGN.md §14) */
+  /* ============================================================
+   * Shadows
+   * ============================================================ */
+
+  --shadow-1:
+    0px 1px 3px 0px rgba(15, 23, 42, 0.06);
+
+  --shadow-2:
+    0px 4px 12px 0px rgba(15, 23, 42, 0.08);
+
+
+  /* ============================================================
+   * Motion
+   * ============================================================ */
+
   --animate-duration-instant: 150ms;
   --animate-duration-fast: 200ms;
   --animate-duration-normal: 250ms;
 }
 
+
+/* ==============================================================
+ * Root
+ * ============================================================== */
+
 :root {
-  /* Brand primary at 50% — plain rgba for broad tooling/browser compatibility. */
+  /*
+   * Brand primary at 50%.
+   * Used for focus indicators and interactive states.
+   */
   --color-focus-ring: rgba(0, 191, 255, 0.5);
 }
+
+
+/* ==============================================================
+ * Base
+ * ============================================================== */
 
 @layer base {
   body {
     background-color: var(--color-surface-base);
     color: var(--color-text-primary);
+
     font-family: var(--font-sans);
     font-size: var(--text-md);
     font-weight: 400;
     line-height: 20px;
   }
 
-  /* WCAG 2.2 AA: focus indicators are never hidden or suppressed. */
+  /*
+   * WCAG 2.2 AA:
+   * Focus indicators are never hidden or suppressed.
+   */
   :focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
   }
 
-  /* Numeric data is tabular and monospaced wherever it appears. */
+  /*
+   * Numeric data is tabular and monospaced.
+   *
+   * Recommended for:
+   * - prices
+   * - transaction amounts
+   * - invoice numbers
+   * - quantities
+   * - timestamps
+   * - percentages
+   */
   .numeric {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
