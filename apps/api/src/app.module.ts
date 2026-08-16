@@ -25,6 +25,7 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
 import { SupplierPurchasesModule } from './modules/supplier-purchases/supplier-purchases.module';
 import { PayablesModule } from './modules/payables/payables.module';
+import { SalesModule } from './modules/sales/sales.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { PayablesModule } from './modules/payables/payables.module';
     StockMovementsModule,
     SupplierPurchasesModule,
     PayablesModule,
+    SalesModule,
   ],
 
   providers: [
