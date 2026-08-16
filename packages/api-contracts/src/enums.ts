@@ -34,3 +34,32 @@ export const LedgerSourceType = z.enum([
   'PAYABLE_SETTLEMENT',
 ]);
 export type LedgerSourceType = z.infer<typeof LedgerSourceType>;
+
+/** OhMyPos — SupplierPurchase.paymentStatus (ERD §3). */
+export const PaymentStatus = z.enum(['PAID', 'UNPAID', 'PARTIALLY_PAID']);
+export type PaymentStatus = z.infer<typeof PaymentStatus>;
+
+/**
+ * The subset a client may send when CREATING a purchase. `PARTIALLY_PAID` is
+ * unreachable at creation: ADR-006 makes the branch binary (ledger entry XOR
+ * payable), and ERD §6 states the two are mutually exclusive at creation time.
+ * The settlement flow is what widens the stored value to PARTIALLY_PAID (§4).
+ */
+export const PurchasePaymentStatusInput = z.enum(['PAID', 'UNPAID']);
+export type PurchasePaymentStatusInput = z.infer<
+  typeof PurchasePaymentStatusInput
+>;
+
+export const PayableStatus = z.enum(['OPEN', 'PARTIALLY_SETTLED', 'SETTLED']);
+export type PayableStatus = z.infer<typeof PayableStatus>;
+
+export const StockDirection = z.enum(['IN', 'OUT']);
+export type StockDirection = z.infer<typeof StockDirection>;
+
+export const StockReferenceType = z.enum([
+  'SALE',
+  'PURCHASE',
+  'OPENING',
+  'ADJUSTMENT',
+]);
+export type StockReferenceType = z.infer<typeof StockReferenceType>;

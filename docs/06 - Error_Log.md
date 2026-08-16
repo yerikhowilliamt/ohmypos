@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-004 — Phase 4's `Restrict` foreign keys broke two older e2e suites, but only on a seeded database
+
+- **Date found:** 2026-08-16
+- **Found during:** Review of TASK-006 (Phase 4) against `docs/plannings/phase-4-purchasing-payables.md`
+- **Symptom:** `pnpm --filter api test:e2e` passed when run twice in a row, and failed with 35 failures across `auth-rbac.e2e-spec.ts` and `master-data.e2e-spec.ts` when run straight after `pnpm --filter api db:seed`. Both suites reported "Test suite failed to run" rather than an assertion failure, because the error was thrown in `beforeAll`. **This is the order CI uses**, so it would have failed on the next pipeline run despite passing locally.
+- **Root cause:** Phase 4 added `onDelete: Restrict` foreign keys pointing at tables the older suites wipe unconditionally. `auth-rbac`'s `prisma.ledgerEntry.deleteMany({})` hit `supplier_purchases_ledger_entry_id_fkey`, and `master-data`'s `prisma.rawMaterial.deleteMany({})` hit `supplier_purchase_items_raw_material_id_fkey`. Neither suite is wrong about wanting a clean table, and the `Restrict` rules are deliberate (financial history must never disappear because a parent row was deleted) — the defect is that a new module added children to tables that pre-existing suites delete, without extending their cleanup. It hid because an unseeded database has no purchasing rows, and because each e2e run left the tables empty for the next one; only the seed re-created the blocking rows.
+- **Resolution:** Both suites now delete the Phase 4 children (`payableSettlement` → `payable` → `supplierPurchaseItem` → `supplierPurchase` → `stockMovement`) before their existing wipe, with a comment naming the constraint and the ADR-backed reason the `Restrict` stays. No production code and no schema changed — the FK behaviour is correct as designed.
+- **Prevention:** Verified in both orders explicitly: `db:seed` → `test:e2e` and `test:e2e` → `test:e2e`, 71/71 green in each. General lesson for Phase 5 onward: **a green e2e run proves nothing about cleanup ordering unless it is run against a seeded database.** Any phase that adds a table with a `Restrict` FK must extend every existing suite that wipes the referenced table in the same change — the failure surfaces as `beforeAll` dying, which reads like an unrelated infrastructure problem rather than a data-model one.
+- **Severity:** High — it breaks CI for every subsequent phase, and its intermittency (passing locally on a second run) is exactly the profile that gets misdiagnosed as flakiness rather than a real ordering bug.
+
 ### ERR-003 — Removing the JWT skew tolerance broke every login
 
 - **Date found:** 2026-08-15
