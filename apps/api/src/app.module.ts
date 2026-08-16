@@ -27,6 +27,7 @@ import { SupplierPurchasesModule } from './modules/supplier-purchases/supplier-p
 import { PayablesModule } from './modules/payables/payables.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
     PayablesModule,
     SalesModule,
     InventoryModule,
+    ReportsModule,
   ],
 
   providers: [

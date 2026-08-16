@@ -1,0 +1,246 @@
+/**
+ * OhMyPos — Reporting service, Dashboard 3 (PRD §5.4, ADR-005, ADR-008,
+ * ADR-014, ADR-017, ADR-018, System Design §6.6/§11).
+ *
+ * READ ONLY. Every method is a SELECT. There is no $transaction anywhere in
+ * this file and there must never be one — Playbook §7 governs writes, and this
+ * module performs none.
+ *
+ * COGS ALWAYS comes from `sale_items.hpp_at_sale`, the per-unit snapshot frozen
+ * at sale time (ADR-005, ADR-015). This file must never import calculateHpp,
+ * never read RawMaterial.unitCost, and never touch RecipeItem — doing so makes
+ * historical reports change retroactively when a material's price changes,
+ * which is the exact bug AGENTS.md's Troubleshooting table warns about.
+ *
+ * Aggregation happens in Postgres, not in Node: `SUM(hpp_at_sale * quantity)`
+ * over a month is ~80k rows that must never cross the wire (plan §5).
+ *
+ * ALIAS CONTRACT (report-filters.ts): ledger_entries AS le, sales AS s,
+ * sale_items AS si, products AS p, accounts AS a.
+ */
+import { Injectable } from '@nestjs/common';
+import type {
+  DailyIncomeResponse,
+  IncomeByPaymentMethodResponse,
+  ProductProfitResponse,
+  ProductRankBy,
+  ProfitLossResponse,
+  TopProductsResponse,
+} from '@ohmypos/api-contracts';
+import { Prisma } from '../../generated/prisma/client';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import {
+  eachWibDay,
+  resolveReportRange,
+  type ReportRange,
+} from '../../common/period';
+import { ledgerScope, saleScope, wibDayOfEntryDate } from './report-filters';
+import { fillDailyGaps } from './report-math';
+import {
+  toDailyIncomeResponse,
+  toIncomeByPaymentMethodResponse,
+  toProductProfitResponse,
+  toProfitLossResponse,
+  toReportPeriod,
+  toTopProductsResponse,
+  type DailyIncomeQueryRow,
+  type IncomeByAccountRow,
+  type ProductAggregateRow,
+  type ProfitLossCogsRow,
+  type ProfitLossMoneyRow,
+} from './reports.mapper';
+import type { ReportRangeQueryDto, TopProductsQueryDto } from './reports.dto';
+
+/**
+ * The ORDER BY per ranking metric, as pre-built SQL fragments.
+ *
+ * A lookup object, NOT string interpolation of `query.rankBy` — even though Zod
+ * has already constrained the value to three literals. An ORDER BY built from a
+ * request string is the one place in this module where a future edit could turn
+ * a validated enum into injected SQL.
+ */
+const PRODUCT_ORDER_BY: Record<ProductRankBy, Prisma.Sql> = {
+  quantity: Prisma.sql`SUM(si.quantity) DESC`,
+  revenue: Prisma.sql`ROUND(SUM(si.line_total), 2) DESC`,
+  profit: Prisma.sql`(ROUND(SUM(si.line_total), 2) - ROUND(SUM(si.hpp_at_sale * si.quantity), 2)) DESC`,
+};
+
+@Injectable()
+export class ReportsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Resolves the range and the branch label shared by all five reports.
+   *
+   * An unknown branchId is NOT a 404 (plan decision 10): a filter matching
+   * nothing is an empty result set, so the report returns zeros with
+   * `branchName: null`.
+   */
+  private async resolveContext(query: ReportRangeQueryDto) {
+    const range = resolveReportRange(query.startDate, query.endDate);
+    const branch = query.branchId
+      ? await this.prisma.branch.findUnique({ where: { id: query.branchId } })
+      : null;
+
+    return {
+      range,
+      period: toReportPeriod(
+        range,
+        query.branchId ?? null,
+        branch?.name ?? null,
+      ),
+    };
+  }
+
+  /** ADR-017 §2 — the margin view and the cash view, computed in two passes. */
+  async profitLoss(query: ReportRangeQueryDto): Promise<ProfitLossResponse> {
+    const { range, period } = await this.resolveContext(query);
+    const ledgerWhere = ledgerScope(range, query.branchId);
+    const saleWhere = saleScope(range, query.branchId);
+
+    const [moneyRows, cogsRows] = await Promise.all([
+      this.prisma.$queryRaw<ProfitLossMoneyRow[]>`
+        SELECT
+          COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'  AND le.source_type =  'SALE'), 0)   AS sales_revenue,
+          COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'  AND le.source_type <> 'SALE'), 0)   AS other_income,
+          COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'OUTFLOW' AND le.source_type =  'MANUAL'), 0) AS operating_expenses,
+          COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'OUTFLOW'
+                   AND le.source_type IN ('PURCHASE', 'PAYABLE_SETTLEMENT')), 0)                        AS material_cash_outflow,
+          COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'), 0)                                 AS total_inflow,
+          COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'OUTFLOW'), 0)                                AS total_outflow
+        FROM ledger_entries le
+        WHERE ${ledgerWhere}`,
+      this.prisma.$queryRaw<ProfitLossCogsRow[]>`
+        SELECT
+          COALESCE(ROUND(SUM(si.hpp_at_sale * si.quantity), 2), 0) AS cogs,
+          COUNT(DISTINCT s.id)::int                                AS sale_count
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id
+        WHERE ${saleWhere}`,
+    ]);
+
+    return toProfitLossResponse(period, moneyRows[0], cogsRows[0]);
+  }
+
+  /**
+   * The shared product aggregate behind BOTH product-profit and top-products —
+   * the two reports differ only in ORDER BY and LIMIT.
+   *
+   * `SUM(si.hpp_at_sale * si.quantity)` is the expression Prisma's groupBy
+   * cannot express, and the reason this module uses raw SQL at all (plan §4).
+   * The sum is exact and rounded ONCE (plan §2).
+   */
+  private async productAggregate(
+    range: ReportRange,
+    branchId: string | undefined,
+    rankBy: ProductRankBy,
+    limit: number | null,
+  ): Promise<ProductAggregateRow[]> {
+    const saleWhere = saleScope(range, branchId);
+    const orderBy = PRODUCT_ORDER_BY[rankBy];
+    // A bound LIMIT parameter, or no LIMIT clause at all for the full report.
+    const limitClause =
+      limit === null ? Prisma.empty : Prisma.sql`LIMIT ${limit}`;
+
+    return this.prisma.$queryRaw<ProductAggregateRow[]>`
+      SELECT
+        si.product_id                                            AS product_id,
+        p.name                                                   AS product_name,
+        COALESCE(SUM(si.quantity), 0)                            AS quantity_sold,
+        COALESCE(ROUND(SUM(si.line_total), 2), 0)                AS revenue,
+        COALESCE(ROUND(SUM(si.hpp_at_sale * si.quantity), 2), 0) AS cogs,
+        COUNT(*)::int                                            AS line_count
+      FROM sale_items si
+      JOIN sales s    ON s.id = si.sale_id
+      JOIN products p ON p.id = si.product_id
+      WHERE ${saleWhere}
+      GROUP BY si.product_id, p.name
+      ORDER BY ${orderBy}, p.name ASC, si.product_id ASC
+      ${limitClause}`;
+  }
+
+  async productProfit(
+    query: ReportRangeQueryDto,
+  ): Promise<ProductProfitResponse> {
+    const { range, period } = await this.resolveContext(query);
+    const rows = await this.productAggregate(
+      range,
+      query.branchId,
+      'revenue',
+      null,
+    );
+    return toProductProfitResponse(period, rows);
+  }
+
+  async topProducts(query: TopProductsQueryDto): Promise<TopProductsResponse> {
+    const { range, period } = await this.resolveContext(query);
+    const rows = await this.productAggregate(
+      range,
+      query.branchId,
+      query.rankBy,
+      query.limit,
+    );
+    return toTopProductsResponse(period, query.rankBy, rows);
+  }
+
+  /**
+   * Grouped from `ledger_entries`, not from `sales`, so this report's total
+   * equals ProfitLossResponse.totalIncome by construction — manual income
+   * entries carry an account too (plan decision 4).
+   */
+  async incomeByPaymentMethod(
+    query: ReportRangeQueryDto,
+  ): Promise<IncomeByPaymentMethodResponse> {
+    const { range, period } = await this.resolveContext(query);
+    const ledgerWhere = ledgerScope(range, query.branchId);
+
+    const rows = await this.prisma.$queryRaw<IncomeByAccountRow[]>`
+      SELECT
+        le.account_id                                                        AS account_id,
+        a.name                                                               AS account_name,
+        a.type                                                               AS account_type,
+        COALESCE(SUM(le.amount), 0)                                          AS total,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.source_type =  'SALE'), 0)  AS sales_total,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.source_type <> 'SALE'), 0)  AS other_total,
+        COUNT(*)::int                                                        AS entry_count
+      FROM ledger_entries le
+      JOIN accounts a ON a.id = le.account_id
+      WHERE le.type = 'INFLOW' AND ${ledgerWhere}
+      GROUP BY le.account_id, a.name, a.type
+      ORDER BY total DESC, a.name ASC`;
+
+    return toIncomeByPaymentMethodResponse(period, rows);
+  }
+
+  /**
+   * Buckets by WIB calendar day (ADR-018). Days with no income are absent from
+   * the SQL result and are zero-filled in TypeScript so a trend chart gets a
+   * continuous series (plan §6.7).
+   */
+  async dailyIncome(query: ReportRangeQueryDto): Promise<DailyIncomeResponse> {
+    const { range, period } = await this.resolveContext(query);
+    const ledgerWhere = ledgerScope(range, query.branchId);
+    const wibDay = wibDayOfEntryDate();
+
+    const rows = await this.prisma.$queryRaw<DailyIncomeQueryRow[]>`
+      SELECT
+        ${wibDay}                   AS day,
+        COALESCE(SUM(le.amount), 0) AS income,
+        COUNT(*)::int               AS entry_count
+      FROM ledger_entries le
+      WHERE le.type = 'INFLOW' AND ${ledgerWhere}
+      GROUP BY 1
+      ORDER BY 1`;
+
+    const buckets = fillDailyGaps(
+      eachWibDay(range),
+      rows.map((row) => ({
+        date: row.day,
+        income: row.income,
+        entryCount: row.entry_count,
+      })),
+    );
+
+    return toDailyIncomeResponse(period, buckets);
+  }
+}
