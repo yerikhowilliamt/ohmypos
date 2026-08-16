@@ -78,4 +78,14 @@
 - **Prevention:** The e2e suite asserts the **HTTP status**, not just that an error occurred — `rejects an allocation that would exceed the transaction amount` expects 400 and matches the message, so a regression to 500 fails the build. More generally: when a ported module's error handling depends on a library's error *shape*, verify that shape against the actual runtime before porting, rather than assuming the shape carried over with the code. Recorded as a decision in TASK-003.
 - **Severity:** High — it silently disables the enforcement path for the allocation-sum invariant, which is money-correctness (ADR-004, Playbook §7).
 
+### ERR-005 — `SaleProductNotFoundException` extended the wrong base class, returning 400 instead of 404
+
+- **Date found:** 2026-08-16
+- **Found during:** TASK-008 (Phase 5 — Sales), while writing `sales.e2e-spec.ts` Case 10 (unknown product mid-cart)
+- **Symptom:** Caught by the e2e suite before it could ship. `POST /sales` with a valid-but-nonexistent `productId` in the cart returned **400** (`"Product(s) not found: ..."`) instead of the **404** the plan's error-mapping table (§10.5) and `purchasing-payables.e2e-spec.ts`'s precedent (`PurchaseItemMaterialNotFoundException` → 404) both specify.
+- **Root cause:** `sales.exceptions.ts` declared `class SaleProductNotFoundException extends BadRequestException` — a straightforward copy-paste slip while writing four exception classes in one file, three of which (`InactiveProductException`, `RecipeIncompleteException`, `CentralBranchNotSellableException`) genuinely are 400/409s. Nothing caught it at write time because the exception's *name* said "NotFound" and its *behavior* (throwing, with the right message) was otherwise correct — only the HTTP status was wrong, and only an e2e assertion on the literal status code (not just "it errored") could catch that.
+- **Resolution:** Changed the base class to `NotFoundException`. One-line fix, caught before any code depending on the 404 contract was written.
+- **Prevention:** `sales.e2e-spec.ts` Case 10 already asserts `res.status).toBe(404)` explicitly rather than just "not 2xx" — that assertion is what caught this, and it stays as the regression guard. General lesson, consistent with ERR-001: when a module defines several sibling exceptions with different HTTP statuses in one file, verify each one's base class against the plan's error-mapping table individually rather than trusting the file to be internally consistent — a class name matching intent is not proof the base class does.
+- **Severity:** Low — caught in the same session before merge, never reached a running system. Logged because Playbook §10 puts the Sale flow in the "must have thorough tests" tier specifically to catch exactly this class of mistake, and it did.
+
 _(Add the next entry above this line, following the template.)_

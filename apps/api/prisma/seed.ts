@@ -6,6 +6,7 @@ import { LedgerEntriesService } from '../src/modules/ledger-entries/ledger-entri
 import { PayablesService } from '../src/modules/payables/payables.service';
 import { StockMovementsService } from '../src/modules/stock-movements/stock-movements.service';
 import { SupplierPurchasesService } from '../src/modules/supplier-purchases/supplier-purchases.service';
+import { SalesService } from '../src/modules/sales/sales.service';
 
 /**
  * Synthetic seed data only — fictional branches and staff, never anything from
@@ -15,18 +16,19 @@ import { SupplierPurchasesService } from '../src/modules/supplier-purchases/supp
  *  - the initial OWNER (ADR-011 §5);
  *  - system categories (ADR-012);
  *  - system branch `Pusat (Dapur Sentral)` (ADR-014);
- *  - Phase 4 purchasing fixtures per §9.9 for hand verification and e2e testing.
+ *  - Phase 4 purchasing fixtures per §9.9 for hand verification and e2e testing;
+ *  - Phase 5 sale fixture per plan §10.6.
  *
- * The Phase 4 fixtures go through `SupplierPurchasesService` and
- * `PayablesService` rather than writing rows directly (plan §9.9). That is not
- * ceremony: `remainingBalance`, `paymentStatus` and `RawMaterial.currentStock`
- * are denormalized balances whose correctness rests on having exactly ONE
- * writer each (plan §2 Option B). A seed that wrote them by hand would be a
- * second writer, and — because it lives outside `apps/api/src` — one that the
- * single-writer greps in the definition of done cannot see. Hand-computing
- * `40000.00` here would also silently desync the moment a settlement amount
- * changed. Every derived figure below is produced by the same code the API
- * runs; only the inputs are literals.
+ * The Phase 4/5 fixtures go through `SupplierPurchasesService`, `PayablesService`
+ * and `SalesService` rather than writing rows directly (Phase 4 plan §9.9,
+ * Phase 5 plan §10.6). That is not ceremony: `remainingBalance`, `paymentStatus`
+ * and `RawMaterial.currentStock` are denormalized balances whose correctness
+ * rests on having exactly ONE writer each (Phase 4 plan §2 Option B). A seed
+ * that wrote them by hand would be a second writer, and — because it lives
+ * outside `apps/api/src` — one that the single-writer greps in the definition
+ * of done cannot see. Hand-computing `4530.00` here would also silently desync
+ * the moment a recipe or a raw material's cost changed. Every derived figure
+ * below is produced by the same code the API runs; only the inputs are literals.
  *
  * The services are constructed directly instead of booting a Nest container:
  * they are plain classes, and `PrismaService` builds its own driver adapter
@@ -44,6 +46,11 @@ async function main() {
     ledgerEntriesService,
   );
   const payablesService = new PayablesService(prisma, ledgerEntriesService);
+  const salesService = new SalesService(
+    prisma,
+    stockMovementsService,
+    ledgerEntriesService,
+  );
 
   // System central branch (ADR-014) — required for central purchase ledger entry
   // attribution. Not captured in a variable on purpose: the services resolve it
@@ -135,7 +142,7 @@ async function main() {
     },
   });
 
-  await prisma.user.upsert({
+  const kasirMelati = await prisma.user.upsert({
     where: { email: 'kasir@ohmypos.local' },
     update: {},
     create: {
@@ -317,6 +324,35 @@ async function main() {
       settledAt: '2026-08-16T14:00:00.000Z',
       note: 'Cicilan 1',
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase 5: Sales & the outbound half of StockMovement (plan §10.6)
+  // ---------------------------------------------------------------------------
+  // Sale S1 — Cabang Melati, 2 × Es Kopi Susu at the menu price, paid to Kas Tunai.
+  // hppAtSale (per unit) = 0.2500 × 12000.00 + 0.0180 × 85000.00 = 4530.00 —
+  // deliberately the same figure TASK-005 uses to demonstrate the toJSON() scale
+  // trap, so a decimal-serialization regression shows up in two suites at once.
+  const existingSaleS1 = await prisma.sale.findFirst({
+    where: {
+      branchId: branches[0].id,
+      accountId: kasTunai.id,
+      items: { some: { productId: esKopiSusu.id } },
+    },
+  });
+
+  if (!existingSaleS1) {
+    // Server computes hppAtSale, totalAmount and the stock decrement — none of
+    // those are literals here, same discipline as the Phase 4 fixtures above.
+    await salesService.create(
+      {
+        branchId: branches[0].id,
+        accountId: kasTunai.id,
+        soldAt: '2026-08-16T15:00:00.000Z',
+        items: [{ productId: esKopiSusu.id, quantity: '2' }],
+      },
+      kasirMelati.id,
+    );
   }
 
   console.log(`Seeded. Owner login: ${ownerEmail}`);

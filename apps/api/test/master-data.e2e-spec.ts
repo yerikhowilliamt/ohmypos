@@ -83,6 +83,12 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
   async function cleanup() {
     await prisma.recipeItem.deleteMany({});
+    // Phase 5's SaleItem → Product is `onDelete: Restrict` (plan §9.4 decision
+    // 8) — the ERR-004 fallout, predicted this time. `saleItem`/`sale` must go
+    // before `product.deleteMany({})` below or that wipe hits
+    // `sale_items_product_id_fkey` on any seeded database.
+    await prisma.saleItem.deleteMany({});
+    await prisma.sale.deleteMany({});
     await prisma.product.deleteMany({});
     // Phase 4's purchasing rows must go first. `SupplierPurchaseItem` and
     // `StockMovement` both reference `RawMaterial` with `onDelete: Restrict`
