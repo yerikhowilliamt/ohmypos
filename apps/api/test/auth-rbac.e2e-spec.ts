@@ -98,6 +98,17 @@ describe('Auth & role-based access control (e2e)', () => {
   async function cleanup() {
     await prisma.allocation.deleteMany({});
     await prisma.bankTransaction.deleteMany({});
+    // Phase 4's purchasing rows must go first. `SupplierPurchase.ledgerEntry`
+    // and `PayableSettlement.ledgerEntry` are `onDelete: Restrict` on purpose
+    // (plan §8.4d — financial history must never vanish because a parent row
+    // was deleted), so the wipe below hits
+    // `supplier_purchases_ledger_entry_id_fkey` on any database that has been
+    // seeded. Order, not scope, is what fixes it.
+    await prisma.payableSettlement.deleteMany({});
+    await prisma.payable.deleteMany({});
+    await prisma.supplierPurchaseItem.deleteMany({});
+    await prisma.supplierPurchase.deleteMany({});
+    await prisma.stockMovement.deleteMany({});
     await prisma.ledgerEntry.deleteMany({});
     // Includes the users individual tests create, so a failed run leaves
     // nothing behind that would break the next one.

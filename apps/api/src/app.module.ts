@@ -21,6 +21,10 @@ import { UsersModule } from './modules/users/users.module';
 import { RawMaterialsModule } from './modules/raw-materials/raw-materials.module';
 import { RecipesModule } from './modules/recipes/recipes.module';
 import { ProductsModule } from './modules/products/products.module';
+import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { StockMovementsModule } from './modules/stock-movements/stock-movements.module';
+import { SupplierPurchasesModule } from './modules/supplier-purchases/supplier-purchases.module';
+import { PayablesModule } from './modules/payables/payables.module';
 
 @Module({
   imports: [
@@ -57,6 +61,10 @@ import { ProductsModule } from './modules/products/products.module';
     RawMaterialsModule,
     RecipesModule,
     ProductsModule,
+    SuppliersModule,
+    StockMovementsModule,
+    SupplierPurchasesModule,
+    PayablesModule,
   ],
 
   providers: [

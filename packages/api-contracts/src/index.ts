@@ -23,3 +23,7 @@ export * from './auth.schema';
 export * from './raw-material.schema';
 export * from './product.schema';
 export * from './recipe.schema';
+export * from './supplier.schema';
+export * from './supplier-purchase.schema';
+export * from './payable.schema';
+export * from './stock-movement.schema';
