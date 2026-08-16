@@ -9,6 +9,8 @@ import { Prisma } from '../generated/prisma/client';
  */
 export const CENTRAL_BRANCH_NAME = 'Pusat (Dapur Sentral)';
 export const PURCHASE_CATEGORY_NAME = 'Pembelian Bahan Baku';
+/** ADR-015, plan §10.3 step 9 — the income LedgerEntry a Sale generates. */
+export const SALE_CATEGORY_NAME = 'Penjualan';
 
 export async function resolveLedgerBranchId(
   tx: Prisma.TransactionClient,
@@ -37,6 +39,21 @@ export async function resolvePurchaseCategoryId(
     // An environment fault, not a client error: the seed owns this row.
     throw new InternalServerErrorException(
       `System category "${PURCHASE_CATEGORY_NAME}" is missing — run \`pnpm --filter api db:seed\``,
+    );
+  }
+  return category.id;
+}
+
+export async function resolveSaleCategoryId(
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const category = await tx.category.findUnique({
+    where: { name: SALE_CATEGORY_NAME },
+  });
+  if (!category) {
+    // An environment fault, not a client error: the seed owns this row.
+    throw new InternalServerErrorException(
+      `System category "${SALE_CATEGORY_NAME}" is missing — run \`pnpm --filter api db:seed\``,
     );
   }
   return category.id;

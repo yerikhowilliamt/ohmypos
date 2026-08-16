@@ -73,7 +73,7 @@
 - **Trigger condition:** The business owner asks for any one of them, or Phase 3's `Sale` flow is specified — whichever comes first.
 - **Proposed resolution:** Take them one at a time through the normal schema-approval gate. Tax and discount should be decided together, before `Sale` is built, because both change the total's definition.
 - **Priority:** Medium
-- **Status:** Open
+- **Status:** Partially resolved (2026-08-16) — Tax, discount, and order type decided per ADR-015 (Phase 5 planning): none get schema support in v1. `Sale.totalAmount = Σ SaleItem.lineTotal`; discounts are expressed through the existing per-line price override (`unitPriceAtSale` + `isPriceOverridden`). SKU/barcode scanning, the expense approval state, and the cashier shift remain **Open** — none of the three is touched by Phase 5 and each still needs its own approval pass.
 
 ### DEBT-003 — Two vocabularies for transaction direction
 
@@ -109,6 +109,42 @@
 - **Trigger condition:** A second write path or bulk import for `PayableSettlement` is added.
 - **Proposed resolution:** Add `trg_check_payable_settlement_sum` trigger in a migration, modeled on `trg_check_allocation_sum`.
 - **Priority:** Low
+- **Status:** Open
+
+### DEBT-008 — Raw-material locks acquired one statement per row, not one batched `ANY($1) ORDER BY id`
+
+- **Date logged:** 2026-08-16
+- **Found during:** Phase 5 (Sales planning §2.4) — ADR-016
+- **Description:** `StockMovementsService.lockRawMaterialsInIdOrder` issues one `SELECT ... FOR UPDATE` per raw material, in a loop, rather than a single `SELECT id FROM raw_materials WHERE id = ANY($1) ORDER BY id FOR UPDATE`. The batched form would cut the lock phase from M round trips to one.
+- **Why deferred:** The batched form's lock ordering depends on `LockRows` sitting above `Sort` in the query plan — true today, but a query-plan dependency that no test in this repo can pin. A future planner/statistics change could reorder it with no code change, surfacing as an intermittent `40P01` in production against a green test suite. The per-statement loop's order is fixed by the calling code, not the planner, and is provable by a unit test with no database (ADR-016).
+- **Impact if unaddressed:** At a realistic cart (≤ 8 products → ≤ 15 distinct materials) the extra round trips are single-digit milliseconds inside a transaction that already runs ~10 statements — negligible at current volume.
+- **Trigger condition:** The lock-acquisition phase is measured as a meaningful share of sale latency at real transaction volume.
+- **Proposed resolution:** Switch to the batched `ANY($1) ORDER BY id` statement, and add an `EXPLAIN`-based test (or a Postgres version pin) that asserts `LockRows` sits above `Sort` in the plan, so a planner change fails CI instead of failing silently in production.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-009 — Per-line sale price override has no role restriction
+
+- **Date logged:** 2026-08-16
+- **Found during:** Phase 5 (Sales planning §1 decision 6, §8.2)
+- **Description:** `CreateSaleSchema`'s `unitPrice` override is available to `KASIR`, `ADMIN`, and `OWNER` alike — any authenticated cashier can charge below (or above) `Product.sellPrice` on any line, with no approval step and no per-role ceiling. Playbook §6 already names `PriceOverrideNotPermittedException` as an exception to add "if role-based restrictions on manual price override are added later" — v1 deliberately does not add them.
+- **Why deferred:** PRD §5.2 specifies the override mechanism ("can be manually overridden for specific cases — e.g. discounts or negotiated prices") without naming who may use it or bounding it, and no ADR restricts it. Building a restriction now would be inventing a policy the business owner hasn't stated, not implementing one.
+- **Impact if unaddressed:** A cashier can under-charge without any system-level check, which shows up only as a lower recorded `totalAmount` and `grossMargin` on that sale — nothing flags it as anomalous.
+- **Trigger condition:** The business owner reports unauthorized or unusual discounting, or asks for an approval/ceiling policy on manual overrides.
+- **Proposed resolution:** Decide the policy (a percentage ceiling, an `ADMIN`/`OWNER`-only override, or a post-hoc report of overridden lines) and encode it as a Zod refinement or a role check, raising `PriceOverrideNotPermittedException`.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-010 — No void/refund path for a `Sale`
+
+- **Date logged:** 2026-08-16
+- **Found during:** Phase 5 (Sales planning §11.2)
+- **Description:** Once created, a `Sale` cannot be edited, voided, or refunded. A mis-keyed sale (wrong product, wrong quantity, double-entry) has no correction path other than manually recording compensating movements outside the system's guarantees — there is no reverse-stock-in, no reverse-ledger-entry, and no status field marking a sale as voided.
+- **Why deferred:** Not in PRD §5.2's scope, and a void/refund flow needs its own transaction-boundary and ledger-reversal analysis (does it reverse the `LedgerEntry` or write an offsetting one? does stock go back to `RawMaterial.currentStock` or to a separate "returned" bucket? does `SaleItem.hppAtSale` still apply to the reversal?) — none of which any existing document answers, and Phase 5's scope is the forward flow only.
+- **Impact if unaddressed:** A cashier error is currently uncorrectable within the system's own transactional guarantees. In practice this is a real F&B operational need, not a hypothetical.
+- **Trigger condition:** The first mis-keyed sale in production, or the business owner asks for a void/refund flow — whichever comes first.
+- **Proposed resolution:** Design a `SaleVoid`/`SaleRefund` flow (or a `Sale.status` state machine) through the normal planning-and-approval gate, once the forward flow (this phase) is stable and its transaction/lock patterns are proven.
+- **Priority:** Medium
 - **Status:** Open
 
 ---

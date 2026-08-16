@@ -109,6 +109,11 @@ describe('Auth & role-based access control (e2e)', () => {
     await prisma.supplierPurchaseItem.deleteMany({});
     await prisma.supplierPurchase.deleteMany({});
     await prisma.stockMovement.deleteMany({});
+    // Phase 5's Sale.ledgerEntryId is `onDelete: Restrict` too (plan §9.1) —
+    // saleItem/sale must go before the ledgerEntry wipe below, same reasoning
+    // as the purchasing rows above (ERR-004's lesson, again).
+    await prisma.saleItem.deleteMany({});
+    await prisma.sale.deleteMany({});
     await prisma.ledgerEntry.deleteMany({});
     // Includes the users individual tests create, so a failed run leaves
     // nothing behind that would break the next one.
