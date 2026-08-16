@@ -461,4 +461,223 @@ describe('Auth & role-based access control (e2e)', () => {
       await prisma.user.delete({ where: { id: created.id } });
     });
   });
+
+  describe('Full Route Authorization Matrix (DEF-001 & P0-1)', () => {
+    it('rejects KASIR on master data and reconciliation endpoints (403)', async () => {
+      const endpoints: Array<{
+        method: 'get' | 'post' | 'patch' | 'delete';
+        url: string;
+        body?: object;
+      }> = [
+        {
+          method: 'post',
+          url: '/api/v1/branches',
+          body: { name: 'Pwn Branch' },
+        },
+        { method: 'get', url: '/api/v1/branches' },
+        {
+          method: 'patch',
+          url: `/api/v1/branches/${branchA}`,
+          body: { name: 'Updated' },
+        },
+        { method: 'delete', url: `/api/v1/branches/${branchA}` },
+        {
+          method: 'post',
+          url: '/api/v1/accounts',
+          body: { name: 'Pwn Account', type: 'BANK' },
+        },
+        { method: 'get', url: '/api/v1/accounts' },
+        {
+          method: 'post',
+          url: '/api/v1/categories',
+          body: { name: 'Pwn Cat', type: 'INFLOW' },
+        },
+        { method: 'get', url: '/api/v1/categories' },
+        {
+          method: 'post',
+          url: '/api/v1/matching/propose',
+          body: { accountId },
+        },
+        { method: 'post', url: '/api/v1/matching/reset', body: { accountId } },
+        { method: 'get', url: '/api/v1/reconciliation/transactions' },
+        { method: 'get', url: '/api/v1/reconciliation/summary' },
+        { method: 'post', url: `/api/v1/import/csv/${accountId}?format=BCA` },
+      ];
+
+      for (const ep of endpoints) {
+        const req = request(app.getHttpServer())
+          [ep.method](ep.url)
+          .set('Cookie', kasir.cookies);
+        if (ep.body) {
+          req.send(ep.body);
+        }
+        const res = await req;
+        expect(res.status).toBe(403);
+      }
+    });
+
+    it('allows ADMIN and OWNER on master data and reconciliation endpoints', async () => {
+      // Branches GET
+      await request(app.getHttpServer())
+        .get('/api/v1/branches')
+        .set('Cookie', admin.cookies)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/branches')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      // Accounts GET
+      await request(app.getHttpServer())
+        .get('/api/v1/accounts')
+        .set('Cookie', admin.cookies)
+        .expect(200);
+
+      // Categories GET
+      await request(app.getHttpServer())
+        .get('/api/v1/categories')
+        .set('Cookie', admin.cookies)
+        .expect(200);
+
+      // Reconciliation Summary GET
+      await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/summary')
+        .set('Cookie', admin.cookies)
+        .expect(200);
+    });
+
+    it('rejects unauthenticated callers on protected endpoints (401)', async () => {
+      const endpoints: Array<{ method: 'get' | 'post'; url: string }> = [
+        { method: 'get', url: '/api/v1/branches' },
+        { method: 'get', url: '/api/v1/accounts' },
+        { method: 'get', url: '/api/v1/categories' },
+        { method: 'post', url: '/api/v1/matching/propose' },
+        { method: 'get', url: '/api/v1/reconciliation/summary' },
+        { method: 'get', url: '/api/v1/users' },
+        { method: 'get', url: '/api/v1/reports/profit-loss' },
+      ];
+
+      for (const ep of endpoints) {
+        await request(app.getHttpServer())[ep.method](ep.url).expect(401);
+      }
+    });
+  });
+
+  describe('Branch Deletion with Dependent Staff (DEF-002 & P0-2)', () => {
+    it('rejects deleting a branch with assigned staff (400) and preserves cashier branchId', async () => {
+      // 1. Create a dedicated branch
+      const branchRes = await request(app.getHttpServer())
+        .post('/api/v1/branches')
+        .set('Cookie', owner.cookies)
+        .send({ name: 'Branch To Delete' })
+        .expect(201);
+      const branchBody = branchRes.body as { id: string };
+      const testBranchId = branchBody.id;
+
+      // 2. Create a cashier assigned to this branch
+      const userRes = await request(app.getHttpServer())
+        .post('/api/v1/users')
+        .set('Cookie', owner.cookies)
+        .send({
+          name: 'Staff at Branch',
+          email: 'staff-del@test.local',
+          password: 'Password123!',
+          role: 'KASIR',
+          branchId: testBranchId,
+        })
+        .expect(201);
+      const userBody = userRes.body as { id: string };
+      const testUserId = userBody.id;
+
+      // 3. Attempt to delete the branch -> MUST return 400 with descriptive error naming staff
+      const delRes = await request(app.getHttpServer())
+        .delete(`/api/v1/branches/${testBranchId}`)
+        .set('Cookie', owner.cookies)
+        .expect(400);
+
+      const delBody = delRes.body as { message: string };
+      expect(delBody.message).toContain('Staff at Branch');
+
+      // 4. Assert user's branchId is still intact and not null
+      const checkUser = await prisma.user.findUnique({
+        where: { id: testUserId },
+      });
+      expect(checkUser?.branchId).toBe(testBranchId);
+
+      // Cleanup
+      await prisma.user.delete({ where: { id: testUserId } });
+      await prisma.branch.delete({ where: { id: testBranchId } });
+    });
+  });
+
+  describe('List Endpoint Parameter Validation & Fuzzing (DEF-007 & P1-1)', () => {
+    it('rejects unvalidated sortBy parameters on all list endpoints (400)', async () => {
+      const endpoints = [
+        '/api/v1/sales',
+        '/api/v1/payables',
+        '/api/v1/suppliers',
+        '/api/v1/ledger-entries',
+        '/api/v1/supplier-purchases',
+      ];
+
+      const badSorts = ['nonexistentField', 'user', '', '__proto__'];
+
+      for (const url of endpoints) {
+        for (const badSort of badSorts) {
+          const res = await request(app.getHttpServer())
+            .get(`${url}?sortBy=${encodeURIComponent(badSort)}`)
+            .set('Cookie', owner.cookies);
+
+          expect(res.status).toBe(400);
+        }
+
+        // Check bad page/limit parameters
+        const page0 = await request(app.getHttpServer())
+          .get(`${url}?page=0`)
+          .set('Cookie', owner.cookies);
+        expect(page0.status).toBe(400);
+
+        const limit101 = await request(app.getHttpServer())
+          .get(`${url}?limit=101`)
+          .set('Cookie', owner.cookies);
+        expect(limit101.status).toBe(400);
+      }
+    });
+  });
+
+  describe('Sale Date Boundaries (DEF-008 & P1-2)', () => {
+    it('rejects sales dated in the distant future or distant past (400)', async () => {
+      // Product for sale test
+      const product = await prisma.product.create({
+        data: { name: 'Rbac Product', sellPrice: '10000.00' },
+      });
+
+      // 1. Far future sale (2126-01-01)
+      await request(app.getHttpServer())
+        .post('/api/v1/sales')
+        .set('Cookie', kasir.cookies)
+        .send({
+          branchId: branchA,
+          accountId,
+          soldAt: '2126-01-01T00:00:00.000Z',
+          items: [{ productId: product.id, quantity: '1.0000' }],
+        })
+        .expect(400);
+
+      // 2. Far past sale (2020-01-01)
+      await request(app.getHttpServer())
+        .post('/api/v1/sales')
+        .set('Cookie', kasir.cookies)
+        .send({
+          branchId: branchA,
+          accountId,
+          soldAt: '2020-01-01T00:00:00.000Z',
+          items: [{ productId: product.id, quantity: '1.0000' }],
+        })
+        .expect(400);
+
+      await prisma.product.delete({ where: { id: product.id } });
+    });
+  });
 });

@@ -55,8 +55,17 @@ export type PayableSupplierSummary = z.infer<
   typeof PayableSupplierSummarySchema
 >;
 
+export const PayableSortBySchema = z.enum([
+  'createdAt',
+  'dueDate',
+  'originalAmount',
+  'remainingBalance',
+]);
+export type PayableSortBy = z.infer<typeof PayableSortBySchema>;
+
 export const PayableQuerySchema = PaginationQuerySchema.extend({
   supplierId: UuidString.optional(),
   status: PayableStatus.optional(),
+  sortBy: PayableSortBySchema.optional(),
 });
 export type PayableQuery = z.infer<typeof PayableQuerySchema>;

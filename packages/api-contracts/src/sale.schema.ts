@@ -44,7 +44,13 @@ export const CreateSaleSchema = z.object({
   branchId: UuidString,
   /** The payment method used — Account, per ERD §3 and System Design §6.1. */
   accountId: UuidString,
-  soldAt: DateTimeString,
+  soldAt: DateTimeString.refine((v) => {
+    const d = new Date(v).getTime();
+    if (isNaN(d)) return false;
+    const nowWithTolerance = Date.now() + 5 * 60 * 1000;
+    const minDate = new Date('2024-01-01T00:00:00.000Z').getTime();
+    return d <= nowWithTolerance && d >= minDate;
+  }, 'soldAt cannot be in the future or before 2024'),
   /**
    * Bounded at 50 lines. Every line adds round trips inside a transaction that
    * holds row locks (ADR-016), and the bound is what keeps the lock-hold window
@@ -94,11 +100,15 @@ export const SaleResponseSchema = z.object({
 });
 export type SaleResponse = z.infer<typeof SaleResponseSchema>;
 
+export const SaleSortBySchema = z.enum(['soldAt', 'totalAmount', 'createdAt']);
+export type SaleSortBy = z.infer<typeof SaleSortBySchema>;
+
 export const SaleQuerySchema = PaginationQuerySchema.extend({
   branchId: UuidString.optional(),
   accountId: UuidString.optional(),
   userId: UuidString.optional(),
   startDate: DateTimeString.optional(),
   endDate: DateTimeString.optional(),
+  sortBy: SaleSortBySchema.optional(),
 });
 export type SaleQuery = z.infer<typeof SaleQuerySchema>;

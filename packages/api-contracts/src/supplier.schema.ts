@@ -30,7 +30,11 @@ export const SupplierResponseSchema = z.object({
 });
 export type SupplierResponse = z.infer<typeof SupplierResponseSchema>;
 
+export const SupplierSortBySchema = z.enum(['name', 'createdAt']);
+export type SupplierSortBy = z.infer<typeof SupplierSortBySchema>;
+
 export const SupplierQuerySchema = PaginationQuerySchema.extend({
   search: z.string().trim().optional(),
+  sortBy: SupplierSortBySchema.optional(),
 });
 export type SupplierQuery = z.infer<typeof SupplierQuerySchema>;

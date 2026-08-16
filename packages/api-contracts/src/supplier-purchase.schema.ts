@@ -113,11 +113,21 @@ export type SupplierPurchaseResponse = z.infer<
   typeof SupplierPurchaseResponseSchema
 >;
 
+export const SupplierPurchaseSortBySchema = z.enum([
+  'purchaseDate',
+  'totalAmount',
+  'createdAt',
+]);
+export type SupplierPurchaseSortBy = z.infer<
+  typeof SupplierPurchaseSortBySchema
+>;
+
 export const SupplierPurchaseQuerySchema = PaginationQuerySchema.extend({
   supplierId: UuidString.optional(),
   branchId: UuidString.optional(),
   paymentStatus: PaymentStatus.optional(),
   startDate: DateTimeString.optional(),
   endDate: DateTimeString.optional(),
+  sortBy: SupplierPurchaseSortBySchema.optional(),
 });
 export type SupplierPurchaseQuery = z.infer<typeof SupplierPurchaseQuerySchema>;
