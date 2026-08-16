@@ -171,6 +171,42 @@
 - **Priority:** Medium
 - **Status:** Open
 
+### DEBT-013 — No closing-stock snapshots — query-time calculation scale boundary
+
+- **Date logged:** 2026-08-17
+- **Found during:** Phase 6 (Inventory planning §13.4)
+- **Description:** Inventory Summary (`GET /inventory/summary?period=YYYY-MM`) computes opening, in, out, and closing quantities entirely at query time via `groupBy` over `StockMovement` (ADR-008). There is no stored `closingStock` table or snapshot column.
+- **Why deferred:** Query-time computation is correct by construction (no cache invalidation or out-of-sync snapshot anomalies). At v1 transaction volume for a single small multi-branch business (~5,000 movements/month), indexed aggregation runs well under 20ms.
+- **Impact if unaddressed:** At higher volume (e.g. multi-year history, >50,000 movements), multi-period report queries will scan larger index ranges.
+- **Trigger condition:** `GET /inventory/summary` p95 response time exceeds 250ms under production volume.
+- **Proposed resolution:** Introduce a monthly closing snapshot table populated on period close or asynchronously computed read-model.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-014 — OpeningStock unitPrice historical immutability vs master data PATCH
+
+- **Date logged:** 2026-08-17
+- **Found during:** Phase 6 (Inventory planning §13.4)
+- **Description:** `OpeningStock.unitPrice` is snapshotted into `OpeningStock` and `StockMovement.unitCostAtMovement`. However, live HPP uses `RawMaterial.unitCost`. If a user modifies master data `RawMaterial.unitCost` via `PATCH /raw-materials/:id`, live product HPP shifts for future sales without changing historical opening stock valuation.
+- **Why deferred:** Deliberate architecture decision (ADR-005): historical snapshot vs live master data.
+- **Impact if unaddressed:** None on accounting accuracy (historical numbers are immutable). Stakeholders may wonder why live HPP changed after a master data edit if not informed of the design.
+- **Trigger condition:** Business owner asks for audit history or retrospective valuation reports.
+- **Proposed resolution:** Maintain a formal `RawMaterialCostHistory` table if retrospective inventory valuation is ever required.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-015 — OpeningStock has no branchId; multi-branch inventory requires new model
+
+- **Date logged:** 2026-08-17
+- **Found during:** Phase 6 (Inventory planning §13.4)
+- **Description:** `OpeningStock` is centralized (no `branchId`), matching the centralized raw material stock pool (ADR-004).
+- **Why deferred:** PRD §3 explicitly states single business with centralized stock in v1.
+- **Impact if unaddressed:** Cannot perform per-branch stock-takes or branch-specific inventory counts without a schema change.
+- **Trigger condition:** An ADR revisiting ADR-004 to introduce branch-level stock tracking.
+- **Proposed resolution:** Add optional `branchId` to `OpeningStock` and transition `RawMaterial` to per-branch balances.
+- **Priority:** Low
+- **Status:** Open
+
 ---
 
 ## Resolved

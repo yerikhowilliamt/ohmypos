@@ -15,6 +15,10 @@
  * instead of interleaving lock and write per line; same order, strictly safer,
  * and it is what keeps the invariant in one place instead of two copies of the
  * same loop drifting apart.
+ *
+ * Phase 6 adds the third writer, applyOpening — the OPENING movement a monthly
+ * stock-take produces. It is the only one of the three whose quantity is a
+ * signed correction rather than a physical arrival or consumption.
  */
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
@@ -47,6 +51,26 @@ export interface OutboundStockInput {
   referenceId: string;
   movementDate: Date;
   lines: OutboundStockLine[];
+}
+
+export interface OpeningStockLine {
+  rawMaterialId: string;
+  /** SIGNED correction — direction and quantity are derived here, not by the caller. */
+  delta: Prisma.Decimal;
+  /** OpeningStock.unitPrice ?? rawMaterial.unitCost (plan §5). */
+  unitCost: Prisma.Decimal;
+  /**
+   * The OpeningStock row this movement came from. Per LINE, unlike
+   * applyInbound/applyOutbound: one purchase or one sale is a single event with
+   * one id, but a bulk stock-take writes one OpeningStock row per material.
+   */
+  referenceId: string;
+}
+
+export interface OpeningStockInput {
+  /** ALWAYS periodStart — never `new Date()` (plan §11.9 trap 3). */
+  movementDate: Date;
+  lines: OpeningStockLine[];
 }
 
 @Injectable()
@@ -189,6 +213,68 @@ export class StockMovementsService {
 
       // Deliberately NOT updating rawMaterial.unitCost — same omission and same
       // reason as applyInbound (plan §5 / DEBT-006).
+    }
+  }
+
+  /**
+   * The OPENING counterpart of applyInbound/applyOutbound (System Design §6.4,
+   * ADR-016, plan §3.2).
+   *
+   * Deliberately does NOT call assertSufficientStock. The negative-result check
+   * happens in OpeningStockService BEFORE any write, against `resultingStock`,
+   * so the error can name the declared figure the user typed rather than a
+   * shortfall they never asked for.
+   *
+   * A zero delta still writes a movement (quantity 0.0000). It is the ledger's
+   * record that a count was taken and confirmed the balance, and it is inert in
+   * every sum — which keeps "one declaration, one movement" true and makes the
+   * e2e assertions on movement counts unambiguous.
+   */
+  async applyOpening(
+    tx: Prisma.TransactionClient,
+    input: OpeningStockInput,
+  ): Promise<void> {
+    const lines = [...input.lines].sort((a, b) =>
+      a.rawMaterialId.localeCompare(b.rawMaterialId),
+    );
+
+    // Re-locking rows the caller already holds is a no-op wait — this call is
+    // what keeps applyOpening correct on its own, independent of the caller.
+    await this.lockRawMaterialsInIdOrder(
+      tx,
+      lines.map((l) => l.rawMaterialId),
+    );
+
+    for (const line of lines) {
+      await tx.stockMovement.create({
+        data: {
+          rawMaterialId: line.rawMaterialId,
+          // ERD §3 names OPENING as the example of a central event: a
+          // stock-take counts the shared pool, not one outlet's shelf.
+          // Attributing it to a branch would put centralized stock into a
+          // branch-shaped column, which is the ADR-004 mistake this schema
+          // exists to prevent.
+          branchId: null,
+          direction: line.delta.isNegative() ? 'OUT' : 'IN',
+          quantity: line.delta.abs(),
+          referenceType: 'OPENING',
+          referenceId: line.referenceId,
+          unitCostAtMovement: line.unitCost,
+          movementDate: input.movementDate,
+        },
+      });
+
+      // `increment` with a negative Decimal is a correct atomic subtraction, so
+      // there is one code path here rather than a sign branch. The FOR UPDATE
+      // above is still required: it serializes the check-then-act pair (the
+      // caller's carry-forward read vs. this write), not the arithmetic.
+      await tx.rawMaterial.update({
+        where: { id: line.rawMaterialId },
+        data: { currentStock: { increment: line.delta } },
+      });
+
+      // Deliberately NOT updating rawMaterial.unitCost — same omission and same
+      // reason as applyInbound and applyOutbound (DEBT-006).
     }
   }
 }

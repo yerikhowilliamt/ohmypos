@@ -94,6 +94,7 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
     // `StockMovement` both reference `RawMaterial` with `onDelete: Restrict`
     // (plan §8.4d), so the raw-material wipe below hits
     // `supplier_purchase_items_raw_material_id_fkey` on any seeded database.
+    await prisma.openingStock.deleteMany({});
     await prisma.payableSettlement.deleteMany({});
     await prisma.payable.deleteMany({});
     await prisma.supplierPurchaseItem.deleteMany({});

@@ -28,3 +28,6 @@ export * from './supplier-purchase.schema';
 export * from './payable.schema';
 export * from './stock-movement.schema';
 export * from './sale.schema';
+export * from './period.schema';
+export * from './opening-stock.schema';
+export * from './inventory-summary.schema';
