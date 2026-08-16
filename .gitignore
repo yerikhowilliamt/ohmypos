@@ -42,3 +42,6 @@ docs/planning-prompts/
 docs/plannings/
 docs/remediations/
 docs/reports/
+
+# playwright MCP snapshot artifacts — generated during E2E sessions, not repo content
+.playwright-mcp/

@@ -110,37 +110,55 @@ describe('Indonesian Vocabulary Translation (DEBT-003)', () => {
     });
 
     it('returns proper badge classes for StockStatus', () => {
-      expect(getStockStatusBadgeClasses('OK')).toContain('text-status-success');
-      expect(getStockStatusBadgeClasses('LOW')).toContain(
-        'text-status-warning',
-      );
-      expect(getStockStatusBadgeClasses('OUT')).toContain('text-status-danger');
+      expect(getStockStatusBadgeClasses('OK')).toContain('bg-status-success');
+      expect(getStockStatusBadgeClasses('OK')).toContain('text-white');
+      expect(getStockStatusBadgeClasses('LOW')).toContain('bg-status-warning');
+      expect(getStockStatusBadgeClasses('LOW')).toContain('text-white');
+      expect(getStockStatusBadgeClasses('OUT')).toContain('bg-status-danger');
+      expect(getStockStatusBadgeClasses('OUT')).toContain('text-white');
     });
 
     it('returns proper badge classes for PaymentStatus', () => {
       expect(getPaymentStatusBadgeClasses('PAID')).toContain(
-        'text-status-success',
+        'bg-status-success',
+      );
+      expect(getPaymentStatusBadgeClasses('PAID')).toContain('text-white');
+      expect(getPaymentStatusBadgeClasses('PARTIALLY_PAID')).toContain(
+        'bg-status-warning',
       );
       expect(getPaymentStatusBadgeClasses('PARTIALLY_PAID')).toContain(
-        'text-status-warning',
+        'text-white',
       );
       expect(getPaymentStatusBadgeClasses('UNPAID')).toContain(
-        'text-status-danger',
+        'bg-status-danger',
       );
+      expect(getPaymentStatusBadgeClasses('UNPAID')).toContain('text-white');
     });
 
     it('returns proper badge classes for TransactionStatus', () => {
       expect(getTransactionStatusBadgeClasses('MATCHED')).toContain(
-        'text-status-success',
+        'bg-status-success',
+      );
+      expect(getTransactionStatusBadgeClasses('MATCHED')).toContain(
+        'text-white',
       );
       expect(getTransactionStatusBadgeClasses('PARTIALLY_ALLOCATED')).toContain(
-        'text-status-warning',
+        'bg-status-warning',
+      );
+      expect(getTransactionStatusBadgeClasses('PARTIALLY_ALLOCATED')).toContain(
+        'text-white',
       );
       expect(getTransactionStatusBadgeClasses('PENDING_REVIEW')).toContain(
-        'text-status-info',
+        'bg-status-info',
+      );
+      expect(getTransactionStatusBadgeClasses('PENDING_REVIEW')).toContain(
+        'text-white',
       );
       expect(getTransactionStatusBadgeClasses('UNRESOLVED')).toContain(
-        'text-status-danger',
+        'bg-status-danger',
+      );
+      expect(getTransactionStatusBadgeClasses('UNRESOLVED')).toContain(
+        'text-white',
       );
     });
   });
