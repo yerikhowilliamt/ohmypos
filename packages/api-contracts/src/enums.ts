@@ -63,3 +63,11 @@ export const StockReferenceType = z.enum([
   'ADJUSTMENT',
 ]);
 export type StockReferenceType = z.infer<typeof StockReferenceType>;
+
+/**
+ * OhMyPos — Dashboard 5's automatic stock badge (PRD §5.6). Computed at query
+ * time from closing stock versus `RawMaterial.lowStockThreshold`; never stored,
+ * because a stored status is a second source of truth that can drift (ADR-008).
+ */
+export const StockStatus = z.enum(['OK', 'LOW', 'OUT']);
+export type StockStatus = z.infer<typeof StockStatus>;

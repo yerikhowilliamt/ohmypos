@@ -65,3 +65,15 @@ export type UuidString = z.infer<typeof UuidString>;
 /** An ISO-8601 date-time carried as a string, parsed into a `Date` server-side. */
 export const DateTimeString = z.iso.datetime({ offset: true }).or(z.iso.date());
 export type DateTimeString = z.infer<typeof DateTimeString>;
+
+/**
+ * A stock quantity that may legitimately be negative — a carry-forward or a
+ * closing balance is a computed difference, not an amount (Phase 6 plan §2.1).
+ * Never used for a stored `quantity` column: those carry magnitude only, with
+ * the sign living in `StockMovement.direction`.
+ */
+export const SignedQuantityString = decimalString({
+  scale: 4,
+  nonNegative: false,
+});
+export type SignedQuantityString = z.infer<typeof SignedQuantityString>;
