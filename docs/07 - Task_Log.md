@@ -41,6 +41,39 @@
 
 ## Log
 
+### TASK-015 — Sidebar Brand Logo Integration (`logo.webp` / `logo.svg`)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Frontend (`apps/web`) / UI Branding
+- **Objective:** Replace static text brand header in `Sidebar.tsx` with optimized brand logo image asset (converted to WebP/SVG with transparent padding trimmed).
+- **Relevant docs:** DESIGN.md, System Design v4 §5.
+- **What was done:**
+  1. Converted user-uploaded brand logo PNG into lossless, transparent-trimmed WebP (`apps/web/public/logo.webp`), PNG (`apps/web/public/logo.png`), and SVG (`apps/web/public/logo.svg`).
+  2. Integrated Next.js `<Image />` component with `priority` and aspect ratio preservation inside `<Link href="/">` in `apps/web/components/shell/Sidebar.tsx`.
+  3. Verified monorepo pipeline (`pnpm turbo run lint typecheck test build` — 15/15 tasks passing).
+- **Decisions made during this task:**
+  1. Trimmed transparent margins around logo asset to ensure crisp alignment and correct optical sizing within sidebar width constraints.
+- **Status:** Done
+- **Handoff notes:**
+  - Logo is served from `apps/web/public/logo.webp` and `logo.svg` is also available in `public/`.
+
+### TASK-014 — Next.js 16 Proxy Convention Migration (`middleware.ts` -> `proxy.ts`)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Frontend (`apps/web`) / Next.js 16 Deprecation Resolution
+- **Objective:** Resolve Next.js 16 deprecation warning regarding the `middleware` file convention by migrating `apps/web/middleware.ts` to `apps/web/proxy.ts`.
+- **Relevant docs:** System Design v4 §5, Next.js 16 Proxy Convention documentation.
+- **What was done:**
+  1. Migrated `apps/web/middleware.ts` to `apps/web/proxy.ts`, exporting `export function proxy(request: NextRequest)` and `config = { matcher: [...] }`.
+  2. Removed deprecated `apps/web/middleware.ts`.
+  3. Updated code docstrings in `apps/web/lib/session.ts` and `apps/web/components/shell/LogoutButton.tsx` to reference the proxy layer.
+  4. Verified full monorepo pipeline (`pnpm turbo run lint typecheck test build` — 15/15 tasks passing, zero warnings).
+- **Decisions made during this task:**
+  1. Followed Next.js 16 official `proxy.ts` file convention to keep the edge route protection layer forward-compatible without requiring additional dependencies.
+- **Status:** Done
+- **Handoff notes:**
+  - `web:build` now compiles cleanly and detects `ƒ Proxy (Middleware)` with zero deprecation warnings.
+
 ### TASK-013 — Tech Debt Log Remediation (DEBT-003, DEBT-012, DEBT-016 & Audit)
 
 - **Date:** 2026-08-17
