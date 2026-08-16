@@ -41,6 +41,17 @@
 
 ## Log
 
+### TASK-007 — Fix `allocation-sum.e2e-spec.ts` isolated-run failure (Phase 4 recurrence)
+
+- **Date:** 2026-08-16
+- **Module / Phase:** Follow-up to Phase 4 (Purchasing & Payables) — test cleanup only
+- **Objective:** Fix a recurrence of ERR-004 in a third suite, `allocation-sum.e2e-spec.ts`, which fails when run in isolation against a seeded database even though the full e2e suite passes.
+- **Relevant docs:** ERR-004 (`06 - Error_Log.md`), ADR-006, ADR-007, ADR-014.
+- **What was done:** Reviewed with the new `review-remediation` skill, which produced a machine-executable spec (`docs/remediations/phase-4-purchasing-payables.md` — local working doc, gitignored, not part of this repository) scoped to exactly one file. Independently re-verified every claim in that spec before acting on it, per this project's own "verify, don't trust" standard: reproduced the failure by temporarily reverting the fix (8/8 tests fail without it), confirmed the fix restores 8/8 in isolation and 71/71 in the full suite, and ran the full quality gate (`turbo run lint typecheck test build`, 15/15). `apps/api/test/allocation-sum.e2e-spec.ts`'s `beforeEach` and `resetDatabase` now delete `payableSettlement` → `payable` → `supplierPurchaseItem` → `supplierPurchase` → `stockMovement` (and, in `resetDatabase`, `recipeItem`/`product`/`rawMaterial`/`supplier`) before the pre-existing wipe of `ledgerEntry`/`account`/`category`/`branch` — the same pattern ERR-004 already applied to `auth-rbac.e2e-spec.ts` and `master-data.e2e-spec.ts`.
+- **Decisions made during this task:** None — this is a mechanical cleanup-ordering fix with no design surface; no schema, service, or contract changed.
+- **Status:** Done
+- **Handoff notes:** Extends ERR-004's own prevention rule: the isolated-run check (`db:seed` → `test:e2e -- <single-suite>`) must be run per-suite, not just as a full-suite pass, for every suite that touches a table referenced by a `Restrict` foreign key — a full-suite pass can hide exactly this failure mode when one suite happens to clean up after another. Any future phase adding a `Restrict`-referenced table should re-check all three suites (`auth-rbac`, `master-data`, `allocation-sum`) in isolation, not assume ERR-004's fix already covers every case.
+
 ### TASK-006 — Phase 4: Purchasing & Payables
 
 - **Date:** 2026-08-16
