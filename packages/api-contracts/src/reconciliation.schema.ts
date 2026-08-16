@@ -3,6 +3,13 @@ import { TransactionStatus, TransactionType } from './enums';
 import { DateTimeString, MoneyString, UuidString } from './primitives';
 import { PaginationQuerySchema } from './pagination.schema';
 
+export const ReconciliationSortBySchema = z.enum([
+  'txnDate',
+  'amount',
+  'createdAt',
+]);
+export type ReconciliationSortBy = z.infer<typeof ReconciliationSortBySchema>;
+
 /** Filters shared by the reconciliation dashboard's list and summary views. */
 export const ReconciliationQuerySchema = PaginationQuerySchema.extend({
   accountId: UuidString.optional(),
@@ -12,6 +19,7 @@ export const ReconciliationQuerySchema = PaginationQuerySchema.extend({
   status: TransactionStatus.optional(),
   startDate: DateTimeString.optional(),
   endDate: DateTimeString.optional(),
+  sortBy: ReconciliationSortBySchema.optional(),
 });
 export type ReconciliationQuery = z.infer<typeof ReconciliationQuerySchema>;
 

@@ -1,10 +1,14 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RoleGuard } from '../../common/guards/role.guard';
 import { ReconciliationService } from './reconciliation.service';
 import { ReconciliationQueryDto } from './reconciliation.dto';
 
 @ApiTags('reconciliation')
 @Controller('reconciliation')
+@UseGuards(RoleGuard)
+@Roles('ADMIN', 'OWNER')
 export class ReconciliationController {
   constructor(private readonly reconciliationService: ReconciliationService) {}
 

@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { LoggerModule } from 'nestjs-pino';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RoleGuard } from './common/guards/role.guard';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
@@ -78,6 +79,8 @@ import { ReportsModule } from './modules/reports/reports.module';
     // Registered globally so every endpoint is authenticated by default; an
     // endpoint opts out only with an explicit @Public() (Playbook §8).
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // Registered globally so every endpoint checks @Roles(...) declarations (ADR-011).
+    { provide: APP_GUARD, useClass: RoleGuard },
     // Every request body/query is validated against its Zod schema from
     // packages/api-contracts before it reaches a service (ADR-010, Playbook §4).
     { provide: APP_PIPE, useClass: ZodValidationPipe },

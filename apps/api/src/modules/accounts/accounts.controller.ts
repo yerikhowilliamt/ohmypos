@@ -9,13 +9,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RoleGuard } from '../../common/guards/role.guard';
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto, UpdateAccountDto } from './accounts.dto';
 
 @ApiTags('accounts')
 @Controller('accounts')
+@UseGuards(RoleGuard)
+@Roles('OWNER', 'ADMIN')
 export class AccountsController {
   constructor(private readonly accountsService: AccountsService) {}
 

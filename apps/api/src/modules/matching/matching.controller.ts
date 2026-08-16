@@ -1,10 +1,21 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RoleGuard } from '../../common/guards/role.guard';
 import { MatchingService } from './matching.service';
 import { ProposeMatchesDto, ResetMatchesDto } from './matching.dto';
 
 @ApiTags('matching')
 @Controller('matching')
+@UseGuards(RoleGuard)
+@Roles('ADMIN', 'OWNER')
 export class MatchingController {
   constructor(private readonly matchingService: MatchingService) {}
 
