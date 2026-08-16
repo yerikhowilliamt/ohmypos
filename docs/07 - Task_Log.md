@@ -41,6 +41,41 @@
 
 ## Log
 
+### TASK-006 — Phase 4: Purchasing & Payables
+
+- **Date:** 2026-08-16
+- **Module / Phase:** Phase 4 — Purchasing & Payables (`Supplier`, `SupplierPurchase`, `SupplierPurchaseItem`, `Payable`, `PayableSettlement`, `StockMovement`)
+- **Objective:** Implement full inventory inbound purchasing, supplier management, payables ledger settlement, and stock movements with pessimistic row locking per `docs/plannings/phase-4-purchasing-payables.md`.
+- **Relevant docs:** PRD §5.3, ADR-004, ADR-006, ADR-007, ADR-010, ADR-011, ADR-012, ADR-014, ERD v3 §3, §6, §7, Playbook §3–§10.
+- **What was done:**
+  1. Authored **ADR-014** (Central kitchen branch for central-purchase ledger entry attribution) and logged **DEBT-006** (`RawMaterial.unitCost` not updated by purchases) & **DEBT-007** (No DB-level trigger for payable settlement sum).
+  2. Extended `schema.prisma` with 4 enums (`PaymentStatus`, `PayableStatus`, `StockDirection`, `StockReferenceType`) and 6 models (`Supplier`, `SupplierPurchase`, `SupplierPurchaseItem`, `Payable`, `PayableSettlement`, `StockMovement`), generated Prisma client, and executed migration `20260815185935_add_purchasing_payables_stock_movements`.
+  3. Created Zod schemas in `packages/api-contracts` (`supplier.schema.ts`, `supplier-purchase.schema.ts`, `payable.schema.ts`, `stock-movement.schema.ts`) with mutual exclusion (`PAID` requires `accountId`, `UNPAID` rejects `accountId`), unique raw material validation, and decimal scale formatting.
+  4. Created pure calculators & rule validators with unit tests: `calculateLineTotal` and `calculatePurchaseTotal` in `purchase-totals.ts` (`purchase-totals.spec.ts`) and `assertSettlable` in `payables.rules.ts` (`payables.rules.spec.ts`).
+  5. Implemented `SuppliersModule` (CRUD, delete restriction if referenced), `StockMovementsModule` (`SELECT ... FOR UPDATE` row locks sorted ascending to prevent deadlocks + atomic increment on `RawMaterial.currentStock`), `SupplierPurchasesModule` (atomic `$transaction` enforcing ADR-006 binary branch and ADR-014 central branch attribution), and `PayablesModule` (pessimistic lock on `Payable` + live `remainingBalance` & `status` update + `LedgerEntry` creation on settlement).
+  6. Updated `seed.ts` with `Pusat (Dapur Sentral)` system branch, 2 suppliers (`Toko Sumber Rejeki`, `CV Kopi Nusantara`), Purchase A (Central, PAID, 290,000.00), and Purchase B (Melati, UNPAID, 60,000.00 with 20,000.00 partial settlement).
+  7. Built auth-aware e2e test suite `purchasing-payables.e2e-spec.ts` testing all 27 cases from §9.10: ADR-006 binary branch, stock movements, central purchase attribution, partial/full settlements, over-settlement rejection, concurrency lock under `Promise.allSettled`, rollback guarantees, RBAC/BranchScopeGuard enforcement, decimal scale preservation, and balance re-derivation.
+- **Decisions made during this task:**
+  (1) Option 1 / Option B chosen for `Payable`: stored `remainingBalance` + `status` written strictly inside the settlement transaction under `SELECT id FROM payables WHERE id = ${id} FOR UPDATE`.
+  (2) Option L3 chosen for central purchase ledger entries: `Pusat (Dapur Sentral)` branch seeded and resolved via `resolveLedgerBranchId` (formalized in ADR-014).
+  (3) Option P2 chosen for `SupplierPurchase.paymentStatus`: updated live upon partial/full settlement so purchase status reflects true settlement state.
+  (4) Settlement creation restricted to `OWNER` only (money leaving central account).
+  (5) Stock movements acquire pessimistic locks on raw materials in ascending order (`localeCompare`) to prevent deadlocks across concurrent bulk operations.
+- **Post-review corrections (2026-08-16):** the phase was reviewed against its plan and six items were fixed; nothing in the ADR-006 branch, the transaction boundaries, or the schema changed.
+  1. **ERR-004 (High, CI-breaking)** — `db:seed` → `test:e2e` failed 35 tests in `auth-rbac` and `master-data`, while `test:e2e` alone passed. Phase 4's `Restrict` FKs blocked those suites' unconditional `ledgerEntry.deleteMany({})` / `rawMaterial.deleteMany({})`. Both cleanups now delete the purchasing children first. See ERR-004 for why a green e2e run on an unseeded database proved nothing here.
+  2. **Seed no longer hand-writes derived values.** It calls `SupplierPurchasesService.create` and `PayablesService.settle` (services constructed directly; `PrismaService` builds its own adapter, so no Nest container is needed). Previously it wrote `totalAmount`, `lineTotal`, `remainingBalance: '40000.00'`, `paymentStatus: 'PARTIALLY_PAID'` and the `currentStock` increments as literals — a second writer to three denormalized balances, living outside `apps/api/src` where the single-writer greps could not see it.
+  3. **ADR-014's rejection is now real.** The ADR claimed the API rejects `Pusat (Dapur Sentral)` as a purchase `branchId`; nothing did. Added `CentralBranchNotAssignableException` (400) plus e2e Case 28. Exception inventory is now six, not five.
+  4. **e2e Case 15 was vacuous** — it asserted `.every()` over a result set that contained no other-branch rows at all. It now creates a branch-2 purchase and a central purchase first, asserts the result is non-empty, and names both ids as exclusions.
+  5. **e2e Case 3 was order-dependent** — it read the two most recent `StockMovement` rows globally. It now creates its own purchase and queries by `referenceId`, asserting one movement per line with exact quantity, unit cost and branch.
+  6. **House-style cleanups:** `this.name` added to all six domain exceptions (Phase 2/3 set it, Phase 4 did not), and the two unit-spec files gained the `ADR-`/`§` doc comment the plan's §9.1a requires. The plan's §8.5 `migrate diff` command was also corrected — it used Prisma 5/6 flag names that Prisma 7 rejects with a usage dump, which reads deceptively like a clean check.
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test build` green (15/15 tasks); 71 e2e tests (allocation, auth/RBAC, master-data, purchasing-payables) and 31 unit tests pass — verified in both `db:seed` → `test:e2e` and `test:e2e` → `test:e2e` order. Seed output re-checked in SQL after the rewrite: purchase A `290000.00` PAID central with 1 ledger entry and 0 payables, purchase B `60000.00` with 0 purchase ledger entries and 1 payable, stored `remainingBalance` `40000.00` equal to the re-derived figure, Gula `25.0000` / Kopi `7.0000`, central entry on `Pusat (Dapur Sentral)` and the settlement entry on `Cabang Melati`. **What Phase 5 (POS & Sales) must know:**
+  - Inbound stock from purchases writes `StockMovement` with `direction: 'IN'` and increment on `RawMaterial.currentStock`.
+  - Phase 5 `Sale` flow will record `StockMovement` with `direction: 'OUT'`, `referenceType: 'SALE'`, and decrement `RawMaterial.currentStock` inside the sale transaction under `FOR UPDATE` lock.
+  - Money movements for sales create `LedgerEntry` with `type: 'INFLOW'`, `sourceType: 'SALE'`.
+  - Reuse `StockMovementsService` rather than writing `RawMaterial.currentStock` from the sale flow: it is the single writer of that column, and its `applyInbound` already establishes the `tx`-parameter shape and the ascending-id lock order that the `OUT` counterpart must copy to stay deadlock-free against concurrent purchases.
+  - `Sale` and `SaleItem` will add more `Restrict` children to `raw_materials`, `ledger_entries` and `branches`. Extend the cleanup in **every** existing e2e suite that wipes those tables in the same change, and verify with `db:seed` → `test:e2e` — ERR-004 is exactly this mistake, and it passes locally while failing CI.
+
 ### TASK-005 — Phase 3: Master Data (Product / Recipe / RawMaterial)
 
 - **Date:** 2026-08-15

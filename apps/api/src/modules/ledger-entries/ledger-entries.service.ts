@@ -6,6 +6,8 @@ import {
 import type {
   CreateLedgerEntry,
   LedgerEntryQuery,
+  LedgerSourceType,
+  TransactionType,
   UpdateLedgerEntry,
 } from '@ohmypos/api-contracts';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -17,11 +19,40 @@ import { Prisma } from '../../generated/prisma/client';
  *
  * Entries created through this module are always `sourceType = MANUAL`; the
  * SALE / PURCHASE / PAYABLE_SETTLEMENT variants are written by their own
- * modules inside a transaction in Phase 3 (Playbook §7).
+ * modules inside a transaction in Phase 3/4/5 (Playbook §7).
  */
 @Injectable()
 export class LedgerEntriesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Creates a system-generated entry inside the CALLER'S transaction (Playbook §3,
+   * §7). New modules must not write `ledger_entries` directly; they call this.
+   *
+   * Takes `tx`, never `this.prisma` — a Sale, a Purchase and a Settlement each
+   * need the entry to commit or roll back with the rest of their flow.
+   *
+   * `sourceType` is never MANUAL here: MANUAL is what `create()` below produces,
+   * and `update()` refuses to edit anything that is not MANUAL (TASK-003 note 7).
+   */
+  async createSystemEntry(
+    tx: Prisma.TransactionClient,
+    input: {
+      accountId: string;
+      categoryId: string;
+      branchId: string;
+      entryDate: Date;
+      amount: Prisma.Decimal;
+      type: TransactionType;
+      sourceType: Exclude<LedgerSourceType, 'MANUAL'>;
+      sourceId: string | null;
+      note?: string | null;
+    },
+  ) {
+    return tx.ledgerEntry.create({
+      data: { ...input, note: input.note ?? null },
+    });
+  }
 
   async create(dto: CreateLedgerEntry) {
     await this.assertReferencesExist(

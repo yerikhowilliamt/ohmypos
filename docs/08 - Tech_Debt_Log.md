@@ -87,6 +87,30 @@
 - **Priority:** Low
 - **Status:** Open
 
+### DEBT-006 — RawMaterial.unitCost not updated by purchases
+
+- **Date logged:** 2026-08-16
+- **Found during:** Phase 4 (Purchasing & Payables planning §5)
+- **Description:** A purchase records `unitCost` per item and `StockMovement.unitCostAtMovement` snapshots it, but does not write back to `RawMaterial.unitCost`. `unitCost` remains master data updated only via `PATCH /raw-materials/:id`.
+- **Why deferred:** Writing to `RawMaterial.unitCost` on purchase silently changes live HPP for all products (ADR-005) and is a costing-method decision (last-cost vs moving-average) with no approved ADR.
+- **Impact if unaddressed:** Live HPP may diverge from actual recent purchase prices if master data unit costs are not kept up to date by staff.
+- **Trigger condition:** The business owner reports that live HPP is stale relative to actual purchase prices.
+- **Proposed resolution:** Decide the costing method explicitly in an ADR superseding or extending ADR-005 (e.g. weighted moving average or last purchase cost).
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-007 — No DB-level trigger enforcing payable settlement sum constraint
+
+- **Date logged:** 2026-08-16
+- **Found during:** Phase 4 (Purchasing & Payables planning §2 Option D)
+- **Description:** `Payable.remainingBalance` and settlement bounds are enforced in the service layer under `SELECT ... FOR UPDATE` row lock, rather than via a PostgreSQL trigger (`trg_check_payable_settlement_sum`).
+- **Why deferred:** In v1, there is exactly one writer to `PayableSettlement` (inside `PayablesService.settle`). Adding a trigger introduces P2039 driver error unwrapping fragility (ERR-001) for a single-writer flow.
+- **Impact if unaddressed:** If a future second write path (e.g. bulk data import or raw SQL migration) is introduced and omits locking, over-settlement could theoretically occur.
+- **Trigger condition:** A second write path or bulk import for `PayableSettlement` is added.
+- **Proposed resolution:** Add `trg_check_payable_settlement_sum` trigger in a migration, modeled on `trg_check_allocation_sum`.
+- **Priority:** Low
+- **Status:** Open
+
 ---
 
 ## Resolved
