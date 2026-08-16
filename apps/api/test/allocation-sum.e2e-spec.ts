@@ -84,6 +84,11 @@ describe('Allocation sum constraint (e2e)', () => {
   beforeEach(async () => {
     await prisma.allocation.deleteMany({});
     await prisma.bankTransaction.deleteMany({});
+    await prisma.payableSettlement.deleteMany({});
+    await prisma.payable.deleteMany({});
+    await prisma.supplierPurchaseItem.deleteMany({});
+    await prisma.supplierPurchase.deleteMany({});
+    await prisma.stockMovement.deleteMany({});
     await prisma.ledgerEntry.deleteMany({});
   });
 
@@ -301,6 +306,14 @@ describe('Allocation sum constraint (e2e)', () => {
 });
 
 async function resetDatabase(prisma: PrismaService) {
+  await prisma.payableSettlement.deleteMany({});
+  await prisma.payable.deleteMany({});
+  await prisma.supplierPurchaseItem.deleteMany({});
+  await prisma.supplierPurchase.deleteMany({});
+  await prisma.stockMovement.deleteMany({});
+  await prisma.recipeItem.deleteMany({});
+  await prisma.product.deleteMany({});
+  await prisma.rawMaterial.deleteMany({});
   await prisma.user.deleteMany({ where: { email: 'alloc-admin@test.local' } });
   await prisma.allocation.deleteMany({});
   await prisma.bankTransaction.deleteMany({});
@@ -308,4 +321,5 @@ async function resetDatabase(prisma: PrismaService) {
   await prisma.account.deleteMany({});
   await prisma.category.deleteMany({});
   await prisma.branch.deleteMany({});
+  await prisma.supplier.deleteMany({});
 }
