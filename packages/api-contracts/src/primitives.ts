@@ -77,3 +77,14 @@ export const SignedQuantityString = decimalString({
   nonNegative: false,
 });
 export type SignedQuantityString = z.infer<typeof SignedQuantityString>;
+
+/**
+ * A monetary amount that may legitimately be negative — e.g. gross profit,
+ * net profit, or net cash flow for a central branch with expenses and zero
+ * revenue (ADR-014, ADR-017).
+ */
+export const SignedMoneyString = decimalString({
+  scale: 2,
+  nonNegative: false,
+});
+export type SignedMoneyString = z.infer<typeof SignedMoneyString>;

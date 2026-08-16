@@ -47,6 +47,7 @@
 - **Why deferred:** Simplest possible implementation for v1, and correct by construction (no cache-invalidation logic needed). Appropriate at the transaction volume of a single small multi-branch business.
 - **Impact if unaddressed:** Report queries slow down as historical data accumulates, especially once several months/years of `LedgerEntry` and `StockMovement` rows exist.
 - **Trigger condition:** Any report route consistently exceeds ~500ms at real production data volume, or the business's transaction volume grows meaningfully beyond current expectations.
+- **Measured (2026-08-17, Phase 7):** on synthetic volume across 3 branches spanning 12 months — profit-loss 2 ms, product-profit 2 ms, income-by-payment-method 3 ms, top-products 1 ms, daily-income 1 ms at a one-month range; 1 ms at a one-year range. Trigger for reopening ADR-008: >1 s at a one-year range, or a sequential scan on `sale_items`/`ledger_entries` at a one-month range.
 - **Proposed resolution:** Introduce materialized views or a dedicated read-model table for the report queries, refreshed on a schedule or on write.
 - **Priority:** Medium
 - **Status:** Open
@@ -169,6 +170,15 @@
 - **Trigger condition:** The next task that visibly relies on `Button`'s non-default variants or `Card`'s default appearance (first candidate: the actual POS/back-office page implementations replacing today's placeholders).
 - **Proposed resolution:** Either map shadcn's semantic tokens onto DESIGN.md's palette in `globals.css` (e.g. `--color-primary: var(--color-brand-primary)`, `--color-destructive: var(--color-status-danger)`, etc.), or rewrite `Button`/`Card`/`Input` to reference DESIGN.md tokens directly, matching the pattern used by `dropdown-menu.tsx` and `login/page.tsx`.
 - **Priority:** Medium
+- **Status:** Open
+
+### DEBT-011 — Report rows are unpaginated
+
+- **Area:** `apps/api/src/modules/reports` (Dashboard 3)
+- **What:** `GET /reports/product-profit` returns one row per product sold in the range with no pagination, and `GET /reports/daily-income` one row per day (bounded at 366 by `MAX_REPORT_RANGE_DAYS`).
+- **Why it was accepted:** at v1 scale the product catalogue is a café menu — tens of rows. The frontend renders the whole set as one table plus one chart, so paginating it would complicate both sides for no benefit today.
+- **Trigger to fix:** the product catalogue exceeding ~500 active products, or a product-profit response exceeding ~1 MB.
+- **Fix when triggered:** additive query parameters (`page`, `limit`) on the product-profit endpoint reusing `PaginationQuerySchema` — not a redesign.
 - **Status:** Open
 
 ### DEBT-013 — No closing-stock snapshots — query-time calculation scale boundary
