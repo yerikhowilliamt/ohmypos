@@ -84,6 +84,8 @@ describe('Allocation sum constraint (e2e)', () => {
   beforeEach(async () => {
     await prisma.allocation.deleteMany({});
     await prisma.bankTransaction.deleteMany({});
+    await prisma.saleItem.deleteMany({});
+    await prisma.sale.deleteMany({});
     await prisma.payableSettlement.deleteMany({});
     await prisma.payable.deleteMany({});
     await prisma.supplierPurchaseItem.deleteMany({});
@@ -307,6 +309,8 @@ describe('Allocation sum constraint (e2e)', () => {
 
 async function resetDatabase(prisma: PrismaService) {
   await prisma.openingStock.deleteMany({});
+  await prisma.saleItem.deleteMany({});
+  await prisma.sale.deleteMany({});
   await prisma.payableSettlement.deleteMany({});
   await prisma.payable.deleteMany({});
   await prisma.supplierPurchaseItem.deleteMany({});
