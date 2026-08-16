@@ -41,6 +41,24 @@
 
 ## Log
 
+### TASK-013 — Tech Debt Log Remediation (DEBT-003, DEBT-012, DEBT-016 & Audit)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Infrastructure / Frontend Tokens, Contracts Vocabulary & Tech Debt Log Remediation
+- **Objective:** Remediate actionable technical debt items in `docs/08 - Tech_Debt_Log.md`, resolve UI token inconsistencies (DEBT-012), centralize Indonesian vocabulary translations (DEBT-003), fix duplicate ID collision (DEBT-016), and perform full trigger condition audit across all remaining deferred debt entries.
+- **Relevant docs:** DESIGN.md §8–§14, ADR-001–018, System Design v4 §2/§11, PRD v1.1, `docs/08 - Tech_Debt_Log.md`.
+- **What was done:**
+  1. **DEBT-012 Resolution:** Aligned `packages/ui/src/styles/globals.css` with exact DESIGN.md tokens (`#16A34A` success, `#00B894` inflow, `#2563EB` outflow/info, surfaces, radius, and shadows). Added full `@theme` semantic shadcn token mappings (`--color-primary`, `--color-card`, `--color-destructive`, `--color-border`, etc.). Rewrote `button.tsx`, `card.tsx`, `input.tsx`, and `label.tsx` to reference DESIGN.md semantic tokens directly.
+  2. **DEBT-003 Resolution:** Implemented centralized type-safe Indonesian vocabulary translation module in `@ohmypos/api-contracts` (`src/vocabulary.ts`), re-exported in `index.ts`. Created `apps/web/lib/vocabulary.ts` with Flow Indicator and status badge helper styling. Added 16 Vitest unit tests in `apps/web/lib/vocabulary.test.ts` (100% green).
+  3. **DEBT-016 Fix & Log Audit:** Renumbered duplicate ID `DEBT-011` (unpaginated reports) to `DEBT-016`. Moved DEBT-003 and DEBT-012 to Resolved section in `docs/08 - Tech_Debt_Log.md`. Confirmed deferred status for DEBT-001, DEBT-002, DEBT-004, DEBT-006–011, DEBT-013–015 whose triggers have not been met.
+  4. **Verification:** Verified all monorepo checks (`pnpm turbo run lint typecheck test`) and API e2e tests (`pnpm --filter api test:e2e`).
+- **Decisions made during this task:**
+  1. Option 1 selected: Resolve immediate UI tokens and contract vocabulary without prematurely modifying deferred backend mechanisms whose triggers have not fired.
+- **Status:** Done
+- **Handoff notes:**
+  - `packages/ui` is now completely ready for Phase 8b+ screen implementations with zero undefined utility classes.
+  - `@ohmypos/api-contracts` provides `formatTransactionType`, `formatStockDirection`, and other standard Indonesian formatters for both backend and frontend.
+
 ### TASK-012 — Adversarial QA Review Remediation (Backend/API DEF-001–DEF-009)
 
 - **Date:** 2026-08-17
