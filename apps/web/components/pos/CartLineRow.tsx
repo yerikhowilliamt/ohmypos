@@ -5,6 +5,7 @@ import { Minus, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Button } from '@ohmypos/ui/components/button';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
+import { Label } from '@ohmypos/ui/components/label';
 import { cn } from '@ohmypos/ui/lib/utils';
 import { formatCurrency } from '@/lib/formatters';
 import { effectiveUnitPrice, type CartLine } from '@/lib/pos/cart.reducer';
@@ -99,12 +100,12 @@ export function CartLineRow({
       </div>
 
       <div className="flex items-center gap-2">
-        <label
+        <Label
           htmlFor={`cart-price-${line.id}`}
           className="shrink-0 text-xs text-text-tertiary"
         >
           Harga satuan
-        </label>
+        </Label>
         {/* CurrencyInput.onChange emits a raw unformatted string, not an event —
             the field displays "18.000" while state keeps "18000". */}
         <CurrencyInput

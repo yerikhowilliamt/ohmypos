@@ -1,0 +1,10 @@
+# OhMyPos
+
+> Modern Point of Sale and back-office management system designed for multi-branch F&B businesses.
+
+- [Login](/login): Authentication portal for Cashiers, Admins, and Owners.
+- [POS Terminal](/sales): Front-of-house point of sale with real-time cart and inventory check.
+- [Back Office Master Data](/master-data): Raw materials, products, and recipe configuration.
+- [Inventory & Expenses](/inventory): Stock management, supplier purchases, and branch expenses.
+- [Reconciliation](/reconciliation): Bank statement transaction matching and ledger allocation.
+

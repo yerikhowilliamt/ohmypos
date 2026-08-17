@@ -1,4 +1,10 @@
+import type { Metadata } from 'next';
 import { requireRole } from '@/lib/session';
+
+export const metadata: Metadata = {
+  title: 'Pengguna — OhMyPos',
+  description: 'Kelola akun staf dan peran akses',
+};
 
 export default async function Page() {
   await requireRole(['OWNER']);

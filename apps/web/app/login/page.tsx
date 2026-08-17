@@ -6,6 +6,7 @@ import { Button } from '@ohmypos/ui/components/button';
 import { Input } from '@ohmypos/ui/components/input';
 import { Label } from '@ohmypos/ui/components/label';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { apiFetch } from '@/lib/api';
@@ -48,7 +49,17 @@ export default function LoginPage() {
         noValidate
         className="w-full max-w-sm rounded-sm border border-border-default bg-surface-raised p-6 shadow-1"
       >
-        <h1 className="text-xl font-bold text-text-primary">OhMyPos</h1>
+        <div className="mb-2">
+          <Image
+            src="/logo.svg"
+            alt="OhMyPos"
+            width={142}
+            height={40}
+            priority
+            className="h-8 w-auto object-contain"
+          />
+        </div>
+        <h1 className="sr-only">OhMyPos</h1>
         <p className="mt-1 text-sm text-text-secondary">
           Masuk untuk melanjutkan.
         </p>

@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Plus } from 'lucide-react';
 import type { ProductWithHppResponse } from '@ohmypos/api-contracts';
 import { Badge } from '@ohmypos/ui/components/badge';
+import { Button } from '@ohmypos/ui/components/button';
 import { cn } from '@ohmypos/ui/lib/utils';
 import { formatCurrency } from '@/lib/formatters';
 import { canAddProduct } from '@/lib/pos/availability';
@@ -36,8 +37,9 @@ export function ProductCard({
       : null;
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       data-testid={`product-card-${product.id}`}
       disabled={!addable}
       aria-label={`Tambah ${product.name}`}
@@ -89,6 +91,6 @@ export function ProductCard({
           </span>
         )}
       </span>
-    </button>
+    </Button>
   );
 }

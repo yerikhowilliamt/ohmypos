@@ -48,13 +48,22 @@ export function MasterDataClient() {
         className="w-full space-y-4"
       >
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="products" className="gap-2">
-            <Coffee className="size-4" />
-            Produk & Resep ({products.length})
+          <TabsTrigger
+            value="products"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm truncate"
+          >
+            <Coffee className="size-3.5 sm:size-4 shrink-0" />
+            <span>
+              Produk<span className="hidden sm:inline"> & Resep</span> (
+              {products.length})
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="raw-materials" className="gap-2">
-            <Package className="size-4" />
-            Bahan Baku ({rawMaterials.length})
+          <TabsTrigger
+            value="raw-materials"
+            className="gap-1.5 sm:gap-2 text-xs sm:text-sm truncate"
+          >
+            <Package className="size-3.5 sm:size-4 shrink-0" />
+            <span>Bahan Baku ({rawMaterials.length})</span>
           </TabsTrigger>
         </TabsList>
 

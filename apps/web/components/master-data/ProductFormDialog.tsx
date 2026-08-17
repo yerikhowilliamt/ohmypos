@@ -20,6 +20,7 @@ import {
 import { Input } from '@ohmypos/ui/components/input';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
 import { Label } from '@ohmypos/ui/components/label';
+import { Checkbox } from '@ohmypos/ui/components/checkbox';
 import { useCreateProduct, useUpdateProduct } from '@/hooks/useMasterData';
 import { formatCurrency, formatMarginPercentage } from '@/lib/formatters';
 
@@ -161,12 +162,7 @@ export function ProductFormDialog({
             </div>
 
             <div className="flex items-center gap-2 pt-1">
-              <input
-                id="product-active"
-                type="checkbox"
-                className="size-4 rounded-xs border-border-default text-brand-primary focus:ring-focus-ring cursor-pointer"
-                {...register('isActive')}
-              />
+              <Checkbox id="product-active" {...register('isActive')} />
               <Label
                 htmlFor="product-active"
                 className="cursor-pointer text-sm font-normal"
