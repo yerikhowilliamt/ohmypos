@@ -1,15 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@ohmypos/ui/components/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@ohmypos/ui/components/table';
 import { ArrowRight, Plus } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import {
@@ -18,12 +11,68 @@ import {
 } from '@/lib/vocabulary';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { useSupplierPurchases } from '@/hooks/useExpenses';
+import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { SupplierPurchaseResponse } from '@ohmypos/api-contracts';
 import { PurchaseEntryFormDialog } from './PurchaseEntryFormDialog';
 import { CentralBranchTag } from './CentralBranchTag';
 
 interface PurchaseEntryTabProps {
   onGoToPayables: () => void;
 }
+
+const columns: ColumnDef<SupplierPurchaseResponse>[] = [
+  {
+    accessorFn: (row) => new Date(row.purchaseDate).getTime(),
+    id: 'purchaseDate',
+    header: ({ column }) => <SortableHeader label="Tanggal" column={column} />,
+    cell: ({ row }) => (
+      <span className="text-text-secondary">
+        {new Date(row.original.purchaseDate).toLocaleDateString('id-ID')}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'supplierName',
+    header: ({ column }) => <SortableHeader label="Pemasok" column={column} />,
+    cell: ({ row }) => (
+      <span className="font-medium text-text-primary">
+        {row.original.supplierName}
+      </span>
+    ),
+  },
+  {
+    accessorFn: (row) => row.branchId ?? 'Central',
+    id: 'branchId',
+    header: ({ column }) => <SortableHeader label="Lokasi" column={column} />,
+    cell: ({ row }) => <CentralBranchTag branchId={row.original.branchId} />,
+  },
+  {
+    accessorKey: 'paymentStatus',
+    filterFn: 'equalsString',
+    header: ({ column }) => <SortableHeader label="Status" column={column} />,
+    cell: ({ row }) => (
+      <Badge
+        className={`text-[11px] ${getPaymentStatusBadgeClasses(row.original.paymentStatus)}`}
+      >
+        {formatPaymentStatus(row.original.paymentStatus)}
+      </Badge>
+    ),
+    meta: { align: 'center' },
+  },
+  {
+    accessorFn: (row) => Number(row.totalAmount),
+    id: 'totalAmount',
+    header: ({ column }) => (
+      <SortableHeader label="Total" column={column} align="right" />
+    ),
+    cell: ({ row }) => (
+      <span className="numeric font-mono font-medium text-accent-outflow">
+        {formatCurrency(row.original.totalAmount)}
+      </span>
+    ),
+    meta: { align: 'right' },
+  },
+];
 
 export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
@@ -78,68 +127,12 @@ export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
         </div>
       )}
 
-      <div className="rounded-md border border-border-default bg-surface-raised shadow-1 overflow-hidden">
-        <Table className="min-w-[650px]">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-[120px]">Tanggal</TableHead>
-              <TableHead className="min-w-[200px]">Pemasok</TableHead>
-              <TableHead className="min-w-[120px]">Lokasi</TableHead>
-              <TableHead className="text-center min-w-[130px]">
-                Status
-              </TableHead>
-              <TableHead className="text-right min-w-[130px]">Total</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="h-32 text-center text-text-secondary"
-                >
-                  Memuat data pembelian…
-                </TableCell>
-              </TableRow>
-            ) : purchases.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="h-32 text-center text-text-secondary"
-                >
-                  Belum ada pembelian tercatat.
-                </TableCell>
-              </TableRow>
-            ) : (
-              purchases.map((purchase) => (
-                <TableRow key={purchase.id}>
-                  <TableCell className="text-text-secondary">
-                    {new Date(purchase.purchaseDate).toLocaleDateString(
-                      'id-ID',
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium text-text-primary">
-                    {purchase.supplierName}
-                  </TableCell>
-                  <TableCell>
-                    <CentralBranchTag branchId={purchase.branchId} />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge
-                      className={`text-[11px] ${getPaymentStatusBadgeClasses(purchase.paymentStatus)}`}
-                    >
-                      {formatPaymentStatus(purchase.paymentStatus)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right numeric font-mono font-medium text-accent-outflow">
-                    {formatCurrency(purchase.totalAmount)}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        columns={columns}
+        data={purchases}
+        isLoading={isLoading}
+        emptyMessage="Belum ada pembelian tercatat."
+      />
 
       <PurchaseEntryFormDialog
         open={isCreateOpen}
