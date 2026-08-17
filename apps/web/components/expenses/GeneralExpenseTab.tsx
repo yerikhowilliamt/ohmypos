@@ -1,21 +1,64 @@
 'use client';
 
 import * as React from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@ohmypos/ui/components/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@ohmypos/ui/components/table';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Plus } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { formatLedgerSourceType } from '@/lib/vocabulary';
 import { useLedgerEntries } from '@/hooks/useExpenses';
+import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { LedgerEntryResponse } from '@ohmypos/api-contracts';
 import { GeneralExpenseFormDialog } from './GeneralExpenseFormDialog';
+
+const columns: ColumnDef<LedgerEntryResponse>[] = [
+  {
+    accessorFn: (row) => new Date(row.entryDate).getTime(),
+    id: 'entryDate',
+    header: ({ column }) => <SortableHeader label="Tanggal" column={column} />,
+    cell: ({ row }) => (
+      <span className="text-text-secondary">
+        {new Date(row.original.entryDate).toLocaleDateString('id-ID')}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'note',
+    header: ({ column }) => <SortableHeader label="Catatan" column={column} />,
+    cell: ({ row }) => (
+      <span className="text-text-primary">
+        {row.original.note ?? <span className="text-text-tertiary">—</span>}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'sourceType',
+    filterFn: 'includesString',
+    header: ({ column }) => <SortableHeader label="Sumber" column={column} />,
+    cell: ({ row }) => (
+      <Badge
+        variant={row.original.sourceType === 'MANUAL' ? 'outline' : 'secondary'}
+        className="text-[11px]"
+      >
+        {formatLedgerSourceType(row.original.sourceType)}
+      </Badge>
+    ),
+  },
+  {
+    accessorFn: (row) => Number(row.amount),
+    id: 'amount',
+    header: ({ column }) => (
+      <SortableHeader label="Jumlah" column={column} align="right" />
+    ),
+    cell: ({ row }) => (
+      <span className="numeric font-mono font-medium text-accent-outflow">
+        {formatCurrency(row.original.amount)}
+      </span>
+    ),
+    meta: { align: 'right' },
+  },
+];
 
 export function GeneralExpenseTab() {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
@@ -43,65 +86,12 @@ export function GeneralExpenseTab() {
         </Button>
       </div>
 
-      <div className="rounded-md border border-border-default bg-surface-raised shadow-1 overflow-hidden">
-        <Table className="min-w-[640px]">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-[120px]">Tanggal</TableHead>
-              <TableHead className="min-w-[220px]">Catatan</TableHead>
-              <TableHead className="min-w-[140px]">Sumber</TableHead>
-              <TableHead className="text-right min-w-[140px]">Jumlah</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="h-32 text-center text-text-secondary"
-                >
-                  Memuat data pengeluaran…
-                </TableCell>
-              </TableRow>
-            ) : entries.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="h-32 text-center text-text-secondary"
-                >
-                  Belum ada pengeluaran tercatat.
-                </TableCell>
-              </TableRow>
-            ) : (
-              entries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className="text-text-secondary">
-                    {new Date(entry.entryDate).toLocaleDateString('id-ID')}
-                  </TableCell>
-                  <TableCell className="text-text-primary">
-                    {entry.note ?? (
-                      <span className="text-text-tertiary">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        entry.sourceType === 'MANUAL' ? 'outline' : 'secondary'
-                      }
-                      className="text-[11px]"
-                    >
-                      {formatLedgerSourceType(entry.sourceType)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right numeric font-mono font-medium text-accent-outflow">
-                    {formatCurrency(entry.amount)}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        columns={columns}
+        data={entries}
+        isLoading={isLoading}
+        emptyMessage="Belum ada pengeluaran tercatat."
+      />
 
       <GeneralExpenseFormDialog
         open={isCreateOpen}

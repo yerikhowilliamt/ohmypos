@@ -1,15 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent } from '@ohmypos/ui/components/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@ohmypos/ui/components/table';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Button } from '@ohmypos/ui/components/button';
 import { HandCoins, Wallet } from 'lucide-react';
@@ -20,6 +13,7 @@ import {
 } from '@/lib/vocabulary';
 import type { PayableResponse } from '@ohmypos/api-contracts';
 import { usePayables, usePayablesSummary } from '@/hooks/useExpenses';
+import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { PayableSettlementDialog } from './PayableSettlementDialog';
 
 /** PayableStatus and PaymentStatus share the same three-tier semantics
@@ -43,6 +37,75 @@ export function PayablesTab() {
     (sum, s) => sum + Number(s.totalOutstanding),
     0,
   );
+
+  // Columns live in-component: the Aksi cell closes over setSettlingPayable.
+  const columns: ColumnDef<PayableResponse>[] = [
+    {
+      accessorKey: 'supplierName',
+      header: ({ column }) => (
+        <SortableHeader label="Pemasok" column={column} />
+      ),
+      cell: ({ row }) => (
+        <span className="font-medium text-text-primary">
+          {row.original.supplierName}
+        </span>
+      ),
+    },
+    {
+      accessorFn: (row) => Number(row.originalAmount),
+      id: 'originalAmount',
+      header: ({ column }) => (
+        <SortableHeader label="Jumlah Awal" column={column} align="right" />
+      ),
+      cell: ({ row }) => (
+        <span className="numeric font-mono text-text-secondary">
+          {formatCurrency(row.original.originalAmount)}
+        </span>
+      ),
+      meta: { align: 'right' },
+    },
+    {
+      accessorFn: (row) => Number(row.remainingBalance),
+      id: 'remainingBalance',
+      header: ({ column }) => (
+        <SortableHeader label="Sisa Utang" column={column} align="right" />
+      ),
+      cell: ({ row }) => (
+        <span className="numeric font-mono font-medium text-status-danger">
+          {formatCurrency(row.original.remainingBalance)}
+        </span>
+      ),
+      meta: { align: 'right' },
+    },
+    {
+      accessorFn: (row) => row.status,
+      id: 'status',
+      filterFn: 'equalsString',
+      header: ({ column }) => <SortableHeader label="Status" column={column} />,
+      cell: ({ row }) => (
+        <Badge
+          className={`text-[11px] ${payableBadgeClasses(row.original.status)}`}
+        >
+          {formatPayableStatus(row.original.status)}
+        </Badge>
+      ),
+      meta: { align: 'center' },
+    },
+    {
+      header: 'Aksi',
+      cell: ({ row }) => (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={row.original.status === 'SETTLED'}
+          onClick={() => setSettlingPayable(row.original)}
+        >
+          Bayar
+        </Button>
+      ),
+      meta: { align: 'center' },
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -100,77 +163,12 @@ export function PayablesTab() {
         ))}
       </div>
 
-      <div className="rounded-md border border-border-default bg-surface-raised shadow-1 overflow-hidden">
-        <Table className="min-w-[650px]">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="min-w-[200px]">Pemasok</TableHead>
-              <TableHead className="text-right min-w-[130px]">
-                Jumlah Awal
-              </TableHead>
-              <TableHead className="text-right min-w-[130px]">
-                Sisa Utang
-              </TableHead>
-              <TableHead className="text-center min-w-[120px]">
-                Status
-              </TableHead>
-              <TableHead className="text-center min-w-[100px]">Aksi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="h-32 text-center text-text-secondary"
-                >
-                  Memuat data utang…
-                </TableCell>
-              </TableRow>
-            ) : payables.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="h-32 text-center text-text-secondary"
-                >
-                  Belum ada utang tercatat.
-                </TableCell>
-              </TableRow>
-            ) : (
-              payables.map((payable) => (
-                <TableRow key={payable.id}>
-                  <TableCell className="font-medium text-text-primary">
-                    {payable.supplierName}
-                  </TableCell>
-                  <TableCell className="text-right numeric font-mono text-text-secondary">
-                    {formatCurrency(payable.originalAmount)}
-                  </TableCell>
-                  <TableCell className="text-right numeric font-mono font-medium text-status-danger">
-                    {formatCurrency(payable.remainingBalance)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge
-                      className={`text-[11px] ${payableBadgeClasses(payable.status)}`}
-                    >
-                      {formatPayableStatus(payable.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={payable.status === 'SETTLED'}
-                      onClick={() => setSettlingPayable(payable)}
-                    >
-                      Bayar
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        columns={columns}
+        data={payables}
+        isLoading={isLoading}
+        emptyMessage="Belum ada utang tercatat."
+      />
 
       <PayableSettlementDialog
         open={Boolean(settlingPayable)}
