@@ -4,8 +4,8 @@ import { requireRole } from '@/lib/session';
 import { InventoryClient } from '@/components/inventory/InventoryClient';
 
 export const metadata: Metadata = {
-  title: 'Stok Awal Inventori — OhMyPos',
-  description: 'Kelola dan perbarui stok fisik awal per bahan baku bulanan',
+  title: 'Inventori — OhMyPos',
+  description: 'Pantau pergerakan stok dan catat stok awal bahan baku bulanan',
 };
 
 export default async function InventoryPage() {

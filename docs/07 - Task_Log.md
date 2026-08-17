@@ -298,6 +298,36 @@
   - Phase 8g (Reporting Frontend) will consume the contracts in `report.schema.ts` and call the 5 endpoints on `/api/v1/reports/*`.
   - All 15 unit test suites (129 tests) and 7 e2e suites (170 tests) are green.
 
+### TASK-011 — Phase 8f: Frontend — Inventory Summary Screen (Dashboard 5)
+
+- **Date:** 2026-08-18
+- **Module / Phase:** Phase 8f — `apps/web` inventory summary view (PRD §5.6 "Dashboard 5")
+- **Objective:** Build the read-only inventory summary table (opening/in/out/closing per raw material per period + OK/low/out status) as a tabbed view on `(back-office)/inventory`, reusing the Phase 8a data-fetching pattern, `packages/ui` primitives, and the Flow Indicator motif.
+- **Relevant docs:** PRD §5.6, Phase 6 plan §7.3/§7.4, ADR-004, ADR-008, ADR-010, DESIGN.md §28/§32/§37/§40, Playbook §10.
+- **What was done:**
+  1. Added `useInventorySummary(period)` hook + `INVENTORY_QUERY_KEYS.inventorySummary` in `apps/web/hooks/useInventory.ts`, calling `GET /inventory/summary?period=YYYY-MM` via `apiFetch` (Phase 8a pattern).
+  2. Created `apps/web/components/inventory/InventorySummaryTable.tsx`: server-aggregated table rendering values verbatim (no client-side recomputation), Flow Indicator colors on the Masuk (`text-accent-inflow`) and Keluar (`text-accent-outflow`) columns, JetBrains Mono tabular numerals via `font-mono tabular-nums`, stock status badge via `getStockStatusBadgeClasses` + `formatStockStatus` ("Aman"/"Menipis"/"Habis"), client-side name search filter, loading skeleton and empty states.
+  3. Restructured `apps/web/components/inventory/InventoryClient.tsx` into `Tabs` (Ringkasan Stok / Stok Awal) sharing the URL-driven `PeriodNavigator`; moved the existing worksheet notification/loading/error blocks into the Stok Awal tab. Page header retitled "Inventori" and `page.tsx` metadata updated.
+  4. **No branch filter** — per ADR-004/Phase 6 §7.4 stock is a centralized pool; `GET /inventory/summary` has no branch dimension, so the prompt's "branch filter" line was corrected rather than implemented.
+  5. Wrote `InventorySummaryTable.test.tsx` (7 cases): header/row rendering with `formatQuantity`, Flow Indicator classes on in/out cells, status badge label + semantic color, zero/negative quantity rendering, empty state, live search filter, and no-match empty state.
+- **Decisions made during this task:**
+  1. Option 1 selected (tabbed interface on `/inventory`) per user approval — summary and opening-stock worksheet live in one domain surface with a shared period navigator, per `docs/plannings/phase-08f-frontend-inventory-summary.md`.
+  2. Both tab queries run on mount (Tabs content is unmounted when inactive but the tanstack query still fires) — accepted for master-data scale; no `enabled`-gating added to keep the hook signature stable.
+- **Status:** Done
+- **Handoff notes:** `pnpm --filter web test` green (24 files, 174 tests); `pnpm --filter web typecheck` green; `eslint` green on all touched files. Pre-existing lint error in `apps/web/components/master-data/RecipeEditorDialog.tsx:74` (`watchedItems` unused) was NOT touched (out of scope, unrelated to this task). No schema, dependency, or Git changes made. What next phases must know: the summary table reuses `getFlowIndicatorClasses`/`getStockStatusBadgeClasses` from `apps/web/lib/vocabulary.ts` (DEBT-003 pattern) — any new screen with movement numbers should reuse the same helpers rather than introducing a bespoke indicator.
+- **Post-review amendment (2026-08-18):** per user request, feature-bearing tables must use the shadcn Data Table pattern instead of hand-rolled search inputs:
+  1. Added dependency `@tanstack/react-table@^8.21.3` to `apps/web` (user-approved; governance gate for dependency additions; pinned to v8 deliberately — v9.1.2's `useTable`/`createCoreRowModel` API differs from the shadcn data-table pattern and is not yet documented everywhere).
+  2. Created reusable `apps/web/components/ui/data-table.tsx` — TanStack Table + `@ohmypos/ui` table primitives (DESIGN.md §28): sortable headers via column defs, column-filter toolbar (search input bound to a filterable column via `searchColumn`), align via `meta.align`, consistent loading/empty states. This is the shared surface for search/filter/sort tables going forward (Phase 8g reports, reconciliation, etc.).
+  3. Rewrote `InventorySummaryTable` on `DataTable` with `ColumnDef`s: sortable name/quantity/status columns, numeric `accessorFn` sorting (string values sort lexically, so values are converted to `Number`), Flow Indicator kept on in/out cell spans, status badge + search behavior preserved. Added a sort interaction test.
+- **Handoff notes (amended):** tables needing search/filter/sort must use `apps/web/components/ui/data-table.tsx`, not a bespoke input. `meta.align: 'right'` is the convention for right-aligned numeric columns. `@tanstack/react-table` v8 is the pinned major — do not bump to v9 without re-verifying the data-table wrapper against the new `useTable` API.
+- **Post-review amendment 2 (2026-08-18):** "use DataTable everywhere" — every display table in the app migrated off raw `@ohmypos/ui` Table markup onto the shared DataTable:
+  1. Extended `components/ui/data-table.tsx`: `isLoading` (skeleton rows), `searchColumns: string[]` (multi-column search; single-column `searchColumn` removed), `meta.align: 'center'`, filter-aware empty state ("Tidak ditemukan data yang cocok dengan filter." when filters active vs `emptyMessage`), shared `SortableHeader` export (deduplicated from InventorySummaryTable).
+  2. Migrated `GeneralExpenseTab`, `PayablesTab`, `PurchaseEntryTab` (fixer lane) and `RawMaterialsTable`, `ProductsTable` (parallel fixer lane): ColumnDef arrays, `accessorFn` numeric/date sorting, `meta.align` right/center, loading+empty via props, hand-rolled search inputs replaced by `searchColumns` (RawMaterials preserves name-OR-unit search via a custom `filterFn` because TanStack ANDs multiple column filters — verified against `table-core` source; Products searches name; expenses tables get no search as before). Aksi/action columns declared in-component where they close over dialog state setters (documented in both files).
+  3. `OpeningStockWorksheetTable` deliberately NOT migrated: it is a form (react-hook-form fields + validation + row-level error state), not a display table; binding form field indexes to TanStack row order would be a correctness hazard. Flagged to user; no sort/search exists on it.
+  4. Found pre-existing `RawMaterialsTable.test.tsx` / `ProductsTable.test.tsx` suites (8 tests) — still green after migration.
+- **Handoff notes (amended 2):** rule of thumb for future tables — display tables with search/filter/sort use `components/ui/data-table.tsx`; form tables (editable inputs per row) stay raw `Table` markup. Numeric columns must sort via `accessorFn: (row) => Number(row.x)`. Multi-column search filters AND in TanStack — for OR semantics write a custom `filterFn` on one search column. `SortableHeader` now lives in `data-table.tsx`.
+- **Status:** Done
+
 ### TASK-010 — Phase 6: Inventory (Opening Stock & Inventory Summary)
 
 - **Date:** 2026-08-17
