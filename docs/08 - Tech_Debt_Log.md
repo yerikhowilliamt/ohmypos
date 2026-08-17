@@ -193,6 +193,54 @@
 - **Priority:** Low
 - **Status:** Open
 
+### DEBT-017 — `POST /sales` has no idempotency key, so a lost response is unresolvable
+
+- **Date logged:** 2026-08-17
+- **Found during:** Phase 8c (TASK-017) — designing the POS submit failure paths
+- **Description:** If the sale request reaches the server and commits but the response is lost (network drop, 5xx after commit), neither the cashier nor the client can tell whether money and stock moved. There is no client-supplied idempotency key on `POST /sales` and no way to ask "did my request land". A blind retry writes a second `Sale`, a second income `LedgerEntry`, and a second stock decrement — the exact double-write risk ADR-016 cites when it rejects optimistic retry.
+- **Why deferred:** Adding one properly means a request-id column with a unique constraint plus a replay path that returns the original `SaleResponse` rather than a 409 — a schema change and an API contract change, both gated. The POS mitigates the failure honestly in the meantime: a network-level or 5xx failure is marked `uncertain` rather than `error`, no retry button is offered, and the cashier is pointed at "Periksa transaksi terakhir" (`GET /sales?limit=5&sortBy=soldAt`, which `BranchScopeGuard` scopes to their own branch) to see whether the sale landed before deciding.
+- **Impact if unaddressed:** Real but bounded — it needs a lost response, and it currently costs the cashier a manual check rather than risking a duplicate. If the mitigation is ever removed and a plain retry button added, it becomes a live double-charge path.
+- **Trigger condition:** A duplicated sale is observed in production, or the POS is put on a connection where lost responses are routine.
+- **Proposed resolution:** Add a client-generated `idempotencyKey` (UUID) to `CreateSaleSchema` with a unique index on `Sale`. On replay, return the original `SaleResponse` with 200 instead of creating a second sale. Then the POS can offer a plain retry.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-018 — POS omits mockup elements with no backing data model
+
+- **Date logged:** 2026-08-17
+- **Found during:** Phase 8c (TASK-017)
+- **Description:** The POS screen deliberately does not render four things DESIGN.md describes. (1) The **category strip** (§22): `Product` has no category column, so the controls would filter nothing — search covers discovery instead. (2) **Tax, discount and order-type lines** in the order panel (§24's "discount where applicable"): none has schema support (ADR-015 decision 1, DEBT-004); a per-line price override with a "Harga khusus" marker is the entire discount mechanism. (3) **Product images** (§21's "where useful"): no image field exists. (4) **Cart persistence across a reload**: the cart is in-memory only, so an accidental refresh mid-order loses it.
+- **Why deferred:** Each would either promise behaviour the system does not have — which DEBT-004 already judged worse than omitting it — or, for cart persistence, add scope beyond what this phase was asked for.
+- **Impact if unaddressed:** (1)–(3) are expectation gaps against the approved mockup only. (4) is a real operational annoyance: a cashier who refreshes mid-order retypes it.
+- **Trigger condition:** The business owner asks for menu categories or product photos; or a cashier reports losing an order to a refresh.
+- **Proposed resolution:** Categories and images are additive schema work through the normal approval gate. Cart persistence is frontend-only — persist the reducer state to `sessionStorage`, keyed by branch, and rehydrate on mount.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-019 — `NEXT_PUBLIC_API_BASE_URL` fallback port disagrees with the actual API port
+
+- **Date logged:** 2026-08-17
+- **Found during:** Phase 8c (TASK-017), while verifying the POS against the running stack
+- **Description:** `apps/web/lib/api.ts` falls back to `http://localhost:4013/api/v1` when `NEXT_PUBLIC_API_BASE_URL` is unset, but `apps/api/.env` sets `PORT=4015`, and `.env.local`, `.env.example` and `.agents/skills/e2e-playwright/SKILL.md` all say 4015. Frontend test mocks also hardcode 4013.
+- **Why deferred:** Not touched in this task — `.env.local` is present in a working checkout, so the fallback never fires and fixing it was outside the phase's scope (AGENTS.md: edit only files strictly required).
+- **Impact if unaddressed:** A developer who clones without `.env.local` gets connection failures against a port nothing listens on, with no error pointing at the cause.
+- **Trigger condition:** Anyone setting up the repo without copying `.env.example`, or CI running the web app without the env var.
+- **Proposed resolution:** Change the fallback in `lib/api.ts` to 4015 and update the three test mocks that assert 4013. One-line change plus test fixture updates.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-020 — The e2e suite and `pnpm dev` share one database, and `db:seed` cannot restore it
+
+- **Date logged:** 2026-08-17
+- **Found during:** Phase 8c (TASK-017) — the dev database was found empty after running the api e2e suite
+- **Description:** `apps/api/test/*.e2e-spec.ts` run their `cleanup()` against the same Postgres database `pnpm dev` uses, so running the e2e suite wipes local development data. AGENTS.md points at `pnpm --filter api db:seed` to "reset synthetic data", but the seed's `rawMaterial.upsert` (and others) use `update: {}` — on an existing row it changes nothing, so it recreates missing rows but cannot restore a `currentStock` that drifted. Only `prisma migrate reset` truly resets.
+- **Why deferred:** Out of scope for a frontend phase, and it needs a decision about how test isolation should work rather than a quick patch.
+- **Impact if unaddressed:** Anyone running `test:e2e` silently loses their dev data and then follows a documented recovery step that does not fully recover it.
+- **Trigger condition:** Any developer running the e2e suite while relying on local dev data — i.e. routinely.
+- **Proposed resolution:** Point the e2e suite at a separate database via a `DATABASE_URL` override in `test/setup-e2e.ts` or a dedicated `.env.test`. Separately, correct AGENTS.md's claim about `db:seed`, or make the seed genuinely idempotent-restoring for the fixture fields.
+- **Priority:** Medium
+- **Status:** Open
+
 ---
 
 ## Resolved

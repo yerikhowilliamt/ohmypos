@@ -38,6 +38,20 @@ export class AccountsController {
     return this.accountsService.findAll();
   }
 
+  /**
+   * The one account route a KASIR may call: the POS payment-method picker needs
+   * it to satisfy `CreateSaleSchema.accountId` (PRD §5.2). Declared BEFORE
+   * `@Get(':id')` — Nest matches in declaration order, so the reverse would send
+   * `payment-methods` into `ParseUUIDPipe` and 400. The narrowed projection
+   * lives in the service; this route never exposes `openingBalance`.
+   */
+  @Get('payment-methods')
+  @Roles('OWNER', 'ADMIN', 'KASIR')
+  @ApiOperation({ summary: 'List payment methods for the POS (no balances)' })
+  findPaymentMethods() {
+    return this.accountsService.findPaymentMethods();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get one account' })
   @ApiResponse({ status: 404, description: 'Account not found' })
