@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-005 — `useSuppliers` assumed a bare array for a paginated API response, breaking purchase dialog
+
+- **Date found:** 2026-08-17
+- **Found during:** Phase 8d (TASK-018) — Playwright E2E smoke pass on Purchase Entry form
+- **Symptom:** Opening the "Catat Pembelian" dialog threw `Runtime TypeError: suppliers.map is not a function` at `PurchaseEntryFormDialog.tsx:203`.
+- **Root cause:** `GET /suppliers` in `apps/api` returns a paginated envelope `{ data: SupplierResponse[]; meta: PaginationMeta }`, but `useSuppliers` in `apps/web/hooks/useExpenses.ts` typed and treated the return value as a raw array `SupplierResponse[]`. Frontend unit tests had passed because the test mock in `PurchaseEntryFormDialog.test.tsx` mocked `apiFetch` with a bare array `mockSuppliers` rather than the paginated envelope, creating false test confidence.
+- **Resolution:** Updated `useSuppliers` in `apps/web/hooks/useExpenses.ts` to expect `{ data: SupplierResponse[]; meta: PaginationMeta }` with query `/suppliers?limit=100`, updated `PurchaseEntryFormDialog.tsx` to unpack `suppliersData?.data ?? []`, and aligned unit test mocks in `PurchaseEntryFormDialog.test.tsx` and `useExpenses.test.ts`.
+- **Prevention:** Always verify the actual endpoint return type in `apps/api` (or its Zod response contract) when writing React Query hooks and their test mocks, rather than assuming unpaginated responses for reference data.
+- **Severity:** Medium — broke purchase creation modal in the UI, caught and resolved during the live MCP Playwright smoke pass.
+
 ### ERR-004 — Phase 4's `Restrict` foreign keys broke two older e2e suites, but only on a seeded database
 
 - **Date found:** 2026-08-16

@@ -16,7 +16,7 @@ export function Sidebar({ role }: { role: UserRole }) {
   const items = getNavItems(role);
 
   return (
-    <aside className="flex w-[216px] shrink-0 flex-col border-r border-border-default bg-surface-raised p-3">
+    <aside className="hidden md:flex w-[216px] shrink-0 flex-col border-r border-border-default bg-surface-raised p-3">
       <div className="px-2 py-3">
         <Link href="/" className="inline-block">
           <Image

@@ -66,19 +66,19 @@ export function RawMaterialsTable({
     <div className="space-y-4">
       {/* Toolbar: Search + Add Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative w-full sm:max-w-sm">
           <Search className="absolute left-2.5 top-2.5 size-4 text-text-tertiary" />
           <Input
             type="search"
             placeholder="Cari bahan baku atau satuan…"
-            className="pl-9 bg-surface-raised"
+            className="pl-9 bg-surface-raised w-full"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <Button
           onClick={() => setIsCreateOpen(true)}
-          className="gap-2 shrink-0"
+          className="gap-2 shrink-0 w-full sm:w-auto justify-center"
         >
           <Plus className="size-4" />
           Tambah Bahan Baku
@@ -87,117 +87,127 @@ export function RawMaterialsTable({
 
       {/* Table Container */}
       <div className="rounded-md border border-border-default bg-surface-raised shadow-1 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[30%]">Nama Bahan Baku</TableHead>
-              <TableHead>Satuan</TableHead>
-              <TableHead className="text-right">Biaya Satuan</TableHead>
-              <TableHead className="text-right">Stok Saat Ini</TableHead>
-              <TableHead className="text-right">Batas Rendah</TableHead>
-              <TableHead className="text-center w-[120px]">Aksi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
+        <div className="overflow-x-auto">
+          <Table className="min-w-[780px]">
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="h-32 text-center text-text-secondary"
-                >
-                  Memuat data bahan baku…
-                </TableCell>
+                <TableHead className="min-w-[220px]">Nama Bahan Baku</TableHead>
+                <TableHead className="min-w-[100px]">Satuan</TableHead>
+                <TableHead className="text-right min-w-[130px]">
+                  Biaya Satuan
+                </TableHead>
+                <TableHead className="text-right min-w-[150px]">
+                  Stok Saat Ini
+                </TableHead>
+                <TableHead className="text-right min-w-[130px]">
+                  Batas Rendah
+                </TableHead>
+                <TableHead className="text-center min-w-[110px]">
+                  Aksi
+                </TableHead>
               </TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="h-32 text-center text-text-secondary"
-                >
-                  {search
-                    ? `Tidak ditemukan bahan baku yang cocok dengan "${search}"`
-                    : 'Belum ada bahan baku terdaftar.'}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((item) => {
-                const currentStockNum = Number(item.currentStock);
-                const thresholdNum = Number(item.lowStockThreshold);
-                const isLowStock =
-                  thresholdNum > 0 && currentStockNum <= thresholdNum;
-                const isOutOfStock = currentStockNum <= 0;
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="h-32 text-center text-text-secondary"
+                  >
+                    Memuat data bahan baku…
+                  </TableCell>
+                </TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="h-32 text-center text-text-secondary"
+                  >
+                    {search
+                      ? `Tidak ditemukan bahan baku yang cocok dengan "${search}"`
+                      : 'Belum ada bahan baku terdaftar.'}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filtered.map((item) => {
+                  const currentStockNum = Number(item.currentStock);
+                  const thresholdNum = Number(item.lowStockThreshold);
+                  const isLowStock =
+                    thresholdNum > 0 && currentStockNum <= thresholdNum;
+                  const isOutOfStock = currentStockNum <= 0;
 
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium text-text-primary">
-                      {item.name}
-                    </TableCell>
-                    <TableCell>
-                      <span className="inline-flex rounded-xs bg-surface-muted px-2 py-0.5 text-xs text-text-secondary font-mono">
-                        {item.unit}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right numeric font-mono text-text-primary">
-                      {formatCurrency(item.unitCost)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="numeric font-mono text-text-primary">
-                          {formatQuantity(item.currentStock, item.unit)}
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium text-text-primary">
+                        {item.name}
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex rounded-xs bg-surface-muted px-2 py-0.5 text-xs text-text-secondary font-mono">
+                          {item.unit}
                         </span>
-                        {isOutOfStock ? (
-                          <Badge
-                            variant="danger"
-                            className="text-[10px] px-1.5 py-0"
+                      </TableCell>
+                      <TableCell className="text-right numeric font-mono text-text-primary">
+                        {formatCurrency(item.unitCost)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="numeric font-mono text-text-primary">
+                            {formatQuantity(item.currentStock, item.unit)}
+                          </span>
+                          {isOutOfStock ? (
+                            <Badge
+                              variant="danger"
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              Habis
+                            </Badge>
+                          ) : isLowStock ? (
+                            <Badge
+                              variant="warning"
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              Rendah
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right numeric font-mono text-text-secondary text-xs">
+                        {formatQuantity(item.lowStockThreshold, item.unit)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            title="Edit bahan baku"
+                            onClick={() => setEditingMaterial(item)}
+                            className="size-7 text-text-secondary hover:text-text-primary"
                           >
-                            Habis
-                          </Badge>
-                        ) : isLowStock ? (
-                          <Badge
-                            variant="warning"
-                            className="text-[10px] px-1.5 py-0"
+                            <Edit2 className="size-3.5" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            title="Hapus bahan baku"
+                            onClick={() => {
+                              setDeleteError(null);
+                              setDeletingMaterial(item);
+                            }}
+                            className="size-7 text-status-danger hover:bg-status-danger/10"
                           >
-                            Rendah
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right numeric font-mono text-text-secondary text-xs">
-                      {formatQuantity(item.lowStockThreshold, item.unit)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          title="Edit bahan baku"
-                          onClick={() => setEditingMaterial(item)}
-                          className="size-7 text-text-secondary hover:text-text-primary"
-                        >
-                          <Edit2 className="size-3.5" />
-                          <span className="sr-only">Edit</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          title="Hapus bahan baku"
-                          onClick={() => {
-                            setDeleteError(null);
-                            setDeletingMaterial(item);
-                          }}
-                          className="size-7 text-status-danger hover:bg-status-danger/10"
-                        >
-                          <Trash2 className="size-3.5" />
-                          <span className="sr-only">Hapus</span>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
+                            <Trash2 className="size-3.5" />
+                            <span className="sr-only">Hapus</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {/* Create / Edit Dialog */}
