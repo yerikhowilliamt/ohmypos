@@ -660,6 +660,28 @@ describe('Sales (e2e)', () => {
       });
       expect(res.status).toBe(409);
 
+      // The POS renders this per cart line, so the body has to be machine-readable,
+      // not just a human sentence. Only the short material is listed — the
+      // satisfiable one must not appear.
+      const body = res.body as {
+        code: string;
+        details: {
+          shortfalls: {
+            rawMaterialId: string;
+            name: string;
+            required: string;
+            available: string;
+          }[];
+        };
+      };
+      expect(body.code).toBe('INSUFFICIENT_STOCK');
+      expect(body.details.shortfalls).toHaveLength(1);
+      expect(body.details.shortfalls[0]).toMatchObject({
+        rawMaterialId: mRollBId,
+        required: '5.0000',
+        available: '1.0000',
+      });
+
       const aAfter = await prisma.rawMaterial.findUniqueOrThrow({
         where: { id: mRollAId },
       });

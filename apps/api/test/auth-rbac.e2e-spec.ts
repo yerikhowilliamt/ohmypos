@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import type { PaymentMethodResponse } from '@ohmypos/api-contracts';
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
@@ -514,6 +515,38 @@ describe('Auth & role-based access control (e2e)', () => {
         const res = await req;
         expect(res.status).toBe(403);
       }
+    });
+
+    it('allows KASIR on GET /accounts/payment-methods, without exposing balances', async () => {
+      // The POS needs an accountId to satisfy CreateSaleSchema, but Kas Awal is
+      // owner-level financial data. The narrowed projection is the whole point of
+      // this route existing separately from GET /accounts.
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/accounts/payment-methods')
+        .set('Cookie', kasir.cookies)
+        .expect(200);
+
+      const accounts = res.body as PaymentMethodResponse[];
+      expect(Array.isArray(accounts)).toBe(true);
+      expect(accounts.length).toBeGreaterThan(0);
+      for (const account of accounts) {
+        expect(Object.keys(account).sort()).toEqual(['id', 'name', 'type']);
+        expect(account).not.toHaveProperty('openingBalance');
+      }
+    });
+
+    it('keeps the rest of /accounts closed to KASIR', async () => {
+      // The literal segment must not fall through to @Get(':id') either — that
+      // would surface as a 400 from ParseUUIDPipe rather than a working route.
+      await request(app.getHttpServer())
+        .get('/api/v1/accounts')
+        .set('Cookie', kasir.cookies)
+        .expect(403);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/accounts/${accountId}`)
+        .set('Cookie', kasir.cookies)
+        .expect(403);
     });
 
     it('allows ADMIN and OWNER on master data and reconciliation endpoints', async () => {

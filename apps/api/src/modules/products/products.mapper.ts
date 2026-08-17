@@ -39,6 +39,13 @@ export function toProductWithHppResponse(
     makeableQuantity: hasRecipe
       ? computeMakeableQuantity(product.recipeItems)
       : null,
+    // Fan-out for the POS's cart-aware makeable quantity (ADR-013). Comes from
+    // the `recipeItems` already eagerly included for the HPP calculation above —
+    // no extra query, no N+1.
+    recipeItems: product.recipeItems.map((ri) => ({
+      rawMaterialId: ri.rawMaterialId,
+      quantityUsed: ri.quantityUsed.toFixed(4),
+    })),
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
