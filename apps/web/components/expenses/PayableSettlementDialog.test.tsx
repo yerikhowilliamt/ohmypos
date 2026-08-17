@@ -87,9 +87,12 @@ describe('PayableSettlementDialog', () => {
     await screen.findByText('Kas Tunai');
 
     // Select account
-    fireEvent.change(screen.getByLabelText(/dibayar dari akun/i), {
-      target: { value: mockAccounts[0].id },
+    const accountTrigger = screen.getByLabelText(/dibayar dari akun/i);
+    fireEvent.click(accountTrigger);
+    const accountOption = await screen.findByRole('option', {
+      name: 'Kas Tunai',
     });
+    fireEvent.click(accountOption);
 
     // Enter full settlement amount
     fireEvent.change(screen.getByTestId('settlement-amount-input'), {
@@ -148,9 +151,12 @@ describe('PayableSettlementDialog', () => {
     // Wait for accounts reference data to load
     await screen.findByText('Kas Tunai');
 
-    fireEvent.change(screen.getByLabelText(/dibayar dari akun/i), {
-      target: { value: mockAccounts[0].id },
+    const accountTrigger = screen.getByLabelText(/dibayar dari akun/i);
+    fireEvent.click(accountTrigger);
+    const accountOption = await screen.findByRole('option', {
+      name: 'Kas Tunai',
     });
+    fireEvent.click(accountOption);
 
     // Enter partial amount: 200.000 out of 500.000
     fireEvent.change(screen.getByTestId('settlement-amount-input'), {
@@ -199,9 +205,12 @@ describe('PayableSettlementDialog', () => {
     // Wait for accounts reference data to load
     await screen.findByText('Kas Tunai');
 
-    fireEvent.change(screen.getByLabelText(/dibayar dari akun/i), {
-      target: { value: mockAccounts[0].id },
+    const accountTrigger = screen.getByLabelText(/dibayar dari akun/i);
+    fireEvent.click(accountTrigger);
+    const accountOption = await screen.findByRole('option', {
+      name: 'Kas Tunai',
     });
+    fireEvent.click(accountOption);
 
     // Enter over-settlement amount: 600.000 > 500.000
     fireEvent.change(screen.getByTestId('settlement-amount-input'), {
@@ -247,13 +256,16 @@ describe('PayableSettlementDialog', () => {
         payable={mockPayable}
       />,
     );
-
     // Wait for accounts reference data to load
     await screen.findByText('Kas Tunai');
 
-    fireEvent.change(screen.getByLabelText(/dibayar dari akun/i), {
-      target: { value: mockAccounts[0].id },
+    const accountTrigger = screen.getByLabelText(/dibayar dari akun/i);
+    fireEvent.click(accountTrigger);
+    const accountOption = await screen.findByRole('option', {
+      name: 'Kas Tunai',
     });
+    fireEvent.click(accountOption);
+
     fireEvent.change(screen.getByTestId('settlement-amount-input'), {
       target: { value: '500000' },
     });

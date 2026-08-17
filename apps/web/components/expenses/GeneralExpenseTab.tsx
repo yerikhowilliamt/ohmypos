@@ -24,7 +24,7 @@ export function GeneralExpenseTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-text-primary">
             Pengeluaran Umum
@@ -36,7 +36,7 @@ export function GeneralExpenseTab() {
         </div>
         <Button
           onClick={() => setIsCreateOpen(true)}
-          className="gap-2 shrink-0"
+          className="gap-2 shrink-0 w-full md:w-auto"
         >
           <Plus className="size-4" />
           Tambah Pengeluaran
