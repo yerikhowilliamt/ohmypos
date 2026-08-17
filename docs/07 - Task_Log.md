@@ -41,6 +41,36 @@
 
 ## Log
 
+### TASK-017 — Phase 8c: Frontend POS / Sales Screen (`(pos)/sales`)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Phase 8c — `apps/web` POS screen, plus three additive backend enablers
+- **Objective:** Build the KASIR-only POS screen per PRD §5.2 and DESIGN.md §20–§27: product search + grid, multi-line cart with per-line price override, advisory cart-aware makeable quantity, payment-method selection tied to `Account`, and a submit path that treats `InsufficientStockException` as an in-cart error rather than a toast.
+- **Relevant docs:** PRD §5.2; System Design §5, §6.1, §9; DESIGN.md §20–§27, §33, §37; ADR-004, ADR-005, ADR-007, ADR-011, ADR-013, ADR-015, ADR-016; Playbook §5, §6, §8, §10; DEBT-004, DEBT-005, DEBT-009, DEBT-010.
+- **What was done:**
+  1. **Backend enablers (all approved before implementation; no schema change, no migration):**
+     - `GET /accounts/payment-methods` — new KASIR-readable route (`accounts.controller.ts`, declared above `@Get(':id')`), backed by `AccountsService.findPaymentMethods()` which uses a Prisma `select` so `openingBalance` (Kas Awal) never reaches a cashier. New `PaymentMethodResponseSchema`. The rest of `/accounts` stays `OWNER`/`ADMIN`.
+     - `ProductWithHppResponse.recipeItems` — the recipe fan-out (`rawMaterialId`, 4dp `quantityUsed`) added to `products.mapper.ts` from the `recipeItems` relation already eagerly included for the HPP calculation. No query change, no N+1.
+     - `InsufficientStockException` now carries a machine-readable body: `code: 'INSUFFICIENT_STOCK'` plus `details.shortfalls[{rawMaterialId, name, required, available}]`. Built with an object descriptor so the global filter passes it through verbatim; `message` is byte-identical to the previous string form, so existing assertions still hold. `stock.rules.ts` passes `rawMaterialId` through (it already had it). Wire contract: `InsufficientStockErrorSchema` in `sale.schema.ts`.
+  2. **Pure frontend modules** (`apps/web/lib/`): `decimal.ts` (scaled-BigInt fixed-point — Playbook §5 forbids floats for money/stock; no dependency added), `pos/cart.reducer.ts`, `pos/availability.ts` (the contention calculator), `pos/cart-totals.ts`, `pos/to-create-sale.ts`, `pos/submit-error.ts`.
+  3. **Components** (`apps/web/components/pos/`): `PosScreen`, `CartProvider`, `ProductGrid`, `ProductCard`, `CartPanel`, `CartLineRow`, `CartErrorBanner`, `PaymentMethodPicker`, `SaleSuccessDialog`. `hooks/usePos.ts` adds `usePaymentMethods` / `useCreateSale` / `useRecentSales`. `app/(pos)/sales/page.tsx` became an async Server Component that reads `branchId` from the session.
+  4. **`ApiError` gained an optional third `body` argument** so structured error payloads survive to the caller — previously everything but `message` was discarded.
+  5. **Tests:** 84 new frontend tests (calculators at the thorough tier, `PosScreen.test.tsx` for the wired screen), plus new backend cases in `stock.rules.spec.ts`, `auth-rbac.e2e-spec.ts`, `master-data.e2e-spec.ts`, `sales.e2e-spec.ts`. Repo: 138 web + 142 api unit + 181 api e2e, all passing; `turbo run lint typecheck test` clean.
+- **Decisions made during this task:**
+  1. **Cart state = `useReducer` + a small route-scoped Context**, not RHF `useFieldArray` and not Zustand. Zustand was rejected as a new dependency for a single screen; `useFieldArray` was rejected because grid-click adds require find-or-append and `update()` remounts the row, dropping focus mid price-override, and because it would make the contention logic testable only through the DOM. The reducer being pure is what puts the hard part in the thorough test tier.
+  2. **`ADD_PRODUCT` merges into an existing line only when that line is still at master price.** A line carrying an override is a deliberate negotiated price, so tapping the tile again starts a new line — which is exactly why `CreateSaleSchema` permits duplicate `productId`.
+  3. **Two opposite rounding rules, deliberately.** Sale totals round per line then sum (matching `calculateSaleLineTotal`); the stock fan-out sums exactly and rounds once per material (ADR-015 decision 3). With whole-unit cart quantities the two currently coincide; the structure keeps them correct if fractional quantities are ever allowed.
+  4. **`SUBMIT_START` is a no-op unless status is `idle`** — the state machine, not the button's `disabled` attribute, is what makes double-submit unreachable.
+  5. **A network failure or 5xx is `uncertain`, not `error`.** `POST /sales` has no idempotency key, so a blind retry could double-write a `LedgerEntry` — the risk ADR-016 names when rejecting optimistic retry. The banner offers "Periksa transaksi terakhir" (`GET /sales?limit=5`, KASIR-readable) instead of a retry button, and submit stays locked until the cashier confirms. Logged as DEBT-017.
+  6. **Cart lines are flagged from two sources** — the client's own advisory arithmetic and the server's 409 shortfalls mapped back through `recipeItems`. The server's set routinely names lines the client thought were fine; that is the whole point.
+  7. **Products with `hasRecipe: false` or `isActive: false` are blocked at the tile**, since the server rejects both with a 409 every time.
+- **Status:** Done
+- **Handoff notes:**
+  - **The client-side makeable quantity is advisory and always will be** (ADR-013). It is recomputed from the last-fetched `raw_materials` and can be stale the moment it renders, because stock is one centralized pool (ADR-004) that another branch's till can drain. The 409 path is the real contract — this was verified live by draining stock behind an open cart and confirming the in-cart banner, the line highlight, the preserved cart, and a clean rollback (no sale, no ledger entry, no stock movement).
+  - **Not built, each with a reason, all logged as debt:** category strip (no `Product.category` column), tax/discount/order-type lines (ADR-015 decision 1), void/refund (DEBT-010), cart persistence across reload, product images.
+  - **`GET /products` is unpaginated and unfiltered** — search and the `isActive` filter are client-side. Fine at master-data scale; revisit with DEBT-016 if the product list grows.
+  - **Running the api e2e suite wipes the shared dev database** (its `cleanup()` targets the same Postgres as `dev`). Re-seed with `pnpm --filter api db:seed` afterwards — but note the seed's `rawMaterial.upsert` uses `update: {}`, so it will **not** reset `currentStock` on an existing row. A full reset needs `prisma migrate reset`.
+
 ### TASK-016 — Phase 8b: Frontend Master Data Screens (Produk, Resep/BOM, Bahan Baku)
 
 - **Date:** 2026-08-17

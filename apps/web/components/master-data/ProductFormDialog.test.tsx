@@ -20,6 +20,12 @@ const mockProduct: ProductWithHppResponse = {
   hasRecipe: true,
   margin: '16000.00',
   makeableQuantity: 20,
+  recipeItems: [
+    {
+      rawMaterialId: 'bbbbbbbb-1111-4111-8111-111111111111',
+      quantityUsed: '0.0180',
+    },
+  ],
   createdAt: '2026-08-16T00:00:00.000Z',
   updatedAt: '2026-08-16T00:00:00.000Z',
 };

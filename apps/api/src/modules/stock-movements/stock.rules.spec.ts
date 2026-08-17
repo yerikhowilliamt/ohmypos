@@ -103,4 +103,73 @@ describe('Stock Sufficiency Rule (stock.rules.ts)', () => {
       ),
     ).toThrow(InsufficientStockException);
   });
+
+  /**
+   * The POS maps shortfalls back to the cart lines that caused them, so the 409
+   * body has to carry the raw material ids — not just the human-readable message.
+   * `message` stays byte-identical to the string form the assertions above rely on.
+   */
+  it('serialises a machine-readable shortfall payload alongside the message', () => {
+    const available = new Map([['gula', new Prisma.Decimal('2.0000')]]);
+
+    try {
+      assertSufficientStock(
+        [
+          {
+            rawMaterialId: 'gula',
+            name: 'Gula',
+            quantity: new Prisma.Decimal('5.0000'),
+          },
+          {
+            rawMaterialId: 'kopi',
+            name: 'Kopi',
+            quantity: new Prisma.Decimal('1.0000'),
+          },
+        ],
+        available,
+      );
+      fail('expected InsufficientStockException to be thrown');
+    } catch (error) {
+      const exception = error as InsufficientStockException;
+      expect(exception.getStatus()).toBe(409);
+
+      const body = exception.getResponse() as {
+        statusCode: number;
+        error: string;
+        code: string;
+        message: string;
+        details: {
+          shortfalls: {
+            rawMaterialId: string;
+            name: string;
+            required: string;
+            available: string;
+          }[];
+        };
+      };
+
+      expect(body.statusCode).toBe(409);
+      expect(body.error).toBe('Conflict');
+      expect(body.code).toBe('INSUFFICIENT_STOCK');
+      // The message a client without structured handling would still show.
+      expect(body.message).toBe(exception.message);
+      expect(body.message).toContain('Gula (butuh 5.0000, tersedia 2.0000)');
+
+      // Both short materials, at full 4dp scale, keyed by id.
+      expect(body.details.shortfalls).toEqual([
+        {
+          rawMaterialId: 'gula',
+          name: 'Gula',
+          required: '5.0000',
+          available: '2.0000',
+        },
+        {
+          rawMaterialId: 'kopi',
+          name: 'Kopi',
+          required: '1.0000',
+          available: '0.0000',
+        },
+      ]);
+    }
+  });
 });

@@ -35,6 +35,7 @@ export function assertSufficientStock(
   if (shortfalls.length > 0) {
     throw new InsufficientStockException(
       shortfalls.map((s) => ({
+        rawMaterialId: s.rawMaterialId,
         name: s.name,
         required: s.quantity,
         available: s.availableQuantity,
