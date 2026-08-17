@@ -17,7 +17,14 @@ import {
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
 import { Input } from '@ohmypos/ui/components/input';
-import { NativeSelect } from '@ohmypos/ui/components/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@ohmypos/ui/components/select';
+import { DatePicker } from '@ohmypos/ui/components/date-picker';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
 import { Label } from '@ohmypos/ui/components/label';
 import {
@@ -121,18 +128,28 @@ export function GeneralExpenseFormDialog({
           <div className="mt-4 space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="expense-category">Kategori</Label>
-              <NativeSelect
-                id="expense-category"
-                aria-invalid={Boolean(errors.categoryId)}
-                {...register('categoryId')}
-              >
-                <option value="">-- Pilih Kategori --</option>
-                {expenseCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <Controller
+                name="categoryId"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger
+                      id="expense-category"
+                      aria-invalid={Boolean(errors.categoryId)}
+                      className="h-9 text-sm"
+                    >
+                      <SelectValue placeholder="-- Pilih Kategori --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {expenseCategories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               {errors.categoryId && (
                 <p role="alert" className="text-xs text-status-danger">
                   {errors.categoryId.message}
@@ -143,18 +160,28 @@ export function GeneralExpenseFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="expense-account">Akun / Kas</Label>
-                <NativeSelect
-                  id="expense-account"
-                  aria-invalid={Boolean(errors.accountId)}
-                  {...register('accountId')}
-                >
-                  <option value="">-- Pilih Akun --</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                <Controller
+                  name="accountId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger
+                        id="expense-account"
+                        aria-invalid={Boolean(errors.accountId)}
+                        className="h-9 text-sm"
+                      >
+                        <SelectValue placeholder="-- Pilih Akun --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 {errors.accountId && (
                   <p role="alert" className="text-xs text-status-danger">
                     {errors.accountId.message}
@@ -164,18 +191,28 @@ export function GeneralExpenseFormDialog({
 
               <div className="space-y-1.5">
                 <Label htmlFor="expense-branch">Cabang</Label>
-                <NativeSelect
-                  id="expense-branch"
-                  aria-invalid={Boolean(errors.branchId)}
-                  {...register('branchId')}
-                >
-                  <option value="">-- Pilih Cabang --</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </NativeSelect>
+                <Controller
+                  name="branchId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger
+                        id="expense-branch"
+                        aria-invalid={Boolean(errors.branchId)}
+                        className="h-9 text-sm"
+                      >
+                        <SelectValue placeholder="-- Pilih Cabang --" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 {errors.branchId && (
                   <p role="alert" className="text-xs text-status-danger">
                     {errors.branchId.message}
@@ -187,11 +224,18 @@ export function GeneralExpenseFormDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="expense-date">Tanggal</Label>
-                <Input
-                  id="expense-date"
-                  type="date"
-                  aria-invalid={Boolean(errors.entryDate)}
-                  {...register('entryDate')}
+                <Controller
+                  name="entryDate"
+                  control={control}
+                  render={({ field }) => (
+                    <DatePicker
+                      id="expense-date"
+                      ariaLabel="Tanggal pengeluaran"
+                      ariaInvalid={Boolean(errors.entryDate)}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
                 {errors.entryDate && (
                   <p role="alert" className="text-xs text-status-danger">

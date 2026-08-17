@@ -113,15 +113,25 @@ describe('GeneralExpenseFormDialog', () => {
 
     await screen.findByText('Sewa');
 
-    fireEvent.change(screen.getByLabelText(/kategori/i), {
-      target: { value: mockCategories[0].id },
+    const categoryTrigger = screen.getByLabelText(/kategori/i);
+    fireEvent.click(categoryTrigger);
+    const categoryOption = await screen.findByRole('option', { name: 'Sewa' });
+    fireEvent.click(categoryOption);
+
+    const accountTrigger = screen.getByLabelText(/akun \/ kas/i);
+    fireEvent.click(accountTrigger);
+    const accountOption = await screen.findByRole('option', {
+      name: 'Kas Tunai',
     });
-    fireEvent.change(screen.getByLabelText(/akun \/ kas/i), {
-      target: { value: mockAccounts[0].id },
+    fireEvent.click(accountOption);
+
+    const branchTrigger = screen.getByLabelText(/cabang/i);
+    fireEvent.click(branchTrigger);
+    const branchOption = await screen.findByRole('option', {
+      name: 'Cabang Melati',
     });
-    fireEvent.change(screen.getByLabelText(/cabang/i), {
-      target: { value: mockBranches[0].id },
-    });
+    fireEvent.click(branchOption);
+
     fireEvent.change(screen.getByLabelText(/jumlah/i), {
       target: { value: '500000' },
     });

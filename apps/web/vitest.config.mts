@@ -12,5 +12,8 @@ export default defineConfig({
     include: ['**/*.test.ts', '**/*.test.tsx'],
     globals: true,
     exclude: ['node_modules/**', '.next/**'],
+    // Radix dialogs/popovers in jsdom are slow; 5s default flakes under
+    // turbo's parallel lint/typecheck/build CPU load.
+    testTimeout: 15000,
   },
 });

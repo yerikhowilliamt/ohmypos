@@ -18,7 +18,14 @@ import {
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
 import { Input } from '@ohmypos/ui/components/input';
-import { NativeSelect } from '@ohmypos/ui/components/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@ohmypos/ui/components/select';
+import { DatePicker } from '@ohmypos/ui/components/date-picker';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
 import { Label } from '@ohmypos/ui/components/label';
 import { RadioInput } from '@ohmypos/ui/components/radio-input';
@@ -185,35 +192,38 @@ export function PurchaseEntryFormDialog({
 
             <div className="mt-4 flex-1 overflow-y-auto pr-1 space-y-4">
               {/* Supplier picker */}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 ">
                 <Label htmlFor="purchase-supplier">Pemasok</Label>
                 <div className="flex gap-2">
                   <Controller
                     name="supplierId"
                     control={control}
                     render={({ field }) => (
-                      <NativeSelect
-                        id="purchase-supplier"
-                        aria-invalid={Boolean(errors.supplierId)}
+                      <Select
                         value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        onValueChange={field.onChange}
                       >
-                        <option value="">-- Pilih Pemasok --</option>
-                        {suppliers.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                        <SelectTrigger
+                          id="purchase-supplier"
+                          aria-invalid={Boolean(errors.supplierId)}
+                          className="h-9 text-sm"
+                        >
+                          <SelectValue placeholder="-- Pilih Pemasok --" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {suppliers.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
                   />
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
+                    size="default"
                     className="shrink-0"
                     onClick={() => setIsSupplierCreateOpen(true)}
                   >
@@ -251,18 +261,31 @@ export function PurchaseEntryFormDialog({
                   </Label>
                 </div>
                 {!isCentral && (
-                  <NativeSelect
-                    aria-label="Pilih Cabang"
-                    value={watchedBranchId ?? ''}
-                    onChange={(e) => setValue('branchId', e.target.value)}
-                  >
-                    <option value="">-- Pilih Cabang --</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                  <Controller
+                    name="branchId"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? ''}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger
+                          aria-label="Pilih Cabang"
+                          aria-invalid={Boolean(errors.branchId)}
+                          className="h-9 text-sm"
+                        >
+                          <SelectValue placeholder="-- Pilih Cabang --" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {branches.map((b) => (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 )}
                 {errors.branchId && (
                   <p role="alert" className="text-xs text-status-danger">
@@ -297,11 +320,18 @@ export function PurchaseEntryFormDialog({
 
                 <div className="space-y-1.5">
                   <Label htmlFor="purchase-date">Tanggal Pembelian</Label>
-                  <Input
-                    id="purchase-date"
-                    type="date"
-                    aria-invalid={Boolean(errors.purchaseDate)}
-                    {...register('purchaseDate')}
+                  <Controller
+                    name="purchaseDate"
+                    control={control}
+                    render={({ field }) => (
+                      <DatePicker
+                        id="purchase-date"
+                        ariaLabel="Tanggal pembelian"
+                        ariaInvalid={Boolean(errors.purchaseDate)}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    )}
                   />
                 </div>
               </div>
@@ -309,18 +339,31 @@ export function PurchaseEntryFormDialog({
               {isPaid && (
                 <div className="space-y-1.5">
                   <Label htmlFor="purchase-account">Dibayar Dari Akun</Label>
-                  <NativeSelect
-                    id="purchase-account"
-                    aria-invalid={Boolean(errors.accountId)}
-                    {...register('accountId')}
-                  >
-                    <option value="">-- Pilih Akun --</option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </NativeSelect>
+                  <Controller
+                    name="accountId"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? ''}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger
+                          id="purchase-account"
+                          aria-invalid={Boolean(errors.accountId)}
+                          className="h-9 text-sm"
+                        >
+                          <SelectValue placeholder="-- Pilih Akun --" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                   {errors.accountId && (
                     <p role="alert" className="text-xs text-status-danger">
                       {errors.accountId.message}
@@ -371,28 +414,46 @@ export function PurchaseEntryFormDialog({
                         <div
                           key={field.id}
                           data-testid={`purchase-item-row-${index}`}
-                          className="rounded-sm border border-border-default bg-surface-raised p-3 shadow-1 space-y-2"
+                          className="flex flex-col justify-center items-end w-full rounded-sm border border-border-default bg-surface-raised p-2 shadow-1"
                         >
-                          <div className="grid grid-cols-12 gap-2 items-start">
+                          <div className="grid grid-cols-12 gap-4 items-start">
                             <div className="col-span-12 sm:col-span-5 space-y-1">
-                              <Label
-                                htmlFor={`items.${index}.rawMaterialId`}
-                                className="text-[11px] font-medium text-text-secondary block"
-                              >
-                                Bahan Baku #{index + 1}
-                              </Label>
-                              <NativeSelect
-                                id={`items.${index}.rawMaterialId`}
-                                data-testid={`purchase-raw-material-select-${index}`}
-                                {...register(`items.${index}.rawMaterialId`)}
-                              >
-                                <option value="">-- Pilih --</option>
-                                {rawMaterials.map((rm) => (
-                                  <option key={rm.id} value={rm.id}>
-                                    {rm.name} ({rm.unit})
-                                  </option>
-                                ))}
-                              </NativeSelect>
+                              <div className="flex items-center justify-between gap-2">
+                                <Label
+                                  htmlFor={`items.${index}.rawMaterialId`}
+                                  className="text-[11px] font-medium text-text-secondary"
+                                >
+                                  Bahan Baku #{index + 1}
+                                </Label>
+                              </div>
+                              <Controller
+                                name={`items.${index}.rawMaterialId`}
+                                control={control}
+                                render={({ field: rmField }) => (
+                                  <Select
+                                    value={rmField.value}
+                                    onValueChange={rmField.onChange}
+                                  >
+                                    <SelectTrigger
+                                      id={`items.${index}.rawMaterialId`}
+                                      data-testid={`purchase-raw-material-select-${index}`}
+                                      aria-invalid={Boolean(
+                                        rowError?.rawMaterialId,
+                                      )}
+                                      className="h-9 text-sm"
+                                    >
+                                      <SelectValue placeholder="-- Pilih --" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {rawMaterials.map((rm) => (
+                                        <SelectItem key={rm.id} value={rm.id}>
+                                          {rm.name} ({rm.unit})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              />
                               {rowError?.rawMaterialId && (
                                 <p
                                   role="alert"
@@ -403,7 +464,7 @@ export function PurchaseEntryFormDialog({
                               )}
                             </div>
 
-                            <div className="col-span-6 sm:col-span-3 space-y-1">
+                            <div className="col-span-5 sm:col-span-3 space-y-1">
                               <Label
                                 htmlFor={`items.${index}.quantity`}
                                 className="text-[11px] font-medium text-text-secondary block"
@@ -463,19 +524,17 @@ export function PurchaseEntryFormDialog({
                               )}
                             </div>
 
-                            <div className="col-span-1 pt-6 flex justify-end">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Hapus baris"
-                                onClick={() => remove(index)}
-                                className="size-8 text-status-danger hover:bg-status-danger/10"
-                              >
-                                <Trash2 className="size-4" />
-                                <span className="sr-only">Hapus baris</span>
-                              </Button>
-                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              title="Hapus baris"
+                              onClick={() => remove(index)}
+                              className="size-6 text-status-danger hover:bg-status-danger/10 col-span-1 sm:col-span-1 space-y-1 mt-5"
+                            >
+                              <Trash2 className="size-4" />
+                              <span className="sr-only">Hapus baris</span>
+                            </Button>
                           </div>
                         </div>
                       );
