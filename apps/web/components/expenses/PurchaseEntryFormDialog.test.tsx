@@ -208,16 +208,23 @@ describe('PurchaseEntryFormDialog', () => {
 
     await screen.findByText('CV Sumber Rasa');
 
-    fireEvent.change(screen.getByLabelText(/pemasok/i), {
-      target: { value: mockSuppliers[0].id },
+    const supplierTrigger = screen.getByLabelText(/pemasok/i);
+    fireEvent.click(supplierTrigger);
+    const supplierOption = await screen.findByRole('option', {
+      name: 'CV Sumber Rasa',
     });
+    fireEvent.click(supplierOption);
 
     fireEvent.click(
       screen.getByRole('button', { name: /tambah bahan pertama/i }),
     );
-    fireEvent.change(screen.getByTestId('purchase-raw-material-select-0'), {
-      target: { value: mockRawMaterials[0].id },
+    const rm0Trigger = screen.getByTestId('purchase-raw-material-select-0');
+    fireEvent.click(rm0Trigger);
+    const rm0Option = await screen.findByRole('option', {
+      name: 'Biji Kopi Espresso (kg)',
     });
+    fireEvent.click(rm0Option);
+
     fireEvent.change(screen.getByTestId('purchase-quantity-input-0'), {
       target: { value: '1' },
     });
@@ -226,9 +233,13 @@ describe('PurchaseEntryFormDialog', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /tambah bahan$/i }));
-    fireEvent.change(screen.getByTestId('purchase-raw-material-select-1'), {
-      target: { value: mockRawMaterials[0].id },
+    const rm1Trigger = screen.getByTestId('purchase-raw-material-select-1');
+    fireEvent.click(rm1Trigger);
+    const rm1Option = await screen.findByRole('option', {
+      name: 'Biji Kopi Espresso (kg)',
     });
+    fireEvent.click(rm1Option);
+
     fireEvent.change(screen.getByTestId('purchase-quantity-input-1'), {
       target: { value: '1' },
     });
@@ -260,15 +271,23 @@ describe('PurchaseEntryFormDialog', () => {
 
     await screen.findByText('CV Sumber Rasa');
 
-    fireEvent.change(screen.getByLabelText(/pemasok/i), {
-      target: { value: mockSuppliers[0].id },
+    const supplierTrigger = screen.getByLabelText(/pemasok/i);
+    fireEvent.click(supplierTrigger);
+    const supplierOption = await screen.findByRole('option', {
+      name: 'CV Sumber Rasa',
     });
+    fireEvent.click(supplierOption);
+
     fireEvent.click(
       screen.getByRole('button', { name: /tambah bahan pertama/i }),
     );
-    fireEvent.change(screen.getByTestId('purchase-raw-material-select-0'), {
-      target: { value: mockRawMaterials[0].id },
+    const rm0Trigger = screen.getByTestId('purchase-raw-material-select-0');
+    fireEvent.click(rm0Trigger);
+    const rm0Option = await screen.findByRole('option', {
+      name: 'Biji Kopi Espresso (kg)',
     });
+    fireEvent.click(rm0Option);
+
     fireEvent.change(screen.getByTestId('purchase-quantity-input-0'), {
       target: { value: '10' },
     });

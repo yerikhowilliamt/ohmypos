@@ -41,6 +41,43 @@
 
 ## Log
 
+### TASK-020 — Phase 8e: Frontend Opening Stock Screen (`(back-office)/inventory`)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Phase 8e — `apps/web` Opening Stock back-office screen
+- **Objective:** Build the OWNER-only monthly opening stock worksheet entry screen per PRD §5.5, Phase 6 plan, and DESIGN.md: month-based period navigation with URL sync, bulk worksheet table displaying raw material carry-forward balances, quantity input pre-fills, and conditional unit price entry (rendered as active CurrencyInput when `requiresUnitPrice: true`, or locked badge when purchase already priced the material in that period).
+- **Relevant docs:** PRD §5.5; System Design §5, §6.4; ADR-004, ADR-010, ADR-011, ADR-016, ADR-018; Playbook §4, §5, §8, §10; DESIGN.md §6/§32; Phase 6 plan `phase-6-inventory.md`.
+- **What was done:**
+  1. **Data Hooks (`apps/web/hooks/useInventory.ts`):**
+     - Created `useOpeningStockWorksheet(period)` calling `GET /inventory/opening-stock?period=YYYY-MM`.
+     - Created `useUpsertOpeningStock()` calling `PUT /inventory/opening-stock` and invalidating the active period worksheet query cache on success.
+     - Added test suite `hooks/useInventory.test.ts` covering both query and mutation workflows.
+  2. **Components (`apps/web/components/` & `@ohmypos/ui`):**
+     - Created Radix/shadcn UI primitive `packages/ui/src/components/ui/select.tsx` (`Select`, `SelectTrigger`, `SelectContent`, `SelectItem`, `SelectValue`).
+       - Added curated shadcn/Radix components to `@ohmypos/ui`: `alert.tsx`, `popover.tsx`, `tooltip.tsx`, `separator.tsx`, `skeleton.tsx`, `scroll-area.tsx`, `sheet.tsx`, `calendar.tsx`, `date-picker.tsx` with DESIGN.md tokens.
+       - Refactored `MobileNavDrawer.tsx` from hand-rolled overlay div to shadcn `Sheet` (Radix Dialog) primitive with side="left" mobile drawer behavior.
+      - `PeriodNavigator.tsx` now opens a month-grid popover instead of a date calendar — only month names rendered (no dates/days), with year prev/next header; clicking a month sets the period to `YYYY-MM` of the viewed year; prev/next month buttons retained.
+      - Replaced all native `<input type="date">` with the shadcn `DatePicker` (Popover + Calendar) in `GeneralExpenseFormDialog.tsx` (entryDate), `PurchaseEntryFormDialog.tsx` (purchaseDate), and `PayableSettlementDialog.tsx` (settledAt).
+      - Bumped vitest `testTimeout` to 15000ms in `apps/web/vitest.config.mts` — 5s default flaked under turbo's parallel CPU load with Radix popover/portal-heavy jsdom tests.
+      - Fixed calendar popover jumpiness: `calendar.tsx` now renders a fixed 6-week grid (49 cells, trailing empty cells + uniform `h-8 w-8` cells) so the calendar height never varies between months and the Popover content stays anchored in place. `DatePicker` popover forced `side="top"` + `avoidCollisions={false}`.
+      - 320px mobile support: calendar container changed from fixed `w-65` to `w-fit`, `PopoverContent` gained default `collisionPadding={8}`. Verified via Playwright at 320×700 — inventory, expenses, master-data (incl. Sheet drawer 272px), reports, reconciliation all show zero horizontal overflow; month-grid popover (22–312px) and calendar popover (42–284px) stay fully in viewport.
+     - Refactored all screens and dialogs away from `NativeSelect` to full Radix `Select` primitive across the entire web app: `PeriodNavigator.tsx`, `RecipeEditorDialog.tsx`, `GeneralExpenseFormDialog.tsx`, `PurchaseEntryFormDialog.tsx`, and `PayableSettlementDialog.tsx`.
+     - `OpeningStockWorksheetTable.tsx`: Bulk tabular form using React Hook Form + `zodResolver(UpsertOpeningStockSchema)` + `useFieldArray`. Renders material metadata, carry-forward balance, declared quantity input with decimal validation, conditional `CurrencyInput` for unit price or "Otomatis (Pembelian)" locked badge, and complete/partial declaration status badge.
+     - `InventoryClient.tsx`: Client coordinator handling URL `?period=YYYY-MM` parameter synchronization, loading/error states, submission handling, and success/error alert banners.
+  3. **Page Route (`apps/web/app/(back-office)/inventory/page.tsx`):**
+     - Server Component with `requireRole(['OWNER'])` wrapping `InventoryClient` in React `Suspense`.
+  4. **Verification & Tests:**
+     - Component unit tests: `OpeningStockWorksheetTable.test.tsx` (5 tests passing).
+     - Hook unit tests: `hooks/useInventory.test.ts` (2 tests passing).
+     - Full monorepo verification: `pnpm turbo run lint typecheck test build` 100% green (15/15 tasks passing).
+- **Decisions made during this task:**
+  1. Approved Option 1 (React Hook Form with `useFieldArray` + `zodResolver(UpsertOpeningStockSchema)`), Option 1 (URL Query Parameter sync `?period=YYYY-MM`), and Option 1 (Smart pre-fill with locked purchase price badge).
+  2. `requiresUnitPrice` respected strictly from backend without client-side recomputation.
+- **Status:** Done
+- **Handoff notes:**
+  - `(back-office)/inventory` opening stock screen is operational and verified.
+  - Next phase: Phase 8f (Frontend Inventory Summary).
+
 ### TASK-019 — Frontend Responsive Design (Mobile, Tablet, & Desktop Support)
 
 - **Date:** 2026-08-17

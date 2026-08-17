@@ -231,15 +231,18 @@ describe('RecipeEditorDialog', () => {
     expect(await screen.findByTestId('raw-material-select-1')).toBeDefined();
 
     const select0 = screen.getByTestId('raw-material-select-0');
-    const select1 = screen.getByTestId('raw-material-select-1');
+    fireEvent.click(select0);
+    const opt0 = await screen.findByRole('option', {
+      name: /Biji Kopi Espresso/,
+    });
+    fireEvent.click(opt0);
 
-    // Pick same raw material in both rows
-    fireEvent.change(select0, {
-      target: { value: mockRawMaterials[0].id },
+    const select1 = screen.getByTestId('raw-material-select-1');
+    fireEvent.click(select1);
+    const opt1 = await screen.findByRole('option', {
+      name: /Biji Kopi Espresso/,
     });
-    fireEvent.change(select1, {
-      target: { value: mockRawMaterials[0].id },
-    });
+    fireEvent.click(opt1);
 
     const qtyInput0 = screen.getByTestId('quantity-input-0');
     const qtyInput1 = screen.getByTestId('quantity-input-1');
@@ -281,9 +284,11 @@ describe('RecipeEditorDialog', () => {
     fireEvent.click(screen.getByTestId('add-ingredient-btn'));
 
     const select = await screen.findByTestId('raw-material-select-0');
-    fireEvent.change(select, {
-      target: { value: mockRawMaterials[2].id },
+    fireEvent.click(select);
+    const opt = await screen.findByRole('option', {
+      name: /Sirup Gula Aren/,
     });
+    fireEvent.click(opt);
 
     const qtyInput = screen.getByTestId('quantity-input-0');
     fireEvent.change(qtyInput, { target: { value: '0.03' } });
