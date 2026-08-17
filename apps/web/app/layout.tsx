@@ -16,8 +16,55 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'OhMyPos',
-  description: 'POS & back-office for a multi-branch F&B business',
+  metadataBase: new URL('http://localhost:3001'),
+  title: {
+    default: 'OhMyPos — Multi-Branch Point of Sale & Back-Office',
+    template: '%s | OhMyPos',
+  },
+  description:
+    'Modern Point of Sale and back-office management system designed for multi-branch F&B businesses. Real-time inventory, sales, and financial reconciliation.',
+  applicationName: 'OhMyPos',
+  authors: [{ name: 'OhMyPos Team' }],
+  keywords: [
+    'point of sale',
+    'POS',
+    'F&B',
+    'inventory management',
+    'back office',
+    'reconciliation',
+    'multi-branch',
+  ],
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    title: 'OhMyPos — Multi-Branch Point of Sale & Back-Office',
+    description:
+      'Modern Point of Sale and back-office management system designed for multi-branch F&B businesses.',
+    url: '/',
+    siteName: 'OhMyPos',
+    images: [
+      {
+        url: '/logo.png',
+        width: 512,
+        height: 512,
+        alt: 'OhMyPos Logo',
+      },
+    ],
+    locale: 'id_ID',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'OhMyPos — Multi-Branch Point of Sale & Back-Office',
+    description:
+      'Modern Point of Sale and back-office management system designed for multi-branch F&B businesses.',
+    images: ['/logo.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

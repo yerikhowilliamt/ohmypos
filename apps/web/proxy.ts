@@ -14,6 +14,14 @@ export function proxy(request: NextRequest) {
   const hasSession = request.cookies.has(ACCESS_TOKEN_COOKIE);
   const { pathname } = request.nextUrl;
   const isLoginPage = pathname === '/login';
+  const isPublicRoute =
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/llms.txt';
+
+  if (isPublicRoute) {
+    return NextResponse.next();
+  }
 
   if (!hasSession && !isLoginPage) {
     const loginUrl = new URL('/login', request.url);
@@ -29,5 +37,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.svg).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.svg|.*\\.png|.*\\.webp|robots\\.txt|sitemap\\.xml|llms\\.txt).*)',
+  ],
 };

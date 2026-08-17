@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
 import { Input } from '@ohmypos/ui/components/input';
+import { NativeSelect } from '@ohmypos/ui/components/native-select';
 import { Label } from '@ohmypos/ui/components/label';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Plus, Trash2, AlertCircle, ChefHat, Sparkles } from 'lucide-react';
@@ -253,16 +254,15 @@ export function RecipeEditorDialog({
                       <div className="grid grid-cols-12 gap-2 items-start">
                         {/* Raw Material Select */}
                         <div className="col-span-12 sm:col-span-7 space-y-1">
-                          <label
+                          <Label
                             htmlFor={`items.${index}.rawMaterialId`}
                             className="text-[11px] font-medium text-text-secondary block"
                           >
                             Bahan Baku #{index + 1}
-                          </label>
-                          <select
+                          </Label>
+                          <NativeSelect
                             id={`items.${index}.rawMaterialId`}
                             data-testid={`raw-material-select-${index}`}
-                            className="w-full h-9 rounded-sm border border-border-default bg-surface-raised px-3 text-sm text-text-primary outline-none focus:ring-2 focus:ring-focus-ring cursor-pointer"
                             {...register(`items.${index}.rawMaterialId`)}
                           >
                             <option value="">-- Pilih Bahan Baku --</option>
@@ -272,7 +272,7 @@ export function RecipeEditorDialog({
                                 {formatCurrency(rm.unitCost)}/{rm.unit}
                               </option>
                             ))}
-                          </select>
+                          </NativeSelect>
                           {rowError?.rawMaterialId && (
                             <p
                               role="alert"
@@ -285,13 +285,13 @@ export function RecipeEditorDialog({
 
                         {/* Quantity Input */}
                         <div className="col-span-10 sm:col-span-4 space-y-1">
-                          <label
+                          <Label
                             htmlFor={`items.${index}.quantityUsed`}
                             className="text-[11px] font-medium text-text-secondary block"
                           >
                             Takaran per Porsi{' '}
                             {selectedRm ? `(${selectedRm.unit})` : ''}
-                          </label>
+                          </Label>
                           <div className="relative">
                             <Input
                               id={`items.${index}.quantityUsed`}
