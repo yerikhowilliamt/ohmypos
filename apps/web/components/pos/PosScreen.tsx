@@ -19,6 +19,10 @@ import {
 import { computeCartAvailability } from '@/lib/pos/availability';
 import { mapSubmitError } from '@/lib/pos/submit-error';
 import { toCreateSale } from '@/lib/pos/to-create-sale';
+import { ShoppingBag } from 'lucide-react';
+import { Button } from '@ohmypos/ui/components/button';
+import { formatCurrency } from '@/lib/formatters';
+import { cartItemCount, cartTotal } from '@/lib/pos/cart-totals';
 import { CartProvider, useCart } from './CartProvider';
 import { CartPanel } from './CartPanel';
 import { ProductGrid } from './ProductGrid';
@@ -163,11 +167,17 @@ function PosScreenInner({ branchId }: { branchId: string }) {
   const errorMessage = (error: unknown): string | null =>
     error instanceof Error ? error.message : null;
 
+  const cartSum = React.useMemo(() => cartTotal(state.lines), [state.lines]);
+  const cartCount = React.useMemo(
+    () => cartItemCount(state.lines),
+    [state.lines],
+  );
+
   return (
     <>
       {/* DESIGN.md §20: navigation (AppShell) + product discovery + persistent
           order context. The sidebar is provided by the (pos) layout. */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-4 pb-16 lg:pb-0 lg:flex-row lg:items-start">
         <ProductGrid
           products={productList}
           headroom={availability.headroom}
@@ -200,6 +210,32 @@ function PosScreenInner({ branchId }: { branchId: string }) {
           onClearCart={() => dispatch({ type: 'CLEAR_CART' })}
         />
       </div>
+
+      {/* Floating sticky cart bar on mobile screens (< lg) */}
+      {state.lines.length > 0 && (
+        <div className="fixed bottom-3 left-3 right-3 z-30 flex items-center justify-between rounded-md border border-border-default bg-surface-raised/95 p-3 shadow-2 backdrop-blur-xs lg:hidden animate-in slide-in-from-bottom duration-200">
+          <div className="flex flex-col">
+            <span className="text-xs text-text-secondary">
+              {cartCount} item dipilih
+            </span>
+            <span className="numeric font-mono text-base font-bold text-text-primary">
+              {formatCurrency(cartSum)}
+            </span>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              const cartEl = document.getElementById('pos-cart-panel');
+              cartEl?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="gap-1.5 shadow-1"
+          >
+            <ShoppingBag className="size-4" />
+            Lihat Pesanan
+          </Button>
+        </div>
+      )}
 
       <SaleSuccessDialog
         sale={completedSale}

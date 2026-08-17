@@ -79,6 +79,7 @@ export function CartPanel({
 
   return (
     <aside
+      id="pos-cart-panel"
       aria-label="Pesanan"
       className="flex w-full shrink-0 flex-col gap-3 rounded-md border border-border-default bg-surface-muted p-4 shadow-1 lg:w-[380px]"
     >

@@ -41,6 +41,67 @@
 
 ## Log
 
+### TASK-019 — Frontend Responsive Design (Mobile, Tablet, & Desktop Support)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Frontend (`apps/web` and `@ohmypos/ui`) Responsive Design Refactoring
+- **Objective:** Implement complete mobile, tablet, and desktop responsive UX across OhMyPos: collapsible slide-over mobile drawer navigation with backdrop blur, responsive topbar with hamburger toggle, responsive 1/2/4-col KPI summary cards, horizontally scrollable tabs and tables, floating sticky bottom cart bar for mobile POS cashiering, and constrained responsive modal dialogs.
+- **Relevant docs:** PRD §5; DESIGN.md; Engineering Playbook §5, §10; implementation plan `implementation_plan.md`.
+- **What was done:**
+  1. **Core UI Primitives (`packages/ui/src/components/ui/dialog.tsx`):**
+     - Updated `DialogContent` with `w-[calc(100%-2rem)] max-w-lg max-h-[90vh] overflow-y-auto` to prevent viewport clipping and allow smooth vertical scrolling on small mobile screens.
+  2. **Shell Layout & Navigation (`apps/web/components/shell/`):**
+     - Created `MobileNavDrawer.tsx`: slide-over mobile drawer with ESC-key dismiss, body scroll locking, brand logo, user badge, navigation items, and logout action.
+     - Updated `Sidebar.tsx`: hidden on `< md:` screens (`hidden md:flex`) and persistent on desktop.
+     - Updated `Topbar.tsx`: hamburger trigger button on mobile (`md:hidden`), mobile logo header, and truncated user profile badge.
+     - Updated `AppShell.tsx`: state management for mobile drawer and responsive content padding (`p-3.5 sm:p-6 overflow-x-hidden`).
+  3. **POS Screen (`apps/web/components/pos/`):**
+     - Added floating sticky bottom cart bar on mobile viewports (`lg:hidden`) displaying item count, total price in IDR, and smooth scroll button to cart panel.
+     - Maintained desktop 2-column split view (`ProductGrid` on left, `CartPanel` on right) on `lg:` viewports.
+  4. **Back-Office Screens & Dialogs (`apps/web/app/(back-office)/`):**
+     - `MasterDataSummaryCards.tsx` & `PayablesTab.tsx`: Responsive grid cards (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`).
+     - `MasterDataClient.tsx` & `ExpensesClient.tsx`: Responsive segmented tabs with compact touch styling.
+     - `PurchaseEntryFormDialog.tsx`: Responsive input grids (`grid-cols-1 sm:grid-cols-2` and `grid-cols-12`).
+  5. **Verification:**
+     - Vitest suite: 21 test files, 160 tests passing (100%).
+     - Monorepo validation (`turbo run lint typecheck build test`): 15/15 tasks passing clean.
+     - Playwright MCP responsive testing across Mobile portrait (375x667), Tablet (768x1024), and Desktop (1280x800).
+- **Status:** Done
+- **Handoff notes:** Frontend is fully responsive across mobile, tablet, and desktop screens. Ready for remaining feature phases.
+
+### TASK-018 — Phase 8d: Frontend Purchases & Expenses Screens (`(back-office)/expenses`)
+
+- **Date:** 2026-08-17
+- **Module / Phase:** Phase 8d — `apps/web` Purchases & Expenses back-office screens
+- **Objective:** Build the OWNER-only Purchases & Expenses back-office screen per PRD §5.3 and DESIGN.md: categorized general operational expense entry, raw material purchase recording with immediate-paid vs. unpaid (utang) branching (ADR-006), on-the-fly quick supplier creation, payables list with per-supplier running balance summaries, cross-tab unpaid purchase banner, and partial/full payable settlement with live remaining balance calculation and client-side over-settlement prevention.
+- **Relevant docs:** PRD §5.3; System Design §5; ADR-006, ADR-010, ADR-011; Playbook §4, §5, §8, §10; DESIGN.md; DEBT-021; ERR-005.
+- **What was done:**
+  1. **Page shell & tabs (`apps/web/app/(back-office)/expenses/`):**
+     - `page.tsx` enforcing `requireRole(['OWNER'])`.
+     - `ExpensesClient.tsx` rendering 3 tabs: "Pengeluaran Umum", "Pembelian", and "Utang".
+  2. **Components (`apps/web/components/expenses/`):**
+     - `GeneralExpenseTab.tsx` + `GeneralExpenseFormDialog.tsx`: Lists OUTFLOW ledger entries, creates categorized expenses tied to branch and account.
+     - `PurchaseEntryTab.tsx` + `PurchaseEntryFormDialog.tsx`: Multi-item purchase entry form with running total calculation, paid/unpaid toggle (hides account picker when UNPAID, shows when PAID per ADR-006), duplicate raw-material validation, and cross-tab banner on unpaid creation.
+     - `SupplierQuickCreateDialog.tsx`: Modal to register new suppliers on-the-fly without leaving purchase entry.
+     - `PayablesTab.tsx` + `PayableSettlementDialog.tsx`: Supplier running balance cards, payables table with status badges (`Belum Lunas`, `Sebagian`, `Lunas`), and modal for partial/full settlement with live "Sisa Setelah Bayar" calculation and client-side overage block (`lib/decimal.ts`).
+     - `CentralBranchTag.tsx`: Badge indicator for central vs branch purchases.
+  3. **Data Hooks (`apps/web/hooks/useExpenses.ts`):**
+     - Reference data hooks: `useCategories`, `useAccounts`, `useBranches`.
+     - Ledger hooks: `useLedgerEntries`, `useCreateLedgerEntry`.
+     - Supplier hooks: `useSuppliers`, `useCreateSupplier`.
+     - Purchase hooks: `useSupplierPurchases`, `useCreateSupplierPurchase`.
+     - Payable hooks: `usePayables`, `usePayablesSummary`, `useSettlePayable`.
+  4. **Tests & Monorepo Validation:**
+     - 6 unit test suites covering expenses: `GeneralExpenseFormDialog.test.tsx`, `PurchaseEntryFormDialog.test.tsx`, `SupplierQuickCreateDialog.test.tsx`, `PayableSettlementDialog.test.tsx`, `PayablesTab.test.tsx`, and `hooks/useExpenses.test.ts`. Total: 21 test files, 160 tests in web, all passing.
+     - Full monorepo validation `turbo run lint typecheck test build` 100% clean (15/15 tasks).
+     - Live MCP Playwright E2E smoke pass through the full golden path: General expense entry → Unpaid raw material purchase → Cross-tab banner redirection → Partial payable settlement → Automatic OUTFLOW ledger entry creation.
+  5. **Tech Debt & Error Logs:** Logged `DEBT-021` (deferred supplier master data edit/delete UI) in `08 - Tech_Debt_Log.md` and `ERR-005` in `06 - Error_Log.md`.
+- **Decisions made during this task:**
+  1. Fixed-point decimal arithmetic (`lib/decimal.ts`) was used for settlement balance subtraction and purchase totals to avoid floating-point inaccuracies, matching Playbook §5.
+  2. Supplier edit/delete master data table deferred to post-v1 backlog (`DEBT-021`); quick-create modal satisfies the purchase entry operational flow cleanly.
+- **Status:** Done
+- **Handoff notes:** All Phase 8d deliverables, unit tests, monorepo checks, and Playwright E2E smoke tests are complete and verified. Ready for the next phase.
+
 ### TASK-017 — Phase 8c: Frontend POS / Sales Screen (`(pos)/sales`)
 
 - **Date:** 2026-08-17

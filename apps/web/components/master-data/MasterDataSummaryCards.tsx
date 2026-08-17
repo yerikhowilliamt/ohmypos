@@ -31,7 +31,7 @@ export function MasterDataSummaryCards({
   }).length;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {/* Total Products */}
       <Card className="p-3 shadow-1 bg-surface-raised border-border-default">
         <CardContent className="p-0 flex items-center justify-between">

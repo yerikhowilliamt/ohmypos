@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@ohmypos/ui/components/button';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
@@ -31,14 +32,15 @@ export function LogoutButton() {
 
   return (
     <div className="px-1 py-0.5">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={handleLogout}
         disabled={isPending}
-        className="w-full rounded-sm px-2 py-1.5 text-left text-sm font-medium text-status-danger hover:bg-surface-strong/60 disabled:opacity-50"
+        className="w-full justify-start rounded-sm px-2 py-1.5 text-left text-sm font-medium text-status-danger hover:bg-surface-strong/60 disabled:opacity-50"
       >
         {isPending ? 'Keluar…' : 'Keluar'}
-      </button>
+      </Button>
       {error && (
         <p role="alert" className="mt-1 px-2 text-xs text-status-danger">
           {error}

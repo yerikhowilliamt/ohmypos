@@ -241,6 +241,18 @@
 - **Priority:** Medium
 - **Status:** Open
 
+### DEBT-021 — Supplier master data has no edit/delete UI in back-office
+
+- **Date logged:** 2026-08-17
+- **Found during:** Phase 8d (TASK-018 / Frontend Purchases & Expenses)
+- **Description:** Suppliers have a quick-create dialog (`SupplierQuickCreateDialog.tsx`) and full backend CRUD endpoints (`POST /suppliers`, `GET /suppliers`, `PATCH /suppliers/:id`, `DELETE /suppliers/:id`), but there is no dedicated Supplier management tab or edit/deactivate UI in the Master Data or Expenses screens.
+- **Why deferred:** PRD §5.3 and Phase 8d prioritize the high-impact operational flow: entering general expenses, recording raw material purchases with paid/payable branching, managing running payable balances, and on-the-fly supplier creation during purchase recording. Full supplier master data table/edit/delete is lower priority than transactional workflows in v1.
+- **Impact if unaddressed:** If a supplier's contact info or name changes, or if a supplier was misspelled during quick-create, editing requires calling the API directly via cURL or Postman.
+- **Trigger condition:** The business owner requests the ability to rename suppliers, update supplier phone numbers/contacts, or deactivate retired suppliers from the UI.
+- **Proposed resolution:** Add a "Pemasok" tab to `(back-office)/master-data` with a table, edit dialog, and delete/deactivate confirmation modal wired to existing `PATCH /suppliers/:id` and `DELETE /suppliers/:id` endpoints.
+- **Priority:** Low
+- **Status:** Open
+
 ---
 
 ## Resolved

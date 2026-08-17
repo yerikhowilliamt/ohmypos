@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import type { PaymentMethodResponse } from '@ohmypos/api-contracts';
+import { Button } from '@ohmypos/ui/components/button';
 import { cn } from '@ohmypos/ui/lib/utils';
 import { formatAccountType } from '@/lib/vocabulary';
 
@@ -57,15 +58,16 @@ export function PaymentMethodPicker({
         {methods.map((method) => {
           const selected = method.id === selectedId;
           return (
-            <button
+            <Button
               key={method.id}
               type="button"
+              variant="ghost"
               role="radio"
               aria-checked={selected}
               data-testid={`payment-method-${method.id}`}
               onClick={() => onSelect(method.id)}
               className={cn(
-                'flex min-h-11 cursor-pointer flex-col items-start rounded-sm border px-3 py-2 text-left transition-colors',
+                'flex min-h-11 cursor-pointer flex-col items-start rounded-sm border px-3 py-2 text-left transition-colors h-auto',
                 'outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
                 selected
                   ? 'border-brand-primary bg-surface-strong text-text-primary'
@@ -76,7 +78,7 @@ export function PaymentMethodPicker({
               <span className="text-xs text-text-tertiary">
                 {formatAccountType(method.type)}
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>
