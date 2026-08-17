@@ -2,11 +2,17 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4013/api/v1';
 
 /** Thrown by `apiFetch` for any non-2xx response; carries the HTTP status so
- * callers — and the refresh-on-401 logic below — can branch on it. */
+ * callers — and the refresh-on-401 logic below — can branch on it.
+ *
+ * `body` is the parsed error payload. Domain exceptions that carry structured
+ * detail (`InsufficientStockException`'s `details.shortfalls`) need more than the
+ * flattened message: the POS maps each shortfall back to the cart lines that
+ * caused it. Optional, so every existing call site is unaffected. */
 export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly body?: unknown,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -27,7 +33,7 @@ async function doFetch<T>(path: string, init?: RequestInit): Promise<T> {
     const message = Array.isArray(body?.message)
       ? body.message.join(', ')
       : (body?.message ?? `Request failed with status ${res.status}`);
-    throw new ApiError(message, res.status);
+    throw new ApiError(message, res.status, body);
   }
 
   return res.json() as Promise<T>;

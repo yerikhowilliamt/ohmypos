@@ -1,5 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { CreateAccount, UpdateAccount } from '@ohmypos/api-contracts';
+import type {
+  CreateAccount,
+  PaymentMethodResponse,
+  UpdateAccount,
+} from '@ohmypos/api-contracts';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 
@@ -23,6 +27,18 @@ export class AccountsService {
 
   async findAll() {
     return this.prisma.account.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  /**
+   * POS payment-method list. `select` — not a mapper — is what keeps
+   * `openingBalance` off the wire, so a widened role on the route below cannot
+   * accidentally leak Kas Awal to a cashier.
+   */
+  async findPaymentMethods(): Promise<PaymentMethodResponse[]> {
+    return this.prisma.account.findMany({
+      select: { id: true, name: true, type: true },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async findOne(id: string) {

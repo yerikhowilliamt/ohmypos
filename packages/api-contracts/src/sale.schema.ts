@@ -100,6 +100,33 @@ export const SaleResponseSchema = z.object({
 });
 export type SaleResponse = z.infer<typeof SaleResponseSchema>;
 
+/**
+ * The 409 body thrown by `InsufficientStockException` (Playbook §6).
+ *
+ * Shortfalls are per RAW MATERIAL, not per sale line — one short material can be
+ * reached through several products (ADR-015 decision 3 aggregates the fan-out the
+ * same way). A client maps them back to cart lines through the products'
+ * `recipeItems`. Parse with `safeParse`: a 409 may also be `InactiveProduct` or
+ * `RecipeIncomplete`, which carry no `details`.
+ */
+export const StockShortfallSchema = z.object({
+  rawMaterialId: UuidString,
+  name: z.string(),
+  required: QuantityString,
+  available: QuantityString,
+});
+export type StockShortfall = z.infer<typeof StockShortfallSchema>;
+
+export const InsufficientStockErrorSchema = z.object({
+  statusCode: z.literal(409),
+  code: z.literal('INSUFFICIENT_STOCK'),
+  message: z.string(),
+  details: z.object({ shortfalls: z.array(StockShortfallSchema) }),
+});
+export type InsufficientStockError = z.infer<
+  typeof InsufficientStockErrorSchema
+>;
+
 export const SaleSortBySchema = z.enum(['soldAt', 'totalAmount', 'createdAt']);
 export type SaleSortBy = z.infer<typeof SaleSortBySchema>;
 

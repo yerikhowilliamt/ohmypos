@@ -311,6 +311,7 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
       expect(body.product.hpp).toBeNull();
       expect(body.product.hasRecipe).toBe(false);
       expect(body.product.makeableQuantity).toBeNull();
+      expect(body.product.recipeItems).toEqual([]);
     });
 
     it('calculates HPP, makeableQuantity, margin and preserves string scale ("4530.00")', async () => {
@@ -359,6 +360,14 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
       // Makeable quantity: min( floor(10 / 0.25) = 40, floor(5 / 0.018) = 277 ) = 40
       expect(putBody.product.makeableQuantity).toBe(40);
+
+      // The fan-out the POS needs to recompute that figure against a whole cart
+      // rather than one product at a time (ADR-013). 4dp scale, same as the wire
+      // format everywhere else.
+      expect(putBody.product.recipeItems).toEqual([
+        { rawMaterialId: gula.id, quantityUsed: '0.2500' },
+        { rawMaterialId: kopi.id, quantityUsed: '0.0180' },
+      ]);
 
       // Verify GET returns identical envelope (§9.7a)
       const getRes = await request(app.getHttpServer())
