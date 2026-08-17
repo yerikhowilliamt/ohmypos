@@ -18,7 +18,14 @@ import {
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
 import { Input } from '@ohmypos/ui/components/input';
-import { NativeSelect } from '@ohmypos/ui/components/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@ohmypos/ui/components/select';
+import { DatePicker } from '@ohmypos/ui/components/date-picker';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
 import { Label } from '@ohmypos/ui/components/label';
 import { AlertCircle } from 'lucide-react';
@@ -167,18 +174,31 @@ export function PayableSettlementDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="settlement-account">Dibayar Dari Akun</Label>
-              <NativeSelect
-                id="settlement-account"
-                aria-invalid={Boolean(errors.accountId)}
-                {...register('accountId')}
-              >
-                <option value="">-- Pilih Akun --</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </NativeSelect>
+              <Controller
+                name="accountId"
+                control={control}
+                render={({ field: accountField }) => (
+                  <Select
+                    value={accountField.value}
+                    onValueChange={accountField.onChange}
+                  >
+                    <SelectTrigger
+                      id="settlement-account"
+                      aria-invalid={Boolean(errors.accountId)}
+                      className="h-9 text-sm"
+                    >
+                      <SelectValue placeholder="-- Pilih Akun --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               {errors.accountId && (
                 <p role="alert" className="text-xs text-status-danger">
                   {errors.accountId.message}
@@ -214,11 +234,18 @@ export function PayableSettlementDialog({
 
               <div className="space-y-1.5">
                 <Label htmlFor="settlement-date">Tanggal Bayar</Label>
-                <Input
-                  id="settlement-date"
-                  type="date"
-                  aria-invalid={Boolean(errors.settledAt)}
-                  {...register('settledAt')}
+                <Controller
+                  name="settledAt"
+                  control={control}
+                  render={({ field }) => (
+                    <DatePicker
+                      id="settlement-date"
+                      ariaLabel="Tanggal bayar utang"
+                      ariaInvalid={Boolean(errors.settledAt)}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
               </div>
             </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ReplaceRecipeSchema,
@@ -19,7 +19,13 @@ import {
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
 import { Input } from '@ohmypos/ui/components/input';
-import { NativeSelect } from '@ohmypos/ui/components/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@ohmypos/ui/components/select';
 import { Label } from '@ohmypos/ui/components/label';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Plus, Trash2, AlertCircle, ChefHat, Sparkles } from 'lucide-react';
@@ -253,26 +259,56 @@ export function RecipeEditorDialog({
                     >
                       <div className="grid grid-cols-12 gap-2 items-start">
                         {/* Raw Material Select */}
-                        <div className="col-span-12 sm:col-span-7 space-y-1">
-                          <Label
-                            htmlFor={`items.${index}.rawMaterialId`}
-                            className="text-[11px] font-medium text-text-secondary block"
-                          >
-                            Bahan Baku #{index + 1}
-                          </Label>
-                          <NativeSelect
-                            id={`items.${index}.rawMaterialId`}
-                            data-testid={`raw-material-select-${index}`}
-                            {...register(`items.${index}.rawMaterialId`)}
-                          >
-                            <option value="">-- Pilih Bahan Baku --</option>
-                            {rawMaterials.map((rm) => (
-                              <option key={rm.id} value={rm.id}>
-                                {rm.name} ({rm.unit}) —{' '}
-                                {formatCurrency(rm.unitCost)}/{rm.unit}
-                              </option>
-                            ))}
-                          </NativeSelect>
+                        <div className="col-span-12 sm:col-span-8 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <Label
+                              htmlFor={`items.${index}.rawMaterialId`}
+                              className="text-[11px] font-medium text-text-secondary"
+                            >
+                              Bahan Baku #{index + 1}
+                            </Label>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              data-testid={`remove-ingredient-btn-${index}`}
+                              title="Hapus baris bahan"
+                              onClick={() => remove(index)}
+                              className="size-6 text-status-danger hover:bg-status-danger/10"
+                            >
+                              <Trash2 className="size-4" />
+                              <span className="sr-only">Hapus baris</span>
+                            </Button>
+                          </div>
+                          <Controller
+                            control={control}
+                            name={`items.${index}.rawMaterialId`}
+                            render={({ field: selectField }) => (
+                              <Select
+                                value={selectField.value}
+                                onValueChange={selectField.onChange}
+                              >
+                                <SelectTrigger
+                                  id={`items.${index}.rawMaterialId`}
+                                  data-testid={`raw-material-select-${index}`}
+                                  aria-invalid={Boolean(
+                                    rowError?.rawMaterialId,
+                                  )}
+                                  className="h-9 text-sm"
+                                >
+                                  <SelectValue placeholder="-- Pilih Bahan Baku --" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {rawMaterials.map((rm) => (
+                                    <SelectItem key={rm.id} value={rm.id}>
+                                      {rm.name} ({rm.unit}) —{' '}
+                                      {formatCurrency(rm.unitCost)}/{rm.unit}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
                           {rowError?.rawMaterialId && (
                             <p
                               role="alert"
@@ -284,7 +320,7 @@ export function RecipeEditorDialog({
                         </div>
 
                         {/* Quantity Input */}
-                        <div className="col-span-10 sm:col-span-4 space-y-1">
+                        <div className="col-span-12 sm:col-span-4 space-y-1">
                           <Label
                             htmlFor={`items.${index}.quantityUsed`}
                             className="text-[11px] font-medium text-text-secondary block"
@@ -322,22 +358,6 @@ export function RecipeEditorDialog({
                               {rowError.quantityUsed.message}
                             </p>
                           )}
-                        </div>
-
-                        {/* Remove Action Button */}
-                        <div className="col-span-2 sm:col-span-1 pt-6 flex justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            data-testid={`remove-ingredient-btn-${index}`}
-                            title="Hapus baris bahan"
-                            onClick={() => remove(index)}
-                            className="size-8 text-status-danger hover:bg-status-danger/10"
-                          >
-                            <Trash2 className="size-4" />
-                            <span className="sr-only">Hapus baris</span>
-                          </Button>
                         </div>
                       </div>
                     </div>
