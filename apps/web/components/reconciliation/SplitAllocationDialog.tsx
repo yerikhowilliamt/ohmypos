@@ -20,7 +20,13 @@ import {
 } from '@ohmypos/ui/components/dialog';
 import { Input } from '@ohmypos/ui/components/input';
 import { Label } from '@ohmypos/ui/components/label';
-import { NativeSelect } from '@ohmypos/ui/components/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@ohmypos/ui/components/select';
 import { formatCurrency } from '@/lib/formatters';
 import {
   DRAFT_LINE_MESSAGES,
@@ -330,25 +336,28 @@ export function SplitAllocationDialog({
                       <Label htmlFor={`split-entry-${index}`}>
                         Catatan Pembukuan
                       </Label>
-                      <NativeSelect
-                        id={`split-entry-${index}`}
-                        data-testid={`split-entry-${index}`}
-                        value={line.ledgerEntryId}
-                        aria-invalid={Boolean(message)}
-                        onChange={(event) =>
-                          updateLine(line.id, {
-                            ledgerEntryId: event.target.value,
-                          })
+                      <Select
+                        value={line.ledgerEntryId || undefined}
+                        onValueChange={(value) =>
+                          updateLine(line.id, { ledgerEntryId: value })
                         }
                       >
-                        <option value="">-- Pilih Catatan --</option>
-                        {entryOptions.map((entry) => (
-                          <option key={entry.id} value={entry.id}>
-                            {allocatedEntryIds.has(entry.id) ? '• ' : ''}
-                            {entryLabel(entry)}
-                          </option>
-                        ))}
-                      </NativeSelect>
+                        <SelectTrigger
+                          id={`split-entry-${index}`}
+                          data-testid={`split-entry-${index}`}
+                          aria-invalid={Boolean(message)}
+                        >
+                          <SelectValue placeholder="-- Pilih Catatan --" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {entryOptions.map((entry) => (
+                            <SelectItem key={entry.id} value={entry.id}>
+                              {allocatedEntryIds.has(entry.id) ? '• ' : ''}
+                              {entryLabel(entry)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="w-full space-y-1.5 sm:w-44">

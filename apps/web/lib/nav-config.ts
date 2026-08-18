@@ -17,6 +17,7 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { href: '/reconciliation', label: 'Rekonsiliasi' },
   ],
   OWNER: [
+    { href: '/dashboard', label: 'Dashboard' },
     { href: '/master-data', label: 'Data Master' },
     { href: '/reconciliation', label: 'Rekonsiliasi' },
     { href: '/expenses', label: 'Pengeluaran' },

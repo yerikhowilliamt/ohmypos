@@ -13,7 +13,13 @@ import {
 } from '@ohmypos/ui/components/card';
 import { Input } from '@ohmypos/ui/components/input';
 import { Label } from '@ohmypos/ui/components/label';
-import { NativeSelect } from '@ohmypos/ui/components/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@ohmypos/ui/components/select';
 import type { AccountResponse, ImportResult } from '@ohmypos/api-contracts';
 import { useImportBankStatement } from '@/hooks/useReconciliation';
 
@@ -79,35 +85,40 @@ export function BankStatementImportCard({
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="import-account">Akun Bank</Label>
-              <NativeSelect
-                id="import-account"
-                value={accountId}
-                onChange={(event) => setAccountId(event.target.value)}
+              <Select
+                value={accountId || undefined}
+                onValueChange={(value) => setAccountId(value)}
               >
-                <option value="">-- Pilih Akun --</option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </NativeSelect>
+                <SelectTrigger id="import-account">
+                  <SelectValue placeholder="-- Pilih Akun --" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="import-format">Format Bank</Label>
-              <NativeSelect
-                id="import-format"
+              <Select
                 value={format}
-                onChange={(event) =>
-                  setFormat(event.target.value as BankFormat)
-                }
+                onValueChange={(value) => setFormat(value as BankFormat)}
               >
-                {FORMATS.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </NativeSelect>
+                <SelectTrigger id="import-format">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FORMATS.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

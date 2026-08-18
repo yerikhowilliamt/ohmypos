@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type {
+  CashBalanceResponse,
   DailyIncomeResponse,
   IncomeByPaymentMethodResponse,
   ProductProfitResponse,
@@ -36,6 +37,8 @@ export const REPORTS_QUERY_KEYS = {
   topProducts: (f: TopProductsFilters) =>
     ['reports', 'top-products', f] as const,
   dailyIncome: (f: ReportFilters) => ['reports', 'daily-income', f] as const,
+  cashBalance: (asOfDate?: string) =>
+    ['reports', 'cash-balance', asOfDate ?? 'today'] as const,
 };
 
 function buildQueryString(filters: ReportFilters): string {
@@ -113,5 +116,18 @@ export function useDailyIncome(filters: ReportFilters, enabled = true) {
         `/reports/daily-income?${buildQueryString(filters)}`,
       ),
     enabled: enabled && isRangeReady(filters),
+  });
+}
+
+/** Running cash balance (§1, ADR-004/glossary Kas Awal). `asOfDate` omitted = today (WIB, server-resolved). */
+export function useCashBalance(asOfDate?: string) {
+  return useQuery({
+    queryKey: REPORTS_QUERY_KEYS.cashBalance(asOfDate),
+    queryFn: () =>
+      apiFetch<CashBalanceResponse>(
+        asOfDate
+          ? `/reports/cash-balance?asOfDate=${encodeURIComponent(asOfDate)}`
+          : '/reports/cash-balance',
+      ),
   });
 }
