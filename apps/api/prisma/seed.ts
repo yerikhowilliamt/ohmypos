@@ -100,8 +100,11 @@ async function main() {
 
   // Required by ADR-012: system-generated ledger entries must have a category.
   // Resolved by name inside the services (`resolvePurchaseCategoryId`), so no
-  // id is captured here either.
-  await Promise.all(
+  // id is captured here for THOSE fixtures — but the reconciliation fixtures
+  // below write LedgerEntry rows directly (there is no service for a MANUAL
+  // entry's creation-with-category the way Purchases/Sales have one) and need
+  // the ids, hence capturing the upsert results here.
+  const categories = await Promise.all(
     [
       { name: 'Penjualan', type: 'INFLOW' as const },
       { name: 'Pembelian Bahan Baku', type: 'OUTFLOW' as const },
@@ -114,6 +117,10 @@ async function main() {
       }),
     ),
   );
+  const categoryPenjualan = categories.find((c) => c.name === 'Penjualan')!;
+  const categoryOperasional = categories.find(
+    (c) => c.name === 'Operasional',
+  )!;
 
   const ownerEmail = process.env.SEED_OWNER_EMAIL ?? 'owner@ohmypos.local';
   const ownerPassword = process.env.SEED_OWNER_PASSWORD ?? 'ChangeMe123!';
@@ -393,6 +400,219 @@ async function main() {
       kasirMelati.id,
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Phase 8h/8j: Reconciliation fixtures (plan §9.2 E2E smoke needs something to
+  // click on). BankTransaction and LedgerEntry are written directly with
+  // `prisma` rather than through a service — unlike the Phase 4/5 fixtures
+  // above, nothing here is a denormalized balance a service derives; `status`
+  // is either a plain literal or left for `trg_check_allocation_sum`'s
+  // `sync_transaction_status` trigger to set the instant an Allocation row is
+  // inserted (docs/plannings/phase-8h-reconciliation.md §1.3) — exactly what
+  // happens through the real API, so writing the Allocation row directly here
+  // exercises the identical trigger path.
+  //
+  // Covers every `TransactionStatus` and gives `POST /matching/propose`
+  // (docs/plannings/phase-8h-reconciliation.md §1.4) one candidate of each
+  // `MatchType`:
+  //  - BT1 vs LE1: same amount, same day        -> EXACT
+  //  - BT2a + BT2b vs LE2: sum to LE2's amount   -> AGGREGATION
+  //  - BT3 vs LE3: same amount, 2 days apart     -> FUZZY (default tolerance 3d)
+  //  - BT4: pre-allocated 300,000 of 500,000     -> PARTIALLY_ALLOCATED
+  //  - BT5: pre-allocated exactly 45,000         -> MATCHED
+  //  - BT6: seeded already PENDING_REVIEW, no candidate in this session's
+  //    queue -> demonstrates the "candidates are not persisted" trap directly
+  //    (§1.4) without the operator having to reload mid-session to see it.
+  //  - BT7: no nearby ledger entry               -> UNRESOLVED, no candidate
+  async function upsertReconTxn(input: {
+    externalRef: string;
+    txnDate: string;
+    amount: string;
+    type: 'INFLOW' | 'OUTFLOW';
+    description: string;
+    status?: 'UNRESOLVED' | 'PENDING_REVIEW';
+  }) {
+    return prisma.bankTransaction.upsert({
+      where: {
+        accountId_externalRef: {
+          accountId: bankUtama.id,
+          externalRef: input.externalRef,
+        },
+      },
+      update: {},
+      create: {
+        accountId: bankUtama.id,
+        externalRef: input.externalRef,
+        txnDate: new Date(input.txnDate),
+        amount: input.amount,
+        type: input.type,
+        description: input.description,
+        status: input.status ?? 'UNRESOLVED',
+      },
+    });
+  }
+
+  async function upsertReconLedgerEntry(input: {
+    note: string;
+    entryDate: string;
+    amount: string;
+    type: 'INFLOW' | 'OUTFLOW';
+    categoryId: string;
+    branchId: string;
+  }) {
+    const existing = await prisma.ledgerEntry.findFirst({
+      where: { accountId: bankUtama.id, note: input.note },
+    });
+    if (existing) return existing;
+
+    return prisma.ledgerEntry.create({
+      data: {
+        accountId: bankUtama.id,
+        categoryId: input.categoryId,
+        branchId: input.branchId,
+        entryDate: new Date(input.entryDate),
+        amount: input.amount,
+        type: input.type,
+        note: input.note,
+        sourceType: 'MANUAL',
+      },
+    });
+  }
+
+  await upsertReconLedgerEntry({
+    note: 'Penjualan tunai QRIS (seed rekonsiliasi)',
+    entryDate: '2026-08-17T09:00:00.000Z',
+    amount: '250000.00',
+    type: 'INFLOW',
+    categoryId: categoryPenjualan.id,
+    branchId: branches[0].id,
+  });
+  await upsertReconLedgerEntry({
+    note: 'Penjualan gabungan QRIS (seed rekonsiliasi)',
+    entryDate: '2026-08-15T09:00:00.000Z',
+    amount: '180000.00',
+    type: 'INFLOW',
+    categoryId: categoryPenjualan.id,
+    branchId: branches[1].id,
+  });
+  await upsertReconLedgerEntry({
+    note: 'Biaya admin bank bulanan (seed rekonsiliasi)',
+    entryDate: '2026-08-14T09:00:00.000Z',
+    amount: '75000.00',
+    type: 'OUTFLOW',
+    categoryId: categoryOperasional.id,
+    branchId: branches[0].id,
+  });
+  const le4 = await upsertReconLedgerEntry({
+    note: 'Setoran tunai cabang, alokasi sebagian (seed rekonsiliasi)',
+    entryDate: '2026-08-10T09:00:00.000Z',
+    amount: '300000.00',
+    type: 'INFLOW',
+    categoryId: categoryPenjualan.id,
+    branchId: branches[0].id,
+  });
+  const le5 = await upsertReconLedgerEntry({
+    note: 'Pembayaran listrik PLN (seed rekonsiliasi)',
+    entryDate: '2026-08-12T09:00:00.000Z',
+    amount: '45000.00',
+    type: 'OUTFLOW',
+    categoryId: categoryOperasional.id,
+    branchId: branches[0].id,
+  });
+
+  await upsertReconTxn({
+    externalRef: 'SEED-RECON-BT1',
+    txnDate: '2026-08-17T10:00:00.000Z',
+    amount: '250000.00',
+    type: 'INFLOW',
+    description: 'Setoran QRIS Cabang Melati',
+  });
+  await upsertReconTxn({
+    externalRef: 'SEED-RECON-BT2A',
+    txnDate: '2026-08-15T08:00:00.000Z',
+    amount: '100000.00',
+    type: 'INFLOW',
+    description: 'Transfer masuk QRIS #1',
+  });
+  await upsertReconTxn({
+    externalRef: 'SEED-RECON-BT2B',
+    txnDate: '2026-08-16T08:00:00.000Z',
+    amount: '80000.00',
+    type: 'INFLOW',
+    description: 'Transfer masuk QRIS #2',
+  });
+  await upsertReconTxn({
+    externalRef: 'SEED-RECON-BT3',
+    txnDate: '2026-08-16T11:00:00.000Z',
+    amount: '75000.00',
+    type: 'OUTFLOW',
+    description: 'Biaya admin bank bulanan',
+  });
+  const bt4 = await upsertReconTxn({
+    externalRef: 'SEED-RECON-BT4',
+    txnDate: '2026-08-10T10:00:00.000Z',
+    amount: '500000.00',
+    type: 'INFLOW',
+    description: 'Setoran tunai cabang Melati',
+  });
+  const bt5 = await upsertReconTxn({
+    externalRef: 'SEED-RECON-BT5',
+    txnDate: '2026-08-12T10:00:00.000Z',
+    amount: '45000.00',
+    type: 'OUTFLOW',
+    description: 'Pembayaran listrik PLN',
+  });
+  await upsertReconTxn({
+    externalRef: 'SEED-RECON-BT6',
+    txnDate: '2026-08-13T10:00:00.000Z',
+    amount: '90000.00',
+    type: 'INFLOW',
+    description: 'Transfer belum ditinjau (dari sesi sebelumnya)',
+    status: 'PENDING_REVIEW',
+  });
+  await upsertReconTxn({
+    externalRef: 'SEED-RECON-BT7',
+    txnDate: '2026-08-01T10:00:00.000Z',
+    amount: '15000.00',
+    type: 'OUTFLOW',
+    description: 'Biaya tidak diketahui',
+  });
+
+  // BT1, BT2a, BT2b, BT3, BT7 stay UNRESOLVED — no Allocation row touches them.
+
+  // BT4: allocate 300,000 of 500,000 against LE4 -> trigger sets PARTIALLY_ALLOCATED.
+  await prisma.allocation.upsert({
+    where: {
+      bankTransactionId_idempotencyKey: {
+        bankTransactionId: bt4.id,
+        idempotencyKey: 'seed-alloc-bt4-le4',
+      },
+    },
+    update: {},
+    create: {
+      bankTransactionId: bt4.id,
+      ledgerEntryId: le4.id,
+      amountPortion: '300000.00',
+      idempotencyKey: 'seed-alloc-bt4-le4',
+    },
+  });
+
+  // BT5: allocate the full 45,000 against LE5 -> trigger sets MATCHED.
+  await prisma.allocation.upsert({
+    where: {
+      bankTransactionId_idempotencyKey: {
+        bankTransactionId: bt5.id,
+        idempotencyKey: 'seed-alloc-bt5-le5',
+      },
+    },
+    update: {},
+    create: {
+      bankTransactionId: bt5.id,
+      ledgerEntryId: le5.id,
+      amountPortion: '45000.00',
+      idempotencyKey: 'seed-alloc-bt5-le5',
+    },
+  });
 
   console.log(`Seeded. Owner login: ${ownerEmail}`);
   await prisma.$disconnect();
