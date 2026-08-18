@@ -10,6 +10,7 @@ import {
   REPORT_TIMEZONE,
   eachWibDay,
   resolveReportRange,
+  todayWib,
 } from './period';
 
 describe('Report period (period.ts)', () => {
@@ -96,6 +97,23 @@ describe('Report period (period.ts)', () => {
       const days = eachWibDay(range);
       expect(days).toHaveLength(range.dayCount);
       expect(new Set(days).size).toBe(range.dayCount);
+    });
+  });
+
+  describe('todayWib', () => {
+    it('returns the WIB date for a UTC instant already on the same WIB day', () => {
+      // 2025-03-05T10:00:00Z is 2025-03-05T17:00:00+07:00 — still March 5th WIB.
+      expect(todayWib(new Date('2025-03-05T10:00:00.000Z'))).toBe('2025-03-05');
+    });
+
+    it('rolls over to the next WIB day for a late-UTC instant', () => {
+      // 2025-03-05T17:30:00Z is 2025-03-06T00:30:00+07:00 — already March 6th WIB.
+      expect(todayWib(new Date('2025-03-05T17:30:00.000Z'))).toBe('2025-03-06');
+    });
+
+    it('stays on the same WIB day for an early-UTC instant', () => {
+      // 2025-03-05T00:00:00Z is 2025-03-05T07:00:00+07:00 — still March 5th WIB.
+      expect(todayWib(new Date('2025-03-05T00:00:00.000Z'))).toBe('2025-03-05');
     });
   });
 

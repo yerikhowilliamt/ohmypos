@@ -12,7 +12,13 @@ import {
 } from '@ohmypos/ui/components/alert';
 import { Button } from '@ohmypos/ui/components/button';
 import { Label } from '@ohmypos/ui/components/label';
-import { NativeSelect } from '@ohmypos/ui/components/native-select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@ohmypos/ui/components/select';
 import { ApiError } from '@/lib/api';
 import { TRANSACTION_STATUS_LABELS } from '@/lib/vocabulary';
 import { useAccounts } from '@/hooks/useExpenses';
@@ -28,6 +34,10 @@ import { ReconciliationSummaryCards } from '@/components/reconciliation/Reconcil
 import { SplitAllocationDialog } from '@/components/reconciliation/SplitAllocationDialog';
 
 const PAGE_SIZE = 50;
+
+/** Sentinel Select values for "all" — Radix Select rejects an empty string value. */
+const ALL_ACCOUNTS_VALUE = '__all_accounts__';
+const ALL_STATUS_VALUE = '__all_status__';
 
 const STATUS_OPTIONS: TransactionStatus[] = [
   'UNRESOLVED',
@@ -119,40 +129,52 @@ export function ReconciliationClient() {
         <div className="grid gap-3 sm:grid-cols-2 lg:max-w-xl">
           <div className="space-y-1.5">
             <Label htmlFor="filter-account">Akun</Label>
-            <NativeSelect
-              id="filter-account"
-              value={accountId}
-              onChange={(event) => {
-                setAccountId(event.target.value);
+            <Select
+              value={accountId || undefined}
+              onValueChange={(value) => {
+                setAccountId(value === ALL_ACCOUNTS_VALUE ? '' : value);
                 setPage(1);
               }}
             >
-              <option value="">Semua Akun</option>
-              {(accountsQuery.data ?? []).map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </NativeSelect>
+              <SelectTrigger id="filter-account">
+                <SelectValue placeholder="Semua Akun" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_ACCOUNTS_VALUE}>Semua Akun</SelectItem>
+                {(accountsQuery.data ?? []).map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="filter-status">Status</Label>
-            <NativeSelect
-              id="filter-status"
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value as TransactionStatus | '');
+            <Select
+              value={status || undefined}
+              onValueChange={(value) => {
+                setStatus(
+                  value === ALL_STATUS_VALUE
+                    ? ''
+                    : (value as TransactionStatus),
+                );
                 setPage(1);
               }}
             >
-              <option value="">Semua Status</option>
-              {STATUS_OPTIONS.map((value) => (
-                <option key={value} value={value}>
-                  {TRANSACTION_STATUS_LABELS[value]}
-                </option>
-              ))}
-            </NativeSelect>
+              <SelectTrigger id="filter-status">
+                <SelectValue placeholder="Semua Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_STATUS_VALUE}>Semua Status</SelectItem>
+                {STATUS_OPTIONS.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {TRANSACTION_STATUS_LABELS[value]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

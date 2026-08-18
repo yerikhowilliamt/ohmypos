@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-006 — Cash-balance running total used the wrong end of `resolveReportRange`, including same-day entries it should have excluded
+
+- **Date found:** 2026-08-18
+- **Found during:** Phase 8i (TASK-023) — running the e2e suite for the new `GET /reports/cash-balance` endpoint immediately after writing `ReportsService.cashBalance`.
+- **Symptom:** e2e Case 36 ("excludes entries dated on/after asOfDate") failed: `expect(row.balance).toBe('0.00')` received `'99999.00'` — an entry dated exactly on `asOfDate` was counted as already elapsed when it should not have been yet.
+- **Root cause:** `cashBalance` computed its cutoff as `resolveReportRange(asOfDate, asOfDate).to`. `period.ts`'s own contract defines `.to` as the *exclusive upper bound of the day after* the given date (start of `asOfDate + 1`, not start of `asOfDate`) — correct for a bounded `[from, to)` range query, but wrong for a single-instant cutoff. Using `.to` meant every entry dated anywhere during `asOfDate` itself (strictly before start of the *next* day) was counted as part of the balance, contradicting the response schema's own doc comment ("strictly before asOfDate's exclusive upper bound") and the intended "as of the start of this day" semantics.
+- **Resolution:** Changed the cutoff to `resolveReportRange(asOfDate, asOfDate).from` — the start of `asOfDate` itself — so entries dated on or after `asOfDate` are correctly excluded from the running balance.
+- **Prevention:** This exact line came from a plan document (`docs/plannings/phase-8i-dashboard-overview.md`) that had already been reviewed and amended for 4 other defects before execution — but the review didn't catch this one because it required cross-checking one section's SQL cutoff logic against another section's e2e test assertion, not just re-reading either section in isolation. Concrete takeaway: when a plan specifies both an implementation and its own tests, running those tests is not optional even for sections that already passed a prior doc review — a plan can be internally self-contradictory in ways only execution surfaces. No new test needed here (Case 36 already covers it); the general prevention is procedural, already reflected in the Task Log entry for TASK-023.
+- **Severity:** High — this is money-correctness-adjacent (a report figure OWNER makes decisions from), caught before merge by the e2e suite the plan itself specified, not in production.
+
 ### ERR-005 — `useSuppliers` assumed a bare array for a paginated API response, breaking purchase dialog
 
 - **Date found:** 2026-08-17

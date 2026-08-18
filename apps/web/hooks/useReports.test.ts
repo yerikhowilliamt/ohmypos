@@ -9,6 +9,7 @@ import {
   useIncomeByPaymentMethod,
   useTopProducts,
   useDailyIncome,
+  useCashBalance,
 } from './useReports';
 
 vi.mock('@/lib/api', () => ({
@@ -118,5 +119,23 @@ describe('useReports hooks', () => {
     );
     expect(result.current.fetchStatus).toBe('idle');
     expect(apiModule.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('useCashBalance omits asOfDate from the query string when not provided', async () => {
+    const { result } = renderHook(() => useCashBalance(), {
+      wrapper: createWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(apiModule.apiFetch).toHaveBeenCalledWith('/reports/cash-balance');
+  });
+
+  it('useCashBalance includes asOfDate when provided', async () => {
+    const { result } = renderHook(() => useCashBalance('2026-08-18'), {
+      wrapper: createWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(apiModule.apiFetch).toHaveBeenCalledWith(
+      '/reports/cash-balance?asOfDate=2026-08-18',
+    );
   });
 });
