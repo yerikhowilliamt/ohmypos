@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { requireRole } from '@/lib/session';
+import { ReconciliationClient } from './ReconciliationClient';
 
 export const metadata: Metadata = {
   title: 'Rekonsiliasi — OhMyPos',
@@ -7,14 +8,14 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
+  // ADMIN and OWNER only (ADR-011 §6, System Design §5). This is the UX gate;
+  // RoleGuard on the import/matching/allocation/reconciliation controllers is
+  // the enforcement, and the screen handles a 403 from it gracefully.
   await requireRole(['ADMIN', 'OWNER']);
 
   return (
-    <main className="flex-1 p-6">
-      <h1 className="text-xl font-bold text-text-primary">Rekonsiliasi</h1>
-      <p className="mt-2 text-sm text-text-secondary">
-        Modul backend sudah siap sejak Phase 1; layarnya dibangun kemudian.
-      </p>
+    <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
+      <ReconciliationClient />
     </main>
   );
 }

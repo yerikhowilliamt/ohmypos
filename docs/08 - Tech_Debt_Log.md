@@ -253,6 +253,18 @@
 - **Priority:** Low
 - **Status:** Open
 
+### DEBT-022 — No Zod schema for the `Allocation`-with-`ledgerEntry` composed response
+
+- **Date logged:** 2026-08-18
+- **Found during:** Phase 8j (TASK-022 / Frontend Reconciliation Screen)
+- **Description:** `GET /allocations/transaction/:txnId` includes the related `ledgerEntry` on every row (`allocation.controller.ts:57` → `allocation.service.ts:174`), but `AllocationResponseSchema` (`packages/api-contracts/src/allocation.schema.ts`) does not describe that composed shape. `apps/web/hooks/useReconciliation.ts` expresses it as a hand-composed intersection type (`AllocationWithLedgerEntry = AllocationResponse & { ledgerEntry: LedgerEntryResponse }`) instead of a schema-derived type, which is an exception to AGENTS.md rule 9 ("Zod schemas drive both API validation and TS types... do not manually type request/response objects if a Zod schema exists").
+- **Why deferred:** Adding a proper `AllocationWithLedgerEntrySchema` is a `packages/api-contracts` change, which needs the corresponding controller/service response to actually conform to it on the API side too — an API-contracts change requiring updates on both `apps/api` and `apps/web` in the same PR (ADR-010) — out of scope for a frontend-only phase.
+- **Impact if unaddressed:** The composed shape can silently drift from what the controller actually returns (e.g. a future field added to the include) without a compile-time or runtime check catching it — the intersection type is asserted, not validated.
+- **Trigger condition:** Any other screen needs the same `Allocation`-with-`ledgerEntry` shape (duplicating the intersection type), or the `allocation.controller.ts` response shape changes.
+- **Proposed resolution:** Add `AllocationWithLedgerEntrySchema` to `packages/api-contracts/src/allocation.schema.ts` (composing `AllocationResponseSchema` and `LedgerEntryResponseSchema`) and use the inferred type on both `apps/api`'s controller return type and `apps/web/hooks/useReconciliation.ts`.
+- **Priority:** Low
+- **Status:** Open
+
 ---
 
 ## Resolved

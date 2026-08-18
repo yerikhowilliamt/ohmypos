@@ -20,10 +20,20 @@ export class ApiError extends Error {
 }
 
 async function doFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  // A FormData body must NOT carry an explicit Content-Type: the browser has to
+  // set `multipart/form-data; boundary=…` itself, and an explicit header would
+  // omit the boundary and make the request unparseable server-side. The only
+  // caller today is the bank-statement CSV import (POST /import/csv/:accountId,
+  // PRD §5.7); every other call site is JSON and keeps its previous behaviour.
+  const isFormData =
+    typeof FormData !== 'undefined' && init?.body instanceof FormData;
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: isFormData
+      ? { ...init?.headers }
+      : { 'Content-Type': 'application/json', ...init?.headers },
   });
 
   if (!res.ok) {
