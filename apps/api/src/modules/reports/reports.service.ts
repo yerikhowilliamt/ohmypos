@@ -20,6 +20,7 @@
  */
 import { Injectable } from '@nestjs/common';
 import type {
+  CashBalanceResponse,
   DailyIncomeResponse,
   IncomeByPaymentMethodResponse,
   ProductProfitResponse,
@@ -32,24 +33,31 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   eachWibDay,
   resolveReportRange,
+  todayWib,
   type ReportRange,
 } from '../../common/period';
 import { ledgerScope, saleScope, wibDayOfEntryDate } from './report-filters';
 import { fillDailyGaps } from './report-math';
 import {
+  toCashBalanceResponse,
   toDailyIncomeResponse,
   toIncomeByPaymentMethodResponse,
   toProductProfitResponse,
   toProfitLossResponse,
   toReportPeriod,
   toTopProductsResponse,
+  type CashBalanceRow,
   type DailyIncomeQueryRow,
   type IncomeByAccountRow,
   type ProductAggregateRow,
   type ProfitLossCogsRow,
   type ProfitLossMoneyRow,
 } from './reports.mapper';
-import type { ReportRangeQueryDto, TopProductsQueryDto } from './reports.dto';
+import type {
+  CashBalanceQueryDto,
+  ReportRangeQueryDto,
+  TopProductsQueryDto,
+} from './reports.dto';
 
 /**
  * The ORDER BY per ranking metric, as pre-built SQL fragments.
@@ -242,5 +250,33 @@ export class ReportsService {
     );
 
     return toDailyIncomeResponse(period, buckets);
+  }
+
+  /**
+   * Running balance, not a range report: opening balance plus every ledger
+   * movement strictly before `asOfDate`'s exclusive WIB boundary. Deliberately
+   * NOT built on `ledgerScope` (report-filters.ts) — that helper assumes a
+   * bounded [from, to) window and a `branchId` filter; this query has neither
+   * a lower bound nor a branch filter, so it is written out in full here
+   * rather than forcing an unbounded query through a bounded-range helper.
+   */
+  async cashBalance(query: CashBalanceQueryDto): Promise<CashBalanceResponse> {
+    const asOfDate = query.asOfDate ?? todayWib(new Date());
+    const cutoff = resolveReportRange(asOfDate, asOfDate).from;
+
+    const rows = await this.prisma.$queryRaw<CashBalanceRow[]>`
+      SELECT
+        a.id                                                                                       AS account_id,
+        a.name                                                                                      AS account_name,
+        a.type                                                                                      AS account_type,
+        a.opening_balance                                                                            AS opening_balance,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'  AND le.entry_date < ${cutoff}), 0) AS total_inflow,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'OUTFLOW' AND le.entry_date < ${cutoff}), 0) AS total_outflow
+      FROM accounts a
+      LEFT JOIN ledger_entries le ON le.account_id = a.id
+      GROUP BY a.id, a.name, a.type, a.opening_balance
+      ORDER BY a.name ASC, a.id ASC`;
+
+    return toCashBalanceResponse(asOfDate, rows);
   }
 }

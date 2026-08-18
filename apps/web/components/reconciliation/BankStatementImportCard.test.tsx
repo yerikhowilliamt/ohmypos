@@ -36,9 +36,10 @@ describe('BankStatementImportCard', () => {
 
     renderWithClient(<BankStatementImportCard accounts={accounts} />);
 
-    fireEvent.change(screen.getByLabelText(/akun bank/i), {
-      target: { value: accounts[0].id },
-    });
+    fireEvent.click(screen.getByLabelText(/akun bank/i));
+    fireEvent.click(
+      await screen.findByRole('option', { name: accounts[0].name }),
+    );
     fireEvent.change(screen.getByTestId('import-file-input'), {
       target: {
         files: [new File(['tanggal,jumlah\n2026-02-01,1000'], 'bca.csv')],
@@ -72,9 +73,10 @@ describe('BankStatementImportCard', () => {
 
     renderWithClient(<BankStatementImportCard accounts={accounts} />);
 
-    fireEvent.change(screen.getByLabelText(/akun bank/i), {
-      target: { value: accounts[0].id },
-    });
+    fireEvent.click(screen.getByLabelText(/akun bank/i));
+    fireEvent.click(
+      await screen.findByRole('option', { name: accounts[0].name }),
+    );
     fireEvent.change(screen.getByTestId('import-file-input'), {
       target: { files: [new File(['x'], 'bca.csv')] },
     });

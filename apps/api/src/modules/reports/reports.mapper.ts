@@ -10,6 +10,7 @@
  * HERE and nowhere else (repo convention — raw-materials.service.ts, sales.mapper.ts).
  */
 import type {
+  CashBalanceResponse,
   DailyIncomeResponse,
   IncomeByPaymentMethodResponse,
   ProductProfitResponse,
@@ -67,6 +68,17 @@ export interface DailyIncomeQueryRow {
   day: string;
   income: Prisma.Decimal;
   entry_count: number;
+}
+
+/** One row per Account — a LEFT JOIN, so an account with zero ledger activity
+ * still appears with total_inflow = total_outflow = 0. */
+export interface CashBalanceRow {
+  account_id: string;
+  account_name: string;
+  account_type: 'BANK' | 'CASH' | 'EWALLET';
+  opening_balance: Prisma.Decimal;
+  total_inflow: Prisma.Decimal;
+  total_outflow: Prisma.Decimal;
 }
 
 export function toReportPeriod(
@@ -203,5 +215,36 @@ export function toDailyIncomeResponse(
     })),
     total: total.toFixed(2),
     averagePerDay: averagePerDay(total, period.dayCount).toFixed(2),
+  };
+}
+
+export function toCashBalanceResponse(
+  asOfDate: string,
+  rows: CashBalanceRow[],
+): CashBalanceResponse {
+  const accounts = rows.map((row) => {
+    const netMovement = row.total_inflow.minus(row.total_outflow);
+    const balance = row.opening_balance.plus(netMovement);
+    return {
+      accountId: row.account_id,
+      accountName: row.account_name,
+      accountType: row.account_type,
+      openingBalance: row.opening_balance.toFixed(2),
+      netMovement: netMovement.toFixed(2),
+      balance: balance.toFixed(2),
+    };
+  });
+
+  const totalBalance = sumDecimals(
+    rows.map((row) =>
+      row.opening_balance.plus(row.total_inflow.minus(row.total_outflow)),
+    ),
+  );
+
+  return {
+    asOfDate,
+    timezone: 'Asia/Jakarta',
+    totalBalance: totalBalance.toFixed(2),
+    accounts,
   };
 }

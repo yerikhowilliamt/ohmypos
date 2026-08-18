@@ -2,7 +2,7 @@
  * OhMyPos — Reports controller, Dashboard 3 (PRD §5.4, System Design §5/§6.6,
  * ADR-011, Playbook §8).
  *
- * OWNER ONLY, on all five endpoints. System Design §5 gives ADMIN master-data
+ * OWNER ONLY, on all six endpoints. System Design §5 gives ADMIN master-data
  * and reconciliation routes only, and §6.6 states outright that the reports
  * screen is OWNER-only in v1. Widening this is a documentation change first
  * (AGENTS.md), not a decorator edit.
@@ -19,7 +19,11 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { ReportRangeQueryDto, TopProductsQueryDto } from './reports.dto';
+import {
+  CashBalanceQueryDto,
+  ReportRangeQueryDto,
+  TopProductsQueryDto,
+} from './reports.dto';
 import { ReportsService } from './reports.service';
 
 @Controller('reports')
@@ -55,5 +59,11 @@ export class ReportsController {
   @Roles('OWNER')
   dailyIncome(@Query() query: ReportRangeQueryDto) {
     return this.reportsService.dailyIncome(query);
+  }
+
+  @Get('cash-balance')
+  @Roles('OWNER')
+  cashBalance(@Query() query: CashBalanceQueryDto) {
+    return this.reportsService.cashBalance(query);
   }
 }
