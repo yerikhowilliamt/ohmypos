@@ -1,0 +1,154 @@
+'use client';
+
+import * as React from 'react';
+import type { ProfitLossResponse } from '@ohmypos/api-contracts';
+import { Card, CardContent } from '@ohmypos/ui/components/card';
+import { Skeleton } from '@ohmypos/ui/components/skeleton';
+import { formatCurrency, formatPercent } from '@/lib/formatters';
+import { getFlowIndicatorClassesForAmount } from '@/lib/vocabulary';
+import { ReportBarChart } from './ReportChart';
+
+interface ProfitLossViewProps {
+  data: ProfitLossResponse | undefined;
+  isLoading: boolean;
+}
+
+function KpiCard({
+  label,
+  value,
+  valueClassName,
+  helper,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+  helper?: string;
+}) {
+  return (
+    <Card className="p-4">
+      <CardContent className="p-0">
+        <p className="text-xs text-text-tertiary">{label}</p>
+        <p
+          className={`mt-1 text-xl font-bold font-mono ${valueClassName ?? 'text-text-primary'}`}
+        >
+          {value}
+        </p>
+        {helper && (
+          <p className="mt-0.5 text-[11px] text-text-secondary">{helper}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Dashboard 3 — Profit & Loss (PRD §5.4, ADR-017). Two views live on this
+ * response and neither is derived from the other: `netProfit` is the margin
+ * view (income − COGS − operating expenses, excludes material purchases
+ * because those are already inside COGS when sold); the `cash` block is what
+ * actually moved through the bank/cash accounts. Both are rendered, labelled
+ * separately, so an owner never has to guess which figure answers which
+ * question.
+ */
+export function ProfitLossView({ data, isLoading }: ProfitLossViewProps) {
+  const chartData = React.useMemo(() => {
+    if (!data) return [];
+    return [
+      { name: 'Pendapatan', value: Number(data.totalIncome) },
+      { name: 'HPP', value: Number(data.cogs) },
+      { name: 'Beban Operasional', value: Number(data.operatingExpenses) },
+      { name: 'Laba Bersih', value: Number(data.netProfit) },
+    ];
+  }, [data]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+        <Skeleton className="h-[280px] w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiCard
+          label="Pendapatan"
+          value={formatCurrency(data?.totalIncome)}
+          valueClassName="text-accent-inflow"
+        />
+        <KpiCard label="HPP" value={formatCurrency(data?.cogs)} />
+        <KpiCard
+          label="Laba Bersih"
+          value={formatCurrency(data?.netProfit)}
+          valueClassName={getFlowIndicatorClassesForAmount(
+            data?.netProfit ?? '0',
+          )}
+          helper={
+            data?.netMarginPct !== undefined
+              ? `margin ${formatPercent(data?.netMarginPct)}`
+              : undefined
+          }
+        />
+      </div>
+
+      <ReportBarChart
+        data={chartData}
+        xKey="name"
+        bars={[{ key: 'value', label: 'Jumlah' }]}
+        tooltipFormatter={(v) => formatCurrency(v)}
+      />
+
+      <Card className="p-4">
+        <CardContent className="p-0 space-y-3">
+          <p className="text-sm font-semibold text-text-primary">
+            Arus Kas Periode Ini
+          </p>
+          <p className="text-xs text-text-secondary">
+            Berbeda dari laba bersih di atas: laba bersih tidak menghitung
+            pembelian bahan baku yang belum terjual, arus kas menghitungnya
+            (ADR-017).
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div>
+              <p className="text-xs text-text-tertiary">Kas Masuk</p>
+              <p className="mt-0.5 font-mono text-sm text-accent-inflow">
+                {formatCurrency(data?.cash.totalInflow)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-text-tertiary">Kas Keluar</p>
+              <p className="mt-0.5 font-mono text-sm text-accent-outflow">
+                {formatCurrency(data?.cash.totalOutflow)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-text-tertiary">
+                Kas Keluar untuk Bahan Baku
+              </p>
+              <p className="mt-0.5 font-mono text-sm text-accent-outflow">
+                {formatCurrency(data?.cash.materialCashOutflow)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-text-tertiary">Arus Kas Bersih</p>
+              <p
+                className={`mt-0.5 font-mono text-sm ${getFlowIndicatorClassesForAmount(
+                  data?.cash.netCashFlow ?? '0',
+                )}`}
+              >
+                {formatCurrency(data?.cash.netCashFlow)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

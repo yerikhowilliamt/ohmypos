@@ -3,6 +3,7 @@ import {
   formatCurrency,
   formatQuantity,
   formatMarginPercentage,
+  formatPercent,
   formatThousands,
   unformatThousands,
 } from './formatters';
@@ -66,6 +67,25 @@ describe('formatters', () => {
     it('returns null when sellPrice is zero or negative', () => {
       expect(formatMarginPercentage('0', '5000')).toBeNull();
       expect(formatMarginPercentage('-1000', '5000')).toBeNull();
+    });
+  });
+
+  describe('formatPercent', () => {
+    it('formats a positive percentage', () => {
+      expect(formatPercent(62.75)).toBe('62,75%');
+    });
+
+    it('formats a negative percentage (a loss margin)', () => {
+      expect(formatPercent(-50)).toBe('-50%');
+    });
+
+    it('formats zero', () => {
+      expect(formatPercent(0)).toBe('0%');
+    });
+
+    it('returns fallback for null/undefined — the API "denominator was zero" case', () => {
+      expect(formatPercent(null)).toBe('—');
+      expect(formatPercent(undefined)).toBe('—');
     });
   });
 
