@@ -29,7 +29,7 @@ export const MAX_REPORT_RANGE_DAYS = 366;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MS_PER_DAY = 86_400_000;
 const MS_PER_HOUR = 3_600_000;
-const WIB_OFFSET_MS = 7 * MS_PER_HOUR;
+export const WIB_OFFSET_MS = 7 * MS_PER_HOUR;
 
 export interface ReportRange {
   /** `YYYY-MM-DD`, WIB, inclusive — echoed back on the response. */
@@ -108,4 +108,15 @@ export function eachWibDay(range: ReportRange): string[] {
     days.push(utcMidnightOfWibDay.toISOString().slice(0, 10));
   }
   return days;
+}
+
+/**
+ * The WIB calendar day containing `now`, as `YYYY-MM-DD`.
+ *
+ * `now` is a parameter, not `Date.now()` — this file stays pure/testable (see
+ * file header). Callers needing "today" pass `new Date()` explicitly; this
+ * function must never call `Date.now()` itself.
+ */
+export function todayWib(now: Date): string {
+  return new Date(now.getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10);
 }

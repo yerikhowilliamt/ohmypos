@@ -156,3 +156,37 @@ export const DailyIncomeResponseSchema = z.object({
   averagePerDay: MoneyString,
 });
 export type DailyIncomeResponse = z.infer<typeof DailyIncomeResponseSchema>;
+
+/**
+ * Cash Balance — a running total, not a query-time range. `Account.openingBalance`
+ * (Kas Awal, centralized, ADR-004/glossary) plus every LedgerEntry INFLOW minus
+ * OUTFLOW strictly before `asOfDate`'s exclusive WIB day boundary. No branchId
+ * filter: neither Account nor its opening balance carries a branch (ERD §3), and
+ * branch-scoping only the ledger side while leaving opening balance unscoped
+ * would silently misstate the total — deliberate omission, not an oversight.
+ */
+export const CashBalanceQuerySchema = z.object({
+  /** WIB calendar day, inclusive cutoff. Omitted = today in WIB. */
+  asOfDate: ReportDate.optional(),
+});
+export type CashBalanceQuery = z.infer<typeof CashBalanceQuerySchema>;
+
+export const CashBalanceAccountRowSchema = z.object({
+  accountId: UuidString,
+  accountName: z.string(),
+  accountType: AccountType,
+  openingBalance: MoneyString,
+  /** Cumulative INFLOW − OUTFLOW strictly before asOfDate's exclusive upper bound. */
+  netMovement: SignedMoneyString,
+  /** openingBalance + netMovement. Can be negative. */
+  balance: SignedMoneyString,
+});
+export type CashBalanceAccountRow = z.infer<typeof CashBalanceAccountRowSchema>;
+
+export const CashBalanceResponseSchema = z.object({
+  asOfDate: ReportDate,
+  timezone: z.literal('Asia/Jakarta'),
+  totalBalance: SignedMoneyString,
+  accounts: z.array(CashBalanceAccountRowSchema),
+});
+export type CashBalanceResponse = z.infer<typeof CashBalanceResponseSchema>;

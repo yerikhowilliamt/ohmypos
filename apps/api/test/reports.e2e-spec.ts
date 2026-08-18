@@ -22,6 +22,8 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import {
+  CashBalanceResponse,
+  CashBalanceResponseSchema,
   DailyIncomeResponse,
   DailyIncomeResponseSchema,
   IncomeByPaymentMethodResponse,
@@ -450,6 +452,7 @@ describe('Reports — Dashboard 3 (e2e)', () => {
     });
     await prisma.branch.deleteMany({ where: { name: { startsWith: 'RP ' } } });
     await prisma.account.deleteMany({ where: { name: { startsWith: 'RP ' } } });
+    await prisma.account.deleteMany({ where: { name: { startsWith: 'CB ' } } });
   }
 
   // ---------------------------------------------------------------------------
@@ -894,6 +897,131 @@ describe('Reports — Dashboard 3 (e2e)', () => {
         { date: '2025-05-10', income: '5000.00', entryCount: 1 },
         { date: '2025-05-11', income: '5000.00', entryCount: 1 },
       ]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Cash balance (running total, not a range report)
+  // ---------------------------------------------------------------------------
+  describe('Cash balance', () => {
+    let cbAccountAId: string;
+    let cbAccountBId: string;
+
+    beforeAll(async () => {
+      cbAccountAId = (
+        await prisma.account.create({
+          data: {
+            name: 'CB Account A',
+            type: 'CASH',
+            openingBalance: '100000.00',
+          },
+        })
+      ).id;
+      cbAccountBId = (
+        await prisma.account.create({
+          data: { name: 'CB Account B', type: 'BANK', openingBalance: '0.00' },
+        })
+      ).id;
+    });
+
+    function accountRow(body: CashBalanceResponse, accountId: string) {
+      return body.accounts.find((a) => a.accountId === accountId);
+    }
+
+    it('Case 34: an account with no ledger activity returns balance === openingBalance', async () => {
+      const res = await getReport('cash-balance', {
+        asOfDate: '2025-01-01',
+      }).expect(200);
+      const body = res.body as CashBalanceResponse;
+      const row = accountRow(body, cbAccountAId);
+      expect(row?.openingBalance).toBe('100000.00');
+      expect(row?.netMovement).toBe('0.00');
+      expect(row?.balance).toBe('100000.00');
+    });
+
+    it('Case 35: sums INFLOW and subtracts OUTFLOW dated before asOfDate', async () => {
+      await postLedgerEntry({
+        branchId: branchAId,
+        accountId: cbAccountAId,
+        categoryName: 'Penjualan',
+        entryDate: '2025-05-10T10:00:00+07:00',
+        amount: '50000.00',
+        type: 'INFLOW',
+      });
+      await postLedgerEntry({
+        branchId: branchAId,
+        accountId: cbAccountAId,
+        categoryName: 'Operasional',
+        entryDate: '2025-05-11T10:00:00+07:00',
+        amount: '20000.00',
+        type: 'OUTFLOW',
+      });
+
+      const res = await getReport('cash-balance', {
+        asOfDate: '2025-05-31',
+      }).expect(200);
+      const body = res.body as CashBalanceResponse;
+      const row = accountRow(body, cbAccountAId);
+      // 100000.00 opening + 50000.00 inflow − 20000.00 outflow = 130000.00
+      expect(row?.netMovement).toBe('30000.00');
+      expect(row?.balance).toBe('130000.00');
+    });
+
+    it('Case 36: excludes entries dated on/after asOfDate', async () => {
+      await postLedgerEntry({
+        branchId: branchAId,
+        accountId: cbAccountBId,
+        categoryName: 'Penjualan',
+        entryDate: '2025-06-15T10:00:00+07:00',
+        amount: '99999.00',
+        type: 'INFLOW',
+      });
+
+      const res = await getReport('cash-balance', {
+        asOfDate: '2025-06-15',
+      }).expect(200);
+      const body = res.body as CashBalanceResponse;
+      const row = accountRow(body, cbAccountBId);
+      // The entry lands ON 2025-06-15 WIB, so with asOfDate=2025-06-15 (cutoff
+      // = start of 2025-06-15 WIB) it is NOT yet counted.
+      expect(row?.balance).toBe('0.00');
+
+      const dayAfter = await getReport('cash-balance', {
+        asOfDate: '2025-06-16',
+      }).expect(200);
+      const rowDayAfter = accountRow(
+        dayAfter.body as CashBalanceResponse,
+        cbAccountBId,
+      );
+      expect(rowDayAfter?.balance).toBe('99999.00');
+    });
+
+    it('Case 37: asOfDate omitted defaults to today and still 200s', async () => {
+      const res = await getReport('cash-balance', {}).expect(200);
+      const body = res.body as CashBalanceResponse;
+      expect(body.asOfDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(body.timezone).toBe('Asia/Jakarta');
+    });
+
+    it('Case 38: the response conforms to CashBalanceResponseSchema', async () => {
+      const res = await getReport('cash-balance', {
+        asOfDate: '2025-06-16',
+      }).expect(200);
+      expect(() => CashBalanceResponseSchema.parse(res.body)).not.toThrow();
+    });
+
+    it.each(['KASIR', 'ADMIN'] as const)(
+      'Case 39: %s is rejected from /reports/cash-balance',
+      async (role) => {
+        const cookies = role === 'KASIR' ? kasir.cookies : admin.cookies;
+        await getReport('cash-balance', {}, cookies).expect(403);
+      },
+    );
+
+    it('Case 40: an unauthenticated caller is rejected', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/reports/cash-balance')
+        .expect(401);
     });
   });
 

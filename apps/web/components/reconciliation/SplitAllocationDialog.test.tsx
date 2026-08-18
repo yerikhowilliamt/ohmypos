@@ -97,6 +97,20 @@ function renderDialog() {
   );
 }
 
+/**
+ * Opens the row's ledger-entry Select and picks the option whose note matches
+ * `entryId`. `findByRole` retries until the option renders, which also covers
+ * the case where `useLedgerEntryCandidates` hasn't resolved yet when the row
+ * first appears — a real operator can't pick an option that isn't on screen
+ * either, so this is not a test-only accommodation.
+ */
+async function selectLedgerEntry(rowIndex: number, entryId: string) {
+  const noteMatch =
+    entryId === ENTRY_A ? /penjualan qris/i : /penjualan transfer/i;
+  fireEvent.click(screen.getByTestId(`split-entry-${rowIndex}`));
+  fireEvent.click(await screen.findByRole('option', { name: noteMatch }));
+}
+
 describe('SplitAllocationDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -107,18 +121,10 @@ describe('SplitAllocationDialog', () => {
     renderDialog();
 
     await screen.findByTestId('split-entry-0');
-    // The ledger-entry candidates load asynchronously (useLedgerEntryCandidates);
-    // a native <select> silently discards a `.value` assignment that doesn't
-    // match any <option> yet, so the very first change must retry until the
-    // candidate list has actually rendered — a real operator can't select an
-    // option that isn't on screen either, so this only removes a test-harness
-    // race, not a product behaviour.
-    await waitFor(() => {
-      fireEvent.change(screen.getByTestId('split-entry-0'), {
-        target: { value: ENTRY_A },
-      });
-      expect(screen.getByTestId('split-entry-0')).toHaveValue(ENTRY_A);
-    });
+    await selectLedgerEntry(0, ENTRY_A);
+    expect(screen.getByTestId('split-entry-0')).toHaveTextContent(
+      /penjualan qris/i,
+    );
     // 1.500.001 against a 1.500.000 transaction — one rupiah over.
     fireEvent.change(screen.getByTestId('split-amount-0'), {
       target: { value: '1500001' },
@@ -142,26 +148,16 @@ describe('SplitAllocationDialog', () => {
     renderDialog();
 
     await screen.findByTestId('split-entry-0');
-    // The ledger-entry candidates load asynchronously (useLedgerEntryCandidates);
-    // a native <select> silently discards a `.value` assignment that doesn't
-    // match any <option> yet, so the very first change must retry until the
-    // candidate list has actually rendered — a real operator can't select an
-    // option that isn't on screen either, so this only removes a test-harness
-    // race, not a product behaviour.
-    await waitFor(() => {
-      fireEvent.change(screen.getByTestId('split-entry-0'), {
-        target: { value: ENTRY_A },
-      });
-      expect(screen.getByTestId('split-entry-0')).toHaveValue(ENTRY_A);
-    });
+    await selectLedgerEntry(0, ENTRY_A);
+    expect(screen.getByTestId('split-entry-0')).toHaveTextContent(
+      /penjualan qris/i,
+    );
     fireEvent.change(screen.getByTestId('split-amount-0'), {
       target: { value: '1200000' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: /tambah baris/i }));
-    fireEvent.change(screen.getByTestId('split-entry-1'), {
-      target: { value: ENTRY_B },
-    });
+    await selectLedgerEntry(1, ENTRY_B);
     fireEvent.change(screen.getByTestId('split-amount-1'), {
       target: { value: '300000' },
     });
@@ -222,18 +218,10 @@ describe('SplitAllocationDialog', () => {
     renderDialog();
 
     await screen.findByTestId('split-entry-0');
-    // The ledger-entry candidates load asynchronously (useLedgerEntryCandidates);
-    // a native <select> silently discards a `.value` assignment that doesn't
-    // match any <option> yet, so the very first change must retry until the
-    // candidate list has actually rendered — a real operator can't select an
-    // option that isn't on screen either, so this only removes a test-harness
-    // race, not a product behaviour.
-    await waitFor(() => {
-      fireEvent.change(screen.getByTestId('split-entry-0'), {
-        target: { value: ENTRY_A },
-      });
-      expect(screen.getByTestId('split-entry-0')).toHaveValue(ENTRY_A);
-    });
+    await selectLedgerEntry(0, ENTRY_A);
+    expect(screen.getByTestId('split-entry-0')).toHaveTextContent(
+      /penjualan qris/i,
+    );
     fireEvent.change(screen.getByTestId('split-amount-0'), {
       target: { value: '1200000' },
     });
@@ -248,9 +236,7 @@ describe('SplitAllocationDialog', () => {
     expect(await screen.findByTestId('saved-allocations')).toBeDefined();
 
     // Second submission: only 300.000 may still be allocated.
-    fireEvent.change(screen.getByTestId('split-entry-0'), {
-      target: { value: ENTRY_B },
-    });
+    await selectLedgerEntry(0, ENTRY_B);
     fireEvent.change(screen.getByTestId('split-amount-0'), {
       target: { value: '300001' },
     });
@@ -275,26 +261,16 @@ describe('SplitAllocationDialog', () => {
     renderDialog();
 
     await screen.findByTestId('split-entry-0');
-    // The ledger-entry candidates load asynchronously (useLedgerEntryCandidates);
-    // a native <select> silently discards a `.value` assignment that doesn't
-    // match any <option> yet, so the very first change must retry until the
-    // candidate list has actually rendered — a real operator can't select an
-    // option that isn't on screen either, so this only removes a test-harness
-    // race, not a product behaviour.
-    await waitFor(() => {
-      fireEvent.change(screen.getByTestId('split-entry-0'), {
-        target: { value: ENTRY_A },
-      });
-      expect(screen.getByTestId('split-entry-0')).toHaveValue(ENTRY_A);
-    });
+    await selectLedgerEntry(0, ENTRY_A);
+    expect(screen.getByTestId('split-entry-0')).toHaveTextContent(
+      /penjualan qris/i,
+    );
     fireEvent.change(screen.getByTestId('split-amount-0'), {
       target: { value: '100000' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: /tambah baris/i }));
-    fireEvent.change(screen.getByTestId('split-entry-1'), {
-      target: { value: ENTRY_A },
-    });
+    await selectLedgerEntry(1, ENTRY_A);
     fireEvent.change(screen.getByTestId('split-amount-1'), {
       target: { value: '200000' },
     });
@@ -324,18 +300,10 @@ describe('SplitAllocationDialog', () => {
     renderDialog();
 
     await screen.findByTestId('split-entry-0');
-    // The ledger-entry candidates load asynchronously (useLedgerEntryCandidates);
-    // a native <select> silently discards a `.value` assignment that doesn't
-    // match any <option> yet, so the very first change must retry until the
-    // candidate list has actually rendered — a real operator can't select an
-    // option that isn't on screen either, so this only removes a test-harness
-    // race, not a product behaviour.
-    await waitFor(() => {
-      fireEvent.change(screen.getByTestId('split-entry-0'), {
-        target: { value: ENTRY_A },
-      });
-      expect(screen.getByTestId('split-entry-0')).toHaveValue(ENTRY_A);
-    });
+    await selectLedgerEntry(0, ENTRY_A);
+    expect(screen.getByTestId('split-entry-0')).toHaveTextContent(
+      /penjualan qris/i,
+    );
     fireEvent.change(screen.getByTestId('split-amount-0'), {
       target: { value: '1200000' },
     });
