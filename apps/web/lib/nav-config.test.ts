@@ -13,7 +13,7 @@ describe('getNavItems', () => {
     ]);
   });
 
-  it('returns all seven back-office routes for OWNER, dashboard first, and never /sales', () => {
+  it('returns all eight back-office routes for OWNER, dashboard first, and never /sales', () => {
     const hrefs = getNavItems('OWNER').map((item) => item.href);
     expect(hrefs).toEqual([
       '/dashboard',
@@ -23,6 +23,7 @@ describe('getNavItems', () => {
       '/inventory',
       '/reports',
       '/users',
+      '/branches',
     ]);
     expect(hrefs[0]).toBe('/dashboard');
     expect(hrefs).not.toContain('/sales');

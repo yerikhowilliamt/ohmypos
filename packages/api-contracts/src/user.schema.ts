@@ -10,8 +10,10 @@ export type UserRole = z.infer<typeof UserRole>;
  * a KASIR must have a branch, an ADMIN or OWNER must not. Prisma cannot
  * express this conditional constraint, which is why it lives here.
  */
-const branchRule = <T extends { role: UserRole; branchId?: string | null }>(
-  schema: z.ZodType<T>,
+const branchRule = <
+  S extends z.ZodType<{ role: UserRole; branchId?: string | null }>,
+>(
+  schema: S,
 ) =>
   schema
     .refine((v) => v.role !== 'KASIR' || Boolean(v.branchId), {
@@ -35,9 +37,19 @@ export const CreateUserSchema = branchRule(
 );
 export type CreateUser = z.infer<typeof CreateUserSchema>;
 
+/**
+ * `role`/`branchId` are optional here (unlike `CreateUserSchema`) because an
+ * update may touch only one of the pair — e.g. reassigning a KASIR's branch
+ * without changing their role. The branchRule can't be applied at this layer
+ * as a result: a partial patch doesn't know the user's *current* role/branchId
+ * to validate the merged state against. `UsersService.update` re-runs
+ * `assertRoleBranchConsistent` against the merged result instead (Phase 9).
+ */
 export const UpdateUserSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   email: z.email().toLowerCase().optional(),
+  role: UserRole.optional(),
+  branchId: UuidString.nullish(),
 });
 export type UpdateUser = z.infer<typeof UpdateUserSchema>;
 
