@@ -34,6 +34,13 @@ export const LedgerEntryQuerySchema = PaginationQuerySchema.extend({
   accountId: UuidString.optional(),
   type: TransactionType.optional(),
   sortBy: LedgerEntrySortBySchema.optional(),
+  /**
+   * Inclusive `entryDate` bounds (ADR-019 / Reconciliation split-allocation
+   * candidate picker). Independent of each other — either may be supplied
+   * alone.
+   */
+  startDate: DateTimeString.optional(),
+  endDate: DateTimeString.optional(),
 });
 export type LedgerEntryQuery = z.infer<typeof LedgerEntryQuerySchema>;
 

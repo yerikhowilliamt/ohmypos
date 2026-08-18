@@ -3,6 +3,8 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -36,5 +38,15 @@ export class MatchingController {
   })
   reset(@Body() dto: ResetMatchesDto) {
     return this.matchingService.resetMatches(dto.accountId);
+  }
+
+  @Post('reject/:bankTransactionId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Reject a single proposed match, returning that transaction to UNRESOLVED',
+  })
+  reject(@Param('bankTransactionId', ParseUUIDPipe) bankTransactionId: string) {
+    return this.matchingService.rejectMatch(bankTransactionId);
   }
 }
