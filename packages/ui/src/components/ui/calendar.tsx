@@ -147,7 +147,7 @@ export function Calendar({
     <div
       data-slot="calendar"
       className={cn(
-        'p-2 bg-surface-raised rounded-md border border-border-default shadow-1 w-fit',
+        'p-2 bg-surface-raised rounded-md border border-border-default shadow-1 w-full',
         className,
       )}
     >
