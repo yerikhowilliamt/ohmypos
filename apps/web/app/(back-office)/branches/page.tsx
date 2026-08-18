@@ -1,18 +1,18 @@
 import type { Metadata } from 'next';
 import { requireRole } from '@/lib/session';
-import { UsersClient } from './UsersClient';
+import { BranchesClient } from './BranchesClient';
 
 export const metadata: Metadata = {
-  title: 'Pengguna — OhMyPos',
-  description: 'Kelola akun staf dan peran akses',
+  title: 'Cabang — OhMyPos',
+  description: 'Kelola daftar cabang',
 };
 
-export default async function Page() {
+export default async function BranchesPage() {
   await requireRole(['OWNER']);
 
   return (
     <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
-      <UsersClient />
+      <BranchesClient />
     </main>
   );
 }
