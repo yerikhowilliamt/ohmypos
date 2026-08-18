@@ -265,6 +265,18 @@
 - **Priority:** Low
 - **Status:** Open
 
+### DEBT-023 — Seed script writes KASIR rows with `branchId: null`, bypassing the role/branch invariant
+
+- **Date logged:** 2026-08-18
+- **Found during:** TASK-024 (Phase 9 manual browser smoke test) — the Users table showed "—" in the Cabang column for both seeded KASIR accounts.
+- **Description:** `apps/api/prisma/seed.ts` inserts KASIR users via `prisma.user.createMany` directly against Prisma, not through `UsersService.create()`. That bypasses `assertRoleBranchConsistent` entirely, so the two seeded KASIR accounts (`kasir@ohmypos.local`, `qa.kasir@ohmypos.local`) ended up with `branchId: null` in the local dev database — a state `UsersService`/`packages/api-contracts` treat as invalid everywhere a real request goes through the service layer (ADR-011 §2).
+- **Why deferred:** Discovered incidentally while smoke-testing Phase 9's new Users UI, not something Phase 9 was scoped to fix — the seed script is shared infrastructure outside this task's file list, and fixing it means deciding whether the seed should hardcode a branch id or create one first, which is a small design choice better made deliberately than as a drive-by edit.
+- **Impact if unaddressed:** Anyone running `db:seed` gets KASIR accounts that can log in (auth doesn't check this) but are invisible to any future branch-scoped reporting/filtering that assumes every KASIR has a branch — a state that could otherwise only be reached by a bug, now reachable by just seeding fresh.
+- **Trigger condition:** Next time `seed.ts` is touched for any reason, or before any task that relies on seeded KASIR accounts already having a valid branch assignment.
+- **Proposed resolution:** Have `seed.ts` create (or look up) a branch before creating its KASIR rows and assign `branchId` to it, so the seed itself satisfies the same invariant the service layer enforces — or route seed user-creation through `UsersService` instead of `prisma.user.createMany` directly, which would catch this class of drift automatically in the future.
+- **Priority:** Low
+- **Status:** Open
+
 ---
 
 ## Resolved

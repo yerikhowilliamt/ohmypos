@@ -24,6 +24,7 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { href: '/inventory', label: 'Inventaris' },
     { href: '/reports', label: 'Laporan' },
     { href: '/users', label: 'Pengguna' },
+    { href: '/branches', label: 'Cabang' },
   ],
 };
 
