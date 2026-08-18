@@ -233,6 +233,7 @@ export function GeneralExpenseFormDialog({
                       ariaLabel="Tanggal pengeluaran"
                       ariaInvalid={Boolean(errors.entryDate)}
                       value={field.value}
+                      side="top"
                       onChange={field.onChange}
                     />
                   )}

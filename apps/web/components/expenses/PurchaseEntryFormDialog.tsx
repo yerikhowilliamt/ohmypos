@@ -329,6 +329,7 @@ export function PurchaseEntryFormDialog({
                         ariaLabel="Tanggal pembelian"
                         ariaInvalid={Boolean(errors.purchaseDate)}
                         value={field.value}
+                        side="bottom"
                         onChange={field.onChange}
                       />
                     )}

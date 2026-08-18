@@ -82,6 +82,23 @@ export function formatMarginPercentage(
 }
 
 /**
+ * Formats an already-computed percentage (report marginPct / sharePct /
+ * netMarginPct — DailyIncome, ProductProfit, IncomeByPaymentMethod, ProfitLoss
+ * response fields) as an Indonesian-locale string. `null` means the API
+ * couldn't compute it (zero denominator, PRD §5.2) — never NaN, so `null` is
+ * the only falsy case that returns the fallback dash.
+ */
+export function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '—';
+  }
+  return `${new Intl.NumberFormat('id-ID', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value)}%`;
+}
+
+/**
  * Formats a raw number string into Indonesian thousand-separated display format with dots.
  * e.g. "20000" -> "20.000", "1500000" -> "1.500.000"
  */
