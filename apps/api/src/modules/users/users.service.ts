@@ -76,7 +76,27 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUser): Promise<UserResponse> {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+
+    // A patch may touch only role or only branchId (e.g. reassigning a KASIR
+    // to a different branch without changing their role) — validate the
+    // *merged* state, not just the fields sent, or a caller could leave a
+    // stray branchId on a user just promoted to ADMIN, or null out a KASIR's
+    // required branchId while leaving their role untouched.
+    const mergedRole = dto.role ?? existing.role;
+    const mergedBranchId =
+      dto.branchId !== undefined ? dto.branchId : existing.branchId;
+    this.assertRoleBranchConsistent(mergedRole, mergedBranchId ?? null);
+
+    if (dto.branchId) {
+      const branch = await this.prisma.branch.findUnique({
+        where: { id: dto.branchId },
+      });
+      if (!branch) {
+        throw new NotFoundException(`Branch with ID ${dto.branchId} not found`);
+      }
+    }
+
     try {
       const user = await this.prisma.user.update({ where: { id }, data: dto });
       return this.toResponse(user);
