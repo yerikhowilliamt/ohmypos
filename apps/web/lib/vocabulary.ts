@@ -77,6 +77,21 @@ export function getFlowIndicatorClasses(
 }
 
 /**
+ * Sign-based Flow Indicator (DESIGN.md §37) for report figures that are
+ * legitimately negative — grossProfit, netProfit, netCashFlow (ADR-017 §2) —
+ * where there is no INFLOW/OUTFLOW literal to key off of, only a signed
+ * amount. Same tokens as `getFlowIndicatorClasses`; a separate function so
+ * that helper's existing direction-based signature and call sites (Inventory,
+ * POS) are untouched.
+ */
+export function getFlowIndicatorClassesForAmount(
+  amount: string | number,
+): string {
+  const numeric = typeof amount === 'string' ? Number(amount) : amount;
+  return numeric < 0 ? 'text-accent-outflow' : 'text-accent-inflow';
+}
+
+/**
  * Returns badge variant styling classes for stock status (DESIGN.md §9).
  */
 export function getStockStatusBadgeClasses(status: StockStatus): string {

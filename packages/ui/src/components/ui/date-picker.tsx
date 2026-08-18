@@ -23,6 +23,7 @@ export interface DatePickerProps {
   ariaInvalid?: boolean;
   minDate?: Date;
   maxDate?: Date;
+  side?: 'top' | 'bottom';
   className?: string;
 }
 
@@ -57,6 +58,7 @@ export function DatePicker({
   ariaInvalid = false,
   minDate,
   maxDate,
+  side = 'bottom',
   className,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
@@ -92,12 +94,13 @@ export function DatePicker({
           {value ? formatDisplayDate(value) : placeholder}
         </Button>
       </PopoverTrigger>
-      {/* side="top" + avoidCollisions={false}: content stays anchored ABOVE the
-          trigger and never flips below, regardless of available space */}
+      {/* avoidCollisions={false}: content stays anchored on the requested side
+    and never flips, regardless of available space — callers choose the
+    side via the `side` prop (default 'top'). */}
       <PopoverContent
-        className="w-auto p-0"
+        className="max-w-md p-0"
         align="start"
-        side="top"
+        side={side}
         avoidCollisions={false}
       >
         <Calendar

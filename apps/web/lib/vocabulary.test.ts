@@ -11,6 +11,7 @@ import {
   formatTransactionStatus,
   formatTransactionType,
   getFlowIndicatorClasses,
+  getFlowIndicatorClassesForAmount,
   getPaymentStatusBadgeClasses,
   getStockStatusBadgeClasses,
   getTransactionStatusBadgeClasses,
@@ -107,6 +108,25 @@ describe('Indonesian Vocabulary Translation (DEBT-003)', () => {
     it('returns blue outflow text for OUTFLOW and OUT', () => {
       expect(getFlowIndicatorClasses('OUTFLOW')).toBe('text-accent-outflow');
       expect(getFlowIndicatorClasses('OUT')).toBe('text-accent-outflow');
+    });
+
+    it('returns green inflow text for a positive or zero signed amount (report figures)', () => {
+      expect(getFlowIndicatorClassesForAmount(96540000)).toBe(
+        'text-accent-inflow',
+      );
+      expect(getFlowIndicatorClassesForAmount('96540000.00')).toBe(
+        'text-accent-inflow',
+      );
+      expect(getFlowIndicatorClassesForAmount(0)).toBe('text-accent-inflow');
+    });
+
+    it('returns outflow text for a negative signed amount — a loss period (ADR-017 §2)', () => {
+      expect(getFlowIndicatorClassesForAmount(-500000)).toBe(
+        'text-accent-outflow',
+      );
+      expect(getFlowIndicatorClassesForAmount('-500000.00')).toBe(
+        'text-accent-outflow',
+      );
     });
 
     it('returns proper badge classes for StockStatus', () => {
