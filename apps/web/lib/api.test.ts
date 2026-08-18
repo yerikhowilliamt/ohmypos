@@ -90,4 +90,35 @@ describe('apiFetch', () => {
     ).rejects.toBeInstanceOf(ApiError);
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('omits Content-Type for a FormData body so the browser sets the boundary', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(200, { imported: 3, skipped: 0, total: 3 }),
+    );
+
+    const form = new FormData();
+    form.append('file', new File(['a,b\n1,2'], 'statement.csv'));
+
+    await apiFetch('/import/csv/acc-1?format=BCA', {
+      method: 'POST',
+      body: form,
+    });
+
+    const init = vi.mocked(fetch).mock.calls[0]?.[1];
+    expect(init?.headers).not.toHaveProperty('Content-Type');
+  });
+
+  it('still sets Content-Type for a JSON body', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+
+    await apiFetch('/allocations', {
+      method: 'POST',
+      body: JSON.stringify({ a: 1 }),
+    });
+
+    const init = vi.mocked(fetch).mock.calls[0]?.[1];
+    expect(init?.headers).toMatchObject({
+      'Content-Type': 'application/json',
+    });
+  });
 });

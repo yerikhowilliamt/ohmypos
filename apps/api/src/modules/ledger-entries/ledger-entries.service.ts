@@ -79,11 +79,20 @@ export class LedgerEntriesService {
     const { page, limit, sortBy } = query;
     const skip = (page - 1) * limit;
 
+    const entryDateFilter: Prisma.DateTimeFilter | undefined =
+      query.startDate || query.endDate
+        ? {
+            ...(query.startDate && { gte: new Date(query.startDate) }),
+            ...(query.endDate && { lte: new Date(query.endDate) }),
+          }
+        : undefined;
+
     const where: Prisma.LedgerEntryWhereInput = {
       ...(query.branchId && { branchId: query.branchId }),
       ...(query.categoryId && { categoryId: query.categoryId }),
       ...(query.accountId && { accountId: query.accountId }),
       ...(query.type && { type: query.type }),
+      ...(entryDateFilter && { entryDate: entryDateFilter }),
     };
 
     const [data, total] = await Promise.all([

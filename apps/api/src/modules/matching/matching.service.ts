@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { ProposeMatches } from '@ohmypos/api-contracts';
 import Decimal from 'decimal.js';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -74,6 +78,40 @@ export class MatchingService {
     }
 
     return candidates;
+  }
+
+  /**
+   * Rejects a single proposed match, returning that one bank transaction to
+   * UNRESOLVED. Frontend Reconciliation screen's "Abaikan" action
+   * (docs/plannings/phase-8h-reconciliation.md §6.2) — unlike `resetMatches`,
+   * this scopes to exactly one transaction rather than every PENDING_REVIEW
+   * row for an account.
+   *
+   * Only valid from PENDING_REVIEW: that is the only status `proposeMatches`
+   * ever writes, and the only status a "reject one candidate" action makes
+   * sense against.
+   */
+  async rejectMatch(bankTransactionId: string) {
+    const transaction = await this.prisma.bankTransaction.findUnique({
+      where: { id: bankTransactionId },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(
+        `Bank transaction with id ${bankTransactionId} not found`,
+      );
+    }
+
+    if (transaction.status !== 'PENDING_REVIEW') {
+      throw new ConflictException(
+        `Bank transaction ${bankTransactionId} is not pending review (current status: ${transaction.status})`,
+      );
+    }
+
+    return this.prisma.bankTransaction.update({
+      where: { id: bankTransactionId },
+      data: { status: 'UNRESOLVED' },
+    });
   }
 
   async resetMatches(accountId?: string) {
