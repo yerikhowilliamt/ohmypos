@@ -1,19 +1,20 @@
 'use client';
 
-import * as React from 'react';
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Line,
   LineChart,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
-  type TooltipContentProps,
-  type TooltipPayloadEntry,
 } from 'recharts';
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@ohmypos/ui/components/chart';
 
 /**
  * OhMyPos — shared Recharts theme for Dashboard 3 (DESIGN.md §36/§37: "Charts
@@ -37,8 +38,6 @@ export type ChartRow = Record<string, string | number>;
 
 const GRID_COLOR = 'var(--color-border-default)';
 const AXIS_TEXT_COLOR = 'var(--color-text-tertiary)';
-const TOOLTIP_BG = 'var(--color-surface-raised)';
-const TOOLTIP_BORDER = 'var(--color-border-default)';
 
 export const CHART_COLORS = [
   'var(--color-brand-primary)',
@@ -55,41 +54,6 @@ function compactNumber(value: number): string {
     notation: 'compact',
     compactDisplay: 'short',
   }).format(value);
-}
-
-function ChartTooltip({
-  active,
-  payload,
-  label,
-  valueFormatter,
-}: TooltipContentProps & {
-  valueFormatter: (v: number) => string;
-}) {
-  if (!active || !payload || payload.length === 0) return null;
-  return (
-    <div
-      className="rounded-md border px-3 py-2 text-xs shadow-1"
-      style={{
-        background: TOOLTIP_BG,
-        borderColor: TOOLTIP_BORDER,
-        color: 'var(--color-text-primary)',
-      }}
-    >
-      <p className="mb-1 font-semibold">{label}</p>
-      {payload.map((entry: TooltipPayloadEntry) => (
-        <p key={String(entry.dataKey)} className="flex items-center gap-2">
-          <span
-            className="inline-block size-2 rounded-full"
-            style={{ background: entry.color }}
-          />
-          <span className="text-text-secondary">{entry.name}:</span>
-          <span className="font-mono tabular-nums">
-            {valueFormatter(Number(entry.value ?? 0))}
-          </span>
-        </p>
-      ))}
-    </div>
-  );
 }
 
 /** Shown in place of a chart when the report range has no rows (empty, not an error). */
@@ -127,40 +91,58 @@ export function ReportBarChart({
   tickFormatter = compactNumber,
   tooltipFormatter = tickFormatter,
 }: ReportBarChartProps) {
+  const chartConfig = Object.fromEntries(
+    bars.map((bar, index) => [
+      bar.key,
+      {
+        label: bar.label,
+        color: bar.color ?? CHART_COLORS[index % CHART_COLORS.length],
+      },
+    ]),
+  ) as ChartConfig;
+
+  const barTooltipFormatter = (value: unknown, name: unknown) => (
+    <span className="flex items-center gap-2">
+      <span className="text-text-secondary">{String(name)}:</span>
+      <span className="font-mono tabular-nums">
+        {tooltipFormatter(Number(value ?? 0))}
+      </span>
+    </span>
+  );
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
-        <XAxis
-          dataKey={xKey}
-          tick={axisTickStyle}
-          axisLine={{ stroke: GRID_COLOR }}
-          tickLine={false}
-        />
-        <YAxis
-          tick={axisTickStyle}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={(v: number) => tickFormatter(v)}
-          width={64}
-        />
-        <Tooltip
-          content={(props) => (
-            <ChartTooltip {...props} valueFormatter={tooltipFormatter} />
-          )}
-          cursor={{ fill: 'var(--color-surface-muted)' }}
-        />
-        {bars.map((bar, index) => (
-          <Bar
-            key={bar.key}
-            dataKey={bar.key}
-            name={bar.label}
-            fill={bar.color ?? CHART_COLORS[index % CHART_COLORS.length]}
-            radius={[4, 4, 0, 0]}
+    <div style={{ height }} className="w-full">
+      <ChartContainer config={chartConfig} className="h-full w-full">
+        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+          <XAxis
+            dataKey={xKey}
+            tick={axisTickStyle}
+            axisLine={{ stroke: GRID_COLOR }}
+            tickLine={false}
           />
-        ))}
-      </BarChart>
-    </ResponsiveContainer>
+          <YAxis
+            tick={axisTickStyle}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v: number) => tickFormatter(v)}
+            width={64}
+          />
+          <ChartTooltip
+            content={<ChartTooltipContent formatter={barTooltipFormatter} />}
+          />
+          {bars.map((bar) => (
+            <Bar
+              key={bar.key}
+              dataKey={bar.key}
+              name={bar.label}
+              fill={`var(--color-${bar.key})`}
+              radius={[4, 4, 0, 0]}
+            />
+          ))}
+        </BarChart>
+      </ChartContainer>
+    </div>
   );
 }
 
@@ -188,39 +170,62 @@ export function ReportLineChart({
   tickFormatter = compactNumber,
   tooltipFormatter = tickFormatter,
 }: ReportLineChartProps) {
+  const chartConfig = {
+    [yKey]: { label, color },
+  } as ChartConfig;
+
+  const lineTooltipFormatter = (value: unknown, name: unknown) => (
+    <span className="flex items-center gap-2">
+      <span className="text-text-secondary">{String(name)}:</span>
+      <span className="font-mono tabular-nums">
+        {tooltipFormatter(Number(value ?? 0))}
+      </span>
+    </span>
+  );
+
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid stroke={GRID_COLOR} vertical={false} />
-        <XAxis
-          dataKey={xKey}
-          tick={axisTickStyle}
-          axisLine={{ stroke: GRID_COLOR }}
-          tickLine={false}
-        />
-        <YAxis
-          tick={axisTickStyle}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={(v: number) => tickFormatter(v)}
-          width={64}
-        />
-        <Tooltip
-          content={(props) => (
-            <ChartTooltip {...props} valueFormatter={tooltipFormatter} />
-          )}
-          cursor={{ stroke: GRID_COLOR }}
-        />
-        <Line
-          type="monotone"
-          dataKey={yKey}
-          name={label}
-          stroke={color}
-          strokeWidth={2}
-          dot={false}
-          activeDot={{ r: 4 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <div style={{ height }} className="w-full">
+      <ChartContainer config={chartConfig} className="h-full w-full">
+        <LineChart
+          data={data}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
+          <CartesianGrid stroke={GRID_COLOR} vertical={false} />
+          <XAxis
+            dataKey={xKey}
+            tick={axisTickStyle}
+            axisLine={{ stroke: GRID_COLOR }}
+            tickLine={false}
+          />
+          <YAxis
+            tick={axisTickStyle}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v: number) => tickFormatter(v)}
+            width={64}
+          />
+          <ChartTooltip
+            cursor={{ stroke: GRID_COLOR }}
+            content={
+              <ChartTooltipContent
+                labelFormatter={(label) => (
+                  <span className="font-semibold">{String(label)}</span>
+                )}
+                formatter={lineTooltipFormatter}
+              />
+            }
+          />
+          <Line
+            type="monotone"
+            dataKey={yKey}
+            name={label}
+            stroke={`var(--color-${yKey})`}
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+        </LineChart>
+      </ChartContainer>
+    </div>
   );
 }
