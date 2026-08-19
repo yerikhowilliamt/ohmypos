@@ -4,8 +4,12 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -225,6 +229,86 @@ export function ReportLineChart({
             activeDot={{ r: 4 }}
           />
         </LineChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
+export interface PieChartItem {
+  name: string;
+  value: number;
+  percentage: number;
+  color?: string;
+}
+
+interface ReportPieChartProps {
+  data: PieChartItem[];
+  height?: number;
+  valueFormatter?: (value: number) => string;
+}
+
+/** Donut / Pie chart for distribution metrics with percentage share */
+export function ReportPieChart({
+  data,
+  height = 260,
+  valueFormatter = compactNumber,
+}: ReportPieChartProps) {
+  const chartConfig = Object.fromEntries(
+    data.map((item, index) => [
+      item.name,
+      {
+        label: item.name,
+        color: item.color ?? CHART_COLORS[index % CHART_COLORS.length],
+      },
+    ]),
+  ) as ChartConfig;
+
+  const pieTooltipFormatter = (value: unknown, name: unknown) => {
+    const item = data.find((d) => d.name === name);
+    return (
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="text-text-secondary">{String(name)}:</span>
+          <span className="font-mono tabular-nums font-semibold">
+            {valueFormatter(Number(value ?? 0))}
+          </span>
+        </div>
+        {item && (
+          <span className="text-xs text-text-tertiary">
+            Porsi: {item.percentage.toFixed(1)}%
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ height }} className="w-full">
+      <ChartContainer config={chartConfig} className="h-full w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <ChartTooltip
+              content={<ChartTooltipContent formatter={pieTooltipFormatter} />}
+            />
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+            >
+              {data.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={
+                    entry.color ?? CHART_COLORS[index % CHART_COLORS.length]
+                  }
+                />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
       </ChartContainer>
     </div>
   );

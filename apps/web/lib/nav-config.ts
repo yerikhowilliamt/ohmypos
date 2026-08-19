@@ -28,7 +28,14 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     },
   ],
   ADMIN: [
-    { href: '/master-data', label: 'Data Master' },
+    {
+      href: '/master-data',
+      label: 'Data Master',
+      children: [
+        { href: '/master-data', label: 'Produk & Resep' },
+        { href: '/master-data/raw-materials', label: 'Bahan Baku' },
+      ],
+    },
     { href: '/accounts', label: 'Metode Pembayaran' },
     { href: '/reconciliation', label: 'Rekonsiliasi' },
   ],
@@ -42,12 +49,40 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
         { href: '/sales/history', label: 'Riwayat Transaksi' },
       ],
     },
-    { href: '/master-data', label: 'Data Master' },
+    {
+      href: '/master-data',
+      label: 'Data Master',
+      children: [
+        { href: '/master-data', label: 'Produk & Resep' },
+        { href: '/master-data/raw-materials', label: 'Bahan Baku' },
+      ],
+    },
     { href: '/accounts', label: 'Metode Pembayaran' },
     { href: '/reconciliation', label: 'Rekonsiliasi' },
-    { href: '/expenses', label: 'Pengeluaran' },
+    {
+      href: '/expenses',
+      label: 'Pengeluaran',
+      children: [
+        { href: '/expenses', label: 'Pengeluaran Umum' },
+        { href: '/expenses/purchases', label: 'Pembelian' },
+        { href: '/expenses/payables', label: 'Utang' },
+      ],
+    },
     { href: '/inventory', label: 'Inventaris' },
-    { href: '/reports', label: 'Laporan' },
+    {
+      href: '/reports',
+      label: 'Laporan',
+      children: [
+        { href: '/reports', label: 'Laba Rugi' },
+        { href: '/reports/product-profit', label: 'Laba per Produk' },
+        {
+          href: '/reports/payment-methods',
+          label: 'Pendapatan per Metode Bayar',
+        },
+        { href: '/reports/top-products', label: '10 Produk Terlaris' },
+        { href: '/reports/daily', label: 'Pendapatan Harian' },
+      ],
+    },
     { href: '/users', label: 'Pengguna' },
     { href: '/branches', label: 'Cabang' },
   ],
