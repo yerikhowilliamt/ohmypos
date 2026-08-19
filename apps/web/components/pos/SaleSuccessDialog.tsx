@@ -16,6 +16,7 @@ import { formatCurrency, formatQuantity } from '@/lib/formatters';
 interface SaleSuccessDialogProps {
   sale: SaleResponse | null;
   onClose: () => void;
+  businessName?: string;
 }
 
 /**
@@ -26,20 +27,35 @@ interface SaleSuccessDialogProps {
  * just created. Nothing shown here is recomputed client-side — `totalAmount` is
  * the server's number.
  */
-export function SaleSuccessDialog({ sale, onClose }: SaleSuccessDialogProps) {
+export function SaleSuccessDialog({
+  sale,
+  onClose,
+  businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME || 'OhMyPos',
+}: SaleSuccessDialogProps) {
   return (
     <Dialog open={sale !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
+          <div className="space-y-0.5">
+            <h2 className="text-base font-bold text-text-primary">
+              {businessName}
+            </h2>
+            {sale && (
+              <p className="text-xs text-text-secondary">
+                Cabang {sale.branchName}
+              </p>
+            )}
+          </div>
           <DialogTitle>Penjualan tercatat</DialogTitle>
           <DialogDescription>
             {sale
-              ? `${sale.branchName} · ${sale.accountName} · ${new Date(
-                  sale.soldAt,
-                ).toLocaleString('id-ID', {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                })}`
+              ? `${sale.accountName} · ${new Date(sale.soldAt).toLocaleString(
+                  'id-ID',
+                  {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  },
+                )}`
               : null}
           </DialogDescription>
         </DialogHeader>

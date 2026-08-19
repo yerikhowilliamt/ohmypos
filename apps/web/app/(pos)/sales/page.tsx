@@ -3,13 +3,9 @@ import { PosScreen } from '@/components/pos/PosScreen';
 import { getSession } from '@/lib/session';
 
 /**
- * POS / Sales Entry (PRD §5.2, DESIGN.md §20). The only route a KASIR can reach —
- * `(pos)/layout.tsx` already gates the role; this page resolves the session again
- * only to read `branchId`, which `CreateSaleSchema` requires and which must come
- * from the server, never from client state.
- *
- * `AppShell` supplies the `<main>` wrapper and the sidebar, so this renders the
- * two remaining zones directly.
+ * POS / Sales Entry (PRD §5.2, DESIGN.md §20).
+ * Accessible by KASIR and OWNER. For KASIR, user.branchId is required.
+ * For OWNER, if user.branchId is not set, they are prompted or can access via branch selection.
  */
 export default async function SalesPage() {
   const user = await getSession();
@@ -18,10 +14,10 @@ export default async function SalesPage() {
     redirect('/login');
   }
 
-  // ADR-011 §2: `branchId` is required when `role = KASIR` and null otherwise.
+  // ADR-011 §2: `branchId` is required when `role = KASIR`.
   // A KASIR without one cannot record a sale — `BranchScopeGuard` would reject
   // every attempt — so this fails loudly here rather than at submit time.
-  if (!user.branchId) {
+  if (!user.branchId && user.role === 'KASIR') {
     return (
       <div
         role="alert"
@@ -33,5 +29,17 @@ export default async function SalesPage() {
     );
   }
 
-  return <PosScreen branchId={user.branchId} />;
+  if (!user.branchId && user.role === 'OWNER') {
+    return (
+      <div
+        role="alert"
+        className="rounded-sm border border-status-warning/30 bg-status-warning/10 p-4 text-sm text-status-warning"
+      >
+        Akun Owner Anda belum terhubung ke cabang aktif. Silakan pilih cabang di
+        pengaturan pengguna atau gunakan akun Kasir cabang untuk bertransaksi.
+      </div>
+    );
+  }
+
+  return <PosScreen branchId={user.branchId!} />;
 }

@@ -32,15 +32,46 @@ export function Sidebar({ role }: { role: UserRole }) {
 
       <nav className="mt-2 flex flex-col gap-1">
         {items.map((item) => {
-          const active =
+          const hasChildren = item.children && item.children.length > 0;
+          const isExactOrSub =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+          if (hasChildren) {
+            return (
+              <div key={item.href} className="flex flex-col gap-1">
+                <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+                  {item.label}
+                </div>
+                <div className="flex flex-col gap-0.5 pl-2 border-l border-border-default ml-2">
+                  {item.children!.map((child) => {
+                    const active = pathname === child.href;
+                    return (
+                      <Link
+                        key={child.href}
+                        href={child.href}
+                        className={cn(
+                          'rounded-sm px-3 py-1.5 text-sm font-medium transition-colors',
+                          active
+                            ? 'bg-brand-primary text-white font-semibold shadow-1'
+                            : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
+                        )}
+                      >
+                        {child.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
                 'rounded-sm px-3 py-2 text-sm font-medium transition-colors',
-                active
+                isExactOrSub
                   ? 'bg-brand-primary text-white font-semibold shadow-1'
                   : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
               )}

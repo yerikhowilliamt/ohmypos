@@ -69,8 +69,40 @@ export function MobileNavDrawer({ user, open, onClose }: MobileNavDrawerProps) {
           {/* Nav Links */}
           <nav className="flex flex-col gap-1 overflow-y-auto max-h-[calc(100vh-220px)]">
             {items.map((item) => {
-              const active =
+              const hasChildren = item.children && item.children.length > 0;
+              const isExactOrSub =
                 pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+              if (hasChildren) {
+                return (
+                  <div key={item.href} className="flex flex-col gap-1 mt-1">
+                    <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">
+                      {item.label}
+                    </div>
+                    <div className="flex flex-col gap-1 pl-2 border-l border-border-default ml-2">
+                      {item.children!.map((child) => {
+                        const active = pathname === child.href;
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={onClose}
+                            className={cn(
+                              'rounded-sm px-3 py-2 text-sm font-medium transition-colors',
+                              active
+                                ? 'bg-brand-primary text-white font-semibold shadow-1'
+                                : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
+                            )}
+                          >
+                            {child.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}
@@ -78,7 +110,7 @@ export function MobileNavDrawer({ user, open, onClose }: MobileNavDrawerProps) {
                   onClick={onClose}
                   className={cn(
                     'rounded-sm px-3 py-2.5 text-sm font-medium transition-colors',
-                    active
+                    isExactOrSub
                       ? 'bg-brand-primary text-white font-semibold shadow-1'
                       : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
                   )}

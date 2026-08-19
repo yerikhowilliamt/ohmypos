@@ -1,8 +1,14 @@
 import type { UserRole } from '@ohmypos/api-contracts';
 
+export type NavChildItem = {
+  href: string;
+  label: string;
+};
+
 export type NavItem = {
   href: string;
   label: string;
+  children?: NavChildItem[];
 };
 
 /**
@@ -11,7 +17,16 @@ export type NavItem = {
  * hiding a link a role can't reach — never the actual access control.
  */
 const NAV_ITEMS: Record<UserRole, NavItem[]> = {
-  KASIR: [{ href: '/sales', label: 'Penjualan' }],
+  KASIR: [
+    {
+      href: '/sales',
+      label: 'Penjualan',
+      children: [
+        { href: '/sales', label: 'Transaksi Kasir' },
+        { href: '/sales/history', label: 'Riwayat Transaksi' },
+      ],
+    },
+  ],
   ADMIN: [
     { href: '/master-data', label: 'Data Master' },
     { href: '/accounts', label: 'Metode Pembayaran' },
@@ -19,6 +34,14 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
   ],
   OWNER: [
     { href: '/dashboard', label: 'Dashboard' },
+    {
+      href: '/sales',
+      label: 'Penjualan',
+      children: [
+        { href: '/sales', label: 'Transaksi Kasir' },
+        { href: '/sales/history', label: 'Riwayat Transaksi' },
+      ],
+    },
     { href: '/master-data', label: 'Data Master' },
     { href: '/accounts', label: 'Metode Pembayaran' },
     { href: '/reconciliation', label: 'Rekonsiliasi' },
