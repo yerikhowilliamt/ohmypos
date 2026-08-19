@@ -6,18 +6,20 @@ describe('getNavItems', () => {
     expect(getNavItems('KASIR').map((item) => item.href)).toEqual(['/sales']);
   });
 
-  it('returns master-data and reconciliation for ADMIN, and nothing else', () => {
+  it('returns master-data, accounts, and reconciliation for ADMIN', () => {
     expect(getNavItems('ADMIN').map((item) => item.href)).toEqual([
       '/master-data',
+      '/accounts',
       '/reconciliation',
     ]);
   });
 
-  it('returns all eight back-office routes for OWNER, dashboard first, and never /sales', () => {
+  it('returns all nine back-office routes for OWNER, dashboard first, and never /sales', () => {
     const hrefs = getNavItems('OWNER').map((item) => item.href);
     expect(hrefs).toEqual([
       '/dashboard',
       '/master-data',
+      '/accounts',
       '/reconciliation',
       '/expenses',
       '/inventory',

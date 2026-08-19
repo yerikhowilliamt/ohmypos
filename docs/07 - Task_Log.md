@@ -41,6 +41,23 @@
 
 ## Log
 
+### TASK-026 — Payment Methods (Accounts) Management UI & POS Revamp Preparation
+
+- **Date:** 2026-08-19
+- **Module / Phase:** Phase UI Revamp / Payment Methods Management (`(back-office)/accounts`)
+- **Objective:** Sediakan UI manajemen Metode Pembayaran / Akun Kas & Bank (`(back-office)/accounts`) untuk role ADMIN dan OWNER guna mendukung fleksibilitas konfigurasi metode pembayaran (Kas Tunai, E-Wallet, QRIS, Bank Transfer) yang dikonsumsi POS dan rekonsiliasi.
+- **Relevant docs:** PRD §5.1, ADR-004, ADR-010, ADR-011, DESIGN.md
+- **What was done:**
+  1. **Frontend UI (`(back-office)/accounts`):** Membuat `page.tsx`, `AccountsClient.tsx`, `AccountsTable.tsx`, dan `AccountFormDialog.tsx` untuk CRUD akun kas/bank (nama, tipe akun `CASH`/`BANK`/`EWALLET`, kas awal / opening balance).
+  2. **Frontend Hooks (`apps/web/hooks/useAccounts.ts`):** Mengimplementasikan TanStack Query hooks `useAccounts`, `useCreateAccount`, `useUpdateAccount`, `useDeleteAccount`.
+  3. **Navigasi (`apps/web/lib/nav-config.ts`):** Mendaftarkan route `/accounts` (Metode Pembayaran) untuk role ADMIN dan OWNER. Update unit tests di `nav-config.test.ts`.
+  4. **Database Seed (`apps/api/prisma/seed.ts`):** Menambahkan seed akun default untuk QRIS dan E-Wallet serta memperbarui penamaan Transfer Bank.
+  5. **DESIGN.md Update:** Memperbarui spesifikasi layout dan komponen POS sesuai referensi Konteks POS 3-Zone layout.
+- **Status:** Done
+- **Handoff notes:** `turbo run lint typecheck test` all green (web: 256 unit tests passed, api: 145 unit tests passed).
+
+---
+
 ### TASK-025 — Phase 10a: Profile Self-Service (name, password, delete-own-account)
 
 - **Date:** 2026-08-18

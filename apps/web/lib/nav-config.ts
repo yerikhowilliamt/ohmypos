@@ -14,11 +14,13 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
   KASIR: [{ href: '/sales', label: 'Penjualan' }],
   ADMIN: [
     { href: '/master-data', label: 'Data Master' },
+    { href: '/accounts', label: 'Metode Pembayaran' },
     { href: '/reconciliation', label: 'Rekonsiliasi' },
   ],
   OWNER: [
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/master-data', label: 'Data Master' },
+    { href: '/accounts', label: 'Metode Pembayaran' },
     { href: '/reconciliation', label: 'Rekonsiliasi' },
     { href: '/expenses', label: 'Pengeluaran' },
     { href: '/inventory', label: 'Inventaris' },
