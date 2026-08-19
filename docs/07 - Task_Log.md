@@ -41,6 +41,29 @@
 
 ## Log
 
+### TASK-027 — Split Sales Navigation, Sales History & Receipt Printing
+
+- **Date:** 2026-08-19
+- **Module / Phase:** Phase 8c Addendum / Sales History & Struk (`(pos)/sales/history`)
+- **Objective:** Pisahkan menu Penjualan di sidebar menjadi sub-menu Transaksi Kasir (`/sales`) dan Riwayat Transaksi (`/sales/history`), serta sediakan UI preview & cetak struk (faktur kasir) dengan nama usaha dan cabang.
+- **Relevant docs:** PRD §5.2, ADR-011, DESIGN.md
+- **What was done:**
+  1. **Navigasi Nested (`apps/web/lib/nav-config.ts`):** Menambahkan dukungan nested items `children` pada `NavItem`. Membuka menu sub-item Penjualan (`Transaksi Kasir` dan `Riwayat Transaksi`) untuk role `KASIR` dan `OWNER`.
+  2. **Sidebar & Mobile Navigation:** Memperbarui `Sidebar.tsx` dan `MobileNavDrawer.tsx` agar merender sub-menu berjenjang dengan active indicator yang presisi.
+  3. **Role Gating:** Memperbarui `(pos)/layout.tsx` dan `/sales/page.tsx` untuk mengizinkan role `KASIR` dan `OWNER`.
+  4. **Riwayat Penjualan (`apps/web/app/(pos)/sales/history`):**
+     - Membuat `page.tsx` dan `SalesHistoryClient.tsx` dengan filter cabang (khusus Owner) dan date-range filter.
+     - Membuat `SalesHistoryTable.tsx` berbasis `DataTable` lengkap dengan pencarian dan sorting.
+     - Menambahkan hook `useSales` di `apps/web/hooks/usePos.ts`.
+  5. **Struk & Invoice (`SaleReceiptDialog.tsx` & `SaleSuccessDialog.tsx`):**
+     - Menampilkan nama usaha (`NEXT_PUBLIC_BUSINESS_NAME` / fallback) dan nama cabang.
+     - Mendukung aksi cetak struk via `window.print()`.
+  6. **Testing:** Menambahkan unit test `SalesHistoryTable.test.tsx` dan memperbarui `nav-config.test.ts`.
+- **Status:** Done
+- **Handoff notes:** Semua unit tests dan linter pass (40 test suites, 257 tests passed). PR diajukan ke branch `dev`.
+
+---
+
 ### TASK-026 — Payment Methods (Accounts) Management UI & POS Revamp Preparation
 
 - **Date:** 2026-08-19

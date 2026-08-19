@@ -39,6 +39,20 @@
 
 ## Log
 
+### DEBT-008 — Thermal printer ESC/POS command integration for receipts
+
+- **Date logged:** 2026-08-19
+- **Found during:** TASK-027 (Sales History & Receipt Printing)
+- **Description:** Struk penjualan saat ini dicetak menggunakan dialog browser standar (`window.print()`). Integrasi direct printing ke Bluetooth/USB thermal printer via ESC/POS protocol / WebUSB / WebBluetooth belum diimplementasikan.
+- **Why deferred:** Browser print dialog sudah mencukupi untuk MVP desktop/tablet, format CSS `@media print` sudah rapi, dan menghindari dependensi hardware khusus di tahap awal.
+- **Impact if unaddressed:** Pengguna POS fisik perlu konfirmasi manual di dialog cetak browser setiap kali print struk ke thermal printer.
+- **Trigger condition:** Merchant membutuhkan print cepat otomatis 58mm/80mm tanpa popup print browser.
+- **Proposed resolution:** Implementasi driver client WebBluetooth / WebUSB atau websocket print service lokal dengan payload ESC/POS.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
 ### DEBT-001 — Reports computed at query time, no materialized views
 
 - **Date logged:** 2026-08-12
