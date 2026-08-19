@@ -18,14 +18,14 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-surface-base">
-      <Sidebar role={user.role} />
+      <Sidebar user={user} />
       <MobileNavDrawer
         user={user}
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
       />
       <div className="flex flex-1 flex-col min-w-0">
-        <Topbar user={user} onOpenMobileNav={() => setMobileNavOpen(true)} />
+        <Topbar onOpenMobileNav={() => setMobileNavOpen(true)} />
         <main className="flex-1 p-3.5 sm:p-6 overflow-x-hidden">
           {children}
         </main>

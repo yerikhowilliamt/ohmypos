@@ -4,11 +4,11 @@ import { requireRole } from '@/lib/session';
 import { ReportsClient } from '@/components/reports/ReportsClient';
 
 export const metadata: Metadata = {
-  title: 'Laba Rugi — Laporan — OhMyPos',
-  description: 'Laporan laba rugi dan performa keuangan bisnis',
+  title: 'Laba per Produk — Laporan — OhMyPos',
+  description: 'Laporan margin laba dan HPP per item menu produk',
 };
 
-export default async function ReportsProfitLossPage() {
+export default async function ReportsProductProfitPage() {
   await requireRole(['OWNER']);
 
   return (
@@ -21,7 +21,7 @@ export default async function ReportsProfitLossPage() {
           </div>
         }
       >
-        <ReportsClient forcedTab="profit-loss" />
+        <ReportsClient forcedTab="product-profit" />
       </React.Suspense>
     </main>
   );

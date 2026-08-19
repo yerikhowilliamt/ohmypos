@@ -41,6 +41,103 @@
 
 ## Log
 
+### TASK-033 — Remove Redundant Branch Label from Topbar
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web Layout Shell (`Topbar.tsx`, `AppShell.tsx`)
+- **Objective:** Hapus label "Semua Cabang" / "Cabang Terkunci" dari Topbar karena data bersifat terpusat (ADR-004) dan filter cabang sudah tersedia secara lokal di modul yang relevan (Laporan & Riwayat Penjualan).
+- **Relevant docs:** DESIGN.md §17, ADR-004
+- **What was done:**
+  1. Menghapus helper `branchLabel` dan elemen teks cabang dari `Topbar.tsx`.
+  2. Menyembunyikan topbar pada layar desktop (`md:hidden`) karena fungsi profil dan menu telah berpindah penuh ke sidebar.
+  3. Memperbarui `AppShell.tsx` dan memverifikasi lint, typecheck, dan unit test.
+- **Status:** Done
+- **Handoff notes:** Lolos lint, typecheck, dan seluruh unit test.
+
+### TASK-032 — Refactor Sidebar Footer Layout with Explicit Settings, Logout, and User Info
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web Layout Shell (`Sidebar.tsx`)
+- **Objective:** Hilangkan dropdown pada avatar user di footer sidebar; susun secara vertikal: tombol Pengaturan (`/profile`), tombol Keluar (Logout), lalu kartu info statis profil user (foto/avatar, nama, dan role).
+- **Relevant docs:** DESIGN.md §16–18, PRD §5
+- **What was done:**
+  1. Menghapus wrapper `DropdownMenu` dari kartu user di sidebar.
+  2. Menambahkan tombol navigasi link `Pengaturan` (`/profile`) dengan icon `Settings`.
+  3. Menambahkan tombol aksi `Keluar` (`Logout`) langsung dengan icon `LogOut` berwarna merah (danger) di bawah tombol pengaturan.
+  4. Menempatkan kartu informasi statis identitas profil user di urutan paling bawah (avatar inisial, nama user, dan label role).
+- **Status:** Done
+- **Handoff notes:** Lint, typecheck, dan unit test seluruhnya lulus.
+
+### TASK-031 — Move User Profile & Role to Sidebar Footer
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web Layout Shell (`Sidebar.tsx`, `Topbar.tsx`, `AppShell.tsx`)
+- **Objective:** Pindahkan identitas profil user dari topbar ke footer bawah sidebar dengan avatar inisial, nama user, role label, dan popup menu aksi (Profil & Logout).
+- **Relevant docs:** DESIGN.md §16–18, PRD §5
+- **What was done:**
+  1. Menghapus dropdown profile dari `Topbar.tsx` dan menyederhanakan topbar menjadi hanya indikator cabang & mobile menu button.
+  2. Menambahkan user identity footer di `Sidebar.tsx` (paling bawah): avatar lingkaran inisial, nama user, role badge, serta chevron selector.
+  3. Mengintegrasikan popup `DropdownMenu` (Profil Saya & Logout) di footer sidebar.
+  4. Mengupdate `AppShell.tsx` agar mengalirkan prop `user: UserResponse` ke `Sidebar`.
+- **Status:** Done
+- **Handoff notes:** Lint, typecheck, dan unit test (40 test file, 257 passed) lulus.
+
+### TASK-030 — Enhance Back-Office Dashboard with Rich Visualizations & Donut Payment Chart
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web Dashboard (`DashboardClient.tsx`, `ReportChart.tsx`)
+- **Objective:** Tingkatkan kepadatan informasi halaman dashboard dengan menambahkan diagram lingkaran (donut chart) porsi metode pembayaran (dalam persentase & nominal), peringkat 5 produk terlaris, feed transaksi terkini, serta card peringatan aksi cepat (bahan baku menipis & utang terbuka).
+- **Relevant docs:** DESIGN.md, PRD §5.4
+- **What was done:**
+  1. Menambahkan komponen `ReportPieChart` pada `ReportChart.tsx` berbasis Recharts `PieChart`, `Pie`, dan `Cell` lengkap dengan tooltip persentase dan nominal terformat.
+  2. Memperbarui `DashboardClient.tsx` untuk mengonsumsi data `useIncomeByPaymentMethod`, `useTopProducts`, `useSales` (recent sales), `useInventorySummary`, dan `usePayablesSummary`.
+  3. Menyusun layout grid 2 baris yang informatif dan responsif:
+     - Baris 1: Ringkasan KPI Utama (Kas, Laba Bersih, Utang, Stok).
+     - Baris 2: Tren Pendapatan Harian (Line Chart) + Diagram Lingkaran Metode Pembayaran (Donut Chart dengan legend persentase).
+     - Baris 3: Top 5 Produk Terlaris, Feed Transaksi Kasir Terkini, dan Status Perhatian / Aksi Operasional (Low Stock & Utang Supplier).
+- **Status:** Done
+- **Handoff notes:** Lint, typecheck, dan unit test lolos.
+
+### TASK-029 — Collapsible Sidebar & Mobile Navigation for Sub-routes
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web UI shell navigation (`Sidebar.tsx`, `MobileNavDrawer.tsx`, `@ohmypos/ui/collapsible`)
+- **Objective:** Buat parent sidebar dengan sub-menu dapat di-expand/collapse ketika diklik menggunakan komponen shadcn Collapsible.
+- **Relevant docs:** DESIGN.md, PRD §5
+- **What was done:**
+  1. Menambahkan komponen shadcn UI `Collapsible`, `CollapsibleTrigger`, `CollapsibleContent` di `packages/ui/src/components/ui/collapsible.tsx` berbasis Radix UI.
+  2. Mengubah `Sidebar.tsx` dan `MobileNavDrawer.tsx` agar menggunakan `Collapsible` dengan chevron icon indikator animasi rotasi.
+  3. Menangani auto-expand ketika user berada di dalam active sub-route sambil tetap mengizinkan toggle buka-tutup manual.
+- **Status:** Done
+- **Handoff notes:** Lolos lint, typecheck, dan seluruh unit test.
+
+### TASK-028 — Split Back-Office Routes into Dedicated Sub-Routes
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web routing refactor (`/master-data`, `/expenses`, `/reports`)
+- **Objective:** Pecah halaman back-office yang sebelumnya menggunakan internal client tabs menjadi URL sub-routes terpisah dengan navigasi sidebar bertingkat.
+- **Relevant docs:** PRD §5, ADR-011, System Design v4 §5
+- **What was done:**
+  1. **Master Data Sub-routes:**
+     - `/master-data`: Produk & Resep / BOM (`MasterDataClient` tab `products`)
+     - `/master-data/raw-materials`: Bahan Baku (`MasterDataClient` tab `raw-materials`)
+  2. **Expenses Sub-routes:**
+     - `/expenses`: Pengeluaran Umum (`ExpensesClient` tab `general`)
+     - `/expenses/purchases`: Pembelian Bahan Baku (`ExpensesClient` tab `purchases`)
+     - `/expenses/payables`: Pelunasan Utang (`ExpensesClient` tab `payables`)
+  3. **Reports Sub-routes:**
+     - `/reports`: Laba Rugi (`ReportsClient` tab `profit-loss`)
+     - `/reports/product-profit`: Laba per Produk
+     - `/reports/payment-methods`: Pendapatan per Metode Bayar
+     - `/reports/top-products`: 10 Produk Terlaris
+     - `/reports/daily`: Pendapatan Harian
+  4. **Navigasi & Filter:**
+     - Memperbarui `nav-config.ts` dan `nav-config.test.ts` untuk sub-menu `Data Master`, `Pengeluaran`, dan `Laporan`.
+     - Mempertahankan query params tanggal dan cabang (`startDate`, `endDate`, `branchId`) saat berpindah tab sub-route laporan.
+- **Decisions made during this task:** Menggunakan navigasi berbasis Link untuk tab bar atas agar setiap halaman memiliki URL unik yang bookmarkable tanpa menghilangkan UX tab switching.
+- **Status:** Done
+- **Handoff notes:** Semua test (`vitest`), lint, dan typecheck lolos.
+
 ### TASK-027 — Split Sales Navigation, Sales History & Receipt Printing
 
 - **Date:** 2026-08-19

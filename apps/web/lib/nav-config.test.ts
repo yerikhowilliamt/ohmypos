@@ -11,15 +11,22 @@ describe('getNavItems', () => {
     ]);
   });
 
-  it('returns master-data, accounts, and reconciliation for ADMIN', () => {
-    expect(getNavItems('ADMIN').map((item) => item.href)).toEqual([
+  it('returns master-data with children, accounts, and reconciliation for ADMIN', () => {
+    const adminItems = getNavItems('ADMIN');
+    expect(adminItems.map((item) => item.href)).toEqual([
       '/master-data',
       '/accounts',
       '/reconciliation',
     ]);
+    expect(
+      adminItems.find((item) => item.href === '/master-data')?.children,
+    ).toEqual([
+      { href: '/master-data', label: 'Produk & Resep' },
+      { href: '/master-data/raw-materials', label: 'Bahan Baku' },
+    ]);
   });
 
-  it('returns back-office routes with Penjualan for OWNER, dashboard first', () => {
+  it('returns back-office routes with submenus for OWNER, dashboard first', () => {
     const items = getNavItems('OWNER');
     const hrefs = items.map((item) => item.href);
     expect(hrefs).toEqual([
@@ -38,6 +45,27 @@ describe('getNavItems', () => {
     expect(items.find((item) => item.href === '/sales')?.children).toEqual([
       { href: '/sales', label: 'Transaksi Kasir' },
       { href: '/sales/history', label: 'Riwayat Transaksi' },
+    ]);
+    expect(
+      items.find((item) => item.href === '/master-data')?.children,
+    ).toEqual([
+      { href: '/master-data', label: 'Produk & Resep' },
+      { href: '/master-data/raw-materials', label: 'Bahan Baku' },
+    ]);
+    expect(items.find((item) => item.href === '/expenses')?.children).toEqual([
+      { href: '/expenses', label: 'Pengeluaran Umum' },
+      { href: '/expenses/purchases', label: 'Pembelian' },
+      { href: '/expenses/payables', label: 'Utang' },
+    ]);
+    expect(items.find((item) => item.href === '/reports')?.children).toEqual([
+      { href: '/reports', label: 'Laba Rugi' },
+      { href: '/reports/product-profit', label: 'Laba per Produk' },
+      {
+        href: '/reports/payment-methods',
+        label: 'Pendapatan per Metode Bayar',
+      },
+      { href: '/reports/top-products', label: '10 Produk Terlaris' },
+      { href: '/reports/daily', label: 'Pendapatan Harian' },
     ]);
   });
 
