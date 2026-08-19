@@ -22,7 +22,7 @@ import {
 import { Public } from '../../common/decorators/public.decorator';
 import { ReqUser } from '../../common/decorators/req-user.decorator';
 import { AuthService } from './auth.service';
-import { ChangePasswordDto, LoginDto } from './auth.dto';
+import { ChangePasswordDto, LoginDto, UpdateSelfDto } from './auth.dto';
 
 /**
  * There is no `register` endpoint. User creation is OWNER-only and lives on
@@ -102,6 +102,32 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.authService.changePassword(userId, dto);
+  }
+
+  @Patch('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update own display name' })
+  updateProfile(@ReqUser('sub') userId: string, @Body() dto: UpdateSelfDto) {
+    return this.authService.updateProfile(userId, dto);
+  }
+
+  @Patch('deactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Deactivate own account (soft) and clear the session',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Caller is the last active OWNER',
+  })
+  async deactivateSelf(
+    @ReqUser('sub') userId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.deactivateSelf(userId);
+    res.clearCookie(ACCESS_TOKEN_COOKIE, COOKIE_OPTIONS);
+    res.clearCookie(REFRESH_TOKEN_COOKIE, COOKIE_OPTIONS);
+    return result;
   }
 
   private setAuthCookies(

@@ -7,7 +7,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@ohmypos/ui/components/dropdown-menu';
-import { Menu } from 'lucide-react';
+import { Menu, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { LogoutButton } from './LogoutButton';
@@ -78,6 +78,14 @@ export function Topbar({ user, onOpenMobileNav }: TopbarProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <Link
+            href="/profile"
+            className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm font-medium text-text-primary hover:bg-surface-strong/60"
+          >
+            <User className="size-4" />
+            Profil Saya
+          </Link>
           <DropdownMenuSeparator />
           <LogoutButton />
         </DropdownMenuContent>
