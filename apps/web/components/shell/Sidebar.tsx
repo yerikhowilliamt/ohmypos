@@ -131,8 +131,17 @@ export function Sidebar({ user }: { user: UserResponse }) {
 
         {/* Static User Profile info */}
         <div className="flex items-center gap-2.5 rounded-md p-2 mt-1 bg-surface-muted/50 border border-border-default/60">
-          <div className="size-8 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20 flex items-center justify-center font-bold text-xs shrink-0">
-            {getInitials(user.name)}
+          <div className="size-8 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+            {user.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={user.photoUrl}
+                alt={user.name}
+                className="size-full object-cover"
+              />
+            ) : (
+              getInitials(user.name)
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-text-primary truncate">

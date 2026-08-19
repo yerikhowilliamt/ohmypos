@@ -282,6 +282,10 @@ model User {
   /// layer, raising InvalidRoleBranchAssignmentException (Playbook §6).
   branchId String? @map("branch_id")
 
+  /// Phase 10b, ADR-020 — reverses ERD §7 note 4's original "no Cloudinary"
+  /// decision. A Cloudinary secure_url, never a locally-stored file (Playbook).
+  photoUrl String? @map("photo_url")
+
   /// ADR-011 §5 — OWNER-only deactivation. Soft, never a row delete, so the
   /// Sale.userId audit trail survives a staff member leaving.
   isActive Boolean @default(true) @map("is_active")

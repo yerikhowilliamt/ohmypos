@@ -47,3 +47,20 @@ export function useDeactivateSelf() {
       }),
   });
 }
+
+export function useUploadPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiFetch<{ photoUrl: string }>('/auth/me/photo', {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEYS.me });
+    },
+  });
+}

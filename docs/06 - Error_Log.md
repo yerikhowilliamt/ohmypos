@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-007 — Remote Cloudinary avatars blocked by Next.js Content Security Policy
+
+- **Date found:** 2026-08-19
+- **Found during:** Phase 10b (TASK-034) — testing profile photo upload and avatar rendering in `apps/web`.
+- **Symptom:** Profile photos uploaded to Cloudinary did not render in the browser (`<img>` broken/blocked).
+- **Root cause:** `apps/web/next.config.ts` configured strict `Content-Security-Policy` with `img-src 'self' data: blob:`, blocking external image domains including Cloudinary CDN (`https://res.cloudinary.com`).
+- **Resolution:** Added `https://res.cloudinary.com` to `img-src` in `securityHeaders` in `next.config.ts`.
+- **Prevention:** Whenever adding new remote media hosting services, check and update CSP headers in `next.config.ts` alongside API contracts.
+- **Severity:** Low — UI display issue, caught and resolved during task verification.
+
 ### ERR-006 — Cash-balance running total used the wrong end of `resolveReportRange`, including same-day entries it should have excluded
 
 - **Date found:** 2026-08-18

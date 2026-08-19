@@ -503,3 +503,30 @@ This is a real gap: a ledger entry could be "settled" twice by two unrelated ban
 - *Service-level `Decimal` check only, no trigger*: rejected — without a `FOR UPDATE` lock on the ledger entry, two concurrent allocation requests could each read a stale sum and both pass, recreating the exact race ADR-007 fixed for the bank-transaction side. A check that doesn't hold under concurrency is worse than an honestly-documented gap.
 - *Block in the frontend by disabling already-allocated entries in the picker*: rejected — the frontend has no authority to invent a constraint the server doesn't enforce (Playbook §7); an operator using the API directly, or a future second screen, would bypass it entirely, and the UI would be asserting a guarantee that doesn't exist.
 
+---
+
+## ADR-020: Profile Photo Upload via Cloudinary (Reversing ERD §7 Note 4)
+
+**Status:** Accepted (Supersedes ERD §7 Note 4)
+
+**Context:**
+`03 - ERD.md` §7 Note 4 initially excluded `User.photoUrl` and `POST /users/me/photo` to avoid bringing in third-party storage dependencies for non-essential features. During product scoping, user profile photo upload was explicitly requested for self-service profiles. Storing image binaries directly in Postgres or local disk in a containerized environment is anti-pattern and violates Playbook guidelines.
+
+**Decision:**
+1. **Add `User.photoUrl`**: Nullable string field on `User` model, holding remote HTTPS URL from Cloudinary.
+2. **Dedicated Cloudinary Upload Service**: Add `ProfilePhotoService` isolated in `apps/api/src/modules/auth/profile-photo.service.ts` to keep `AuthService` core clean.
+3. **Deterministic Public ID & Server-side Transformation**: Use deterministic public ID `ohmypos/users/<userId>` with `overwrite: true` to prevent image sprawl. Cloudinary performs square thumbnail face crop (`256x256`, `crop: 'thumb'`, `gravity: 'face'`) server-side, removing need for client-side image cropping libraries.
+4. **Endpoint**: Expose `POST /auth/me/photo` with multipart file upload interceptor, validating mimetype (`image/jpeg`, `image/png`, `image/webp`) and 2MB max file size.
+
+**Consequences:**
+- (+) Simple user experience with zero frontend cropping overhead.
+- (+) Zero orphaned image accumulation in Cloudinary (deterministic overwrite by user ID).
+- (+) Database stores only lightweight URL string.
+- (−) Introduces external dependency on `cloudinary` SDK in `apps/api`.
+- (−) Requires Cloudinary environment variables (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`).
+
+**Alternatives considered:**
+- *Local filesystem / volume storage*: rejected — not resilient in containerized/stateless deployments, requires manual static file serving and backup strategy.
+- *Store Base64/Binary in PostgreSQL (`bytea`)*: rejected — bloats database backups, hurts query cache, anti-pattern for transactional DBs.
+- *Client-side direct upload via signed URLs*: rejected — adds unnecessary API complexity for low-volume avatar uploads in v1.
+

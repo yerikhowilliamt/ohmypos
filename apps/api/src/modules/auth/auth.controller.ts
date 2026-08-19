@@ -4,13 +4,24 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  MaxFileSizeValidator,
+  ParseFilePipe,
   Patch,
   Post,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import {
   ACCESS_TOKEN_COOKIE,
@@ -23,6 +34,8 @@ import { Public } from '../../common/decorators/public.decorator';
 import { ReqUser } from '../../common/decorators/req-user.decorator';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto, LoginDto, UpdateSelfDto } from './auth.dto';
+import { ProfilePhotoService } from './profile-photo.service';
+import { InvalidImageFileException } from './profile-photo.exceptions';
 
 /**
  * There is no `register` endpoint. User creation is OWNER-only and lives on
@@ -32,7 +45,10 @@ import { ChangePasswordDto, LoginDto, UpdateSelfDto } from './auth.dto';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly profilePhotoService: ProfilePhotoService,
+  ) {}
 
   @Public()
   @Post('login')
@@ -109,6 +125,33 @@ export class AuthController {
   @ApiOperation({ summary: 'Update own display name' })
   updateProfile(@ReqUser('sub') userId: string, @Body() dto: UpdateSelfDto) {
     return this.authService.updateProfile(userId, dto);
+  }
+
+  @Post('me/photo')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload your own profile photo' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  async uploadPhoto(
+    @ReqUser('sub') userId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [new MaxFileSizeValidator({ maxSize: 2 * 1024 * 1024 })],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+      throw new InvalidImageFileException();
+    }
+    const photoUrl = await this.profilePhotoService.upload(userId, file);
+    return { photoUrl };
   }
 
   @Patch('deactivate')
