@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import type {
   ChangePassword,
   Login,
+  LoginResponse,
   UpdateSelf,
   UserResponse,
 } from '@ohmypos/api-contracts';
@@ -10,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import type { JwtPayload } from '../../common/types/jwt-payload.interface';
+import { AttendanceService } from '../devices/attendance.service';
 import { LastActiveOwnerException } from './auth.exceptions';
 
 export interface AuthTokens {
@@ -31,9 +33,14 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly attendanceService: AttendanceService,
   ) {}
 
-  async login(dto: Login): Promise<{ user: UserResponse; tokens: AuthTokens }> {
+  async login(
+    dto: Login,
+    deviceCookieValue: string | undefined,
+    meta: { ipAddress?: string; userAgent?: string },
+  ): Promise<{ user: LoginResponse; tokens: AuthTokens }> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -61,7 +68,18 @@ export class AuthService {
     });
     await this.updateRefreshTokenHash(user.id, tokens.refreshToken);
 
-    return { user: this.toResponse(user), tokens };
+    // Attendance tracking is KASIR-only — ADMIN/OWNER are not branch-scoped
+    // and device tracking is meaningless for them (Phase 11 plan, Context).
+    const attendance =
+      user.role === 'KASIR'
+        ? await this.attendanceService.checkAndRecord(
+            { id: user.id, branchId: user.branchId },
+            deviceCookieValue,
+            meta,
+          )
+        : null;
+
+    return { user: { ...this.toResponse(user), attendance }, tokens };
   }
 
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {

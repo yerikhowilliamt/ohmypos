@@ -40,6 +40,7 @@ describe('getNavItems', () => {
       '/reports',
       '/users',
       '/branches',
+      '/devices',
     ]);
     expect(hrefs[0]).toBe('/dashboard');
     expect(items.find((item) => item.href === '/sales')?.children).toEqual([
@@ -66,6 +67,10 @@ describe('getNavItems', () => {
       },
       { href: '/reports/top-products', label: '10 Produk Terlaris' },
       { href: '/reports/daily', label: 'Pendapatan Harian' },
+    ]);
+    expect(items.find((item) => item.href === '/devices')?.children).toEqual([
+      { href: '/devices', label: 'Daftar Perangkat' },
+      { href: '/devices/attendance', label: 'Log Absensi' },
     ]);
   });
 

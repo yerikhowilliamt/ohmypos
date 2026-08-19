@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AttendanceStatusSchema } from './device.schema';
 import { UserResponseSchema } from './user.schema';
 
 /**
@@ -17,8 +18,16 @@ export const ChangePasswordSchema = z.object({
 });
 export type ChangePassword = z.infer<typeof ChangePasswordSchema>;
 
-/** Tokens travel in HttpOnly cookies, never in the body — only the user is returned. */
-export const LoginResponseSchema = UserResponseSchema;
+/**
+ * Additive over UserResponseSchema (Phase 11) — `attendance` is null for
+ * ADMIN/OWNER (not tracked, Context section) and for any login response that
+ * isn't the login endpoint itself (GET /auth/me, PATCH /users/:id, etc. all
+ * still return plain UserResponseSchema, not this). Frontend code that only
+ * reads name/email/role from a login response is unaffected by this field.
+ */
+export const LoginResponseSchema = UserResponseSchema.extend({
+  attendance: AttendanceStatusSchema.nullable(),
+});
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 
 /**

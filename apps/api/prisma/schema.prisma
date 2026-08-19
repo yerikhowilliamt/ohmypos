@@ -154,6 +154,7 @@ model Branch {
   supplierPurchases SupplierPurchase[]
   stockMovements    StockMovement[]
   sales             Sale[]
+  devices           Device[]
 
   @@map("branches")
 }
@@ -299,6 +300,13 @@ model User {
 
   branch Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
   sales  Sale[]
+
+  /// Phase 11 — the two device relations below are separate: a User can
+  /// activate zero or more devices (as OWNER) and separately generate zero or
+  /// more of their own attendance records (as KASIR). No User is ever on both
+  /// sides for the same row, but Prisma still needs both fields declared.
+  activatedDevices  Device[]
+  attendanceRecords AttendanceRecord[]
 
   /// BranchScopeGuard filters on this for every KASIR-scoped request (ERD §6).
   @@index([branchId])
@@ -699,6 +707,77 @@ model OpeningStock {
   @@unique([rawMaterialId, periodMonth])
   @@index([periodMonth])
   @@map("opening_stocks")
+}
+
+enum AttendanceViolationReason {
+  NO_DEVICE_COOKIE
+  DEVICE_NOT_REGISTERED
+  DEVICE_WRONG_BRANCH
+  DEVICE_INACTIVE
+}
+
+/// Phase 11 — one physical terminal per row, scoped to a Branch (Context
+/// section: a branch shares 1-3 tablets across whichever KASIR works there,
+/// so this is not per-User). Activation is a one-time Owner action performed
+/// physically at the terminal (Context section) — activationCode/
+/// activationCodeExpiresAt exist only between creation and activation, then
+/// both go back to null.
+model Device {
+  id String @id @default(uuid())
+
+  branchId String @map("branch_id")
+  label    String
+
+  isActive Boolean @default(false) @map("is_active")
+
+  activatedByUserId String?   @map("activated_by_user_id")
+  activatedAt        DateTime? @map("activated_at")
+
+  /// Single-use, expiring code proving physical intent to activate. Unique so
+  /// DevicesService.activate can look a device up by code alone.
+  activationCode           String?   @unique @map("activation_code")
+  activationCodeExpiresAt DateTime? @map("activation_code_expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  branch            Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  activatedBy        User?              @relation(fields: [activatedByUserId], references: [id], onDelete: SetNull)
+  attendanceRecords AttendanceRecord[]
+
+  @@index([branchId])
+  @@map("devices")
+}
+
+/// Phase 11 — one row per login attempt, not per session (ERD-style append-
+/// only audit log). Written from AuthService.login(), only for role = KASIR
+/// (Context section — ADMIN/OWNER are not branch-scoped and are excluded).
+/// Login always succeeds regardless of isValid (Context section) — this table
+/// is informational/monitoring, never an access gate.
+model AttendanceRecord {
+  id String @id @default(uuid())
+
+  userId   String  @map("user_id")
+  deviceId String? @map("device_id")
+
+  loginAt DateTime @default(now()) @map("login_at")
+  isValid Boolean  @map("is_valid")
+
+  violationReason AttendanceViolationReason? @map("violation_reason")
+
+  /// Informational only, never used to determine isValid (Context section,
+  /// option 2 rejection — IP/UA are unreliable as a primary signal).
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([deviceId])
+  @@map("attendance_records")
 }
 
 

@@ -41,6 +41,34 @@
 
 ## Log
 
+### TASK-035 — Phase 11: Attendance & Device Tracking
+
+- **Date:** 2026-08-19
+- **Module / Phase:** Phase 11 — Attendance & Device Tracking
+- **Objective:** Track KASIR login timestamp and physical device validity using signed HttpOnly device cookies activated via an authenticated OWNER ceremony; surface attendance violations as non-blocking login warning banners.
+- **Relevant docs:** ADR-021, `docs/plannings/phase-11-attendance-device-tracking.md`, AGENTS.md
+- **What was done:**
+  - Added ADR-021 in `docs/02 - ADR.md` documenting scope expansion for Attendance/Device Tracking & Leave Requests.
+  - Added Prisma models `Device`, `AttendanceRecord`, and enum `AttendanceViolationReason` in `apps/api/prisma/schema.prisma` and applied migration `20260819151056_add_devices_and_attendance`.
+  - Implemented HMAC-SHA256 device cookie signing & timing-safe verification utility (`apps/api/src/common/utils/device-cookie.util.ts`) with Jest unit tests.
+  - Added device contracts (`packages/api-contracts/src/device.schema.ts`) and extended `LoginResponseSchema` with `attendance` field in `packages/api-contracts/src/auth.schema.ts`.
+  - Built `devices` backend module (`devices.controller.ts`, `devices.service.ts`, `attendance.service.ts`, `devices.dto.ts`, `devices.exceptions.ts`, `devices.module.ts`).
+  - Integrated `AttendanceService` into `AuthService.login()` and `AuthController.login()` to inspect cookies for `KASIR` logins and record attendance.
+  - Registered `DevicesModule` in `apps/api/src/app.module.ts` and set cookie constants (`DEVICE_COOKIE`, `DEVICE_COOKIE_MAX_AGE`).
+  - Built frontend pages and components: `/devices` listing with `AddDeviceDialog`, `/devices/attendance` log monitoring page with `AttendanceLogTable`, `/devices/activate` page, `useDevices` and `useAttendanceRecords` hooks, updated `nav-config.ts` (adding `/devices` with submenus `Daftar Perangkat` & `Log Absensi` for OWNER) and `nav-config.test.ts`, plus non-blocking attendance warning banner on `/login`.
+  - Refactored `/devices` and `/devices/attendance` UI to replace native elements and custom tables with `@ohmypos/ui` shadcn primitives (`Badge`, `Checkbox`, `Select`, `Table`) and TanStack `DataTable` with client-side search and sorting.
+  - Added `GET /devices/attendance` endpoint for real-time Owner monitoring of cashier login times, device names, and violation statuses with branch and violation filters.
+  - Verified with unit tests, linting, and typechecks across all packages.
+- **Decisions made during this task:**
+  - `Device` scoped to `Branch`, not `User` (terminals shared per branch).
+  - Attendance recording is strictly for `KASIR` logins; `ADMIN` and `OWNER` logins return `attendance: null`.
+  - Login always succeeds for valid credentials; unregistered or mismatched device results in `isValid: false` warning banner rather than login failure.
+  - Owner activation endpoint `POST /devices/activate` requires authenticated OWNER role rather than public endpoint.
+- **Status:** Done
+- **Handoff notes:**
+  - Documented accepted residual risk in `08 - Tech_Debt_Log.md`: cashier with physical dev tools access could extract and copy the device cookie to a personal device.
+  - Ready for Phase 12 (Leave Requests) which builds on ADR-021 and existing `(shared)` route group patterns.
+
 ### TASK-034 — Phase 10b: Profile Photo Upload (Cloudinary)
 
 - **Date:** 2026-08-19

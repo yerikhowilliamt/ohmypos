@@ -1,7 +1,11 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { LoginSchema, type Login } from '@ohmypos/api-contracts';
+import {
+  LoginSchema,
+  type Login,
+  type LoginResponse,
+} from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
 import { Input } from '@ohmypos/ui/components/input';
 import { Label } from '@ohmypos/ui/components/label';
@@ -21,6 +25,7 @@ import { apiFetch } from '@/lib/api';
 export default function LoginPage() {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
+  const [attendanceWarning, setAttendanceWarning] = useState(false);
 
   const {
     register,
@@ -31,10 +36,14 @@ export default function LoginPage() {
   const onSubmit = async (values: Login) => {
     setFormError(null);
     try {
-      await apiFetch('/auth/login', {
+      const response = await apiFetch<LoginResponse>('/auth/login', {
         method: 'POST',
         body: JSON.stringify(values),
       });
+      if (response.attendance && !response.attendance.isValid) {
+        setAttendanceWarning(true);
+        return;
+      }
       router.replace('/');
       router.refresh();
     } catch (error) {
@@ -63,6 +72,29 @@ export default function LoginPage() {
         <p className="mt-1 text-sm text-text-secondary">
           Masuk untuk melanjutkan.
         </p>
+
+        {attendanceWarning && (
+          <div
+            role="alert"
+            className="mb-4 rounded-sm border border-status-warning/30 bg-status-warning/10 p-3 text-xs text-text-primary"
+          >
+            Login berhasil, tapi perangkat ini tidak terdaftar sebagai terminal
+            resmi cabang Anda. Ini dicatat sebagai pelanggaran absensi. Hubungi
+            Owner jika ini adalah kesalahan.
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => {
+                router.replace('/');
+                router.refresh();
+              }}
+            >
+              Lanjutkan ke Aplikasi
+            </Button>
+          </div>
+        )}
 
         <div className="mt-6 space-y-2">
           <Label htmlFor="email">Email</Label>
