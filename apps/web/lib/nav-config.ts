@@ -85,6 +85,14 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     },
     { href: '/users', label: 'Pengguna' },
     { href: '/branches', label: 'Cabang' },
+    {
+      href: '/devices',
+      label: 'Perangkat',
+      children: [
+        { href: '/devices', label: 'Daftar Perangkat' },
+        { href: '/devices/attendance', label: 'Log Absensi' },
+      ],
+    },
   ],
 };
 

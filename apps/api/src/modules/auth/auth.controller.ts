@@ -27,6 +27,7 @@ import {
   ACCESS_TOKEN_COOKIE,
   ACCESS_TOKEN_MAX_AGE,
   COOKIE_OPTIONS,
+  DEVICE_COOKIE,
   REFRESH_TOKEN_COOKIE,
   REFRESH_TOKEN_MAX_AGE,
 } from '../../common/constants/cookie.constants';
@@ -62,9 +63,20 @@ export class AuthController {
   })
   async login(
     @Body() dto: LoginDto,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { user, tokens } = await this.authService.login(dto);
+    const deviceCookieValue = (
+      req.cookies as Record<string, string> | undefined
+    )?.[DEVICE_COOKIE];
+    const { user, tokens } = await this.authService.login(
+      dto,
+      deviceCookieValue,
+      {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      },
+    );
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     return user;
   }

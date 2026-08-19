@@ -39,6 +39,20 @@
 
 ## Log
 
+### DEBT-010 — Physical Device Cookie Extraction / DevTools Cloning
+
+- **Date logged:** 2026-08-19
+- **Found during:** Phase 11 (TASK-035: Attendance & Device Tracking, ADR-021)
+- **Description:** Device identification relies on a long-lived HttpOnly signed cookie (`ohmypos_device`). An employee with physical access and technical familiarity could inspect browser storage / network requests on the store tablet and copy the signed cookie onto a personal device to pass the attendance check.
+- **Why deferred:** Acceptable residual risk for v1 in typical retail operations. Browser fingerprinting is unreliable and brittle across browser updates; hardware-bound WebAuthn / client certificate enrollment adds massive operational complexity for store tablet setup.
+- **Impact if unaddressed:** A tech-savvy employee could bypass attendance violation logging from their personal phone.
+- **Trigger condition:** Evidence of employee spoofing attendance via copied device cookies or request for hardware-level device attestation.
+- **Proposed resolution:** Implement WebAuthn / hardware-backed device keys (FIDO2 / passkey enrollment) or a dedicated installed wrapper app with secure enclave binding.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
 ### DEBT-009 — Cloudinary direct upload vs server-side proxy
 
 - **Date logged:** 2026-08-19

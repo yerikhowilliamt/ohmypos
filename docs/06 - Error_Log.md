@@ -37,6 +37,18 @@
 
 ## Log
 
+### ERR-008 — Missing `prisma generate` step after manual Prisma schema edits causes stale TypeScript client types
+
+- **Date found:** 2026-08-19
+- **Found during:** TASK-035 (Phase 11 — Attendance & Device Tracking)
+- **Symptom:** `pnpm turbo run lint typecheck` failed in `apps/api` with `Property 'device' does not exist on type 'PrismaService'` and `Property 'attendanceRecord' does not exist on type 'PrismaService'`.
+- **Root cause:** The Prisma schema migration was applied via `prisma migrate dev`, but the generated Prisma Client types in `apps/api/src/generated/prisma` were not regenerated / out of sync with the new schema models.
+- **Resolution:** Ran `pnpm --filter api exec prisma generate` to rebuild the TypeScript client types matching the updated schema.
+- **Prevention:** Include `prisma generate` in local development workflows or schema change execution scripts whenever `schema.prisma` is modified.
+- **Severity:** Low
+
+---
+
 ### ERR-007 — Remote Cloudinary avatars blocked by Next.js Content Security Policy
 
 - **Date found:** 2026-08-19
