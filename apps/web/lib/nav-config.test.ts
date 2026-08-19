@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { getNavItems } from './nav-config';
 
 describe('getNavItems', () => {
-  it('returns only /sales for KASIR', () => {
-    expect(getNavItems('KASIR').map((item) => item.href)).toEqual(['/sales']);
+  it('returns Penjualan with children for KASIR', () => {
+    const kasirItems = getNavItems('KASIR');
+    expect(kasirItems.map((item) => item.href)).toEqual(['/sales']);
+    expect(kasirItems[0].children).toEqual([
+      { href: '/sales', label: 'Transaksi Kasir' },
+      { href: '/sales/history', label: 'Riwayat Transaksi' },
+    ]);
   });
 
   it('returns master-data, accounts, and reconciliation for ADMIN', () => {
@@ -14,10 +19,12 @@ describe('getNavItems', () => {
     ]);
   });
 
-  it('returns all nine back-office routes for OWNER, dashboard first, and never /sales', () => {
-    const hrefs = getNavItems('OWNER').map((item) => item.href);
+  it('returns back-office routes with Penjualan for OWNER, dashboard first', () => {
+    const items = getNavItems('OWNER');
+    const hrefs = items.map((item) => item.href);
     expect(hrefs).toEqual([
       '/dashboard',
+      '/sales',
       '/master-data',
       '/accounts',
       '/reconciliation',
@@ -28,7 +35,10 @@ describe('getNavItems', () => {
       '/branches',
     ]);
     expect(hrefs[0]).toBe('/dashboard');
-    expect(hrefs).not.toContain('/sales');
+    expect(items.find((item) => item.href === '/sales')?.children).toEqual([
+      { href: '/sales', label: 'Transaksi Kasir' },
+      { href: '/sales/history', label: 'Riwayat Transaksi' },
+    ]);
   });
 
   it('does not expose /dashboard to ADMIN or KASIR', () => {
