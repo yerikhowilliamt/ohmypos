@@ -75,7 +75,7 @@ async function main() {
     ),
   );
 
-  const [kasTunai, bankUtama] = await Promise.all([
+  const [kasTunai, bankUtama, qris, ewallet] = await Promise.all([
     prisma.account.upsert({
       where: { id: '00000000-0000-4000-8000-000000000001' },
       update: {},
@@ -88,11 +88,33 @@ async function main() {
     }),
     prisma.account.upsert({
       where: { id: '00000000-0000-4000-8000-000000000002' },
-      update: {},
+      update: {
+        name: 'Transfer Bank (BCA)',
+      },
       create: {
         id: '00000000-0000-4000-8000-000000000002',
-        name: 'Bank Utama',
+        name: 'Transfer Bank (BCA)',
         type: 'BANK',
+        openingBalance: '0',
+      },
+    }),
+    prisma.account.upsert({
+      where: { id: '00000000-0000-4000-8000-000000000003' },
+      update: {},
+      create: {
+        id: '00000000-0000-4000-8000-000000000003',
+        name: 'QRIS',
+        type: 'EWALLET',
+        openingBalance: '0',
+      },
+    }),
+    prisma.account.upsert({
+      where: { id: '00000000-0000-4000-8000-000000000004' },
+      update: {},
+      create: {
+        id: '00000000-0000-4000-8000-000000000004',
+        name: 'E-Wallet',
+        type: 'EWALLET',
         openingBalance: '0',
       },
     }),

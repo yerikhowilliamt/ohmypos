@@ -68,9 +68,9 @@ Primary Visual Reference
 
 Use the following design as the primary visual direction:
 
-Cloud Kitchen POS System Design — Dribbble
+Konteks Platform | POS Order — Dribbble
 
-https://dribbble.com/shots/23059824-Cloud-Kitchen-POS-System-Design
+https://cdn.dribbble.com/userupload/32524639/file/original-74a1cbd03d9efdaf9028c76bc5a5837a.png?resize=752x&vertical=center
 
 The reference is used for:
 
@@ -98,6 +98,23 @@ exact component implementation
 Do not copy the reference literally.
 
 Use it as a visual north star and reinterpret it using the OhMyPos design tokens and domain requirements.
+
+3.1 Confirmed Layout Reference — Sales Transaction Screenshot
+
+A concrete screenshot of the reference product (Konteks — Sales Transaction screen) has been reviewed and is now treated as the binding layout anatomy for OhMyPos POS / Sales Entry.
+
+This screenshot fixes:
+
+the three-zone POS layout (Sidebar / Product Discovery / Order Panel)
+the sidebar anatomy (brand mark, search, grouped menu, nested Sales sub-menu, bottom account card)
+the page header treatment (title + date, no separate topbar strip on POS)
+the category filter treatment (bordered count cards, not pills)
+the product card anatomy (image, name, price, discount tag, "Add New Product" placeholder card)
+the order panel anatomy (customer selector, order list rows with stepper, summary block, payment method, primary CTA)
+
+Typography and color must still follow Section 8 (Typography) and Section 9 (Color Tokens) of this document. The screenshot informs structure, spacing rhythm, and component anatomy only — not fonts or hex values.
+
+Where this screenshot and the general Dribbble reference in Section 3 disagree, the screenshot in 3.1 wins for POS / Sales Entry layout decisions.
 
 4. Product Design Character
 
@@ -455,9 +472,9 @@ prefers-reduced-motion
 The default desktop shell should use:
 
 Sidebar ≈ 216px
-Topbar ≈ 52px
+Topbar ≈ 52px (Backoffice screens only — see exception below)
 
-Structure:
+Structure (Backoffice):
 
 ┌────────────────────────────────────────────────────┐
 │ Sidebar │ Topbar                                   │
@@ -469,13 +486,37 @@ Structure:
 │         │                                          │
 └────────────────────────────────────────────────────┘
 
+Structure (POS / Sales Transaction) — confirmed by the Section 3.1 screenshot:
+
+┌──────────┬──────────────────────────────┬─────────────────┐
+│          │ Page Header (title + date)   │ Detail Order    │
+│ Sidebar  ├──────────────────────────────┤ header          │
+│          │ Category Filter Row          │                 │
+│          ├──────────────────────────────┤ Order List      │
+│          │                               │                 │
+│          │ Product Grid                 ├─────────────────┤
+│          │                               │ Order Summary   │
+│          │                               │ Payment Method  │
+│          │                               │ Primary CTA     │
+└──────────┴──────────────────────────────┴─────────────────┘
+
+On POS / Sales Entry, the page header sits directly inside the main content zone. A separate horizontal topbar strip is not used — the sidebar runs full application height alongside the content and the Order Panel.
+
 The shell should remain visually light.
 
 The sidebar must not visually overpower the content.
 
 16. Sidebar
 
-Use a light sidebar.
+Use a light sidebar, full application height, fixed width ≈ 216px.
+
+Anatomy (confirmed by Section 3.1 screenshot), top to bottom:
+
+Brand mark (logo mark + product name)
+Sidebar search input
+"Menu" section label (tertiary text, small caps or label weight)
+Primary navigation list
+Bottom-pinned block: Settings, Log out, then an Account Card (avatar, name, role)
 
 Characteristics:
 
@@ -485,6 +526,14 @@ compact navigation
 restrained iconography
 clear active state
 
+Navigation list rules:
+
+top-level items may be flat (icon + label) or expandable (icon + label + chevron)
+an expanded parent (e.g. "Sales") reveals its children as an indented sub-list
+the active leaf item uses a filled brand-tinted pill/row behind the label, not just a text color change
+non-active items in an expanded group use plain text with no background
+a group that is not yet available should carry a small "Coming soon" tag instead of being hidden
+
 Active navigation should use:
 
 subtle brand-tinted surface
@@ -493,9 +542,13 @@ strong text
 
 Avoid fully saturated backgrounds for the entire active item.
 
+The bottom Account Card should sit inside its own light-muted rounded container, separated from Settings / Log out above it, and should show avatar, name, and role (e.g. "Admin") so identity and permission context are always visible.
+
 Navigation must be role-aware.
 
 17. Topbar
+
+The topbar applies to Backoffice screens. POS / Sales Entry does not use a separate topbar strip — see Section 15 and Section 18.
 
 The topbar may contain:
 
@@ -536,6 +589,20 @@ Optional filters / actions
 Avoid long descriptive paragraphs.
 
 Page headers should provide orientation, not decoration.
+
+On POS / Sales Entry, the header uses:
+
+Page Title (e.g. "Sales Transaction")
+Current date directly under the title, as tertiary text
+Search input aligned to the right of the header row, sized for quick product lookup
+
+18.1 Detail Order Panel Header
+
+The Order Panel (right rail) has its own header, independent of the main page header:
+
+Panel title (e.g. "Detail Order")
+Customer field directly below: a full-width "Type or Select Customer" combobox
+A "Your order:" label introducing the order list
 
 19. Dashboard
 
@@ -578,16 +645,24 @@ The user must not need to navigate through unrelated application structures duri
 
 POS Layout
 
-Use a modular three-zone structure where screen size permits:
+Use a modular three-zone structure where screen size permits, as confirmed by the Section 3.1 screenshot:
 
 ┌────────────┬──────────────────────────┬──────────────────┐
-│ Sidebar /  │ Categories + Search      │                  │
-│ Navigation ├──────────────────────────┤ Order / Cart     │
-│            │                          │                  │
-│            │ Product Grid             │                  │
-│            │                          │                  │
-│            │                          │ Payment          │
+│ Sidebar /  │ Page Header (title+date) │ Detail Order      │
+│ Navigation │ Category Filter Row      │ (Customer select) │
+│            ├──────────────────────────┤ Order List         │
+│            │ Product Grid             │ Order Summary      │
+│            │                          │ Payment Method      │
+│            │                          │ Primary CTA          │
 └────────────┴──────────────────────────┴──────────────────┘
+
+Zone widths, roughly:
+
+Sidebar: fixed ≈ 216px
+Product Discovery (center): flexible, majority of remaining width
+Order Panel (right): fixed, narrower than the center zone, always visible on desktop
+
+Each of the three zones renders as its own raised (surface.raised) panel with its own rounded container and subtle border, separated by the page background (surface.base), rather than one continuous unbroken surface.
 
 The exact dimensions may adapt responsively.
 
@@ -600,15 +675,13 @@ Product Discovery
 Persistent Order Context
 21. POS Product Grid
 
-Product cards are a primary visual component.
+Product cards are a primary visual component, arranged in a fixed-column grid (4 columns at desktop width, per the Section 3.1 screenshot).
 
 Each card should generally contain:
 
-product image where useful
-product name
-price
-optional supporting information
-add/select action
+product image, filling the top of the card edge-to-edge
+product name below the image
+price below the name
 
 Recommended characteristics:
 
@@ -618,31 +691,56 @@ subtle border
 subtle shadow
 consistent internal spacing
 large click/touch area
+a visible selected/active state: a brand-colored border replacing the default subtle border when a product is the most recently added or is highlighted
 
 Product cards must be easy to scan.
 
 Do not overload cards with secondary information.
 
+21.1 Add New Product Card
+
+The grid's first cell is a persistent "Add New Product" affordance, not a product:
+
+dashed border (color.border.strong)
+centered "+" icon
+centered "Add New Product" label
+same card footprint (radius.lg, same aspect ratio) as product cards, so it doesn't break the grid rhythm
+
+21.2 Discount Tag
+
+When a product has an active promotion, the card must show:
+
+the original price with a strikethrough, in tertiary text
+the discounted/current price in primary emphasis, immediately after
+a discount percentage label (e.g. "30% Off") in color.status.danger, next to the strikethrough price
+
+Do not use the discount tag as the only indicator of price change — always pair it with the visible strikethrough price.
+
 22. POS Categories
 
-Categories should use compact rounded controls.
+Categories are presented as a horizontal row of bordered filter cards, per the Section 3.1 screenshot — not pill tabs.
 
-Example:
+Each category card contains:
 
-All
-Food
-Drinks
-Coffee
-Snacks
-Desserts
+category label (e.g. "All Product", "Foods", "Beverage", "Other")
+an item count directly below the label, in tertiary text (e.g. "1200 items")
 
-Selected state should use a subtle brand or operational accent.
+Card characteristics:
 
-Categories should remain horizontally scannable where possible.
+radius.md
+surface.raised background
+subtle default border (color.border.default)
+selected state: brand-colored border (color.brand.primary) replacing the default border, plus a light brand-tinted background (surface.strong); the label may also switch to brand-colored text
+
+Categories should remain horizontally scannable, laid out as a single row above the product grid.
 
 Avoid oversized navigation controls.
 
+Do not fall back to pill-style tabs for the primary category row on POS — pills remain reserved for status badges, tags, and compact secondary filters elsewhere in the product (per Section 11, Radius System).
+
 23. POS Search
+
+Per the Section 3.1 screenshot, POS search sits inside the page header row, right-aligned opposite the page title, above the category row and product grid.
 
 Search is a first-class control.
 
@@ -663,9 +761,19 @@ no-result state
 loading state
 24. POS Order / Cart Panel
 
-The order panel is a first-class component.
+The order panel ("Detail Order") is a first-class component and the right-most zone of the POS layout.
 
 It should remain visible on desktop POS where layout allows.
+
+Per the Section 3.1 screenshot, the panel is structured top to bottom as:
+
+Panel header: "Detail Order"
+Customer selector: full-width "Type or Select Customer" combobox
+"Your order:" label
+Order List: one row per line item (see 24.1)
+Order Summary block: Subtotal, Service Tax, Total payment (see 24.2)
+Payment Method selector (see 24.3)
+Primary CTA: "Make Order" (see 26)
 
 The order panel must communicate:
 
@@ -679,6 +787,33 @@ final total
 
 The panel must feel visually distinct without becoming visually heavy.
 
+24.1 Order List Row
+
+Each order line item must show, in a single row:
+
+small product thumbnail (rounded, radius.sm)
+product name
+unit price — if discounted, show the discounted price with the original struck through, same treatment as 21.2
+a quantity stepper (see Section 25) below or beside the name
+line total, right-aligned, using JetBrains Mono
+a delete/remove icon (trash), using color.status.danger, aligned to the top-right of the row
+
+Rows should be separated by light dividers or consistent vertical spacing (space.4), not individual card borders per row, to avoid visual heaviness in a scrollable list.
+
+24.2 Order Summary Block
+
+Directly below the order list, right above the payment method selector:
+
+Subtotal (n) — label includes the item count, value in JetBrains Mono
+Service Tax — value in JetBrains Mono
+Total payment — visually the strongest row (font.weight.strong, larger size), separated from the rows above by a divider or extra spacing
+
+All monetary values are right-aligned.
+
+24.3 Payment Method Selector
+
+A labeled dropdown/select ("Payment method:") showing the currently selected method (e.g. "Cash") with a chevron affordance, styled as a standard form select (Section 38), placed directly above the primary CTA.
+
 25. POS Quantity Controls
 
 Quantity controls must be easy to use with:
@@ -687,11 +822,13 @@ mouse
 keyboard
 touch
 
+Per the Section 3.1 screenshot, the standard stepper anatomy is a compact three-part control: a decrement button ("−"), the current quantity in the middle, and an increment button ("+"), grouped inside one small bordered/pill container so it reads as a single control.
+
 The user should be able to:
 
 increment
 decrement
-remove item
+remove item (via the row's dedicated delete icon, not by decrementing to zero)
 view current quantity
 
 Controls should not require precision clicking.
@@ -700,6 +837,8 @@ Controls should not require precision clicking.
 
 The payment action is the strongest action in the POS.
 
+Per the Section 3.1 screenshot, it is a full-width primary button ("Make Order") pinned at the bottom of the Order Panel, using color.brand.primary as its fill, an appropriate icon (e.g. a send/confirm glyph), and text.inverse for the label.
+
 It must be:
 
 prominent
@@ -707,8 +846,9 @@ easy to find
 touch-friendly
 keyboard accessible
 visually distinct
+full-width within the Order Panel, always the lowest element in the panel
 
-The final payable amount should be highly visible.
+The final payable amount (Total payment, Section 24.2) should be highly visible directly above the button.
 
 Do not hide payment inside an overflow menu.
 
@@ -1011,27 +1151,87 @@ The primary target is desktop and laptop web applications.
 Also support:
 
 tablet
+mobile phone (secondary target — see 41.1)
 touch devices
 
 Do not simply scale down the desktop layout.
 
-POS
+41.1 Breakpoints
 
-On narrower layouts:
+breakpoint.desktop = ≥1280px   — primary target, full shell
+breakpoint.laptop   = 1024–1279px — primary target, slightly compressed shell
+breakpoint.tablet    = 768–1023px  — secondary target, adapted shell
+breakpoint.mobile    = <768px      — secondary target, condensed shell
 
-preserve search
-preserve product discovery
-prioritize cart context
-preserve primary payment action
-reduce secondary content
-Backoffice
+Use these four breakpoints consistently across the product. Do not introduce ad-hoc breakpoints per screen.
 
-On narrower layouts:
+Mobile phone is a secondary target: OhMyPos must remain usable and legible on a phone (e.g. an owner checking the Dashboard, or a cashier on a phone during downtime), but it is not the primary design target and does not need the same density as desktop.
 
-prioritize primary columns
-allow horizontal table scrolling where appropriate
-collapse secondary controls
-preserve comprehension
+41.2 Sidebar Behavior by Breakpoint
+
+Desktop / Laptop (≥1024px)
+- Sidebar stays fixed, ≈216px, fully expanded (icons + labels), per Section 16.
+
+Tablet (768–1023px)
+- Sidebar collapses to an icon-only rail, ≈64px wide.
+- Labels appear in a tooltip or a temporary flyout on tap/hover, not permanently visible.
+- The active item indicator (brand-tinted background) still applies to the icon itself.
+- The bottom account card collapses to just the avatar; tapping it opens the full account menu (name, role, role switcher, Settings, Log out) as a popover.
+- A "Sales" (or other) expandable group opens as a flyout submenu when its icon is tapped, rather than an inline indented list.
+
+Mobile (<768px)
+- Sidebar is hidden by default and replaces with either:
+  - a bottom navigation bar showing only the role's top-level items as icons (max 5 visible; overflow goes into a "More" icon), or
+  - a hamburger-triggered full-height drawer that mirrors the desktop sidebar content (brand mark, search, "Menu" label, nav list, account card)
+- For Kasir specifically, since their only destination is the Sales group (Sales Transaction, Sales History), a simple top tab switcher between "Transaction" and "History" is preferred over a hidden drawer, so their one available workflow stays one tap away at all times.
+
+41.3 POS / Sales Transaction Behavior by Breakpoint
+
+Desktop / Laptop (≥1024px)
+- Full three-zone layout as described in Section 20: Sidebar + Product Discovery + Order Panel, all visible simultaneously.
+
+Tablet (768–1023px)
+- Sidebar collapses per 41.2.
+- Product Discovery and Order Panel remain side by side, but the product grid drops from 4 columns to 3 columns and the Order Panel narrows proportionally.
+- If horizontal space is too tight for both to stay comfortably usable, the Order Panel may become a slide-over panel triggered by a persistent "Order (n) · Total" pill/button pinned to the bottom or top-right of the Product Discovery zone — tapping it slides the Order Panel in from the right, overlaying the product grid. This is the one place a persistent zone may become an on-demand overlay.
+
+Mobile (<768px)
+- Single-column flow: Product Discovery is the primary full-width view (category cards scroll horizontally, product grid drops to 2 columns).
+- The Order Panel becomes a bottom sheet, collapsed by default to a slim persistent bar showing item count and Total payment (e.g. "3 items · Rp 32.000") plus a "View Order" affordance.
+- Tapping the bar expands the sheet to show the full Order Panel content (order list, summary, payment method, Make Order button) as described in Section 24, scrollable within the sheet.
+- The Make Order button remains reachable within one tap from the collapsed state — do not bury it more than one interaction deep.
+- Category filter cards become a horizontally scrollable single row (same card treatment, no wrapping to multiple rows).
+
+41.4 Backoffice Behavior by Breakpoint
+
+Desktop / Laptop (≥1024px)
+- Full data tables as described in Section 28, all columns visible.
+
+Tablet (768–1023px)
+- Sidebar collapses per 41.2.
+- Tables keep their column structure but scroll horizontally within their container; the primary identifying column (e.g. name, transaction ID) stays pinned/sticky on the left so context is never lost while scrolling.
+- Filter rows may wrap to two lines instead of staying single-line.
+- KPI card rows (Dashboard, Reports) drop from 3–4 columns to 2 columns.
+
+Mobile (<768px)
+- Prefer collapsing low-priority columns before converting to a card stack — e.g. a Data Master table can drop "last update" and keep name/price/stock/status visible, with the rest reachable via a row-level expand or a detail view.
+- Only convert a table to a stacked card list when the table has 4 columns or fewer and card comparison would not lose meaningful context (per the existing anti-pattern rule in Section 41 — do not do this by default).
+- KPI card rows become a single column, full width.
+- Forms (Settings, Add Product, etc.) become single-column, full-width fields.
+
+41.5 Touch Targets
+
+On tablet and mobile, and for any touch-oriented control on desktop (POS quantity stepper, category cards):
+
+- Minimum touch target size: 40×40px, with 44×44px preferred for primary actions (Make Order, stepper buttons, delete icon).
+- Minimum 8px spacing between adjacent touch targets to prevent mis-taps.
+- Hover-only affordances (e.g. a row action that only appears on hover) must have a touch-accessible equivalent (always-visible icon, or tap-to-reveal) on tablet and mobile.
+
+41.6 Typography & Spacing Scaling
+
+- Do not shrink the base body size below 13px (font.size.sm) at any breakpoint — legibility on operational screens must not be sacrificed for density.
+- Page margins step down with the spacing scale: space.6 (32px) on desktop, space.5 (24px) on tablet, space.4 (16px) on mobile — do not introduce values outside the Section 13 spacing scale.
+- Headline sizes (font.size.2xl / 3xl) may step down one level on mobile (e.g. 3xl → 2xl) to preserve layout balance, but must stay within the defined type scale.
 
 Do not convert every table into a card stack if doing so makes comparison harder.
 
@@ -1308,7 +1508,7 @@ Topbar ≈ 52px
 
 Status:
 
-Reference, not specification.
+Reference, not specification — except for the POS / Sales Entry layout anatomy, which follows the confirmed screenshot in Section 3.1.
 
 Use the mockup to understand:
 
@@ -1414,6 +1614,18 @@ Payment action is obvious.
 
 POS does not contain unnecessary dashboard decoration.
 
+Category row uses bordered count cards, not pill tabs.
+
+"Add New Product" card is present as the grid's first cell.
+
+Discount tags always pair a struck-through price with the percentage label.
+
+Order list rows show thumbnail, stepper, line total, and delete icon.
+
+Order summary shows Subtotal, Service Tax, and a visually dominant Total payment.
+
+Payment method selector sits directly above the primary CTA.
+
 Backoffice
 
 Tables remain readable.
@@ -1427,6 +1639,22 @@ Branch context is explicit.
 Reports have appropriate breathing room.
 
 KPI cards remain useful rather than decorative.
+
+Responsive
+
+Sidebar collapses to an icon rail on tablet and to a bottom nav/drawer on mobile.
+
+POS product grid steps down from 4 to 3 to 2 columns across desktop/tablet/mobile.
+
+Order Panel remains reachable within one tap/interaction at every breakpoint.
+
+Make Order button never requires more than one interaction to reach on mobile.
+
+Backoffice tables keep their primary identifying column pinned when scrolling horizontally.
+
+Touch targets meet the 40×40px minimum (44×44px for primary actions).
+
+No table collapses into a card stack unless it has 4 columns or fewer.
 
 Accessibility
 
