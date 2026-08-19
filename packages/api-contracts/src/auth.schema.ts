@@ -31,3 +31,9 @@ export const UpdateSelfSchema = z.object({
   name: z.string().trim().min(1).max(120),
 });
 export type UpdateSelf = z.infer<typeof UpdateSelfSchema>;
+
+/** Response shape of POST /auth/me/photo (Phase 10b). */
+export const UploadPhotoResponseSchema = z.object({
+  photoUrl: z.string(),
+});
+export type UploadPhotoResponse = z.infer<typeof UploadPhotoResponseSchema>;

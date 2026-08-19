@@ -41,6 +41,31 @@
 
 ## Log
 
+### TASK-034 — Phase 10b: Profile Photo Upload (Cloudinary)
+
+- **Date:** 2026-08-19
+- **Module / Phase:** Phase 10b — Profile Photo Upload
+- **Objective:** Implement self-service profile photo upload using Cloudinary for storage and transformation, adding `User.photoUrl` and `POST /auth/me/photo`.
+- **Relevant docs:** ADR-020, ERD §7 Note 4 (Superseded), PRD v1.1
+- **What was done:**
+  - Authored and approved ADR-020 reversing ERD §7 Note 4.
+  - Added `cloudinary` dependency to `apps/api`.
+  - Updated `apps/api/prisma/schema.prisma` with `photoUrl String? @map("photo_url")` on `User` model, generated and executed migration `20260819141846_add_user_photo_url`.
+  - Updated `@ohmypos/api-contracts` (`UserResponseSchema` with `photoUrl: z.string().nullable()`, `UploadPhotoResponseSchema`).
+  - Added `ProfilePhotoService`, `InvalidImageFileException`, and `POST /auth/me/photo` in `apps/api`.
+  - Updated `AuthService` and `UsersService` to include `photoUrl` in response mapping.
+  - Added `useUploadPhoto` mutation hook and `PhotoForm` component in `apps/web`.
+  - Set Cloudinary upload target folder to `ohmypos` with public ID format `user_<userId>`.
+  - Updated CSP headers in `apps/web/next.config.ts` to allow `https://res.cloudinary.com` under `img-src`.
+  - Added profile photo avatar rendering to `Sidebar.tsx`.
+  - Removed server-side thumbnail crop transformation in `ProfilePhotoService` so the original photo is preserved intact in Cloudinary.
+  - Added unit test `profile-photo.spec.ts`.
+- **Decisions made during this task:**
+  - Cloudinary public ID is deterministic (`ohmypos/user_<userId>`) with `overwrite: true` to avoid orphan image accumulation.
+  - Storing original aspect ratio without server-side crop; circular/square presentation handled in frontend CSS.
+- **Status:** Done
+- **Handoff notes:** Requires real `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in environment variables when deployed.
+
 ### TASK-033 — Remove Redundant Branch Label from Topbar
 
 - **Date:** 2026-08-19

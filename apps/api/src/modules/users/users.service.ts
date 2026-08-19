@@ -162,6 +162,7 @@ export class UsersService {
     role: UserResponse['role'];
     branchId: string | null;
     isActive: boolean;
+    photoUrl?: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): UserResponse {
@@ -172,6 +173,7 @@ export class UsersService {
       role: user.role,
       branchId: user.branchId,
       isActive: user.isActive,
+      photoUrl: user.photoUrl ?? null,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

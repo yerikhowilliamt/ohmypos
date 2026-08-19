@@ -39,6 +39,20 @@
 
 ## Log
 
+### DEBT-009 — Cloudinary direct upload vs server-side proxy
+
+- **Date logged:** 2026-08-19
+- **Found during:** Phase 10b (TASK-034: Profile Photo Upload)
+- **Description:** File foto profil diupload ke backend API (`POST /auth/me/photo`) menggunakan multipart parser NestJS/Multer lalu diproxy streaming ke Cloudinary. Belum menggunakan signed direct upload URL dari browser langsung ke Cloudinary.
+- **Why deferred:** Volume upload avatar profil internal staff rendah, alur streaming server-side sederhana dan memvalidasi ukuran serta sesi otentikasi secara sentral tanpa memaparkan credential signature endpoint tambahan.
+- **Impact if unaddressed:** Sedikit konsumsi bandwidth & memory upload stream pada server backend saat user upload foto.
+- **Trigger condition:** Volume user bertambah drastis atau ada upload gambar/aset berskala besar di masa mendatang.
+- **Proposed resolution:** Implementasi signed upload URL endpoint (`/auth/me/photo/sign`) dan upload langsung dari browser ke Cloudinary.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
 ### DEBT-008 — Thermal printer ESC/POS command integration for receipts
 
 - **Date logged:** 2026-08-19

@@ -60,6 +60,7 @@ export const UserResponseSchema = z.object({
   role: UserRole,
   branchId: UuidString.nullable(),
   isActive: z.boolean(),
+  photoUrl: z.string().nullable(),
   createdAt: z.date().or(z.string()),
   updatedAt: z.date().or(z.string()),
 });
