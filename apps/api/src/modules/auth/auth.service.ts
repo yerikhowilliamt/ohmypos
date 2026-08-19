@@ -3,12 +3,14 @@ import { JwtService } from '@nestjs/jwt';
 import type {
   ChangePassword,
   Login,
+  UpdateSelf,
   UserResponse,
 } from '@ohmypos/api-contracts';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import type { JwtPayload } from '../../common/types/jwt-payload.interface';
+import { LastActiveOwnerException } from './auth.exceptions';
 
 export interface AuthTokens {
   accessToken: string;
@@ -155,6 +157,54 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
     return this.toResponse(user);
+  }
+
+  /** Self-service name change (Phase 10a). Email is not self-service — see auth.schema.ts. */
+  async updateProfile(userId: string, dto: UpdateSelf): Promise<UserResponse> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { name: dto.name },
+    });
+    return this.toResponse(updated);
+  }
+
+  /**
+   * Self-service "Hapus Akun Saya" (Phase 10a). Soft-deactivate only — same
+   * rule as `UsersService.deactivate`, `Sale.userId` is an audit trail (ERD §7
+   * note 3) — plus a guard `UsersService.deactivate` does not need, because an
+   * OWNER deactivating *someone else* can never remove the last active OWNER,
+   * but an OWNER deactivating *themselves* can.
+   */
+  async deactivateSelf(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.role === 'OWNER') {
+      const activeOwnerCount = await this.prisma.user.count({
+        where: { role: 'OWNER', isActive: true },
+      });
+      if (activeOwnerCount <= 1) {
+        throw new LastActiveOwnerException();
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        isActive: false,
+        refreshTokenHash: null,
+        tokenValidFrom: new Date(),
+      },
+    });
+
+    return { message: 'Account deactivated' };
   }
 
   private async generateTokens(
