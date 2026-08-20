@@ -37,6 +37,26 @@
 
 ## Log
 
+### ERR-015 — Test fixture with `hasRecipe: false` made a product silently un-addable to cart
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-051 (OWNER branch-selectable POS access) — writing `PosScreen.owner-branch.test.tsx`
+- **Symptom:** `fireEvent.click(screen.getByTestId('product-card-...'))` produced no visible error, but `cart-total` stayed `Rp 0` and the submit button stayed disabled — the click appeared to do nothing.
+- **Root cause:** `canAddProduct()` (`apps/web/lib/pos/availability.ts`) unconditionally returns `false` for any product with `hasRecipe: false` — `hppAtSale` would have to be `null` at sale time, which the server rejects (`RecipeIncompleteException`, ADR-015) — so `ProductCard`'s `<Button disabled={!addable}>` silently no-ops the click. The new test's product fixture was copied loosely from an unrelated earlier fixture (`AIR`/Air Mineral in `PosScreen.test.tsx`, which is deliberately non-addable to test the "no recipe" empty state) instead of the addable `KOPI_SUSU` shape.
+- **Resolution:** Changed the fixture to `hasRecipe: true` with an empty `recipeItems: []` (a valid "recipe exists, needs no ingredients" edge case `canAddProduct` accepts), and gave it a non-null `hpp`/`margin` to match.
+- **Prevention:** When writing a new POS test fixture meant to be addable, copy the shape of an existing *addable* fixture (`KOPI_SUSU`/`LATTE` in `PosScreen.test.tsx`, both `hasRecipe: true`) rather than assuming `hasRecipe: false` is a harmless default — it silently disables the primary interaction instead of throwing.
+- **Severity:** Low — test-authoring error only, caught before merge, no production impact.
+
+### ERR-014 — Radix `Select` leaves `<body>` with `pointer-events: none` briefly after closing, swallowing the next test click
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-051 (OWNER branch-selectable POS access) — writing `PosScreen.owner-branch.test.tsx`
+- **Symptom:** After `fireEvent.click`-ing a `SelectItem` to pick a branch (confirmed selected — the trigger's displayed value updated correctly), the immediately-following `fireEvent.click` on a `ProductCard` did nothing: `cart-total` stayed `Rp 0`, `cart-submit` stayed disabled, and `await screen.findByText('Penjualan tercatat')` timed out.
+- **Root cause:** Radix `Select`'s portal sets `document.body.style.pointerEvents = 'none'` while open and clears it asynchronously (via an effect, not synchronously with the click handler) once it closes. A `fireEvent.click` fired on a different element in the same synchronous test step can land while `<body>` still has `pointer-events: none`, which silently blocks the click from reaching its target in jsdom — no error is thrown, the click simply does nothing.
+- **Resolution:** Added an explicit wait after every Select interaction in the test's `pickBranch()` helper: `await waitFor(() => expect(document.body.style.pointerEvents).not.toBe('none'))` before issuing any further `fireEvent.click`.
+- **Prevention:** Any future test that interacts with a Radix `Select` (or other Radix component using the same body-lock pattern — `Dialog`, `Sheet`, `Popover`) and then immediately clicks something else outside it must wait for `document.body.style.pointerEvents` to clear first, not just for the visible DOM state to update. No prior test in this codebase exercised a full open-select-then-pick-an-item flow (`ReportFilterBar.test.tsx` only asserts static `disabled` state on the trigger), so this gotcha had no existing precedent to follow.
+- **Severity:** Low — test-infrastructure gotcha only, caught before merge, no production impact.
+
 ### ERR-013 — Prettier formatting error on multi-line destructured props and JSX attributes
 
 - **Date found:** 2026-08-20

@@ -4,8 +4,9 @@ import { getSession } from '@/lib/session';
 
 /**
  * POS / Sales Entry (PRD §5.2, DESIGN.md §20).
- * Accessible by KASIR and OWNER. For KASIR, user.branchId is required.
- * For OWNER, if user.branchId is not set, they are prompted or can access via branch selection.
+ * Accessible by KASIR and OWNER. For KASIR, user.branchId is required — it is
+ * their only branch. OWNER has no fixed branch (ADR-011: unscoped, all-branch
+ * access); PosScreen renders a branch picker for them instead.
  */
 export default async function SalesPage() {
   const user = await getSession();
@@ -29,17 +30,5 @@ export default async function SalesPage() {
     );
   }
 
-  if (!user.branchId && user.role === 'OWNER') {
-    return (
-      <div
-        role="alert"
-        className="rounded-sm border border-status-warning/30 bg-status-warning/10 p-4 text-sm text-status-warning"
-      >
-        Akun Owner Anda belum terhubung ke cabang aktif. Silakan pilih cabang di
-        pengaturan pengguna atau gunakan akun Kasir cabang untuk bertransaksi.
-      </div>
-    );
-  }
-
-  return <PosScreen branchId={user.branchId!} role={user.role} />;
+  return <PosScreen branchId={user.branchId ?? null} role={user.role} />;
 }

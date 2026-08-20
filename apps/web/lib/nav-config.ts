@@ -52,7 +52,7 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
       label: 'Penjualan',
       icon: ShoppingCart,
       children: [
-        { href: '/sales', label: 'Transaksi Kasir' },
+        { href: '/sales', label: 'Transaksi Penjualan' },
         { href: '/sales/history', label: 'Riwayat Transaksi' },
       ],
     },
@@ -79,7 +79,7 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
       label: 'Penjualan',
       icon: ShoppingCart,
       children: [
-        { href: '/sales', label: 'Transaksi Kasir' },
+        { href: '/sales', label: 'Transaksi Penjualan' },
         { href: '/sales/history', label: 'Riwayat Transaksi' },
       ],
     },

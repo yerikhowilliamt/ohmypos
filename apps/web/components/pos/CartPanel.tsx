@@ -91,7 +91,12 @@ export function CartPanel({
     <aside
       id="pos-cart-panel"
       aria-label="Detail pesanan"
-      className="flex w-full shrink-0 flex-col rounded-lg border border-border-default bg-surface-raised shadow-1 lg:h-full lg:w-[360px] xl:w-[380px]"
+      // shrink-0 only from md up: in the desktop/tablet row layout it must
+      // hold its fixed width against ProductGrid, but inside the mobile
+      // bottom sheet (a bounded-height column) it has to shrink to fit so its
+      // own order-list region (below) scrolls internally instead of the
+      // whole panel overflowing the sheet.
+      className="flex w-full min-h-0 shrink flex-col rounded-lg border border-border-default bg-surface-raised shadow-1 md:h-full md:w-[320px] md:shrink-0 lg:w-[360px] xl:w-[380px]"
     >
       {/* §18.1: the panel has its own header, independent of the page header. */}
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-default p-4">

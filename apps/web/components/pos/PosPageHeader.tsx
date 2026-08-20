@@ -8,6 +8,12 @@ import { formatLongDate } from '@/lib/formatters';
 interface PosPageHeaderProps {
   query: string;
   onQueryChange: (value: string) => void;
+  /**
+   * OWNER-only branch selector, built by `PosScreen` (which owns the branch
+   * list and selection state) and slotted in here so this component stays
+   * presentational. `undefined` for KASIR, who has no branch to pick.
+   */
+  branchPicker?: React.ReactNode;
 }
 
 /**
@@ -15,7 +21,11 @@ interface PosPageHeaderProps {
  * beneath it as tertiary text, and a first-class search control right-aligned
  * in the same row, above the category row and product grid.
  */
-export function PosPageHeader({ query, onQueryChange }: PosPageHeaderProps) {
+export function PosPageHeader({
+  query,
+  onQueryChange,
+  branchPicker,
+}: PosPageHeaderProps) {
   // Rendered only after mount — see the hydration note in the plan.
   const [today, setToday] = React.useState<string | null>(null);
 
@@ -41,8 +51,9 @@ export function PosPageHeader({ query, onQueryChange }: PosPageHeaderProps) {
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <h1 className="text-xl font-semibold tracking-tight text-text-primary">
-          Transaksi Kasir
+          Transaksi Penjualan
         </h1>
+        {branchPicker && <div className="mt-1.5">{branchPicker}</div>}
         <p
           data-testid="pos-today"
           className="mt-0.5 text-sm text-text-tertiary"
