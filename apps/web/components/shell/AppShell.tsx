@@ -3,7 +3,9 @@
 import * as React from 'react';
 import type { UserResponse } from '@ohmypos/api-contracts';
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { cn } from '@ohmypos/ui/lib/utils';
+import { getBreadcrumbSegments } from '@/lib/nav-config';
 import { MobileNavDrawer } from './MobileNavDrawer';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -31,6 +33,8 @@ export function AppShell({
 }) {
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const isPos = variant === 'pos';
+  const pathname = usePathname();
+  const breadcrumb = getBreadcrumbSegments(pathname, user.role);
 
   return (
     <div
@@ -48,6 +52,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           variant={variant}
+          breadcrumb={breadcrumb}
           onOpenMobileNav={() => setMobileNavOpen(true)}
         />
         <main

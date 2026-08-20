@@ -18,6 +18,7 @@ import {
 } from '@ohmypos/ui/components/tabs';
 import type { UpsertOpeningStock } from '@ohmypos/api-contracts';
 import { AlertCircle, CheckCircle2, Boxes } from 'lucide-react';
+import { Skeleton } from '@ohmypos/ui/components/skeleton';
 
 function getCurrentMonthString(): string {
   const d = new Date();
@@ -159,12 +160,7 @@ export function InventoryClient() {
 
           {/* Main Content Areas: Loading, Error, or Worksheet Table */}
           {isWorksheetLoading ? (
-            <div className="p-12 text-center rounded-md border border-border-default bg-surface-raised">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary mx-auto mb-3" />
-              <p className="text-sm text-text-secondary">
-                Memuat lembar kerja stok awal periode {period}...
-              </p>
-            </div>
+            <TableSkeleton />
           ) : isWorksheetError ? (
             <div className="p-8 text-center rounded-md border border-status-danger/30 bg-status-danger/5 text-status-danger">
               <AlertCircle className="size-8 mx-auto mb-2 opacity-80" />
@@ -191,15 +187,21 @@ export function InventoryClient() {
   );
 }
 
-function SummaryLoading() {
+/** Mirrors DashboardClient's list-skeleton pattern, sized for a table. */
+function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="p-12 text-center rounded-md border border-border-default bg-surface-raised">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary mx-auto mb-3" />
-      <p className="text-sm text-text-secondary">
-        Memuat ringkasan stok periode ini...
-      </p>
+    <div className="rounded-md border border-border-default bg-surface-raised p-4">
+      <div className="space-y-2">
+        {Array.from({ length: rows }, (_, i) => (
+          <Skeleton key={i} className="h-9 w-full" />
+        ))}
+      </div>
     </div>
   );
+}
+
+function SummaryLoading() {
+  return <TableSkeleton />;
 }
 
 function DataError({ title, error }: { title: string; error: unknown }) {

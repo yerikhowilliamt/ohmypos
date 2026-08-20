@@ -7,6 +7,7 @@ import type {
   UserRole,
 } from '@ohmypos/api-contracts';
 import { useQueryClient } from '@tanstack/react-query';
+import { Store } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -350,9 +351,17 @@ function PosScreenInner({
           {needsBranchSelection ? (
             // OWNER hasn't picked a branch yet — nothing to browse or sell
             // against until they do (see `selectedBranchId` above).
-            <p className="flex-1 py-8 text-center text-sm text-text-secondary">
-              Pilih cabang untuk memulai transaksi.
-            </p>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
+              <span
+                aria-hidden
+                className="flex size-10 items-center justify-center rounded-pill bg-surface-muted text-text-tertiary"
+              >
+                <Store className="size-5" />
+              </span>
+              <p className="text-sm text-text-secondary">
+                Pilih cabang untuk memulai transaksi.
+              </p>
+            </div>
           ) : (
             <>
               <CategoryFilterRow

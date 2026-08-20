@@ -28,7 +28,7 @@ import {
 } from '@ohmypos/ui/components/card';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { Badge } from '@ohmypos/ui/components/badge';
-import { formatCurrency } from '@/lib/formatters';
+import { formatCurrency, formatQuantity } from '@/lib/formatters';
 import {
   AlertTriangle,
   ArrowRight,
@@ -315,7 +315,7 @@ export function DashboardClient() {
                     </div>
                     <div className="flex flex-col items-end font-mono shrink-0 ml-2">
                       <span className="font-semibold text-text-primary">
-                        {p.quantitySold} terjual
+                        {formatQuantity(p.quantitySold)} terjual
                       </span>
                       <span className="text-[10px] text-text-tertiary">
                         {formatCurrency(p.revenue)}
@@ -363,8 +363,8 @@ export function DashboardClient() {
                     className="py-2 flex items-center justify-between text-xs"
                   >
                     <div className="truncate">
-                      <p className="font-medium text-text-primary truncate font-mono">
-                        {sale.id.slice(0, 8)}...
+                      <p className="font-medium text-text-primary truncate">
+                        {sale.cashierName}
                       </p>
                       <p className="text-[10px] text-text-tertiary">
                         {new Date(sale.soldAt).toLocaleTimeString('id-ID', {

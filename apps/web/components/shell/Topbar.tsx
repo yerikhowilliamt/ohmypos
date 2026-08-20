@@ -13,9 +13,19 @@ interface TopbarProps {
    * has no separate horizontal topbar.
    */
   variant?: 'default' | 'pos';
+  /**
+   * Current-page orientation (§17), e.g. `["Data Master", "Bahan Baku"]`.
+   * Desktop-only — mobile has no room next to the hamburger + logo row, and
+   * the page's own header (§18) already carries the title there.
+   */
+  breadcrumb?: string[];
 }
 
-export function Topbar({ onOpenMobileNav, variant = 'default' }: TopbarProps) {
+export function Topbar({
+  onOpenMobileNav,
+  variant = 'default',
+  breadcrumb,
+}: TopbarProps) {
   return (
     <header
       data-testid="topbar"
@@ -48,6 +58,29 @@ export function Topbar({ onOpenMobileNav, variant = 'default' }: TopbarProps) {
             className="h-6 w-auto object-contain"
           />
         </Link>
+
+        {variant === 'default' && breadcrumb && breadcrumb.length > 0 && (
+          <nav
+            aria-label="Breadcrumb"
+            data-testid="topbar-breadcrumb"
+            className="hidden items-center gap-1.5 text-xs text-text-tertiary md:flex"
+          >
+            {breadcrumb.map((segment, idx) => (
+              <span key={segment} className="flex items-center gap-1.5">
+                {idx > 0 && <span aria-hidden>›</span>}
+                <span
+                  className={
+                    idx === breadcrumb.length - 1
+                      ? 'font-medium text-text-secondary'
+                      : undefined
+                  }
+                >
+                  {segment}
+                </span>
+              </span>
+            ))}
+          </nav>
+        )}
       </div>
 
       {/* Branch context — §17. Back-office data is all-branch by construction:

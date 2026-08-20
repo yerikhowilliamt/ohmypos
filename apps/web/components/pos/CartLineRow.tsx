@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ImageOff, Trash2 } from 'lucide-react';
+import { ImageOff, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
 import { Label } from '@ohmypos/ui/components/label';
@@ -39,6 +39,10 @@ export function CartLineRow({
   onPriceChange,
 }: CartLineRowProps) {
   const isOverridden = line.overridePrice !== null;
+  // Starts collapsed unless the line already carries an override, so a fresh
+  // cart line reads as compact text (DESIGN.md §24.1) rather than a full form
+  // row — the CurrencyInput only reappears once the cashier asks to edit it.
+  const [isEditingPrice, setIsEditingPrice] = React.useState(isOverridden);
 
   return (
     <li
@@ -102,25 +106,46 @@ export function CartLineRow({
         </div>
 
         <div className="flex items-center gap-2">
-          <Label
-            htmlFor={`cart-price-${line.id}`}
-            className="shrink-0 text-xs text-text-tertiary"
-          >
-            Harga satuan
-          </Label>
-          {/* CurrencyInput.onChange emits a raw unformatted string, not an event —
-              the field displays "18.000" while state keeps "18000". */}
-          <CurrencyInput
-            id={`cart-price-${line.id}`}
-            data-testid={`cart-price-${line.id}`}
-            value={effectiveUnitPrice(line)}
-            onChange={(value) => onPriceChange(line.id, value)}
-            className="h-8 text-xs"
-          />
-          {isOverridden && (
-            <Badge variant="warning" className="shrink-0">
-              Harga khusus
-            </Badge>
+          {isEditingPrice ? (
+            <>
+              <Label
+                htmlFor={`cart-price-${line.id}`}
+                className="shrink-0 text-xs text-text-tertiary"
+              >
+                Harga satuan
+              </Label>
+              {/* CurrencyInput.onChange emits a raw unformatted string, not an
+                  event — the field displays "18.000" while state keeps "18000". */}
+              <CurrencyInput
+                id={`cart-price-${line.id}`}
+                data-testid={`cart-price-${line.id}`}
+                value={effectiveUnitPrice(line)}
+                onChange={(value) => onPriceChange(line.id, value)}
+                className="h-8 text-xs"
+                autoFocus
+              />
+              {isOverridden && (
+                <Badge variant="warning" className="shrink-0">
+                  Harga khusus
+                </Badge>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              data-testid={`cart-price-edit-${line.id}`}
+              onClick={() => setIsEditingPrice(true)}
+              aria-label={`Ubah harga satuan ${line.productName}`}
+              className="group -mx-1 flex items-center gap-1.5 rounded-xs px-1 py-0.5 text-xs text-text-tertiary outline-none transition-colors hover:bg-surface-muted hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-focus-ring"
+            >
+              <span className="numeric font-mono">
+                {formatCurrency(effectiveUnitPrice(line))}/satuan
+              </span>
+              <Pencil
+                className="size-3 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                aria-hidden
+              />
+            </button>
           )}
         </div>
       </div>

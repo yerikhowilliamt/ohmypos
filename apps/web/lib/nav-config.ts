@@ -141,6 +141,43 @@ export function getNavItems(role: UserRole): NavItem[] {
 }
 
 /**
+ * Backoffice topbar breadcrumb (DESIGN.md §17 "current page/context"). Reuses
+ * the same role-aware label map as the sidebar instead of a second one, so the
+ * two never drift. Returns `["Data Master", "Bahan Baku"]` for a child route,
+ * `["Dashboard"]` for a flat one, or `[]` if the route isn't in the nav (e.g. a
+ * page reached only via a row action, not the sidebar).
+ */
+export function getBreadcrumbSegments(
+  pathname: string,
+  role: UserRole,
+): string[] {
+  for (const item of getNavItems(role)) {
+    if (item.children) {
+      // An exact match always wins first: `/master-data` is a prefix of
+      // `/master-data/raw-materials`, so a naive prefix test on the sibling
+      // list would shadow the more specific child (same trap `isNavItemActive`'s
+      // doc comment above already calls out for `/sales` vs `/sales/history`).
+      // Only children with no exact hit fall back to a prefix test, and among
+      // those the longest (most specific) href wins.
+      const exact = item.children.find((c) => pathname === c.href);
+      if (exact) return [item.label, exact.label];
+      const prefixed = item.children.filter((c) =>
+        pathname.startsWith(`${c.href}/`),
+      );
+      if (prefixed.length > 0) {
+        const best = prefixed.reduce((a, b) =>
+          b.href.length > a.href.length ? b : a,
+        );
+        return [item.label, best.label];
+      }
+      continue;
+    }
+    if (isNavItemActive(pathname, item.href)) return [item.label];
+  }
+  return [];
+}
+
+/**
  * A route is "on" a nav entry when it is that entry or lives beneath it, so
  * `/sales/history` keeps the `Penjualan` group marked as the active section.
  * Leaf children are compared with `===` at the call site instead, because

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import type { PaymentMethodResponse } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
-import { Send } from 'lucide-react';
+import { Send, ShoppingBag } from 'lucide-react';
 import { canSubmit, type CartState } from '@/lib/pos/cart.reducer';
 import { cartItemCount, cartTotal } from '@/lib/pos/cart-totals';
 import type { PaginatedSales } from '@/hooks/usePos';
@@ -121,7 +121,13 @@ export function CartPanel({
       <div className="min-h-0 flex-1 overflow-y-auto px-3">
         {state.lines.length === 0 ? (
           // DESIGN.md §27, near-verbatim copy, no decorative illustration.
-          <div className="flex h-full flex-col items-center justify-center gap-1 py-10 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
+            <span
+              aria-hidden
+              className="flex size-10 items-center justify-center rounded-pill bg-surface-muted text-text-tertiary"
+            >
+              <ShoppingBag className="size-5" />
+            </span>
             <p className="text-sm font-medium text-text-primary">
               Pesanan masih kosong
             </p>
