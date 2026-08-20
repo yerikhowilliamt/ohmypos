@@ -177,6 +177,8 @@ describe('Leave Requests (e2e)', () => {
     const target = list.find((r) => r.userId === kasir.id);
     expect(target).toBeDefined();
     expect(target?.status).toBe('PENDING');
+    expect(target?.user?.name).toBe('Leave Kasir');
+    expect(target?.user?.email).toBe(kasir.email);
 
     const approveRes = await request(app.getHttpServer())
       .patch(`/api/v1/leave-requests/${target!.id}/approve`)

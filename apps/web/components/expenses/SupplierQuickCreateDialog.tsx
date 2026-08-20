@@ -84,9 +84,9 @@ export function SupplierQuickCreateDialog({
       <DialogContent className="sm:max-w-[420px]">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <DialogHeader>
-            <DialogTitle>Pemasok Baru</DialogTitle>
+            <DialogTitle>Tambah Pemasok Baru</DialogTitle>
             <DialogDescription>
-              Daftarkan pemasok baru untuk digunakan pada pembelian ini.
+              Daftarkan nama pemasok baru untuk nota pembelian.
             </DialogDescription>
           </DialogHeader>
 

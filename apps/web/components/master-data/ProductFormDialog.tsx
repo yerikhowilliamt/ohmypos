@@ -149,9 +149,7 @@ export function ProductFormDialog({
               {isEdit ? 'Edit Produk' : 'Tambah Produk Baru'}
             </DialogTitle>
             <DialogDescription>
-              {isEdit
-                ? 'Perbarui nama, foto, harga jual, atau status aktif produk.'
-                : 'Daftarkan menu atau produk baru untuk dijual di kasir/POS.'}
+              Isi rincian produk menu yang akan dijual di kasir.
             </DialogDescription>
           </DialogHeader>
 

@@ -4,7 +4,7 @@ import { MasterDataClient } from './MasterDataClient';
 
 export const metadata: Metadata = {
   title: 'Produk & Resep — Data Master — OhMyPos',
-  description: 'Kelola katalog menu produk dan takaran resep / komposisi (BOM)',
+  description: 'Daftar menu produk dan resep bahan baku',
 };
 
 export default async function MasterDataProductsPage() {

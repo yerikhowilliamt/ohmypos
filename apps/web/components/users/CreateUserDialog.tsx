@@ -108,10 +108,10 @@ export function CreateUserDialog({
       <DialogContent className="sm:max-w-[480px]">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <DialogHeader>
-            <DialogTitle>Tambah Pengguna</DialogTitle>
+            <DialogTitle>Tambah Pengguna Baru</DialogTitle>
             <DialogDescription>
-              Buat akun staf baru. Hanya OWNER yang dapat melakukan ini
-              (ADR-011).
+              Buat akun untuk kasir atau admin toko. Kasir wajib ditentukan
+              cabang tugasnya.
             </DialogDescription>
           </DialogHeader>
 

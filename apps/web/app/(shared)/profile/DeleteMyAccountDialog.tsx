@@ -38,10 +38,8 @@ export function DeleteMyAccountDialog({
             Hapus Akun Saya
           </DialogTitle>
           <DialogDescription className="mt-2 text-text-secondary">
-            Anda tidak akan bisa login lagi dan akan langsung keluar dari sesi
-            aktif Anda. Riwayat transaksi yang tercatat atas nama Anda tetap
-            tersimpan. Tindakan ini tidak bisa dibatalkan sendiri — hanya OWNER
-            lain yang bisa mengaktifkan kembali akun Anda.
+            Akun Anda akan dihapus secara permanen dari sistem. Tindakan ini
+            tidak dapat dibatalkan.
           </DialogDescription>
         </DialogHeader>
 

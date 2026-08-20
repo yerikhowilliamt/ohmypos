@@ -4,7 +4,7 @@ import { ReconciliationClient } from './ReconciliationClient';
 
 export const metadata: Metadata = {
   title: 'Rekonsiliasi — OhMyPos',
-  description: 'Rekonsiliasi rekening bank dengan pencatatan pembukuan',
+  description: 'Pencocokan mutasi rekening bank dengan catatan transaksi toko',
 };
 
 export default async function Page() {

@@ -80,8 +80,8 @@ export function AddDeviceDialog({
           <DialogHeader>
             <DialogTitle>Tambah Perangkat</DialogTitle>
             <DialogDescription>
-              Setelah dibuat, buka kode aktivasi di browser tablet/terminal yang
-              sesungguhnya, sambil login sebagai OWNER di perangkat itu.
+              Setelah perangkat dibuat, buka link aktivasinya langsung di
+              browser tablet kasir toko tersebut.
             </DialogDescription>
           </DialogHeader>
 

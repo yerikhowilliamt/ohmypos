@@ -39,6 +39,18 @@
 
 ## Log
 
+### DEBT-014 — Unpaginated Leave Requests List in All-Employees View
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-046 (All Employees Leave History View in Leave Requests Page)
+- **Description:** `GET /leave-requests` and `useAllLeaveRequests` return the entire list of leave requests in a single unpaginated array, filtered optionally by status and user.
+- **Why deferred:** In small-to-medium retail operations with single-tenant branch staff (v1 PRD scope), total annual leave requests per store remain under a few hundred records, well within single-query memory and network limits.
+- **Impact if unaddressed:** At higher transaction scale over multiple years with large staff counts, loading the full array could increase payload size and DOM node rendering overhead in the history table.
+- **Trigger condition:** When total historical leave requests exceed 500 records or table loading latency exceeds 300ms.
+- **Proposed resolution:** Introduce cursor or offset pagination in `LeaveRequestListQuerySchema` and `LeaveRequestsService.findAll`, utilizing TanStack Table / React Query infinite query pagination on the frontend.
+- **Priority:** Low
+- **Status:** Open
+
 ### DEBT-013 — Accordion animation keyframes omitted and static TypeScript help content
 
 - **Date logged:** 2026-08-20

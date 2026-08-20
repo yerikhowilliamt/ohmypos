@@ -105,7 +105,7 @@ export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
           </h2>
           <p className="text-xs text-text-secondary">
             Stok bertambah segera; pengeluaran hanya tercatat jika dibayar
-            langsung (ADR-006).
+            langsung.
           </p>
         </div>
         <Button

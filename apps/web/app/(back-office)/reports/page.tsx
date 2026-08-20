@@ -5,7 +5,8 @@ import { ReportsClient } from '@/components/reports/ReportsClient';
 
 export const metadata: Metadata = {
   title: 'Laba Rugi — Laporan — OhMyPos',
-  description: 'Laporan laba rugi dan performa keuangan bisnis',
+  description:
+    'Pantau laporan laba rugi, pendapatan harian, dan analisis produk terlaris.',
 };
 
 export default async function ReportsProfitLossPage() {

@@ -11,7 +11,7 @@ export default async function Page() {
   const user = await requireRole(['KASIR', 'ADMIN', 'OWNER']);
 
   return (
-    <main className="flex-1 p-6 max-w-3xl mx-auto w-full">
+    <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
       <LeaveRequestsClient role={user.role} />
     </main>
   );

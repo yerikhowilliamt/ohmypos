@@ -5,7 +5,7 @@ import { InventoryClient } from '@/components/inventory/InventoryClient';
 
 export const metadata: Metadata = {
   title: 'Inventori — OhMyPos',
-  description: 'Pantau pergerakan stok dan catat stok awal bahan baku bulanan',
+  description: 'Pencatatan stok awal dan rekap pergerakan bahan baku',
 };
 
 export default async function InventoryPage() {

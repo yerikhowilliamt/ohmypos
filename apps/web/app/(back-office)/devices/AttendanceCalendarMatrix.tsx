@@ -403,7 +403,7 @@ export function AttendanceCalendarMatrix({
                                     </p>
                                     <p className="text-[11px] text-text-tertiary">
                                       Perangkat:{' '}
-                                      {status.data.deviceLabel ?? 'Terminal'}
+                                      {status.data.deviceLabel ?? 'Perangkat'}
                                     </p>
                                   </div>
                                 )}

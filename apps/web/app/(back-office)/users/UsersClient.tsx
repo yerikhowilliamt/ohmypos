@@ -12,11 +12,10 @@ export function UsersClient() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-text-primary">
-          Pengguna
+          Pengguna & Hak Akses
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Kelola akun staf, peran akses, dan penugasan cabang — hanya OWNER
-          (ADR-011).
+          Kelola akun kasir, admin, dan owner serta cabang penugasannya.
         </p>
       </div>
 

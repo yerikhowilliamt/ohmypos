@@ -41,13 +41,14 @@ export function ActivateDeviceClient({ code }: { code: string }) {
         Aktivasi Perangkat
       </h1>
       <p className="text-sm text-text-secondary">
-        Pastikan Anda membuka tautan ini di browser tablet/terminal yang
-        sesungguhnya akan dipakai Kasir — bukan di perangkat lain.
+        Pastikan halaman ini dibuka langsung di browser tablet atau HP yang akan
+        dipakai kasir di toko — bukan di perangkat pribadi Anda.
       </p>
 
       {result === 'success' ? (
         <p className="text-sm text-status-success">
-          Perangkat ini berhasil diaktifkan.
+          Perangkat berhasil diaktifkan. Kasir sekarang bisa login dan absensi
+          dari perangkat ini.
         </p>
       ) : (
         <>

@@ -78,9 +78,9 @@ export default function LoginPage() {
             role="alert"
             className="mb-4 rounded-sm border border-status-warning/30 bg-status-warning/10 p-3 text-xs text-text-primary"
           >
-            Login berhasil, tapi perangkat ini tidak terdaftar sebagai terminal
-            resmi cabang Anda. Ini dicatat sebagai pelanggaran absensi. Hubungi
-            Owner jika ini adalah kesalahan.
+            Perangkat ini belum terdaftar resmi untuk cabang Anda. Login tetap
+            berhasil, tapi tercatat sebagai absensi di luar perangkat resmi.
+            Hubungi Owner jika ada kekeliruan.
             <Button
               type="button"
               variant="outline"

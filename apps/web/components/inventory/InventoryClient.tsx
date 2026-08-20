@@ -92,17 +92,18 @@ export function InventoryClient() {
   return (
     <div className="space-y-6">
       {/* Header section with title and period navigator */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="w-full lg:w-3/5">
           <div className="flex items-center gap-2">
             <Boxes className="size-6 text-brand-primary" />
             <h1 className="text-2xl font-bold tracking-tight text-text-primary">
-              Inventori
+              Stok Bahan Baku
             </h1>
           </div>
           <p className="mt-1 text-sm text-text-secondary">
-            Pantau ringkasan pergerakan dan catat stok awal bahan baku per
-            periode.
+            Pantau stok bahan baku dan catat stok awal di awal periode
+            operasional. Rincian stok awal, penambahan dari belanja, pemakaian
+            dari penjualan, dan stok akhir.
           </p>
         </div>
 
@@ -119,7 +120,7 @@ export function InventoryClient() {
 
       <Tabs defaultValue="summary">
         <TabsList>
-          <TabsTrigger value="summary">Ringkasan Stok</TabsTrigger>
+          <TabsTrigger value="summary">Ringkasan Pergerakan Stok</TabsTrigger>
           <TabsTrigger value="opening">Stok Awal</TabsTrigger>
         </TabsList>
 

@@ -25,9 +25,19 @@ export const LeaveRequestListQuerySchema = z.object({
 });
 export type LeaveRequestListQuery = z.infer<typeof LeaveRequestListQuerySchema>;
 
+export const LeaveRequestUserSummarySchema = z.object({
+  id: UuidString,
+  name: z.string(),
+  email: z.string(),
+});
+export type LeaveRequestUserSummary = z.infer<
+  typeof LeaveRequestUserSummarySchema
+>;
+
 export const LeaveRequestResponseSchema = z.object({
   id: UuidString,
   userId: UuidString,
+  user: LeaveRequestUserSummarySchema.optional(),
   startDate: z.string(),
   endDate: z.string(),
   reason: z.string(),

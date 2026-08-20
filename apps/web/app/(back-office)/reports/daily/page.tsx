@@ -5,7 +5,7 @@ import { ReportsClient } from '@/components/reports/ReportsClient';
 
 export const metadata: Metadata = {
   title: 'Pendapatan Harian — Laporan — OhMyPos',
-  description: 'Tren omzet harian dan pergerakan tren penjualan',
+  description: 'Laporan rincian pendapatan harian per metode pembayaran',
 };
 
 export default async function ReportsDailyPage() {

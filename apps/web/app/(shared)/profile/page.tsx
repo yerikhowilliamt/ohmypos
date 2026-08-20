@@ -4,7 +4,7 @@ import { ProfileClient } from './ProfileClient';
 
 export const metadata: Metadata = {
   title: 'Profil Saya — OhMyPos',
-  description: 'Ubah nama, kata sandi, atau hapus akun Anda sendiri',
+  description: 'Perbarui informasi profil dan kata sandi akun Anda.',
 };
 
 export default async function Page() {
