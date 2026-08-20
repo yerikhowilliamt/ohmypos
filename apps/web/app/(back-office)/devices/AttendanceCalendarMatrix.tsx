@@ -164,8 +164,8 @@ export function AttendanceCalendarMatrix({
     <div className="space-y-4">
       {/* Controls: Month Switcher & Branch Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-surface-raised p-3.5 rounded-lg border border-border-default shadow-1">
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col sm:flex-row items-center gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1 w-52">
             <Button
               variant="outline"
               size="icon-xs"
@@ -174,7 +174,7 @@ export function AttendanceCalendarMatrix({
             >
               <ChevronLeft className="size-4" />
             </Button>
-            <span className="font-semibold text-sm text-text-primary max-w-[150px] text-center">
+            <span className="font-semibold text-sm text-text-primary w-full text-center">
               {MONTH_NAMES[month]} {year}
             </span>
             <Button
@@ -196,13 +196,13 @@ export function AttendanceCalendarMatrix({
           </Button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="w-[180px]">
+        <div className="flex items-center gap-3 max-w-md">
+          <div className="w-full">
             <Select
               value={selectedBranchId}
               onValueChange={setSelectedBranchId}
             >
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger className="h-6 text-xs">
                 <SelectValue placeholder="Pilih cabang" />
               </SelectTrigger>
               <SelectContent>
