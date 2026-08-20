@@ -370,6 +370,30 @@
 - **Priority:** Low
 - **Status:** Open
 
+### DEBT-024 — No end-to-end browser verification of the Export → download flow
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-045 (Export XLSX Buttons)
+- **Description:** All 8 new Export buttons were verified by unit test (`lib/export.test.ts`, workbook structure only) and, for 3 of the 8 page areas (Expenses, Reconciliation, Attendance), by fetching SSR HTML through a direct API-login + curl session to confirm the button actually renders in the DOM. Nobody has clicked Export in a live browser and confirmed a `.xlsx` file actually downloads and opens with the correct columns/values — the Claude-in-Chrome browser extension wasn't connected in the session this was built in, so the MCP Playwright/browser verification workflow AGENTS.md §6 calls for wasn't run.
+- **Why deferred:** Tooling unavailability in that session, not a scoping decision.
+- **Impact if unaddressed:** A runtime-only issue (e.g. `exceljs`'s browser build failing to resolve under this Next.js version, a Blob/anchor download quirk in a specific browser) would ship undetected.
+- **Trigger condition:** Next session where a browser (Claude-in-Chrome or manual) is available — do one click-through per page area (Reports, Expenses, Inventory, Reconciliation, Devices/Attendance) and confirm the file downloads and opens with correct data.
+- **Proposed resolution:** Run the standard `.agents/skills/e2e-playwright/SKILL.md` workflow against each Export button once, capture a screenshot/confirmation, and mark this entry Resolved.
+- **Priority:** Medium — doesn't touch money/stock correctness (Playbook §10), but it's a shipped user-facing feature with zero live verification.
+- **Status:** Open
+
+### DEBT-025 — Export filenames use the export-time date, not the report's selected date range
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-045 (Export XLSX Buttons)
+- **Description:** The 5 Reports views (`ProfitLossView`, `DailyIncomeView`, `TopProductsView`, `ProductProfitView`, `IncomeByPaymentMethodView`) name their exported file `<report>_<today's date>.xlsx` rather than reflecting the `startDate`/`endDate` the user actually filtered by — e.g. exporting January 2026 data on 2026-08-20 downloads `laba-per-produk_2026-08-20.xlsx`, not something naming the January range.
+- **Why deferred:** `ReportsClient.tsx` owns the `startDate`/`endDate` state; the 5 leaf view components don't currently receive them as props. Threading them through purely to build a filename string felt like scope creep beyond the approved plan, which only committed to adding the buttons.
+- **Impact if unaddressed:** The exported filename is misleading about which period the data covers — a minor but real UX gap for a feature whose entire purpose is producing a file someone else (accountant, payroll) will open later without the on-screen context.
+- **Trigger condition:** Next time any of these 5 view components are touched for another reason, or if a user reports confusion about export filenames.
+- **Proposed resolution:** Add a `filters: ReportFilters` (or `startDate`/`endDate`) prop to the 5 view components, sourced from `ReportsClient`'s existing state, and interpolate it into `exportFilename` in place of `new Date().toISOString().slice(0, 10)`.
+- **Priority:** Low
+- **Status:** Open
+
 ---
 
 ## Resolved

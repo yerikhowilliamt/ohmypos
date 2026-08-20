@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@ohmypos/ui/components/select';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import {
   useAttendanceRecords,
   useUpdateAttendanceStatus,
@@ -43,6 +44,26 @@ const VIOLATION_LABELS: Record<AttendanceViolationReason, string> = {
 interface AttendanceLogTableProps {
   branches: BranchResponse[];
 }
+
+const exportColumns: ExportColumn<AttendanceRecordResponse>[] = [
+  { header: 'Waktu Login', accessor: (row) => new Date(row.loginAt) },
+  { header: 'Karyawan', accessor: (row) => row.userName },
+  { header: 'Email', accessor: (row) => row.userEmail },
+  { header: 'Cabang', accessor: (row) => row.branchName ?? '—' },
+  {
+    header: 'Perangkat',
+    accessor: (row) => row.deviceLabel ?? 'Perangkat Luar',
+  },
+  {
+    header: 'Status',
+    accessor: (row) => (row.isValid ? 'Valid' : 'Pelanggaran'),
+  },
+  {
+    header: 'Catatan / Alasan',
+    accessor: (row) =>
+      row.violationReason ? VIOLATION_LABELS[row.violationReason] : '',
+  },
+];
 
 export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>('ALL');
@@ -290,6 +311,8 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
         searchPlaceholder="Cari riwayat absensi…"
         searchColumns={['userName', 'userEmail', 'branchName', 'deviceLabel']}
         emptyMessage="Belum ada riwayat absensi login kasir."
+        exportColumns={exportColumns}
+        exportFilename={`log-absensi_${new Date().toISOString().slice(0, 10)}.xlsx`}
       />
     </div>
   );

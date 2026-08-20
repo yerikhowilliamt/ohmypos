@@ -132,7 +132,7 @@ export function InventoryClient() {
               error={summaryError}
             />
           ) : (
-            <InventorySummaryTable rows={summary?.data ?? []} />
+            <InventorySummaryTable rows={summary?.data ?? []} period={period} />
           )}
         </TabsContent>
 

@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/formatters';
 import { formatLedgerSourceType } from '@/lib/vocabulary';
 import { useLedgerEntries } from '@/hooks/useExpenses';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import type { LedgerEntryResponse } from '@ohmypos/api-contracts';
 import { GeneralExpenseFormDialog } from './GeneralExpenseFormDialog';
 
@@ -60,6 +61,16 @@ const columns: ColumnDef<LedgerEntryResponse>[] = [
   },
 ];
 
+const exportColumns: ExportColumn<LedgerEntryResponse>[] = [
+  { header: 'Tanggal', accessor: (row) => new Date(row.entryDate) },
+  { header: 'Catatan', accessor: (row) => row.note ?? '' },
+  {
+    header: 'Sumber',
+    accessor: (row) => formatLedgerSourceType(row.sourceType),
+  },
+  { header: 'Jumlah (IDR)', accessor: (row) => Number(row.amount) },
+];
+
 export function GeneralExpenseTab() {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const { data, isLoading } = useLedgerEntries();
@@ -91,6 +102,8 @@ export function GeneralExpenseTab() {
         data={entries}
         isLoading={isLoading}
         emptyMessage="Belum ada pengeluaran tercatat."
+        exportColumns={exportColumns}
+        exportFilename={`pengeluaran-umum_${new Date().toISOString().slice(0, 10)}.xlsx`}
       />
 
       <GeneralExpenseFormDialog
