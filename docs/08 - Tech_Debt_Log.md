@@ -39,6 +39,29 @@
 
 ## Log
 
+### DEBT-013 — Accordion animation keyframes omitted and static TypeScript help content
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-044 (Phase 13: Help / Documentation Page)
+- **Description:** 
+  1. `AccordionContent` in `packages/ui/src/components/ui/accordion.tsx` renders show/hide transitions with instantaneous snapping rather than smooth open/close height animations because `tailwindcss-animate` keyframes (`accordion-down` / `accordion-up`) are not configured in Tailwind setup.
+  2. Help documentation is authored as a static TypeScript array in `apps/web/lib/help-content.ts` rather than a full MDX / markdown rendering pipeline.
+- **Why deferred:** 
+  1. Adding `tailwindcss-animate` or heavy CSS animation plugins is out of scope and requires dependency additions. Radix UI accessibility and state toggling work seamlessly without animation.
+  2. Content is authored directly by developers and typed checks prevent schema regressions without adding markdown-rendering dependencies (`contentlayer`, `next-mdx-remote`, etc.).
+- **Impact if unaddressed:**
+  - Minor visual lack of accordion expanding transition animation.
+  - Adding rich formatting (images, video embeds, complex markdown tables) to help guides requires JSX changes rather than writing markdown.
+- **Trigger condition:**
+  - When design guidelines mandate animated accordion collapsible states across design systems or non-technical administrators need to edit help articles via CMS/Markdown.
+- **Proposed resolution:**
+  - Configure standard CSS keyframe animations for Radix accordion content heights in `globals.css`.
+  - Introduce MDX rendering if help guides scale into a full knowledge base.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
 ### DEBT-012 — Attendance & Leave calendar matrix client-side cross-referencing
 
 - **Date logged:** 2026-08-20
