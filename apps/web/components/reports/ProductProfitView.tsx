@@ -9,6 +9,7 @@ import type {
 import { Card, CardContent } from '@ohmypos/ui/components/card';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import {
   formatCurrency,
   formatPercent,
@@ -105,6 +106,15 @@ const columns: ColumnDef<ProductProfitRow>[] = [
   },
 ];
 
+const exportColumns: ExportColumn<ProductProfitRow>[] = [
+  { header: 'Produk', accessor: (row) => row.productName },
+  { header: 'Terjual', accessor: (row) => Number(row.quantitySold) },
+  { header: 'Pendapatan (IDR)', accessor: (row) => Number(row.revenue) },
+  { header: 'HPP (IDR)', accessor: (row) => Number(row.cogs) },
+  { header: 'Laba Kotor (IDR)', accessor: (row) => Number(row.grossProfit) },
+  { header: 'Margin (%)', accessor: (row) => Number(row.marginPct ?? 0) },
+];
+
 /** Dashboard 3 — Sales-per-Product Profit (PRD §5.4). */
 export function ProductProfitView({ data, isLoading }: ProductProfitViewProps) {
   const chartData = React.useMemo(() => {
@@ -186,6 +196,8 @@ export function ProductProfitView({ data, isLoading }: ProductProfitViewProps) {
         searchLabel="Cari produk"
         emptyMessage="Tidak ada data laba produk"
         emptyDescription="Belum ada penjualan pada rentang tanggal ini."
+        exportColumns={exportColumns}
+        exportFilename={`laba-per-produk_${new Date().toISOString().slice(0, 10)}.xlsx`}
       />
     </div>
   );

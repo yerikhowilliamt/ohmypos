@@ -1,12 +1,45 @@
 'use client';
 
 import * as React from 'react';
+import { Download } from 'lucide-react';
 import type { ProfitLossResponse } from '@ohmypos/api-contracts';
+import { Button } from '@ohmypos/ui/components/button';
 import { Card, CardContent } from '@ohmypos/ui/components/card';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
+import { exportRowsToXlsx, type ExportColumn } from '@/lib/export';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { getFlowIndicatorClassesForAmount } from '@/lib/vocabulary';
 import { ReportBarChart } from './ReportChart';
+
+const exportColumns: ExportColumn<ProfitLossResponse>[] = [
+  { header: 'Pendapatan (IDR)', accessor: (row) => Number(row.totalIncome) },
+  { header: 'HPP (IDR)', accessor: (row) => Number(row.cogs) },
+  {
+    header: 'Beban Operasional (IDR)',
+    accessor: (row) => Number(row.operatingExpenses),
+  },
+  { header: 'Laba Bersih (IDR)', accessor: (row) => Number(row.netProfit) },
+  {
+    header: 'Margin Bersih (%)',
+    accessor: (row) => Number(row.netMarginPct ?? 0),
+  },
+  {
+    header: 'Kas Masuk (IDR)',
+    accessor: (row) => Number(row.cash.totalInflow),
+  },
+  {
+    header: 'Kas Keluar (IDR)',
+    accessor: (row) => Number(row.cash.totalOutflow),
+  },
+  {
+    header: 'Kas Keluar Bahan Baku (IDR)',
+    accessor: (row) => Number(row.cash.materialCashOutflow),
+  },
+  {
+    header: 'Arus Kas Bersih (IDR)',
+    accessor: (row) => Number(row.cash.netCashFlow),
+  },
+];
 
 interface ProfitLossViewProps {
   data: ProfitLossResponse | undefined;
@@ -51,6 +84,22 @@ function KpiCard({
  * question.
  */
 export function ProfitLossView({ data, isLoading }: ProfitLossViewProps) {
+  const [isExporting, setIsExporting] = React.useState(false);
+
+  const handleExport = React.useCallback(async () => {
+    if (!data) return;
+    setIsExporting(true);
+    try {
+      await exportRowsToXlsx(
+        `laba-rugi_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        exportColumns,
+        [data],
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }, [data]);
+
   const chartData = React.useMemo(() => {
     if (!data) return [];
     return [
@@ -77,6 +126,19 @@ export function ProfitLossView({ data, isLoading }: ProfitLossViewProps) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="default"
+          onClick={handleExport}
+          disabled={!data || isExporting}
+        >
+          <Download className="size-4" />
+          Export
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <KpiCard
           label="Pendapatan"

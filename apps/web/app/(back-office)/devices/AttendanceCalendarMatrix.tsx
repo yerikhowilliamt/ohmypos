@@ -7,15 +7,9 @@ import {
   ShieldCheck,
   ShieldAlert,
   CalendarCheck,
-  Minus,
-  Info,
+  Download,
 } from 'lucide-react';
-import type {
-  AttendanceRecordResponse,
-  BranchResponse,
-  LeaveRequestResponse,
-  UserResponse,
-} from '@ohmypos/api-contracts';
+import type { BranchResponse, UserResponse } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
 import {
   Select,
@@ -33,6 +27,15 @@ import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { useAttendanceRecords } from '@/hooks/useDevices';
 import { useUsers } from '@/hooks/useUsers';
 import { useAllLeaveRequests } from '@/hooks/useLeaveRequests';
+import { exportMatrixToXlsx } from '@/lib/export';
+
+const STATUS_LABELS: Record<'VALID' | 'VIOLATION' | 'LEAVE' | 'NONE', string> =
+  {
+    VALID: 'Hadir',
+    VIOLATION: 'Pelanggaran',
+    LEAVE: 'Cuti',
+    NONE: '',
+  };
 
 interface AttendanceCalendarMatrixProps {
   branches: BranchResponse[];
@@ -58,6 +61,7 @@ export function AttendanceCalendarMatrix({
 }: AttendanceCalendarMatrixProps) {
   const [currentDate, setCurrentDate] = React.useState<Date>(() => new Date());
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>('ALL');
+  const [isExporting, setIsExporting] = React.useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -160,6 +164,32 @@ export function AttendanceCalendarMatrix({
     };
   };
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const rowLabels = cashiers.map((cashier) => {
+        const branchName =
+          branches.find((b) => b.id === cashier.branchId)?.name ?? '—';
+        return `${cashier.name} (${branchName})`;
+      });
+      await exportMatrixToXlsx(
+        `absensi-matrix_${year}-${String(month + 1).padStart(2, '0')}.xlsx`,
+        'Karyawan (Kasir)',
+        daysArray.map(String),
+        rowLabels,
+        (rowIndex, columnIndex) => {
+          const status = getDayStatus(
+            cashiers[rowIndex]!,
+            daysArray[columnIndex]!,
+          );
+          return STATUS_LABELS[status.type];
+        },
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Controls: Month Switcher & Branch Selector */}
@@ -196,8 +226,8 @@ export function AttendanceCalendarMatrix({
           </Button>
         </div>
 
-        <div className="flex items-center gap-3 max-w-md">
-          <div className="w-full">
+        <div className="flex items-center gap-2 max-w-md">
+          <div className="w-full min-w-[160px]">
             <Select
               value={selectedBranchId}
               onValueChange={setSelectedBranchId}
@@ -215,6 +245,17 @@ export function AttendanceCalendarMatrix({
               </SelectContent>
             </Select>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-xs h-6 shrink-0 gap-1.5"
+            onClick={handleExport}
+            disabled={isLoading || isExporting || cashiers.length === 0}
+          >
+            <Download className="size-3.5" />
+            Export
+          </Button>
         </div>
       </div>
 

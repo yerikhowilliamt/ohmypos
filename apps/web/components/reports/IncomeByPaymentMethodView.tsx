@@ -8,6 +8,7 @@ import type {
 } from '@ohmypos/api-contracts';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { formatAccountType, getFlowIndicatorClasses } from '@/lib/vocabulary';
 import { ChartEmptyState, ReportBarChart } from './ReportChart';
@@ -76,6 +77,17 @@ const columns: ColumnDef<IncomeByPaymentMethodRow>[] = [
   },
 ];
 
+const exportColumns: ExportColumn<IncomeByPaymentMethodRow>[] = [
+  { header: 'Akun', accessor: (row) => row.accountName },
+  {
+    header: 'Tipe Akun',
+    accessor: (row) => formatAccountType(row.accountType),
+  },
+  { header: 'Total (IDR)', accessor: (row) => Number(row.total) },
+  { header: 'Kontribusi (%)', accessor: (row) => Number(row.sharePct ?? 0) },
+  { header: 'Jumlah Transaksi', accessor: (row) => row.entryCount },
+];
+
 /** Dashboard 3 — Income by Payment Method (PRD §5.4). `total` here equals
  * ProfitLossResponse.totalIncome for the same range — a tested invariant on
  * the backend (Phase 7 §6.1); this view doesn't re-derive it. */
@@ -130,6 +142,8 @@ export function IncomeByPaymentMethodView({
         searchLabel="Cari akun"
         emptyMessage="Tidak ada data pendapatan"
         emptyDescription="Belum ada transaksi pada rentang tanggal ini."
+        exportColumns={exportColumns}
+        exportFilename={`pendapatan-per-metode-bayar_${new Date().toISOString().slice(0, 10)}.xlsx`}
       />
     </div>
   );

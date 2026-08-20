@@ -41,6 +41,28 @@
 
 ## Log
 
+### TASK-045 — Export (XLSX) Buttons Across Key Data Pages
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Cross-cutting frontend feature — Reports, Expenses, Inventory, Reconciliation, Devices/Attendance
+- **Objective:** Add Export buttons to the pages where exporting to a spreadsheet has real business value (accounting rekap, payroll, audit trail) — the app previously had no export functionality anywhere.
+- **Relevant docs:** N/A — purely additive frontend feature, no schema/migration or API contract change; scope and format (XLSX) were confirmed with the user directly before implementation.
+- **What was done:**
+  - Added `exceljs` as a new dependency to `apps/web` (dynamic-imported inside the export handler so it never lands in the initial bundle — only pages with an Export button pay for it, and only once clicked).
+  - Added `apps/web/lib/export.ts` (`exportRowsToXlsx`, `exportMatrixToXlsx`, and the exported-for-testing `buildWorkbook`) plus `export.test.ts` (3 tests: header row, native cell types, empty-row case).
+  - Extended the shared `apps/web/components/ui/data-table.tsx` with optional `exportColumns`/`exportFilename` props — renders an Export button in the toolbar that exports the currently filtered/searched rows (`table.getFilteredRowModel()`), not the full unfiltered dataset.
+  - Wired `exportColumns` into every existing `DataTable` consumer that qualified: `GeneralExpenseTab`, `PurchaseEntryTab`, `PayablesTab` (Expenses); `InventorySummaryTable` (threaded a new `period` prop from `InventoryClient` for the filename); `BankTransactionsTable` (Reconciliation); `AttendanceLogTable` (Devices); and 4 of the 5 Reports views — `DailyIncomeView`, `TopProductsView`, `ProductProfitView`, `IncomeByPaymentMethodView` — all of which already used the same shared `DataTable`, so no bespoke per-tab export logic was needed there (a simplification over the original plan, which hadn't yet noticed this).
+  - Added a bespoke Export button to `ProfitLossView` (single KPI-summary object, no table) calling `exportRowsToXlsx` directly with a one-row export.
+  - Added a bespoke Export button to `AttendanceCalendarMatrix` (staff × day-of-month grid) calling `exportMatrixToXlsx`, reusing its existing `cashiers`/`daysArray`/`getDayStatus` state.
+  - Explicit scope exclusions (confirmed with user up front): Master Data, Users, Branches, Accounts — low export value, and Users holds semi-sensitive staff data.
+- **Decisions made during this task:**
+  - Format: XLSX over CSV — native numeric/date cell types (summable in Excel, no re-parsing needed) and no Indonesian-locale delimiter ambiguity (Excel there defaults to `;`, not `,`). Presented as a 3-option plan (XLSX/CSV/both) via plan mode and approved before implementation, per AGENTS.md's dependency-approval gate.
+  - Library: `exceljs` over `xlsx`/SheetJS — SheetJS's npm-published releases are stale (development moved to their own CDN after v0.18.5) and the npm package carries a known prototype-pollution advisory; `exceljs` is actively maintained and published directly to npm.
+- **Status:** Done
+- **Handoff notes:**
+  - Verified via `lint`/`typecheck`/full test suite (261 tests, all passing) and via a direct API-login + curl fetch of the SSR HTML, confirming the Export button renders correctly for Expenses/Reconciliation/Attendance. Reports and Inventory render behind a `React.Suspense` boundary (required by `useSearchParams()`), so static curl can't observe their post-hydration DOM — same `DataTable` code path, but unverified live. Nobody has clicked Export in an actual browser yet and confirmed a `.xlsx` downloads and opens with correct data (the Claude-in-Chrome extension wasn't connected this session) — see DEBT-024.
+  - Export filenames on the 5 Reports views use the export-time date, not the report's selected `startDate`/`endDate` — see DEBT-025.
+
 ### TASK-044 — Help / Documentation Page (Phase 13)
 
 - **Date:** 2026-08-20

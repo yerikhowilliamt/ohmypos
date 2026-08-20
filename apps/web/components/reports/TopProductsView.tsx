@@ -16,6 +16,7 @@ import {
 } from '@ohmypos/ui/components/select';
 import { Label } from '@ohmypos/ui/components/label';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import {
   formatCurrency,
   formatPercent,
@@ -116,6 +117,15 @@ const columns: ColumnDef<TopProductRow>[] = [
   },
 ];
 
+const exportColumns: ExportColumn<TopProductRow>[] = [
+  { header: '#', accessor: (row) => row.rank },
+  { header: 'Produk', accessor: (row) => row.productName },
+  { header: 'Terjual', accessor: (row) => Number(row.quantitySold) },
+  { header: 'Pendapatan (IDR)', accessor: (row) => Number(row.revenue) },
+  { header: 'Laba Kotor (IDR)', accessor: (row) => Number(row.grossProfit) },
+  { header: 'Margin (%)', accessor: (row) => Number(row.marginPct ?? 0) },
+];
+
 const RANK_METRIC_KEY: Record<
   ProductRankBy,
   'quantitySold' | 'revenue' | 'grossProfit'
@@ -210,6 +220,8 @@ export function TopProductsView({ filters, enabled }: TopProductsViewProps) {
             data={data?.rows ?? []}
             emptyMessage="Tidak ada data produk terlaris"
             emptyDescription="Belum ada penjualan pada rentang tanggal ini."
+            exportColumns={exportColumns}
+            exportFilename={`produk-terlaris_${new Date().toISOString().slice(0, 10)}.xlsx`}
           />
         </>
       )}

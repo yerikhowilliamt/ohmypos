@@ -17,6 +17,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Download,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -30,6 +31,7 @@ import {
 import { Input } from '@ohmypos/ui/components/input';
 import { Button } from '@ohmypos/ui/components/button';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
+import { exportRowsToXlsx, type ExportColumn } from '@/lib/export';
 
 /**
  * OhMyPos data table (shadcn pattern over @tanstack/react-table + @ohmypos/ui
@@ -96,6 +98,48 @@ interface DataTableProps<TData, TValue> {
   searchLabel?: string;
   emptyMessage?: string;
   emptyDescription?: string;
+  /** Raw-value column spec for the Export button — parallel to `columns` but
+   * without JSX cells, since a spreadsheet needs plain string/number/Date
+   * values. Only rendered when both this and `exportFilename` are set. */
+  exportColumns?: ExportColumn<TData>[];
+  exportFilename?: string;
+}
+
+function ExportButton<TData>({
+  table,
+  exportColumns,
+  exportFilename,
+}: {
+  table: ReturnType<typeof useReactTable<TData>>;
+  exportColumns: ExportColumn<TData>[];
+  exportFilename: string;
+}) {
+  const [isExporting, setIsExporting] = React.useState(false);
+  const rowCount = table.getFilteredRowModel().rows.length;
+
+  const handleExport = React.useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const rows = table.getFilteredRowModel().rows.map((row) => row.original);
+      await exportRowsToXlsx(exportFilename, exportColumns, rows);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [table, exportColumns, exportFilename]);
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="default"
+      onClick={handleExport}
+      disabled={rowCount === 0 || isExporting}
+      className="h-6"
+    >
+      <Download className="size-4" />
+      Export
+    </Button>
+  );
 }
 
 /** Reads `meta.align` from a column definition; columns opt into alignment. */
@@ -146,6 +190,8 @@ export function DataTable<TData, TValue>({
   searchLabel,
   emptyMessage = 'Tidak ada data',
   emptyDescription,
+  exportColumns,
+  exportFilename,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -168,17 +214,30 @@ export function DataTable<TData, TValue>({
   const hasActiveFilters = columnFilters.some(
     (f) => f.value !== '' && f.value !== undefined,
   );
+  const canExport = Boolean(exportColumns && exportFilename);
+  const hasSearch = Boolean(searchColumns && searchColumns.length > 0);
 
   return (
     <div className="rounded-md border border-border-default bg-surface-raised overflow-hidden">
-      {searchColumns && searchColumns.length > 0 && (
-        <div className="p-4 border-b border-border-default">
-          <DataTableToolbar
-            table={table}
-            searchColumns={searchColumns}
-            searchPlaceholder={searchPlaceholder}
-            searchLabel={searchLabel}
-          />
+      {(hasSearch || canExport) && (
+        <div className="p-4 border-b border-border-default flex items-center justify-between gap-3">
+          {hasSearch ? (
+            <DataTableToolbar
+              table={table}
+              searchColumns={searchColumns}
+              searchPlaceholder={searchPlaceholder}
+              searchLabel={searchLabel}
+            />
+          ) : (
+            <div />
+          )}
+          {canExport && exportColumns && exportFilename && (
+            <ExportButton
+              table={table}
+              exportColumns={exportColumns}
+              exportFilename={exportFilename}
+            />
+          )}
         </div>
       )}
 

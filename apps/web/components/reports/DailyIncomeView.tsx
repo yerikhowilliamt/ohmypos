@@ -9,6 +9,7 @@ import type {
 import { Card, CardContent } from '@ohmypos/ui/components/card';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import { formatCurrency } from '@/lib/formatters';
 import { getFlowIndicatorClasses } from '@/lib/vocabulary';
 import { ChartEmptyState, ReportLineChart } from './ReportChart';
@@ -54,6 +55,12 @@ const columns: ColumnDef<DailyIncomeRow>[] = [
     ),
     meta: { align: 'right' },
   },
+];
+
+const exportColumns: ExportColumn<DailyIncomeRow>[] = [
+  { header: 'Tanggal', accessor: (row) => new Date(row.date) },
+  { header: 'Pendapatan (IDR)', accessor: (row) => Number(row.income) },
+  { header: 'Jumlah Transaksi', accessor: (row) => row.entryCount },
 ];
 
 /** Dashboard 3 — Total Daily Income (PRD §5.4). The one report with a real
@@ -123,6 +130,8 @@ export function DailyIncomeView({ data, isLoading }: DailyIncomeViewProps) {
         data={data?.rows ?? []}
         emptyMessage="Tidak ada data pendapatan harian"
         emptyDescription="Belum ada transaksi pada rentang tanggal ini."
+        exportColumns={exportColumns}
+        exportFilename={`pendapatan-harian_${new Date().toISOString().slice(0, 10)}.xlsx`}
       />
     </div>
   );
