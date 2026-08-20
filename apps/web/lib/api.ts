@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4013/api/v1';
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4015/api/v1';
 
 /** Thrown by `apiFetch` for any non-2xx response; carries the HTTP status so
  * callers — and the refresh-on-401 logic below — can branch on it.

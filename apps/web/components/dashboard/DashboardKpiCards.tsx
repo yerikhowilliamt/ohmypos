@@ -119,7 +119,9 @@ export function DashboardKpiCards({
       </Card>
 
       {/* Stok Rendah */}
-      <Card className="p-3 shadow-1 bg-surface-raised border-border-default">
+      <Card
+        className={`p-3 shadow-1 bg-surface-raised border-border-default ${lowStockCount > 0 ? 'bg-status-danger/25' : 'border-border-default'}`}
+      >
         <CardContent className="p-0 flex items-center justify-between">
           <div>
             <p className="text-xs text-text-tertiary">Stok Rendah</p>

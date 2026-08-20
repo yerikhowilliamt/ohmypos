@@ -5,7 +5,8 @@ import type { UserResponse } from '@ohmypos/api-contracts';
 import { useSales } from '@/hooks/usePos';
 import { useBranches } from '@/hooks/useBranches';
 import { SalesHistoryTable } from '@/components/pos/SalesHistoryTable';
-import { Input } from '@ohmypos/ui/components/input';
+import { Button } from '@ohmypos/ui/components/button';
+import { DatePicker } from '@ohmypos/ui/components/date-picker';
 import {
   Select,
   SelectContent,
@@ -13,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@ohmypos/ui/components/select';
-import { Calendar, Store } from 'lucide-react';
+import { Store } from 'lucide-react';
 
 interface SalesHistoryClientProps {
   user: UserResponse;
@@ -93,21 +94,20 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
         )}
 
         <div className="flex items-center gap-2">
-          <Calendar className="size-4 text-text-tertiary" />
           <div className="flex items-center gap-1.5 text-xs text-text-secondary">
             <span>Dari:</span>
-            <Input
-              type="date"
+            <DatePicker
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="h-8 text-xs w-[140px]"
+              onChange={(date) => setStartDate(date ?? '')}
+              placeholder="Mulai"
+              className="h-6 text-xs w-[160px]"
             />
             <span>Sampai:</span>
-            <Input
-              type="date"
+            <DatePicker
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="h-8 text-xs w-[140px]"
+              onChange={(date) => setEndDate(date ?? '')}
+              placeholder="Selesai"
+              className="h-6 text-xs w-[160px]"
             />
           </div>
         </div>
@@ -115,17 +115,19 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
         {(startDate ||
           endDate ||
           (user.role === 'OWNER' && selectedBranchId !== 'all')) && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => {
               setStartDate('');
               setEndDate('');
               if (user.role === 'OWNER') setSelectedBranchId('all');
             }}
-            className="text-xs font-medium text-brand-primary hover:underline ml-auto"
+            className="text-xs font-medium text-brand-primary hover:underline ml-auto h-8 px-2"
           >
             Reset Filter
-          </button>
+          </Button>
         )}
       </div>
 

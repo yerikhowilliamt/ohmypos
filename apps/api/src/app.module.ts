@@ -15,6 +15,7 @@ import { AllocationModule } from './modules/allocation/allocation.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { DevicesModule } from './modules/devices/devices.module';
+import { LeaveRequestsModule } from './modules/leave-requests/leave-requests.module';
 import { ImportModule } from './modules/import/import.module';
 import { LedgerEntriesModule } from './modules/ledger-entries/ledger-entries.module';
 import { MatchingModule } from './modules/matching/matching.module';
@@ -59,6 +60,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     CategoriesModule,
     BranchesModule,
     DevicesModule,
+    LeaveRequestsModule,
     LedgerEntriesModule,
     ImportModule,
     AllocationModule,

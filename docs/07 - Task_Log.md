@@ -41,6 +41,112 @@
 
 ## Log
 
+### TASK-041 — Dashboard Compact Branch Profitability Card
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Dashboard UI
+- **Objective:** Consolidate branch profitability into a single clean minimalist card showing top 3 branches with branch name, Profit/Loss badge, and total omset/revenue.
+- **Relevant docs:** PRD §5.4, DESIGN.md
+- **What was done:**
+  - Simplified `apps/web/components/dashboard/BranchProfitabilityCard.tsx` into a single compact card showing max 3 operational branches sorted by omset.
+  - Displayed essential info: Nama Cabang, Badge Status (`Profit` / `Tidak Profit`), Omset per cabang, dan progress bar horizontal minimalis.
+  - Verified live rendering in Playwright, and passed all linter, typecheck, and unit tests across workspace.
+  - Captured screenshot in `docs/screenshoots/dashboard-branch-profitability-single-card.png`.
+- **Status:** Done
+
+### TASK-040 — Dashboard Branch Profitability Horizontal Bar Chart
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Dashboard & Reports
+- **Objective:** Convert the branch profitability card from a data table into an analytical Horizontal Bar Chart with custom tooltips (Revenue, Net Profit, Margin %) and inflow/outflow conditional color fills.
+- **Relevant docs:** PRD §5.4, DESIGN.md §36/§37
+- **What was done:**
+  - Refactored `apps/web/components/dashboard/BranchProfitabilityCard.tsx` from `@ohmypos/ui` Table to Recharts `BarChart` (`layout="vertical"`).
+  - Configured XAxis numeric with compact Indonesian numbers and YAxis with branch names.
+  - Added conditional bar fill colors: emerald green (`--color-accent-inflow`) for profit branches (net profit >= 0) and red (`--color-accent-outflow`) for loss branches.
+  - Added rich analytical tooltip detailing Pendapatan, Laba Bersih, dan Margin %.
+  - Verified live rendering via Playwright and saved screenshot to `docs/screenshoots/dashboard-branch-profitability-barchart.png`.
+- **Decisions made during this task:**
+  - Dynamic bar chart height based on the number of operational branches (`Math.max(220, branchResults.length * 60 + 50)`).
+- **Status:** Done
+
+### TASK-039 — Dashboard Branch Profitability Card
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Dashboard & Reports
+- **Objective:** Display branch profitability metrics (Revenue, COGS, Opex, Net Profit, Margin %, Profit/Loss badge status) on the main Owner Dashboard.
+- **Relevant docs:** PRD §5.4, ADR-014, ADR-017
+- **What was done:**
+  - Created `BranchProfitabilityCard` component (`apps/web/components/dashboard/BranchProfitabilityCard.tsx`).
+  - Integrated real-time query per operational branch to `useProfitLoss({ startDate, endDate, branchId })`.
+  - Filtered out the Central/Pusat kitchen inventory pool, displaying retail selling branches.
+  - Added summary status badges: Profit (emerald), Rugi/Tidak Profit (destructive), Impas (outline), and margin breakdown.
+  - Embedded into `apps/web/components/dashboard/DashboardClient.tsx`.
+  - Verified live via Playwright E2E and saved screenshot to `docs/screenshoots/dashboard-branch-profitability.png`.
+- **Decisions made during this task:**
+  - Used `@ohmypos/ui` shadcn `Table`, `Badge`, `Card`, and `Skeleton` primitives.
+- **Status:** Done
+
+### TASK-038 — Recipe Decimal Parsing & E2E Playwright Verification
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Master Data (Recipe/BOM) & E2E Testing
+- **Objective:** Fix decimal input validation for recipe ingredients supporting comma format ("0,025") and dot format ("0.025"), verify live in browser via Playwright.
+- **Relevant docs:** ADR-010, ADR-012, Playbook §5
+- **What was done:**
+  - Updated `decimalString` in `packages/api-contracts/src/primitives.ts` to accept `/^-?\d+(?:[.,]\d+)?$/` and sanitize comma to dot via transform.
+  - Updated `RecipeEditorDialog.tsx` to sanitize input strings before mutation submission.
+  - Verified live E2E browser flow via Playwright: logged in as Owner, opened Product & Recipe table, edited recipes for Air Mineral and Burger using decimal quantities with commas (`0,05`) and dots (`0.03`), successfully computed Live HPP and Margins without any validation errors.
+  - Captured verification screenshot in `docs/screenshoots/master-data-updated-recipe.png`.
+- **Decisions made during this task:**
+  - Comma and dot inputs are both supported seamlessly across API contracts.
+- **Status:** Done
+
+### TASK-037 — Product Photo Upload & Display
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Master Data & POS (Products)
+- **Objective:** Enable OWNER/ADMIN to upload product photos to Cloudinary and display product photos in Master Data Table, Form Dialog, and POS cards.
+- **Relevant docs:** ADR-020 (Cloudinary Pattern), AGENTS.md, PRD §5.1
+- **What was done:**
+  - Added `photoUrl String? @map("photo_url")` to `Product` model in `apps/api/prisma/schema.prisma` and applied migration `20260820013927_add_product_photo_url`.
+  - Updated `@ohmypos/api-contracts` (`ProductResponseSchema` with `photoUrl: z.string().nullable().optional()`).
+  - Added `ProductPhotoService` in `apps/api/src/modules/products/product-photo.service.ts` with unit test in `product-photo.spec.ts`.
+  - Added `POST /products/:id/photo` endpoint with `FileInterceptor` in `ProductsController` (OWNER/ADMIN only).
+  - Updated `useMasterData.ts` in `apps/web` with `useUploadProductPhoto` mutation.
+  - Updated `ProductFormDialog` with photo upload selector/preview and multipart upload integration.
+  - Updated `ProductsTable` to show product image thumbnail in the product column.
+  - Updated POS `ProductCard` to render product image banner.
+  - Verified tests, lint, and typechecks across monorepo.
+- **Decisions made during this task:**
+  - Cloudinary public ID follows deterministic pattern `product_<productId>` with `overwrite: true` to prevent orphan image storage.
+- **Status:** Done
+- **Handoff notes:**
+  - Standard Cloudinary credentials (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`) in API env are shared with user profile photo uploads.
+
+### TASK-036 — Phase 12: Leave Requests (Cuti)
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Phase 12 — Leave Requests (Cuti)
+- **Objective:** Enable employees (KASIR) to submit leave requests and view submission history, while providing an OWNER-only review and approval/rejection queue.
+- **Relevant docs:** ADR-021, `docs/plannings/phase-12-leave-requests.md`, AGENTS.md
+- **What was done:**
+  - Added Prisma model `LeaveRequest` and enum `LeaveRequestStatus` in `apps/api/prisma/schema.prisma` with relations to `User` (`leaveRequests`, `reviewedLeaveRequests`), and applied migration `20260820010402_add_leave_requests`.
+  - Added API contracts in `packages/api-contracts/src/leave-request.schema.ts` (`CreateLeaveRequestSchema`, `LeaveRequestListQuerySchema`, `LeaveRequestResponseSchema`) and exported in `index.ts`.
+  - Implemented backend module `apps/api/src/modules/leave-requests/` (`leave-requests.exceptions.ts`, `leave-requests.dto.ts`, `leave-requests.service.ts`, `leave-requests.controller.ts`, `leave-requests.module.ts`).
+  - Registered `LeaveRequestsModule` in `apps/api/src/app.module.ts`.
+  - Created frontend React Query hooks in `apps/web/hooks/useLeaveRequests.ts`.
+  - Built frontend UI under `apps/web/app/(shared)/leave-requests/` (`page.tsx`, `LeaveRequestsClient.tsx`, `MyLeaveRequests.tsx`, `OwnerReviewQueue.tsx`).
+  - Updated `apps/web/lib/nav-config.ts` to include `/leave-requests` for `KASIR` and `OWNER`, and updated `nav-config.test.ts`.
+  - Added full e2e test suite in `apps/api/test/leave-requests.e2e-spec.ts` covering submission, self-listing, date validation, RBAC restrictions (KASIR forbidden from all/review), and Owner approval/rejection workflows.
+  - Verified with unit tests, e2e tests, linter, and typecheck across the monorepo.
+- **Decisions made during this task:**
+  - Leave dates are calendar days (`@db.Date`), validated with `startDate <= endDate` at the contract schema level.
+  - Review queue for Owner defaults to `PENDING` items for simple triage in v1.
+- **Status:** Done
+- **Handoff notes:**
+  - Phase 12 fully complete and tested.
+
 ### TASK-035 — Phase 11: Attendance & Device Tracking
 
 - **Date:** 2026-08-19

@@ -636,6 +636,74 @@ async function main() {
     },
   });
 
+  // Phase 12 — Seed sample leave requests for UI inspection and verification
+  const ownerUser = await prisma.user.findUnique({
+    where: { email: ownerEmail },
+  });
+
+  if (ownerUser) {
+    // 1. Pending leave request from Kasir Melati
+    const existingPending = await prisma.leaveRequest.findFirst({
+      where: {
+        userId: kasirMelati.id,
+        reason: 'Acara keluarga di luar kota',
+      },
+    });
+    if (!existingPending) {
+      await prisma.leaveRequest.create({
+        data: {
+          userId: kasirMelati.id,
+          startDate: new Date('2026-09-01'),
+          endDate: new Date('2026-09-03'),
+          reason: 'Acara keluarga di luar kota',
+          status: 'PENDING',
+        },
+      });
+    }
+
+    // 2. Approved leave request
+    const existingApproved = await prisma.leaveRequest.findFirst({
+      where: {
+        userId: kasirMelati.id,
+        reason: 'Istirahat dan cek kesehatan',
+      },
+    });
+    if (!existingApproved) {
+      await prisma.leaveRequest.create({
+        data: {
+          userId: kasirMelati.id,
+          startDate: new Date('2026-08-10'),
+          endDate: new Date('2026-08-11'),
+          reason: 'Istirahat dan cek kesehatan',
+          status: 'APPROVED',
+          reviewedByUserId: ownerUser.id,
+          reviewedAt: new Date('2026-08-09T09:00:00.000Z'),
+        },
+      });
+    }
+
+    // 3. Rejected leave request
+    const existingRejected = await prisma.leaveRequest.findFirst({
+      where: {
+        userId: kasirMelati.id,
+        reason: 'Liburan mendadak',
+      },
+    });
+    if (!existingRejected) {
+      await prisma.leaveRequest.create({
+        data: {
+          userId: kasirMelati.id,
+          startDate: new Date('2026-08-18'),
+          endDate: new Date('2026-08-20'),
+          reason: 'Liburan mendadak',
+          status: 'REJECTED',
+          reviewedByUserId: ownerUser.id,
+          reviewedAt: new Date('2026-08-17T14:30:00.000Z'),
+        },
+      });
+    }
+  }
+
   console.log(`Seeded. Owner login: ${ownerEmail}`);
   await prisma.$disconnect();
 }

@@ -55,10 +55,21 @@ export function ProductCard({
       {inCartQuantity > 0 && (
         <span
           data-testid={`product-in-cart-${product.id}`}
-          className="absolute right-3 top-3 inline-flex size-6 items-center justify-center rounded-pill bg-brand-primary text-xs font-semibold text-white"
+          className="absolute right-3 top-3 z-10 inline-flex size-6 items-center justify-center rounded-pill bg-brand-primary text-xs font-semibold text-white shadow-sm"
         >
           {inCartQuantity}
         </span>
+      )}
+
+      {product.photoUrl && (
+        <div className="relative mb-1 h-28 w-full overflow-hidden rounded-md border border-border-default bg-surface-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={product.photoUrl}
+            alt={product.name}
+            className="size-full object-cover transition-transform group-hover:scale-105"
+          />
+        </div>
       )}
 
       <span className="line-clamp-2 pr-8 text-sm font-medium text-text-primary">

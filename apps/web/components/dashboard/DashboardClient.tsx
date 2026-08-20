@@ -13,6 +13,7 @@ import { useInventorySummary } from '@/hooks/useInventory';
 import { usePayablesSummary } from '@/hooks/useExpenses';
 import { useSales } from '@/hooks/usePos';
 import { DashboardKpiCards } from './DashboardKpiCards';
+import { BranchProfitabilityCard } from './BranchProfitabilityCard';
 import {
   ChartEmptyState,
   CHART_COLORS,
@@ -146,6 +147,9 @@ export function DashboardClient() {
         inventorySummary={inventorySummary}
         isLoading={isKpiLoading}
       />
+
+      {/* Branch Profitability Breakdown */}
+      <BranchProfitabilityCard range={monthRange} />
 
       {/* Primary Analytics Grid: Trend Line & Payment Methods Donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

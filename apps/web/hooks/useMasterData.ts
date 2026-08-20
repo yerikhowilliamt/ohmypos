@@ -135,6 +135,25 @@ export function useDeleteProduct() {
   });
 }
 
+export function useUploadProductPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', data.file);
+      return apiFetch<{ photoUrl: string }>(`/products/${data.id}/photo`, {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: MASTER_DATA_QUERY_KEYS.products,
+      });
+    },
+  });
+}
+
 // --- Recipe Hooks ---
 
 export function useProductRecipe(productId: string | null) {
