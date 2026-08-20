@@ -1,101 +1,87 @@
 'use client';
 
 import * as React from 'react';
-import { Search } from 'lucide-react';
 import type { ProductWithHppResponse } from '@ohmypos/api-contracts';
-import { Input } from '@ohmypos/ui/components/input';
+import { AddProductCard } from './AddProductCard';
 import { ProductCard } from './ProductCard';
 
 interface ProductGridProps {
   products: ProductWithHppResponse[];
   headroom: Map<string, number | null>;
   inCartQuantities: Map<string, number>;
+  highlightedProductId: string | null;
+  /** §21.1's card is shown only to roles that can reach /master-data (ADR-011). */
+  canCreateProducts: boolean;
   isLoading: boolean;
   error: string | null;
+  /** True when a search term or a non-ALL filter is active, for empty copy. */
+  isFiltered: boolean;
   onAdd: (product: ProductWithHppResponse) => void;
 }
 
 /**
- * Product discovery — the middle zone of DESIGN.md §20's three-zone layout.
- *
- * Search only, no category strip: `Product` has no category column, so the
- * category controls in DESIGN.md §22 would be decorative. `GET /products` is
- * unpaginated master data (products.service.ts), so filtering client-side is
- * both correct and instant — DESIGN.md §23 asks for a fast, prominent search.
+ * DESIGN.md §21: a fixed-column grid — 4 columns at desktop, 3 at tablet, 2 at
+ * mobile (§41.3) — whose first cell is the Add New Product affordance (§21.1).
+ * Filtering and search live in `PosScreen`, which owns the state the §22 filter
+ * row and this grid share.
  */
 export function ProductGrid({
   products,
   headroom,
   inCartQuantities,
+  highlightedProductId,
+  canCreateProducts,
   isLoading,
   error,
+  isFiltered,
   onAdd,
 }: ProductGridProps) {
-  const [query, setQuery] = React.useState('');
+  if (isLoading) {
+    return (
+      <p className="py-8 text-center text-sm text-text-secondary">
+        Memuat produk…
+      </p>
+    );
+  }
 
-  const visible = React.useMemo(() => {
-    // Inactive products are rejected server-side with InactiveProductException,
-    // so they are never offered.
-    const sellable = products.filter((p) => p.isActive);
-    const needle = query.trim().toLowerCase();
-    if (!needle) return sellable;
-    return sellable.filter((p) => p.name.toLowerCase().includes(needle));
-  }, [products, query]);
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="rounded-sm border border-status-danger/30 bg-status-danger/10 p-3 text-xs text-status-danger"
+      >
+        {error}
+      </div>
+    );
+  }
 
   return (
-    <section
-      aria-label="Pilih produk"
-      className="flex min-w-0 flex-1 flex-col gap-4"
-    >
-      <div className="relative flex items-center">
-        <Search
-          className="pointer-events-none absolute left-3 size-4 text-text-tertiary"
-          aria-hidden
-        />
-        <Input
-          id="pos-search"
-          type="search"
-          autoComplete="off"
-          placeholder="Cari produk…"
-          aria-label="Cari produk"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className="h-10 pl-9"
-        />
-      </div>
-
-      {isLoading && (
-        <p className="text-sm text-text-secondary">Memuat produk…</p>
-      )}
-
-      {error && (
-        <div
-          role="alert"
-          className="rounded-sm border border-status-danger/30 bg-status-danger/10 p-3 text-xs text-status-danger"
-        >
-          {error}
-        </div>
-      )}
-
-      {!isLoading && !error && visible.length === 0 && (
-        <p className="text-sm text-text-secondary">
-          {query.trim()
-            ? `Tidak ada produk cocok dengan "${query.trim()}".`
+    <div className="flex flex-col gap-3">
+      {products.length === 0 && (
+        // DESIGN.md §23: a distinct no-result state, distinct from empty data.
+        <p className="py-8 text-center text-sm text-text-secondary">
+          {isFiltered
+            ? 'Tidak ada produk yang cocok dengan pencarian atau filter ini.'
             : 'Belum ada produk aktif. Tambahkan produk di Data Master.'}
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-        {visible.map((product) => (
+      <div
+        data-testid="pos-product-grid"
+        className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4"
+      >
+        {canCreateProducts && <AddProductCard />}
+        {products.map((product) => (
           <ProductCard
             key={product.id}
             product={product}
             headroom={headroom.get(product.id)}
             inCartQuantity={inCartQuantities.get(product.id) ?? 0}
+            isHighlighted={product.id === highlightedProductId}
             onAdd={onAdd}
           />
         ))}
       </div>
-    </section>
+    </div>
   );
 }

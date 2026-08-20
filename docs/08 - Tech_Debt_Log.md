@@ -191,7 +191,7 @@
 - **Trigger condition:** The business owner asks for any one of them, or Phase 3's `Sale` flow is specified — whichever comes first.
 - **Proposed resolution:** Take them one at a time through the normal schema-approval gate. Tax and discount should be decided together, before `Sale` is built, because both change the total's definition.
 - **Priority:** Medium
-- **Status:** Partially resolved (2026-08-16) — Tax, discount, and order type decided per ADR-015 (Phase 5 planning): none get schema support in v1. `Sale.totalAmount = Σ SaleItem.lineTotal`; discounts are expressed through the existing per-line price override (`unitPriceAtSale` + `isPriceOverridden`). SKU/barcode scanning, the expense approval state, and the cashier shift remain **Open** — none of the three is touched by Phase 5 and each still needs its own approval pass.
+- **Status:** Partially resolved (2026-08-16) — Tax, discount, and order type decided per ADR-015 (Phase 5 planning): none get schema support in v1. `Sale.totalAmount = Σ SaleItem.lineTotal`; discounts are expressed through the existing per-line price override (`unitPriceAtSale` + `isPriceOverridden`). SKU/barcode scanning, the expense approval state, and the cashier shift remain **Open** — none of the three is touched by Phase 5 and each still needs its own approval pass. (2026-08-20, UI Revamp Phase 2) DESIGN.md §21.2's discount tag on the product card was likewise left unbuilt for the same reason — `Product` has no discount/original-price field, so a strikethrough that can never trigger would repeat the mistake this entry already rejected.
 
 ### DEBT-006 — RawMaterial.unitCost not updated by purchases
 
@@ -332,7 +332,7 @@
 - **Trigger condition:** The business owner asks for menu categories or product photos; or a cashier reports losing an order to a refresh.
 - **Proposed resolution:** Categories and images are additive schema work through the normal approval gate. Cart persistence is frontend-only — persist the reducer state to `sessionStorage`, keyed by branch, and rehydrate on mount.
 - **Priority:** Low
-- **Status:** Open
+- **Status:** Partially resolved (2026-08-20, UI Revamp Phase 2) — (1) the §22 filter row now exists, bound to availability buckets rather than menu categories; see **DEBT-026**. (2), (3) (pre-existing — `Product.photoUrl` already rendered before this phase, unaffected by DEBT-018's original wording), and (4) remain **Open**.
 
 ### DEBT-019 — `NEXT_PUBLIC_API_BASE_URL` fallback port disagrees with the actual API port
 
@@ -415,6 +415,18 @@
 - **Impact if unaddressed:** The exported filename is misleading about which period the data covers — a minor but real UX gap for a feature whose entire purpose is producing a file someone else (accountant, payroll) will open later without the on-screen context.
 - **Trigger condition:** Next time any of these 5 view components are touched for another reason, or if a user reports confusion about export filenames.
 - **Proposed resolution:** Add a `filters: ReportFilters` (or `startDate`/`endDate`) prop to the 5 view components, sourced from `ReportsClient`'s existing state, and interpolate it into `exportFilename` in place of `new Date().toISOString().slice(0, 10)`.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-026 — POS filter row buckets by availability, not menu category
+
+- **Date logged:** 2026-08-20
+- **Found during:** UI Revamp Phase 2 (POS Product Discovery & Filter Cards)
+- **Description:** DESIGN.md §22 illustrates the POS filter row with menu categories (Foods, Beverage). `Product` has no category column, so the row was implemented with availability buckets (Semua Produk / Siap Dibuat / Stok Habis / Tanpa Resep, computed by `lib/pos/product-filters.ts` from the cart-aware headroom in `availability.ts`, ADR-013) using the same bordered-card anatomy §22 specifies. Approved deviation, 2026-08-20.
+- **Why deferred:** Not deferred — a substitution, not an omission. See DEBT-018 for the prior state (row simply absent) and DEBT-004 for the standing rule against rendering UI that promises absent behaviour.
+- **Impact if unaddressed:** None currently — the row is fully functional against real data, just labeled by availability rather than by menu category.
+- **Trigger condition:** The owner asks for menu categories.
+- **Proposed resolution:** Add `Product.category` (or a `ProductCategory` table) through the schema-approval gate; `CategoryFilterRow` already takes `{ id, label, count }[]` and needs no change, only a different `countByBucket` source in `product-filters.ts`.
 - **Priority:** Low
 - **Status:** Open
 

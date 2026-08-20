@@ -155,7 +155,9 @@ function mockReads(onPost?: () => Promise<unknown>) {
 }
 
 async function renderScreen() {
-  const result = renderWithClient(<PosScreen branchId={BRANCH_ID} />);
+  const result = renderWithClient(
+    <PosScreen branchId={BRANCH_ID} role="KASIR" />,
+  );
   await screen.findByTestId(`product-card-${KOPI_SUSU}`);
   return result;
 }
