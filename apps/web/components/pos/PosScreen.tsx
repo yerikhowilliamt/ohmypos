@@ -4,6 +4,7 @@ import * as React from 'react';
 import type {
   ProductWithHppResponse,
   SaleResponse,
+  UserRole,
 } from '@ohmypos/api-contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -23,20 +24,39 @@ import { ShoppingBag } from 'lucide-react';
 import { Button } from '@ohmypos/ui/components/button';
 import { formatCurrency } from '@/lib/formatters';
 import { cartItemCount, cartTotal } from '@/lib/pos/cart-totals';
+import {
+  countByBucket,
+  filterProducts,
+  type ProductBucket,
+} from '@/lib/pos/product-filters';
 import { CartProvider, useCart } from './CartProvider';
 import { CartPanel } from './CartPanel';
+import { CategoryFilterRow } from './CategoryFilterRow';
+import { PosPageHeader } from './PosPageHeader';
 import { ProductGrid } from './ProductGrid';
 import { SaleSuccessDialog } from './SaleSuccessDialog';
 
-export function PosScreen({ branchId }: { branchId: string }) {
+export function PosScreen({
+  branchId,
+  role,
+}: {
+  branchId: string;
+  role: UserRole;
+}) {
   return (
     <CartProvider>
-      <PosScreenInner branchId={branchId} />
+      <PosScreenInner branchId={branchId} role={role} />
     </CartProvider>
   );
 }
 
-function PosScreenInner({ branchId }: { branchId: string }) {
+function PosScreenInner({
+  branchId,
+  role,
+}: {
+  branchId: string;
+  role: UserRole;
+}) {
   const { state, dispatch } = useCart();
   const queryClient = useQueryClient();
 
@@ -82,8 +102,36 @@ function PosScreenInner({ branchId }: { branchId: string }) {
     return counts;
   }, [state.lines]);
 
+  const [query, setQuery] = React.useState('');
+  const [bucket, setBucket] = React.useState<ProductBucket>('ALL');
+  /** DESIGN.md §21's active state — the most recently added product. */
+  const [highlightedProductId, setHighlightedProductId] = React.useState<
+    string | null
+  >(null);
+
+  const bucketCounts = React.useMemo(
+    () => countByBucket(productList, availability.headroom),
+    [productList, availability.headroom],
+  );
+
+  const visibleProducts = React.useMemo(
+    () =>
+      filterProducts({
+        products: productList,
+        headroom: availability.headroom,
+        bucket,
+        query,
+      }),
+    [productList, availability.headroom, bucket, query],
+  );
+
+  // ADR-011: only ADMIN/OWNER can reach /master-data, so only they see §21.1's
+  // Add New Product card. A KASIR tapping it would land on a 403.
+  const canCreateProducts = role === 'OWNER' || role === 'ADMIN';
+
   const handleAdd = React.useCallback(
     (product: ProductWithHppResponse) => {
+      setHighlightedProductId(product.id);
       dispatch({
         type: 'ADD_PRODUCT',
         product,
@@ -175,18 +223,41 @@ function PosScreenInner({ branchId }: { branchId: string }) {
 
   return (
     <>
-      {/* DESIGN.md §20: navigation (AppShell) + product discovery + persistent
-          order context. The sidebar is provided by the (pos) layout. */}
-      <div className="flex flex-col gap-4 pb-16 lg:pb-0 lg:flex-row lg:items-start">
-        <ProductGrid
-          products={productList}
-          headroom={availability.headroom}
-          inCartQuantities={inCartQuantities}
-          isLoading={products.isLoading}
-          error={errorMessage(products.error)}
-          onAdd={handleAdd}
-        />
+      <div className="flex flex-col gap-4 pb-16 lg:h-full lg:min-h-0 lg:flex-row lg:items-stretch lg:pb-0">
+        {/* Zone 2 — Product Discovery (§20). The fixed-height, internally-
+            scrolling three-zone layout is a desktop (lg+) affordance only —
+            below lg the panels stack and the page scrolls normally via
+            AppShell's <main>, same as CartPanel's own shrink-0 sizing
+            already assumes. Forcing h-full/flex-1/overflow-y-auto below lg
+            starved this section against CartPanel's natural mobile height. */}
+        <section
+          aria-label="Pilih produk"
+          className="flex min-w-0 flex-col gap-4 rounded-lg border border-border-default bg-surface-raised p-4 shadow-1 lg:min-h-0 lg:flex-1"
+        >
+          <PosPageHeader query={query} onQueryChange={setQuery} />
 
+          <CategoryFilterRow
+            buckets={bucketCounts}
+            selected={bucket}
+            onSelect={setBucket}
+          />
+
+          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            <ProductGrid
+              products={visibleProducts}
+              headroom={availability.headroom}
+              inCartQuantities={inCartQuantities}
+              highlightedProductId={highlightedProductId}
+              canCreateProducts={canCreateProducts}
+              isLoading={products.isLoading}
+              error={errorMessage(products.error)}
+              isFiltered={query.trim().length > 0 || bucket !== 'ALL'}
+              onAdd={handleAdd}
+            />
+          </div>
+        </section>
+
+        {/* Zone 3 — persistent order context (§20). Its internals are Phase 3. */}
         <CartPanel
           state={state}
           overCommittedLineIds={availability.overCommittedLineIds}

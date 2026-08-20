@@ -41,5 +41,5 @@ export default async function SalesPage() {
     );
   }
 
-  return <PosScreen branchId={user.branchId!} />;
+  return <PosScreen branchId={user.branchId!} role={user.role} />;
 }
