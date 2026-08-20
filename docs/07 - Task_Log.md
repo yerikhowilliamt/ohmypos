@@ -41,6 +41,26 @@
 
 ## Log
 
+### TASK-047 — UI Revamp Phase 1: App Shell & Modern Sidebar Navigation
+
+- **Date:** 2026-08-20
+- **Module / Phase:** UI Revamp Phase 1 (app shell + sidebar), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Objective:** Replace the flat, fully-saturated sidebar with the anatomy DESIGN.md §16 specifies (search, "Menu" label, tinted active pill, icons, 768–1023px icon rail, account card/avatar), and give POS a fixed-height shell so Phases 2–4 can build a non-scrolling three-zone layout on top of it.
+- **Relevant docs:** DESIGN.md §15–17, §41.1–41.6, §42; AGENTS.md governance (no schema/dependency/contract changes, no Git writes).
+- **What was done:**
+  - Added `apps/web/hooks/useMediaQuery.ts` (SSR-safe `useSyncExternalStore`-based media query hook, `useIsRail`/`useIsMobile`) with `useMediaQuery.test.ts`.
+  - Rewrote `apps/web/lib/nav-config.ts`: every `NavItem` now carries a `lucide-react` icon, added `isNavItemActive` and `filterNavItems` pure helpers, added optional `comingSoon` tag support. Appended new test blocks to `nav-config.test.ts`; all prior `getNavItems` assertions kept passing unchanged.
+  - Added `apps/web/components/shell/SidebarAccountCard.tsx` (extracted account identity block; renders a full card at ≥1024px and an avatar + popover at the 768–1023px rail).
+  - Rewrote `apps/web/components/shell/Sidebar.tsx`: sidebar search input, "Menu" section label, tinted `bg-surface-strong`/brand-text active pill with a 3px left indicator bar (replacing the old fully-saturated `bg-brand-primary text-white`), 64px icon-only rail at tablet width with flyout `Popover` submenus and hover `Tooltip` labels, `min-h-10`/`size-10` touch targets (§41.5).
+  - Rewrote `apps/web/components/shell/Topbar.tsx`: added a `variant` prop (`'default' | 'pos'`) and an all-branch "Semua Cabang" branch-context pill for the Backoffice topbar (§17).
+  - Rewrote `apps/web/components/shell/AppShell.tsx`: added a `variant` prop switching the outer container/`<main>` between the normal scrolling shell and a `h-dvh overflow-hidden` POS shell with an internally-scrolling `<main>`.
+  - `apps/web/app/(pos)/layout.tsx`: passes `variant="pos"` to `AppShell`. `(back-office)` and `(shared)` layouts unchanged (default variant).
+  - Edited `apps/web/components/shell/MobileNavDrawer.tsx` to reuse `isNavItemActive`/`NavItem`/`ROLE_LABEL` from the files above, added icons and the same tinted-pill active styling to both flat links and collapsible groups.
+  - Added `apps/web/components/shell/Sidebar.test.tsx` covering expanded (search, active pill, filtering, auto-expand, role visibility) and rail (icon-only layout, flyout, avatar popover) behaviour.
+- **Decisions made during this task:** (1) One `AppShell` with a `variant` prop rather than a dedicated `PosShell` — `(pos)` also contains `/sales/history`, an ordinary scrolling table page, so a POS-only shell component would have forced `overflow-hidden` onto it too. (2) A JS `useMediaQuery`/`useIsRail` hook rather than CSS-only breakpoints, because §41.2 requires different markup at the rail width (a `Popover` flyout instead of an inline indented list), which CSS cannot produce. (3) Cashier branch-name context (§17's `Kemang · Terkunci`) was **not** implemented — logged as tech debt below, see DEBT-005.
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test` green (4/4 tasks, 282/282 tests, 0 lint errors — 4 pre-existing unrelated React Compiler warnings only). Manually verified in Chrome at 1440×900 (expanded sidebar, tinted active pill, branch-context pill), 900×700 (64px icon rail, flyout submenu on click, avatar popover), 500×800 (hamburger drawer with icons and tinted active pill), and `/sales` at 1440×900 (no 52px topbar, POS shell renders with the group auto-expanded and its active child pill-highlighted). Did not test logging in as ADMIN/KASIR interactively — role-based nav visibility is covered by `Sidebar.test.tsx` instead. **What Phase 2 needs:** `AppShell variant="pos"`'s `<main>` is `min-h-0 flex-1 overflow-y-auto`, sized to the viewport minus the mobile topbar; `useIsRail`/`useIsMobile` from `hooks/useMediaQuery.ts` are ready for the product grid and bottom sheet.
+
 ### TASK-046 — All Employees Leave History View in Leave Requests Page
 
 - **Date:** 2026-08-20

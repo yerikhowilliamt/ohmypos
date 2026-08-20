@@ -37,6 +37,18 @@
 
 ## Log
 
+### ERR-013 — Prettier formatting error on multi-line destructured props and JSX attributes
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-047 (UI Revamp Phase 1: App Shell & Modern Sidebar Navigation)
+- **Symptom:** `pnpm --filter web lint` failed with `prettier/prettier` errors in two new files: `SidebarAccountCard.tsx` (an inline destructured props type `{ user, className }: { user: UserResponse; className?: string }` that Prettier wanted expanded across lines) and `Topbar.tsx` (a self-closing `<span aria-hidden className="..." />` that Prettier wanted with each attribute on its own line).
+- **Root cause:** Hand-written JSX/TS was typed to fit Prettier's *printWidth* visually but didn't match its actual line-length/wrapping algorithm for object type literals and multi-attribute JSX tags — the same class of error as ERR-012, just triggered by different constructs (component prop types and JSX attribute lists instead of a `z.infer<...>` export).
+- **Resolution:** Ran `npx eslint --fix` scoped to the two files; Prettier auto-reformatted both to its canonical wrapping and `pnpm --filter web lint` then passed clean.
+- **Prevention:** Same as ERR-012 — run `pnpm turbo run lint` (or `pnpm --filter web lint --fix`) immediately after writing new TSX/TS files, before declaring a task's quality gate green, rather than assuming hand-formatted code already matches Prettier's output.
+- **Severity:** Low
+
+---
+
 ### ERR-012 — Prettier ESLint formatting error on single-line inferred type definition
 
 - **Date found:** 2026-08-20

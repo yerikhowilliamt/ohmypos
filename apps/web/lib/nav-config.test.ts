@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getNavItems } from './nav-config';
+import { filterNavItems, getNavItems, isNavItemActive } from './nav-config';
 
 describe('getNavItems', () => {
   it('returns Penjualan with children, Cuti, and Bantuan for KASIR', () => {
@@ -93,5 +93,57 @@ describe('getNavItems', () => {
     expect(getNavItems('ADMIN').map((item) => item.href)).not.toContain(
       '/help',
     );
+  });
+});
+
+describe('nav item icons', () => {
+  it('gives every top-level item an icon, for the tablet rail', () => {
+    // DESIGN.md §41.2: at 768–1023px the icon is the only thing rendered.
+    for (const role of ['KASIR', 'ADMIN', 'OWNER'] as const) {
+      for (const item of getNavItems(role)) {
+        expect(item.icon, `${role} → ${item.href} has no icon`).toBeDefined();
+      }
+    }
+  });
+});
+
+describe('isNavItemActive', () => {
+  it('matches the exact route', () => {
+    expect(isNavItemActive('/sales', '/sales')).toBe(true);
+  });
+
+  it('matches a nested route, so the parent group stays active', () => {
+    expect(isNavItemActive('/sales/history', '/sales')).toBe(true);
+  });
+
+  it('does not match a sibling that merely shares a prefix', () => {
+    expect(isNavItemActive('/sales-report', '/sales')).toBe(false);
+  });
+});
+
+describe('filterNavItems', () => {
+  const owner = getNavItems('OWNER');
+
+  it('returns everything for an empty or whitespace query', () => {
+    expect(filterNavItems(owner, '')).toBe(owner);
+    expect(filterNavItems(owner, '   ')).toBe(owner);
+  });
+
+  it('matches a top-level label case-insensitively and keeps its children', () => {
+    const result = filterNavItems(owner, 'laporan');
+    expect(result.map((item) => item.href)).toEqual(['/reports']);
+    expect(result[0].children).toHaveLength(5);
+  });
+
+  it('surfaces a parent through a matching child, narrowed to that child', () => {
+    const result = filterNavItems(owner, 'utang');
+    expect(result.map((item) => item.href)).toEqual(['/expenses']);
+    expect(result[0].children).toEqual([
+      { href: '/expenses/payables', label: 'Utang' },
+    ]);
+  });
+
+  it('returns an empty list when nothing matches', () => {
+    expect(filterNavItems(owner, 'zzzz')).toEqual([]);
   });
 });

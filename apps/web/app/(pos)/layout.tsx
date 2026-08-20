@@ -8,5 +8,9 @@ export default async function PosLayout({
   children: React.ReactNode;
 }) {
   const user = await requireRole(['KASIR', 'OWNER']);
-  return <AppShell user={user}>{children}</AppShell>;
+  return (
+    <AppShell user={user} variant="pos">
+      {children}
+    </AppShell>
+  );
 }
