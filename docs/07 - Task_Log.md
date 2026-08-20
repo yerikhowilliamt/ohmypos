@@ -41,6 +41,20 @@
 
 ## Log
 
+### TASK-043 — Attendance Monthly Calendar & Leave Matrix
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Devices & Attendance Tracking / Cuti (Phase 11 & 12 Integration)
+- **Objective:** Provide a monthly attendance calendar grid/matrix (Option 1) mapping each cashier to days 1..31 with status indicators (Hadir Valid, Pelanggaran, Cuti/Izin Disetujui, Libur/Kosong) and interactive popover details.
+- **Relevant docs:** ADR-021, PRD §5.4
+- **What was done:**
+  - Created `AttendanceCalendarMatrix` component (`apps/web/app/(back-office)/devices/AttendanceCalendarMatrix.tsx`).
+  - Integrated `useUsers`, `useAttendanceRecords`, and `useAllLeaveRequests` to cross-reference daily cashier presence with official approved leaves.
+  - Implemented day popover showing login timestamp, device label, and leave reasons.
+  - Added tab switcher in `apps/web/app/(back-office)/devices/attendance/AttendanceClient.tsx` (Kalender Matriks & Riwayat Log Detail).
+  - Verified live E2E via Playwright and saved screenshot to `docs/screenshoots/attendance-calendar-matrix.png`.
+- **Status:** Done
+
 ### TASK-042 — Attendance Status Manual Override by Owner
 
 - **Date:** 2026-08-20

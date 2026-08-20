@@ -10,8 +10,11 @@ import { apiFetch } from '@/lib/api';
 
 export const DEVICES_QUERY_KEYS = {
   devices: ['devices'] as const,
-  attendance: (params?: { branchId?: string; violationOnly?: boolean }) =>
-    ['devices', 'attendance', params] as const,
+  attendance: (params?: {
+    branchId?: string;
+    violationOnly?: boolean;
+    limit?: number;
+  }) => ['devices', 'attendance', params] as const,
 };
 
 export function useDevices() {
@@ -24,10 +27,12 @@ export function useDevices() {
 export function useAttendanceRecords(params?: {
   branchId?: string;
   violationOnly?: boolean;
+  limit?: number;
 }) {
   const query = new URLSearchParams();
   if (params?.branchId) query.set('branchId', params.branchId);
   if (params?.violationOnly) query.set('violationOnly', 'true');
+  if (params?.limit) query.set('limit', String(params.limit));
 
   const queryString = query.toString();
   const endpoint = `/devices/attendance${queryString ? `?${queryString}` : ''}`;
