@@ -4,6 +4,14 @@ import * as React from 'react';
 import type { SaleResponse } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@ohmypos/ui/components/table';
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -61,18 +69,27 @@ export function SaleReceiptDialog({
 
         <div className="py-2 space-y-3 font-mono text-xs">
           <div className="border-b border-border-default border-dashed pb-2">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-text-tertiary border-b border-border-default">
-                  <th className="py-1 font-medium">Item</th>
-                  <th className="py-1 text-center font-medium">Qty</th>
-                  <th className="py-1 text-right font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-default/50">
+            <Table className="w-full text-left">
+              <TableHeader>
+                <TableRow className="text-text-tertiary border-b border-border-default hover:bg-transparent">
+                  <TableHead className="py-1 h-auto font-medium">
+                    Item
+                  </TableHead>
+                  <TableHead className="py-1 h-auto text-center font-medium">
+                    Qty
+                  </TableHead>
+                  <TableHead className="py-1 h-auto text-right font-medium">
+                    Total
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-border-default/50">
                 {sale.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="py-1.5 pr-2">
+                  <TableRow
+                    key={item.id}
+                    className="hover:bg-transparent border-0"
+                  >
+                    <TableCell className="py-1.5 pr-2">
                       <div className="font-medium text-text-primary">
                         {item.productName}
                       </div>
@@ -80,17 +97,17 @@ export function SaleReceiptDialog({
                         @{formatCurrency(item.unitPriceAtSale)}
                         {item.isPriceOverridden && ' (khusus)'}
                       </div>
-                    </td>
-                    <td className="py-1.5 text-center text-text-secondary align-top">
+                    </TableCell>
+                    <TableCell className="py-1.5 text-center text-text-secondary align-top">
                       {formatQuantity(item.quantity)}
-                    </td>
-                    <td className="py-1.5 text-right font-medium text-text-primary align-top">
+                    </TableCell>
+                    <TableCell className="py-1.5 text-right font-medium text-text-primary align-top">
                       {formatCurrency(item.lineTotal)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           <div className="space-y-1.5 text-xs">

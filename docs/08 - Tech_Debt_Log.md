@@ -39,6 +39,20 @@
 
 ## Log
 
+### DEBT-011 — Dashboard branch profitability queries fan-out client-side via `useQueries`
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-041 (Branch Profitability Card)
+- **Description:** `BranchProfitabilityCard` executes one HTTP request per retail branch to `/reports/profit-loss?branchId=...` using TanStack `useQueries` in parallel rather than requesting a single aggregated multi-branch endpoint.
+- **Why deferred:** Business scope in v1 consists of 2–3 physical branches; the overhead of 2–3 lightweight parallel requests is negligible (<50ms).
+- **Impact if unaddressed:** If the number of physical branches grows to dozens, client dashboard initial load will trigger dozens of parallel HTTP requests.
+- **Trigger condition:** When active store branch count exceeds 5 branches or backend report latency increases on dashboard load.
+- **Proposed resolution:** Introduce an aggregated multi-branch endpoint (e.g. `GET /reports/profit-loss/branches`) in `apps/api/src/modules/reports` returning all branch P&L summaries in a single SQL query.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
 ### DEBT-010 — Physical Device Cookie Extraction / DevTools Cloning
 
 - **Date logged:** 2026-08-19

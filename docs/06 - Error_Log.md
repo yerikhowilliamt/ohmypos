@@ -37,6 +37,30 @@
 
 ## Log
 
+### ERR-010 — Next.js Route Interception on Direct Relative `fetch('/api/v1/...')` Calls
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-037 (Product Photo Upload)
+- **Symptom:** Product photo upload threw `Failed to fetch / Server Action not found` when trying to POST to `/api/v1/products/:id/photo`.
+- **Root cause:** Direct relative `fetch('/api/v1/...')` in client components was intercepted by Next.js App Router routing rather than dispatching to the standalone NestJS backend at `http://localhost:4015/api/v1`.
+- **Resolution:** Replaced raw `fetch()` calls with the centralized `apiFetch` helper in `apps/web/lib/api.ts` which uses `NEXT_PUBLIC_API_BASE_URL` and properly handles multipart `FormData` without manually overriding boundary headers.
+- **Prevention:** Always use `apiFetch` from `apps/web/lib/api.ts` for all API calls in `apps/web` hooks and services.
+- **Severity:** Medium
+
+---
+
+### ERR-009 — Comma-formatted decimal inputs rejected by regex before transform in Zod primitive schema
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-038 (Recipe Decimal Input Validation)
+- **Symptom:** Recipe editor rejected user input like `0,025` with `must be a decimal number written as a string` despite valid numeric intent.
+- **Root cause:** `decimalString` primitive schema applied `.regex(/^-?\d+(?:\.\d+)?$/)` before `.transform()`, which failed on Indonesian/European comma decimals (`0,5`).
+- **Resolution:** Updated `DECIMAL_PATTERN` to `/^-?\d+(?:[.,]\d+)?$/` and sanitized `,` to `.` via `.transform()` before scale and precision checks.
+- **Prevention:** Decimal primitive schemas must accept comma and dot separators prior to string normalization.
+- **Severity:** Medium
+
+---
+
 ### ERR-008 — Missing `prisma generate` step after manual Prisma schema edits causes stale TypeScript client types
 
 - **Date found:** 2026-08-19

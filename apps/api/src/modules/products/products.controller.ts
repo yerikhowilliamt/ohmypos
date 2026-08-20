@@ -11,6 +11,7 @@
  * with no branchId column (§6).
  */
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -22,13 +23,17 @@ import {
   Patch,
   Post,
   Put,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { ReplaceRecipeDto } from '../recipes/recipes.dto';
 import { RecipesService } from '../recipes/recipes.service';
+import { ProductPhotoService } from './product-photo.service';
 import { CreateProductDto, UpdateProductDto } from './products.dto';
 import { ProductsService } from './products.service';
 
@@ -39,6 +44,7 @@ export class ProductsController {
   constructor(
     private readonly service: ProductsService,
     private readonly recipesService: RecipesService,
+    private readonly photoService: ProductPhotoService,
   ) {}
 
   @Post()
@@ -71,6 +77,55 @@ export class ProductsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.service.remove(id);
+  }
+
+  @Post(':id/photo')
+  @Roles('OWNER', 'ADMIN')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/gif',
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Invalid image file. Allowed formats: JPG, PNG, WebP, GIF.',
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Upload product photo (OWNER, ADMIN only)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  async uploadPhoto(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+    const photoUrl = await this.photoService.upload(id, file);
+    return { photoUrl };
   }
 
   // --- Recipe Sub-Routes (R1) ---

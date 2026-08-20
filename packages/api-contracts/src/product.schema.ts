@@ -22,6 +22,7 @@ export const ProductResponseSchema = z.object({
   name: z.string(),
   sellPrice: MoneyString,
   isActive: z.boolean(),
+  photoUrl: z.string().nullable().optional(),
   createdAt: z.date().or(z.string()),
   updatedAt: z.date().or(z.string()),
 });

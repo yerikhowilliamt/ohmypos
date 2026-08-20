@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { getNavItems } from './nav-config';
 
 describe('getNavItems', () => {
-  it('returns Penjualan with children for KASIR', () => {
+  it('returns Penjualan with children and Cuti for KASIR', () => {
     const kasirItems = getNavItems('KASIR');
-    expect(kasirItems.map((item) => item.href)).toEqual(['/sales']);
+    expect(kasirItems.map((item) => item.href)).toEqual([
+      '/sales',
+      '/leave-requests',
+    ]);
     expect(kasirItems[0].children).toEqual([
       { href: '/sales', label: 'Transaksi Kasir' },
       { href: '/sales/history', label: 'Riwayat Transaksi' },
@@ -41,6 +44,7 @@ describe('getNavItems', () => {
       '/users',
       '/branches',
       '/devices',
+      '/leave-requests',
     ]);
     expect(hrefs[0]).toBe('/dashboard');
     expect(items.find((item) => item.href === '/sales')?.children).toEqual([

@@ -8,7 +8,7 @@ import type {
 } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
 import { Badge } from '@ohmypos/ui/components/badge';
-import { ChefHat, Edit2, Plus, Trash2 } from 'lucide-react';
+import { ChefHat, Edit2, ImageIcon, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency, formatMarginPercentage } from '@/lib/formatters';
 import { useDeleteProduct } from '@/hooks/useMasterData';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
@@ -50,22 +50,36 @@ export function ProductsTable({
         <SortableHeader label="Nama Produk" column={column} />
       ),
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-text-primary">
-            {row.original.name}
-          </span>
-          <div className="mt-0.5 flex items-center gap-1.5">
-            {row.original.hasRecipe ? (
-              <span className="text-[11px] text-status-success font-medium flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-status-success inline-block" />
-                Resep aktif
-              </span>
+        <div className="flex items-center gap-3">
+          <div className="size-9 shrink-0 overflow-hidden rounded-md border border-border-default bg-surface-muted flex items-center justify-center">
+            {row.original.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={row.original.photoUrl}
+                alt={row.original.name}
+                className="size-full object-cover"
+              />
             ) : (
-              <span className="text-[11px] text-status-warning font-medium flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-status-warning inline-block" />
-                Belum ada resep
-              </span>
+              <ImageIcon className="size-4 text-text-tertiary" />
             )}
+          </div>
+          <div className="flex flex-col">
+            <span className="font-medium text-text-primary">
+              {row.original.name}
+            </span>
+            <div className="mt-0.5 flex items-center gap-1.5">
+              {row.original.hasRecipe ? (
+                <span className="text-[11px] text-status-success font-medium flex items-center gap-1">
+                  <span className="size-1.5 rounded-full bg-status-success inline-block" />
+                  Resep aktif
+                </span>
+              ) : (
+                <span className="text-[11px] text-status-warning font-medium flex items-center gap-1">
+                  <span className="size-1.5 rounded-full bg-status-warning inline-block" />
+                  Belum ada resep
+                </span>
+              )}
+            </div>
           </div>
         </div>
       ),

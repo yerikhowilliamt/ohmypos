@@ -308,6 +308,11 @@ model User {
   activatedDevices  Device[]
   attendanceRecords AttendanceRecord[]
 
+  /// Phase 12 — two distinct relations: requests a User filed themselves, and
+  /// (OWNER only, in practice) requests a User reviewed as approver.
+  leaveRequests         LeaveRequest[] @relation("LeaveRequestUser")
+  reviewedLeaveRequests LeaveRequest[] @relation("LeaveRequestReviewer")
+
   /// BranchScopeGuard filters on this for every KASIR-scoped request (ERD §6).
   @@index([branchId])
   @@map("users")
@@ -352,6 +357,8 @@ model Product {
   name      String  @unique
   sellPrice Decimal @map("sell_price") @db.Decimal(18, 2)
   isActive  Boolean @default(true) @map("is_active")
+
+  photoUrl String? @map("photo_url")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -779,5 +786,43 @@ model AttendanceRecord {
   @@index([deviceId])
   @@map("attendance_records")
 }
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Phase 12 — cuti/leave requests, full approve/reject workflow by OWNER
+/// (Context section — user upgraded this from a passive note during
+/// planning). startDate/endDate are calendar days (@db.Date), same pattern as
+/// OpeningStock.periodMonth — a leave request is a date range, not an instant.
+model LeaveRequest {
+  id String @id @default(uuid())
+
+  userId String @map("user_id")
+
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  reason    String
+
+  status LeaveRequestStatus @default(PENDING)
+
+  reviewedByUserId String?   @map("reviewed_by_user_id")
+  reviewedAt       DateTime? @map("reviewed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Two distinct relations to User from the same model — named to disambiguate
+  /// (Prisma requires this whenever more than one relation targets the same model).
+  user       User  @relation("LeaveRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("LeaveRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
 
 
