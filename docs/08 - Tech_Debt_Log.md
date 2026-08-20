@@ -39,6 +39,20 @@
 
 ## Log
 
+### DEBT-012 — Attendance & Leave calendar matrix client-side cross-referencing
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-043 (Attendance Monthly Calendar & Leave Matrix)
+- **Description:** `AttendanceCalendarMatrix` fetches all cashiers (`useUsers`), attendance records (`useAttendanceRecords`), and approved leaves (`useAllLeaveRequests`) separately, then maps attendance status per day (1..31) on the client side.
+- **Why deferred:** Number of active cashiers per business in v1 is small (2–10 cashiers) and date math in memory is instantaneous (<2ms).
+- **Impact if unaddressed:** If cashier count grows to hundreds or thousands across dozens of franchises, fetching all records and mapping client-side could cause unnecessary data over-fetching.
+- **Trigger condition:** When store cashier staff count exceeds 50 users or matrix rendering experiences noticeable lag on month change.
+- **Proposed resolution:** Create a dedicated backend aggregation endpoint (e.g. `GET /devices/attendance/matrix?year=2026&month=8`) returning the pre-calculated daily matrix status per user directly from a single SQL query.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
 ### DEBT-011 — Dashboard branch profitability queries fan-out client-side via `useQueries`
 
 - **Date logged:** 2026-08-20
