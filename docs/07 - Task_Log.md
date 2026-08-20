@@ -41,6 +41,24 @@
 
 ## Log
 
+### TASK-044 — Help / Documentation Page (Phase 13)
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Documentation / Help Page (Phase 13)
+- **Objective:** Provide a dedicated role-aware Help/Documentation ("Bantuan") page with step-by-step guidance rendered through accessible accordion components without introducing new dependencies or MDX pipelines.
+- **Relevant docs:** `docs/plannings/phase-13-help-page.md`, AGENTS.md, DESIGN.md
+- **What was done:**
+  - Added Accordion component in `packages/ui/src/components/ui/accordion.tsx` wrapping `radix-ui` Accordion primitives.
+  - Authored structured static typed guide data in `apps/web/lib/help-content.ts` with role-based filtering (`getHelpSections`).
+  - Created shared help page `apps/web/app/(shared)/help/page.tsx` and client component `HelpClient.tsx`.
+  - Updated `apps/web/lib/nav-config.ts` to include `/help` in navigation for `KASIR` and `OWNER` (omitting sidebar link for `ADMIN` per AGENTS.md constraints while keeping URL accessible).
+  - Updated unit tests in `apps/web/lib/nav-config.test.ts`.
+  - Ran turbo lint, typecheck, and full test suite across workspace.
+  - Verified live E2E rendering and role-based filtering for `OWNER`, `KASIR`, and `ADMIN` via Playwright.
+- **Status:** Done
+- **Handoff notes:**
+  - Next phases in HR-lite/backlog can proceed independently.
+
 ### TASK-043 — Attendance Monthly Calendar & Leave Matrix
 
 - **Date:** 2026-08-20

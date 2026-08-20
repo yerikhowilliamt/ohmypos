@@ -37,6 +37,18 @@
 
 ## Log
 
+### ERR-011 — Incorrect password in seed credential mental model during test login
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-044 (Phase 13 E2E Verification)
+- **Symptom:** Cashier test login with `Password123!` failed with `401 Invalid credentials`.
+- **Root cause:** Default seed password defined in `apps/api/prisma/seed.ts` is `ChangeMe123!`, not `Password123!`.
+- **Resolution:** Re-attempted login with standard seed password `ChangeMe123!` per `.agents/skills/e2e-playwright/SKILL.md` credentials table.
+- **Prevention:** Always consult `.agents/skills/e2e-playwright/SKILL.md` for seed user credentials before initiating browser test runs.
+- **Severity:** Low — testing workflow error only, no production impact.
+
+---
+
 ### ERR-010 — Next.js Route Interception on Direct Relative `fetch('/api/v1/...')` Calls
 
 - **Date found:** 2026-08-20

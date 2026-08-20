@@ -27,6 +27,7 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
       ],
     },
     { href: '/leave-requests', label: 'Cuti' },
+    { href: '/help', label: 'Bantuan' },
   ],
   ADMIN: [
     {
@@ -95,6 +96,7 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
       ],
     },
     { href: '/leave-requests', label: 'Cuti' },
+    { href: '/help', label: 'Bantuan' },
   ],
 };
 

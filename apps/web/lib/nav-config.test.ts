@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { getNavItems } from './nav-config';
 
 describe('getNavItems', () => {
-  it('returns Penjualan with children and Cuti for KASIR', () => {
+  it('returns Penjualan with children, Cuti, and Bantuan for KASIR', () => {
     const kasirItems = getNavItems('KASIR');
     expect(kasirItems.map((item) => item.href)).toEqual([
       '/sales',
       '/leave-requests',
+      '/help',
     ]);
     expect(kasirItems[0].children).toEqual([
       { href: '/sales', label: 'Transaksi Kasir' },
@@ -45,6 +46,7 @@ describe('getNavItems', () => {
       '/branches',
       '/devices',
       '/leave-requests',
+      '/help',
     ]);
     expect(hrefs[0]).toBe('/dashboard');
     expect(items.find((item) => item.href === '/sales')?.children).toEqual([
@@ -84,6 +86,12 @@ describe('getNavItems', () => {
     );
     expect(getNavItems('KASIR').map((item) => item.href)).not.toContain(
       '/dashboard',
+    );
+  });
+
+  it('does not expose /help to ADMIN', () => {
+    expect(getNavItems('ADMIN').map((item) => item.href)).not.toContain(
+      '/help',
     );
   });
 });
