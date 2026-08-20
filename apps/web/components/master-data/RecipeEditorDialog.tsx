@@ -145,8 +145,11 @@ export function RecipeEditorDialog({
                 <ChefHat className="size-5 text-white" />
               </div>
               <div>
-                <DialogTitle>Resep / Komposisi (BOM)</DialogTitle>
+                <DialogTitle>Resep & Takaran Menu</DialogTitle>
                 <DialogDescription>
+                  Tentukan takaran bahan baku yang terpakai otomatis setiap
+                  produk ini terjual.
+                  <br />
                   Produk:{' '}
                   <span className="font-semibold text-text-primary">
                     {product?.name}
@@ -206,7 +209,7 @@ export function RecipeEditorDialog({
           <div className="my-4 flex-1 overflow-y-auto pr-1 space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                Daftar Bahan Baku Digunakan
+                Bahan Baku yang Digunakan
               </Label>
               <Button
                 type="button"

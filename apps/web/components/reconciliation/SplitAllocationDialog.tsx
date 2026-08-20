@@ -207,9 +207,10 @@ export function SplitAllocationDialog({
       <DialogContent className="sm:max-w-[680px]">
         <form onSubmit={handleSubmit} noValidate>
           <DialogHeader>
-            <DialogTitle>Alokasi Transaksi Bank</DialogTitle>
+            <DialogTitle>Bagi Alokasi Transaksi</DialogTitle>
             <DialogDescription>
-              {transaction?.description ?? '—'}
+              Pecah satu mutasi bank untuk dicocokkan ke beberapa catatan
+              pembukuan.
             </DialogDescription>
           </DialogHeader>
 

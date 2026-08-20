@@ -52,23 +52,23 @@ function getDefaultRange(): { startDate: string; endDate: string } {
 const REPORT_TITLES: Record<TabId, { title: string; desc: string }> = {
   'profit-loss': {
     title: 'Laba Rugi',
-    desc: 'Laporan ringkasan performa pendapatan, HPP, dan laba operasional.',
+    desc: 'Pantau laporan laba rugi, pendapatan harian, dan analisis produk terlaris.',
   },
   'product-profit': {
     title: 'Laba per Produk',
-    desc: 'Rincian margin laba kotor, omzet, dan estimasi HPP per item produk.',
+    desc: 'Laporan keuntungan dan margin laba per menu produk',
   },
   'income-by-payment-method': {
     title: 'Pendapatan per Metode Bayar',
-    desc: 'Total perolehan uang masuk berdasarkan akun kas atau transfer.',
+    desc: 'Laporan pendapatan berdasarkan metode pembayaran yang digunakan',
   },
   'top-products': {
     title: '10 Produk Terlaris',
-    desc: 'Peringkat menu dengan volume penjualan dan keuntungan tertinggi.',
+    desc: 'Daftar menu produk paling laris dan kontribusi keuntungannya',
   },
   'daily-income': {
     title: 'Pendapatan Harian',
-    desc: 'Grafik dan tren omzet penjualan harian dalam rentang tanggal terpilih.',
+    desc: 'Laporan rincian pendapatan harian per metode pembayaran',
   },
 };
 

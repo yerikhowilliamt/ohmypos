@@ -10,11 +10,11 @@ export function AccountsClient() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-text-primary">
-          Metode Pembayaran (Kas & Bank)
+          Rekening & Kas
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Kelola akun penampung dana pembayaran transaksi POS (Kas Tunai,
-          E-Wallet, QRIS, Transfer Bank).
+          Kelola rekening bank dan kas kasir untuk penerimaan pembayaran
+          transaksi toko.
         </p>
       </div>
 

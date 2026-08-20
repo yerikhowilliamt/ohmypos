@@ -177,7 +177,7 @@ export function ProductsTable({
           <Button
             variant="ghost"
             size="icon-xs"
-            title="Kelola resep (BOM)"
+            title="Kelola resep"
             onClick={() => setRecipeProduct(row.original)}
             className="size-7 text-accent-outflow hover:bg-surface-strong"
           >
@@ -246,7 +246,7 @@ export function ProductsTable({
         isLoading={isLoading}
         searchColumns={['name']}
         searchPlaceholder="Cari nama produk / menu…"
-        emptyMessage="Belum ada produk terdaftar."
+        emptyMessage="Belum ada produk jualan terdaftar."
       />
 
       {/* Create / Edit Product Dialog */}
@@ -283,7 +283,7 @@ export function ProductsTable({
           }
         }}
         title="Hapus Produk"
-        description="Apakah Anda yakin ingin menghapus produk ini? Tindakan ini tidak dapat dibatalkan jika produk belum memiliki riwayat transaksi."
+        description="Data yang dihapus tidak dapat dikembalikan. Pastikan bahan/produk ini tidak sedang aktif digunakan."
         itemName={deletingProduct?.name}
         isDeleting={deleteMutation.isPending}
         errorMessage={deleteError}

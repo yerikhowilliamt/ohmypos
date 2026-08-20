@@ -177,7 +177,7 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
             </span>
           ) : (
             <span className="text-xs text-text-tertiary">
-              Sesuai terminal toko
+              Sesuai perangkat toko
             </span>
           ),
       },

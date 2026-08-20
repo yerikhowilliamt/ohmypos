@@ -38,7 +38,7 @@ export function ProfileClient() {
           Profil Saya
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Kelola nama, kata sandi, dan akun Anda sendiri.
+          Perbarui informasi profil dan kata sandi akun Anda.
         </p>
       </div>
 

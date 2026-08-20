@@ -4,7 +4,7 @@ import { ExpensesClient } from '../ExpensesClient';
 
 export const metadata: Metadata = {
   title: 'Utang — Pengeluaran — OhMyPos',
-  description: 'Kelola dan catat pelunasan utang ke pemasok',
+  description: 'Pantau tagihan dan catat pembayaran utang pemasok',
 };
 
 export default async function ExpensesPayablesPage() {

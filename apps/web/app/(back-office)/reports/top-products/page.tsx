@@ -5,7 +5,7 @@ import { ReportsClient } from '@/components/reports/ReportsClient';
 
 export const metadata: Metadata = {
   title: '10 Produk Terlaris — Laporan — OhMyPos',
-  description: 'Daftar produk paling laku dan paling menguntungkan',
+  description: 'Daftar menu produk paling laris dan kontribusi keuntungannya',
 };
 
 export default async function ReportsTopProductsPage() {

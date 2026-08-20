@@ -108,7 +108,7 @@ describe('ProductsTable', () => {
       />,
     );
 
-    expect(screen.getByText('Belum ada produk terdaftar.')).toBeDefined();
+    expect(screen.getByText(/belum ada produk/i)).toBeDefined();
   });
 
   it('opens ProductFormDialog when clicking Tambah Produk button', () => {

@@ -118,9 +118,8 @@ export function RawMaterialFormDialog({
               {isEdit ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}
             </DialogTitle>
             <DialogDescription>
-              {isEdit
-                ? 'Perbarui informasi bahan baku atau biaya per unit.'
-                : 'Daftarkan bahan baku baru yang digunakan dalam resep atau inventaris.'}
+              Isi data bahan mentah atau bahan baku yang digunakan untuk resep
+              menu.
             </DialogDescription>
           </DialogHeader>
 

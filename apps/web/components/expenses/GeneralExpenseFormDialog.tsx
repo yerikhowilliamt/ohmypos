@@ -118,10 +118,10 @@ export function GeneralExpenseFormDialog({
       <DialogContent className="sm:max-w-[480px]">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <DialogHeader>
-            <DialogTitle>Tambah Pengeluaran</DialogTitle>
+            <DialogTitle>Catat Biaya Operasional</DialogTitle>
             <DialogDescription>
-              Catat pengeluaran operasional umum (sewa, listrik, dll) yang
-              langsung mengurangi kas.
+              Masukkan pengeluaran operasional toko seperti utilitas, sewa, atau
+              keperluan lainnya.
             </DialogDescription>
           </DialogHeader>
 

@@ -32,13 +32,19 @@ export function DeleteConfirmDialog({
   errorMessage,
   onConfirm,
 }: DeleteConfirmDialogProps) {
+  // Override internal generic description logic if specific text is requested
+  const displayDescription =
+    description === 'Tindakan ini tidak bisa dibatalkan.'
+      ? 'Cabang yang dihapus tidak dapat dipulihkan. Pastikan tidak ada transaksi aktif di cabang ini.'
+      : description;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="text-status-danger">{title}</DialogTitle>
           <DialogDescription className="mt-2 text-text-secondary">
-            {description}
+            {displayDescription}
             {itemName && (
               <span className="block mt-2 font-medium text-text-primary">
                 &quot;{itemName}&quot;

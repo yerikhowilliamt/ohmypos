@@ -39,12 +39,10 @@ export function DeactivateConfirmDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="text-status-danger">
-            Hapus Pengguna
+            Nonaktifkan Pengguna
           </DialogTitle>
           <DialogDescription className="mt-2 text-text-secondary">
-            Pengguna ini tidak akan bisa login lagi dan akan langsung keluar
-            dari sesi aktifnya. Riwayat transaksi yang tercatat atas namanya
-            tetap tersimpan.
+            Pengguna yang dinonaktifkan tidak akan bisa masuk ke aplikasi lagi.
             {userName && (
               <span className="block mt-2 font-medium text-text-primary">
                 &quot;{userName}&quot;

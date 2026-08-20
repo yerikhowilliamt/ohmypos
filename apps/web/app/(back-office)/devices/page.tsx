@@ -4,7 +4,7 @@ import { DevicesClient } from './DevicesClient';
 
 export const metadata: Metadata = {
   title: 'Perangkat — OhMyPos',
-  description: 'Kelola terminal/tablet yang terdaftar per cabang',
+  description: 'Kelola perangkat yang terdaftar per cabang',
 };
 
 export default async function Page() {

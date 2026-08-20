@@ -4,7 +4,7 @@ import { ExpensesClient } from './ExpensesClient';
 
 export const metadata: Metadata = {
   title: 'Pengeluaran Umum — Pengeluaran — OhMyPos',
-  description: 'Catat pengeluaran operasional dan umum bisnis',
+  description: 'Pencatatan belanja bahan baku, operasional, dan utang pemasok',
 };
 
 export default async function ExpensesGeneralPage() {

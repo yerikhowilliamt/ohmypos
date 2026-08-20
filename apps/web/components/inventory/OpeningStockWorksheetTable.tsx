@@ -85,14 +85,16 @@ export function OpeningStockWorksheetTable({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-surface-raised p-4 rounded-md border border-border-default shadow-1">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm">
           <div className="flex items-center gap-1.5">
-            <span className="text-text-secondary">Bahan Baku:</span>
+            <span className="text-text-secondary">Pencatatan Stok Awal:</span>
             <span className="font-semibold text-text-primary font-mono">
               {rows.length}
             </span>
           </div>
           <span className="text-border-strong hidden sm:inline">•</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-text-secondary">Telah Dideklarasikan:</span>
+            <span className="text-text-secondary">
+              Masukkan jumlah fisik bahan baku yang tersedia di awal periode:
+            </span>
             <span className="font-semibold text-text-primary font-mono">
               {declaredCount} / {rows.length}
             </span>

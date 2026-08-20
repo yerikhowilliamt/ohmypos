@@ -41,6 +41,22 @@
 
 ## Log
 
+### TASK-046 — All Employees Leave History View in Leave Requests Page
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Leave Requests (Phase 12, ADR-021)
+- **Objective:** Add employee leave history view to `/leave-requests` page allowing owners to see all employees' historical leave requests alongside the pending review queue.
+- **Relevant docs:** ADR-021, AGENTS.md, `04 - Engineering_Playbook.md`
+- **What was done:**
+  - Updated `LeaveRequestResponse` and `LeaveRequestUserSummary` schema in `packages/api-contracts/src/leave-request.schema.ts` to include employee summary (`name`, `email`).
+  - Updated `LeaveRequestsService` in `apps/api` to `include` user relation details (`name`, `email`, `id`) in `findMine`, `findAll`, `approve`, and `reject`.
+  - Refactored `OwnerReviewQueue` in `apps/web` with Radix `Tabs` for "Menunggu Persetujuan" and "Riwayat Semua Cuti".
+  - Added dynamic filtering by employee (User) and status (Pending/Approved/Rejected) in the history tab.
+  - Updated E2E test in `apps/api/test/leave-requests.e2e-spec.ts` to verify user details in leave request queries.
+- **Decisions made during this task:** Added user metadata directly into `LeaveRequestResponse` query join, avoiding multiple fragmented frontend network round-trips.
+- **Status:** Done
+- **Handoff notes:** All unit and e2e test suites passing cleanly (`turbo run lint typecheck test`).
+
 ### TASK-045 — Export (XLSX) Buttons Across Key Data Pages
 
 - **Date:** 2026-08-20

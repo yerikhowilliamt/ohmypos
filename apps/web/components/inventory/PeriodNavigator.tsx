@@ -64,12 +64,12 @@ export function PeriodNavigator({
   };
 
   return (
-    <div className="flex items-center justify-between gap-2 bg-surface-raised border border-border-default rounded-sm p-1 shadow-1 w-full lg:w-68 h-8">
+    <div className="flex items-center justify-between gap-2 bg-surface-raised border border-border-default rounded-sm p-1 shadow-1 w-full h-6">
       <Button
         type="button"
         variant="outline"
         size="sm"
-        className="w-6 h-6 p-0"
+        className="w-5 h-5 p-0"
         onClick={() => onPeriodChange(getAdjacentMonth(period, -1))}
         disabled={disabled}
         aria-label="Bulan sebelumnya"
@@ -148,7 +148,7 @@ export function PeriodNavigator({
         type="button"
         variant="outline"
         size="sm"
-        className="h-6 w-6 p-0"
+        className="h-5 w-5 p-0"
         onClick={() => onPeriodChange(getAdjacentMonth(period, 1))}
         disabled={disabled}
         aria-label="Bulan berikutnya"

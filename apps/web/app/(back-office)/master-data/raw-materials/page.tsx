@@ -4,7 +4,7 @@ import { MasterDataClient } from '../MasterDataClient';
 
 export const metadata: Metadata = {
   title: 'Bahan Baku — Data Master — OhMyPos',
-  description: 'Kelola inventaris dan harga beli bahan baku',
+  description: 'Daftar bahan baku dan harga beli',
 };
 
 export default async function MasterDataRawMaterialsPage() {

@@ -37,6 +37,18 @@
 
 ## Log
 
+### ERR-012 — Prettier ESLint formatting error on single-line inferred type definition
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-046 (All Employees Leave History View in Leave Requests Page)
+- **Symptom:** Turbo lint failed on `packages/api-contracts` with `prettier/prettier` error on `export type LeaveRequestUserSummary = z.infer<typeof LeaveRequestUserSummarySchema>;`.
+- **Root cause:** Prettier max line length configuration expected a line break inside the `z.infer<...>` type declaration for longer identifier names.
+- **Resolution:** Re-formatted the type export to span multiple lines matching Prettier rules (`export type LeaveRequestUserSummary = z.infer<\n  typeof LeaveRequestUserSummarySchema\n>;`) and executed `pnpm --filter web lint --fix`.
+- **Prevention:** Always run `pnpm turbo run lint` after editing TypeScript contracts and schema files before finishing a task.
+- **Severity:** Low
+
+---
+
 ### ERR-011 — Incorrect password in seed credential mental model during test login
 
 - **Date found:** 2026-08-20

@@ -89,9 +89,8 @@ export function ReconciliationClient() {
       <Alert variant="destructive" data-testid="reconciliation-forbidden">
         <AlertTitle>Akses ditolak</AlertTitle>
         <AlertDescription>
-          Akun Anda tidak memiliki izin untuk membuka Rekonsiliasi. Hanya Admin
-          dan Owner yang dapat melakukan pencocokan rekonsiliasi. Hubungi Owner
-          bila Anda merasa ini keliru.
+          Halaman ini khusus untuk Owner dan Admin untuk mencocokkan mutasi
+          bank.
         </AlertDescription>
       </Alert>
     );
@@ -108,11 +107,11 @@ export function ReconciliationClient() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-text-primary">
-          Rekonsiliasi
+          Rekonsiliasi Bank
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Impor rekening koran, tinjau usulan pencocokan otomatis, dan
-          alokasikan transaksi bank ke catatan pembukuan.
+          Cocokkan mutasi rekening bank dengan pencatatan
+          kas/penjualan/pengeluaran toko agar pembukuan akurat.
         </p>
       </div>
 

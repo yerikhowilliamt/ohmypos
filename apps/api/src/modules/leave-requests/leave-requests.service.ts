@@ -34,6 +34,11 @@ export class LeaveRequestsService {
   async findMine(userId: string): Promise<LeaveRequestResponse[]> {
     const requests = await this.prisma.leaveRequest.findMany({
       where: { userId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return requests.map((r) => this.toResponse(r));
@@ -44,6 +49,11 @@ export class LeaveRequestsService {
       where: {
         status: query.status,
         userId: query.userId,
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -59,6 +69,11 @@ export class LeaveRequestsService {
         reviewedByUserId: reviewerId,
         reviewedAt: new Date(),
       },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
     });
     return this.toResponse(updated);
   }
@@ -71,6 +86,11 @@ export class LeaveRequestsService {
         status: 'REJECTED',
         reviewedByUserId: reviewerId,
         reviewedAt: new Date(),
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
       },
     });
     return this.toResponse(updated);
@@ -99,10 +119,16 @@ export class LeaveRequestsService {
     reviewedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
+    user?: {
+      id: string;
+      name: string;
+      email: string;
+    };
   }): LeaveRequestResponse {
     return {
       id: request.id,
       userId: request.userId,
+      user: request.user,
       startDate: request.startDate.toISOString().slice(0, 10),
       endDate: request.endDate.toISOString().slice(0, 10),
       reason: request.reason,

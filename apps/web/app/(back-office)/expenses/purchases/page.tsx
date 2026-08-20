@@ -4,7 +4,7 @@ import { ExpensesClient } from '../ExpensesClient';
 
 export const metadata: Metadata = {
   title: 'Pembelian — Pengeluaran — OhMyPos',
-  description: 'Catat pembelian bahan baku dari pemasok',
+  description: 'Catat belanja bahan baku dari pemasok',
 };
 
 export default async function ExpensesPurchasesPage() {

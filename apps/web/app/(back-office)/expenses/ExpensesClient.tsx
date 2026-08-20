@@ -13,15 +13,15 @@ interface ExpensesClientProps {
 const TAB_TITLES = {
   general: {
     title: 'Pengeluaran Umum',
-    desc: 'Catat pengeluaran operasional dan biaya umum bisnis.',
+    desc: 'Catat biaya operasional toko harian seperti listrik, sewa, gaji, atau perlengkapan.',
   },
   purchases: {
     title: 'Pembelian Bahan Baku',
-    desc: 'Catat pembelian bahan baku dari pemasok serta status pembayarannya.',
+    desc: 'Catat belanja bahan baku dari pemasok (tunai atau kredit/utang).',
   },
   payables: {
     title: 'Pelunasan Utang',
-    desc: 'Kelola daftar utang belum lunas dan catat pelunasan ke pemasok.',
+    desc: 'Pantau tagihan jatuh tempo dan catat pembayaran utang ke pemasok.',
   },
 };
 

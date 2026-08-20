@@ -95,9 +95,7 @@ export function BranchFormDialog({
               {isEdit ? 'Edit Cabang' : 'Tambah Cabang'}
             </DialogTitle>
             <DialogDescription>
-              {isEdit
-                ? 'Perbarui nama atau alamat cabang.'
-                : 'Daftarkan cabang baru untuk penjualan dan penugasan staf.'}
+              Isi nama dan alamat cabang toko.
             </DialogDescription>
           </DialogHeader>
 

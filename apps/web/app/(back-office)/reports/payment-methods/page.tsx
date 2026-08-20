@@ -5,7 +5,8 @@ import { ReportsClient } from '@/components/reports/ReportsClient';
 
 export const metadata: Metadata = {
   title: 'Pendapatan per Metode Bayar — Laporan — OhMyPos',
-  description: 'Laporan perolehan kas dan non-tunai per akun pembayaran',
+  description:
+    'Laporan pendapatan berdasarkan metode pembayaran yang digunakan',
 };
 
 export default async function ReportsPaymentMethodsPage() {

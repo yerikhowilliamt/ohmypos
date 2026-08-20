@@ -74,10 +74,10 @@ export function BankStatementImportCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Impor Rekening Koran</CardTitle>
+        <CardTitle className="text-base">Impor Mutasi Bank</CardTitle>
         <CardDescription>
-          Unggah file CSV rekening koran (maks. 5 MB). Baris yang sudah pernah
-          diimpor akan dilewati otomatis.
+          Unggah file mutasi rekening bank (format CSV) untuk mulai mencocokkan
+          transaksi.
         </CardDescription>
       </CardHeader>
       <CardContent>

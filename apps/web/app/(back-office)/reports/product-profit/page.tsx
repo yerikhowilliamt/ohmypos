@@ -5,7 +5,7 @@ import { ReportsClient } from '@/components/reports/ReportsClient';
 
 export const metadata: Metadata = {
   title: 'Laba per Produk — Laporan — OhMyPos',
-  description: 'Laporan margin laba dan HPP per item menu produk',
+  description: 'Laporan keuntungan dan margin laba per menu produk',
 };
 
 export default async function ReportsProductProfitPage() {

@@ -128,7 +128,7 @@ describe('RecipeEditorDialog', () => {
     );
 
     expect(
-      screen.getByRole('heading', { name: /resep \/ komposisi/i }),
+      screen.getByRole('heading', { name: /resep & takaran menu/i }),
     ).toBeDefined();
 
     expect(await screen.findByTestId('raw-material-select-0')).toBeDefined();

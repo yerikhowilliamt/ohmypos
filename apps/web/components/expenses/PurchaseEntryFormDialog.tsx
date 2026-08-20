@@ -185,8 +185,8 @@ export function PurchaseEntryFormDialog({
             <DialogHeader>
               <DialogTitle>Catat Pembelian Bahan Baku</DialogTitle>
               <DialogDescription>
-                Stok bertambah segera; entri pengeluaran hanya dibuat sekarang
-                jika dibayar langsung (ADR-006).
+                Masukkan rincian nota pembelian dari pemasok. Stok bahan baku
+                akan otomatis bertambah.
               </DialogDescription>
             </DialogHeader>
 
