@@ -41,6 +41,24 @@
 
 ## Log
 
+### TASK-049 — UI Revamp Phase 3: POS Order Panel & Transaction Flow
+
+- **Date:** 2026-08-20
+- **Module / Phase:** UI Revamp Phase 3 (POS order panel), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Objective:** Restructure zone 3's `CartPanel` into DESIGN.md §24's top-to-bottom anatomy — panel header, order list of single rows with a unified pill stepper, summary block, payment method, full-width primary CTA pinned at the bottom — without changing any cart *behaviour*.
+- **Relevant docs:** DESIGN.md §18.1, §20, §24, §24.1, §24.2, §24.3, §25, §26, §27, §41.5; ADR-004, ADR-013, ADR-015; DEBT-004.
+- **What was done:**
+  - Added `apps/web/components/pos/QuantityStepper.tsx` — a single bordered pill holding `[−][qty][+]`, replacing three separate `Button`s. Decrement is `disabled` at `quantity <= 1` (§25's current wording moves "remove item" to the row's dedicated delete icon), rather than editing `cartReducer`'s DECREMENT branch, which four test files cover.
+  - Added `apps/web/components/pos/OrderSummary.tsx` — Subtotal (n) then Total bayar, divider between, no tax row (`Sale.totalAmount` is Σ line totals only, ADR-015 decision 1).
+  - Rewrote `CartLineRow.tsx` — thumbnail (resolved by `CartPanel` from the product list, since `CartLine` deliberately carries no photo), name, `QuantityStepper`, mono line total, dedicated top-right trash icon in `status-danger`, dividers between rows instead of a per-row card border. Over-committed state is a tinted background + left accent bar rather than a border.
+  - Rewrote `CartPanel.tsx` — panel header ("Detail Pesanan" + Kosongkan), internally-scrolling order list, pinned foot (error banner → `OrderSummary` → `PaymentMethodPicker` → full-width "Bayar" CTA with a `Send` icon). Takes a new `productPhotos: Map<string, string | null>` prop.
+  - `PaymentMethodPicker.tsx`: 4 targeted edits — visible "Metode pembayaran:" label, horizontal scroll instead of wrap so the control's height never pushes the CTA off-panel, `shrink-0` tiles, updated doc comment recording the §24.3 dropdown deviation.
+  - `PosScreen.tsx`: added a `productPhotos` memo (productId → photoUrl, from the same `productList` the grid renders) and passed it into `CartPanel`.
+  - Added `apps/web/components/pos/OrderPanel.test.tsx` (9 tests) covering `QuantityStepper`, `OrderSummary`, and `CartLineRow` in isolation.
+- **Decisions made during this task:** None beyond what the plan already specified — this task was a literal, section-by-section execution of a pre-approved plan (no approval checkpoint inside the phase, per the plan's §0.8). Three documented DESIGN.md deviations, logged as **DEBT-027**: (1) no customer combobox (§18.1) — no `Customer` model exists; (2) no Service Tax row (§24.2) — `Sale.totalAmount` has no tax column; (3) payment method stays a segmented tile control rather than the §24.3 dropdown, on §26/§43/§41.5 touch-target grounds and because ~15 existing POS tests select a method via `payment-method-<id>` tile clicks.
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test` green (13/13 tasks) — 312/312 web tests (including `PosScreen.test.tsx`'s full 14-test regression suite, unmodified), 151/151 api tests, 0 lint errors (same 4 pre-existing unrelated `react-hook-form` warnings as TASK-047/048). `lib/pos/` was not touched — `cart.reducer.ts`, `cart-totals.ts`, `availability.ts`, `submit-error.ts`, `to-create-sale.ts` are byte-identical to before this task. Manually verified against the running dev server (`localhost:3001`/`localhost:4015`) at 1440×900 as the seeded KASIR (`kasir@ohmypos.local`): panel header reads "Detail Pesanan"; empty state shows both §27 lines; adding products renders one row per line with thumbnail, red top-right trash icon, pill stepper (decrement correctly disabled at quantity 1), and a mono right-aligned line total, separated by hairlines; the order list scrolls internally while summary/payment/CTA stay pinned; overriding a price live-updates Subtotal/Total bayar and shows the "Harga khusus" badge; payment tiles scroll horizontally and selecting one enables the "Bayar" CTA; a full submit produced a correct receipt (itemized, override reflected, Rp 95.000 total) and cleared the cart back to the empty state. Did **not** verify tablet/mobile breakpoints, tab order, or exact pixel touch-target measurements (plan §7.2–§7.3) in this session — those remain outstanding for whoever picks up Phase 4. Phase 4 (mobile bottom sheet) can mount the same `CartPanel` as-is — it is self-contained and prop-driven, and its foot (summary → payment → CTA) is already a single pinned block per the plan's §9 handoff notes.
+
 ### TASK-048 — UI Revamp Phase 2: POS Product Discovery & Filter Cards
 
 - **Date:** 2026-08-20

@@ -39,6 +39,20 @@
 
 ## Log
 
+### DEBT-027 — POS order panel omits customer, tax, and the §24.3 dropdown
+
+- **Date logged:** 2026-08-20
+- **Found during:** UI Revamp Phase 3 (POS Order Panel & Transaction Flow)
+- **Description:** Three deviations from DESIGN.md's order-panel spec. (1) §18.1's "Type or Select Customer" combobox is not built — no `Customer` model exists anywhere in `schema.prisma`, and `CreateSaleSchema` has no customer field. (2) §24.2's Service Tax row is not built — `Sale.totalAmount` is Σ `SaleItem.lineTotal` with no tax column (ADR-015 decision 1, DEBT-004). (3) §24.3 specifies a dropdown for the payment method; a segmented tile control (`PaymentMethodPicker`) was kept instead — §26 requires the payment path to stay visible, §43 forbids depending on precise pointer positioning, there are only a handful of `Account` rows, and converting would mean rewriting the selection step ~15 POS tests depend on (`fireEvent.click(getByTestId('payment-method-<id>'))`).
+- **Why deferred:** (1) and (2) would render UI promising behaviour the system does not have — DEBT-004's standing judgement against fabricated fields. (3) is a deliberate form-factor deviation, not deferred work; §24.3's placement (directly above the CTA) and visible label are still honoured.
+- **Impact if unaddressed:** None currently for (3) — fully functional as built. For (1)/(2): sales cannot be attributed to a named customer, and the summary block cannot show a tax line even if the business later needs one, without a schema change first.
+- **Trigger condition:** (1) the owner asks to attach customers to sales; (2) tax or member discounts are decided — per DEBT-004 these must be decided together, since either changes the meaning of every reported total; (3) the payment method list grows past roughly eight accounts, at which point a fixed 2-column grid (the layout as of 2026-08-20, replacing an earlier horizontally-scrolling row that visibly overflowed the panel's fixed width — see the same day's overflow fix) starts requiring vertical scroll of its own.
+- **Proposed resolution:** (1)/(2) require a schema-approval gate (new `Customer` model / tax column) before any frontend work. (3) would mean swapping `PaymentMethodPicker`'s tiles for a Radix `Select` and rewriting the ~15 dependent test assertions to open the select before clicking an item.
+- **Priority:** Low
+- **Status:** Open
+
+**Addendum (unrelated to the three deviations above, logged in the same task):** `cart.reducer.ts`'s `DECREMENT` action still removes a line at `quantity <= 1`, citing an earlier reading of §25 in its own comment. The new `QuantityStepper` disables the decrement button at quantity 1 instead of touching that tested reducer, so the remove-at-1 branch is now unreachable from the UI (removal happens only via the row's trash icon) and the reducer's comment cites a superseded reading of §25. Left as-is deliberately — `cart.reducer.test.ts` still exercises that branch directly. Trigger to clean up: the next time `cart.reducer.ts` is touched for an unrelated reason, delete the dead branch and correct the comment.
+
 ### DEBT-026 — Cashier branch context absent from the topbar
 
 - **Date logged:** 2026-08-20

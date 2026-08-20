@@ -17,10 +17,18 @@ interface PaymentMethodPickerProps {
 /**
  * Payment method = `Account` (System Design §6.1, ERD §3).
  *
- * Rendered as selectable tiles rather than a dropdown: DESIGN.md §26 requires the
- * payment path to stay visible and touch-friendly, and §43 asks for larger touch
- * targets in POS. There are only a handful of accounts, so a `<select>` would hide
- * the choice behind an extra tap for no gain.
+ * §24.3 specifies a dropdown. This stays a segmented tile control instead: §26
+ * requires the payment path to remain visible, §43 forbids depending on precise
+ * pointer positioning, and there are only a handful of `Account` rows, so a
+ * dropdown would hide the choice behind an extra tap for no gain. §24.3's
+ * placement (directly above the CTA) and visible label are both honoured.
+ * Recorded as a deviation in the Phase 3 plan and the Tech Debt Log.
+ *
+ * Laid out as a fixed 2-column grid rather than a horizontally-scrolling row —
+ * every tile is visible without scrolling, and the panel's fixed width bounds
+ * the grid naturally. Tiles are deliberately compact (§41.5's 40px floor, not
+ * the taller card the row version used) so a handful of accounts don't crowd
+ * the summary/CTA below them.
  */
 export function PaymentMethodPicker({
   methods,
@@ -30,9 +38,9 @@ export function PaymentMethodPicker({
   onSelect,
 }: PaymentMethodPickerProps) {
   return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="mb-1 text-xs font-medium text-text-secondary">
-        Metode pembayaran
+    <fieldset className="flex min-w-0 flex-col gap-2">
+      <legend className="mb-1.5 text-xs font-medium text-text-secondary">
+        Metode pembayaran:
       </legend>
 
       {isLoading && (
@@ -54,7 +62,7 @@ export function PaymentMethodPicker({
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         {methods.map((method) => {
           const selected = method.id === selectedId;
           return (
@@ -67,15 +75,17 @@ export function PaymentMethodPicker({
               data-testid={`payment-method-${method.id}`}
               onClick={() => onSelect(method.id)}
               className={cn(
-                'flex min-h-11 cursor-pointer flex-col items-start rounded-sm border px-3 py-2 text-left transition-colors h-auto',
+                'flex h-auto min-h-10 min-w-0 cursor-pointer flex-col items-start justify-center gap-0 rounded-sm border px-2.5 py-1.5 text-left transition-colors',
                 'outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
                 selected
                   ? 'border-brand-primary bg-surface-strong text-text-primary'
                   : 'border-border-default bg-surface-raised text-text-secondary hover:bg-surface-muted',
               )}
             >
-              <span className="text-sm font-medium">{method.name}</span>
-              <span className="text-xs text-text-tertiary">
+              <span className="w-full truncate text-xs font-medium">
+                {method.name}
+              </span>
+              <span className="w-full truncate text-[11px] text-text-tertiary">
                 {formatAccountType(method.type)}
               </span>
             </Button>

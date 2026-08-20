@@ -102,6 +102,20 @@ function PosScreenInner({
     return counts;
   }, [state.lines]);
 
+  /**
+   * §24.1 wants a thumbnail per order row, but `CartLine` carries only the
+   * name and prices (cart.reducer.ts) — deliberately, so the cart never holds
+   * a stale copy of product data. Resolving the photo here, from the same list
+   * the grid renders, keeps the reducer untouched.
+   */
+  const productPhotos = React.useMemo(() => {
+    const photos = new Map<string, string | null>();
+    for (const product of productList) {
+      photos.set(product.id, product.photoUrl ?? null);
+    }
+    return photos;
+  }, [productList]);
+
   const [query, setQuery] = React.useState('');
   const [bucket, setBucket] = React.useState<ProductBucket>('ALL');
   /** DESIGN.md §21's active state — the most recently added product. */
@@ -261,6 +275,7 @@ function PosScreenInner({
         <CartPanel
           state={state}
           overCommittedLineIds={availability.overCommittedLineIds}
+          productPhotos={productPhotos}
           paymentMethods={paymentMethods.data ?? []}
           paymentMethodsLoading={paymentMethods.isLoading}
           paymentMethodsError={errorMessage(paymentMethods.error)}
