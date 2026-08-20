@@ -42,6 +42,14 @@ export const AttendanceStatusSchema = z.object({
 });
 export type AttendanceStatus = z.infer<typeof AttendanceStatusSchema>;
 
+export const UpdateAttendanceStatusSchema = z.object({
+  isValid: z.boolean(),
+  violationReason: AttendanceViolationReason.nullable().optional(),
+});
+export type UpdateAttendanceStatus = z.infer<
+  typeof UpdateAttendanceStatusSchema
+>;
+
 export const AttendanceRecordResponseSchema = z.object({
   id: UuidString,
   userId: UuidString,

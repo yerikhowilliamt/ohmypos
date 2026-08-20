@@ -41,6 +41,20 @@
 
 ## Log
 
+### TASK-042 — Attendance Status Manual Override by Owner
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Devices & Attendance Tracking (Phase 11 Extension)
+- **Objective:** Allow Owner to manually update/correct attendance validity status (e.g. override system errors, mark as Valid or specific Violation reason) via `PATCH /devices/attendance/:id`.
+- **Relevant docs:** ADR-021, AGENTS.md
+- **What was done:**
+  - Added `UpdateAttendanceStatusSchema` in `@ohmypos/api-contracts`.
+  - Added `updateStatus` method in `AttendanceService` and endpoint `PATCH /devices/attendance/:id` in `DevicesController` (OWNER-only).
+  - Added `useUpdateAttendanceStatus` mutation in `apps/web/hooks/useDevices.ts`.
+  - Added row action DropdownMenu in `AttendanceLogTable.tsx` allowing Owner to toggle record validity ("Tandai Sebagai Valid", "Tandai: HP Pribadi", "Tandai: Salah Cabang", "Tandai: Tak Terdaftar").
+  - Verified live E2E in browser via Playwright and captured screenshot to `docs/screenshoots/attendance-status-override-menu.png`.
+- **Status:** Done
+
 ### TASK-041 — Dashboard Compact Branch Profitability Card
 
 - **Date:** 2026-08-20

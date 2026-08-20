@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
   AttendanceQuery,
   AttendanceRecordResponse,
   AttendanceStatus,
   AttendanceViolationReason,
+  UpdateAttendanceStatus,
 } from '@ohmypos/api-contracts';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { verifyDeviceCookie } from '../../common/utils/device-cookie.util';
@@ -17,6 +18,69 @@ import { verifyDeviceCookie } from '../../common/utils/device-cookie.util';
 @Injectable()
 export class AttendanceService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async updateStatus(
+    id: string,
+    dto: UpdateAttendanceStatus,
+  ): Promise<AttendanceRecordResponse> {
+    const existing = await this.prisma.attendanceRecord.findUnique({
+      where: { id },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Attendance record with ID ${id} not found`);
+    }
+
+    const updated = await this.prisma.attendanceRecord.update({
+      where: { id },
+      data: {
+        isValid: dto.isValid,
+        violationReason: dto.isValid
+          ? null
+          : (dto.violationReason ??
+            existing.violationReason ??
+            'NO_DEVICE_COOKIE'),
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            branchId: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        device: {
+          select: {
+            id: true,
+            label: true,
+          },
+        },
+      },
+    });
+
+    return {
+      id: updated.id,
+      userId: updated.userId,
+      userName: updated.user.name,
+      userEmail: updated.user.email,
+      branchId: updated.user.branchId,
+      branchName: updated.user.branch?.name ?? null,
+      deviceId: updated.deviceId,
+      deviceLabel: updated.device?.label ?? null,
+      loginAt: updated.loginAt,
+      isValid: updated.isValid,
+      violationReason: updated.violationReason,
+      ipAddress: updated.ipAddress,
+      userAgent: updated.userAgent,
+      createdAt: updated.createdAt,
+    };
+  }
 
   async findRecords(
     query: AttendanceQuery,

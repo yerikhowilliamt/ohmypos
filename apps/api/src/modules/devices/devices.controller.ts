@@ -28,6 +28,7 @@ import {
   ActivateDeviceDto,
   AttendanceQueryDto,
   CreateDeviceDto,
+  UpdateAttendanceStatusDto,
 } from './devices.dto';
 
 /**
@@ -66,6 +67,17 @@ export class DevicesController {
   })
   findAttendance(@Query() query: AttendanceQueryDto) {
     return this.attendanceService.findRecords(query);
+  }
+
+  @Patch('attendance/:id')
+  @ApiOperation({
+    summary: 'Override or correct attendance validity status (OWNER only)',
+  })
+  updateAttendanceStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAttendanceStatusDto,
+  ) {
+    return this.attendanceService.updateStatus(id, dto);
   }
 
   @Post('activate')
