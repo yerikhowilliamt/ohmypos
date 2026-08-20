@@ -39,6 +39,18 @@
 
 ## Log
 
+### DEBT-026 — Cashier branch context absent from the topbar
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-047 (UI Revamp Phase 1: App Shell & Modern Sidebar Navigation)
+- **Description:** DESIGN.md §17 requires the cashier's topbar to read a branch identifier such as `Kemang · Terkunci`. `UserResponseSchema` (`packages/api-contracts/src/user.schema.ts`) carries `branchId` but no branch name, and `GET /branches` is OWNER-only, so a KASIR session has no way to resolve its own `branchId` to a display name. Only the Owner/Admin half of §17 ("Semua Cabang") was implemented in `Topbar.tsx`.
+- **Why deferred:** Resolving it requires adding a field to the auth/session API contract (ADR-010), which is outside the scope of a frontend-shell-only phase and needs its own approval per AGENTS.md governance.
+- **Impact if unaddressed:** A KASIR's topbar has no branch confirmation, which the design intends as a lightweight "you're locked to this branch" reassurance — cosmetic, not a security or correctness gap (branch scoping is enforced server-side by `BranchScopeGuard`, not by this label).
+- **Trigger condition:** When the next phase touching `Topbar.tsx`, the auth session contract, or KASIR-facing UX picks this up, or when a user/QA pass flags the missing branch label.
+- **Proposed resolution:** Add `branchName: string | null` to `UserResponseSchema`, populate it in the users/auth mapper (a simple join on `Branch.name`), and render it in `Topbar.tsx` for `variant="default"` when `user.role === 'KASIR'`.
+- **Priority:** Low
+- **Status:** Open
+
 ### DEBT-014 — Unpaginated Leave Requests List in All-Employees View
 
 - **Date logged:** 2026-08-20

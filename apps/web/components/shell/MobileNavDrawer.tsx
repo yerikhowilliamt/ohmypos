@@ -18,7 +18,8 @@ import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { getNavItems } from '@/lib/nav-config';
+import { getNavItems, isNavItemActive, type NavItem } from '@/lib/nav-config';
+import { ROLE_LABEL } from './SidebarAccountCard';
 import { LogoutButton } from './LogoutButton';
 
 interface MobileNavDrawerProps {
@@ -26,12 +27,6 @@ interface MobileNavDrawerProps {
   open: boolean;
   onClose: () => void;
 }
-
-const ROLE_LABEL: Record<UserResponse['role'], string> = {
-  KASIR: 'Kasir',
-  ADMIN: 'Admin',
-  OWNER: 'Owner',
-};
 
 export function MobileNavDrawer({ user, open, onClose }: MobileNavDrawerProps) {
   const pathname = usePathname();
@@ -76,8 +71,7 @@ export function MobileNavDrawer({ user, open, onClose }: MobileNavDrawerProps) {
           <nav className="flex flex-col gap-1 overflow-y-auto max-h-[calc(100vh-220px)]">
             {items.map((item) => {
               const hasChildren = item.children && item.children.length > 0;
-              const isExactOrSub =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isExactOrSub = isNavItemActive(pathname, item.href);
 
               if (hasChildren) {
                 return (
@@ -91,19 +85,22 @@ export function MobileNavDrawer({ user, open, onClose }: MobileNavDrawerProps) {
                 );
               }
 
+              const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={onClose}
+                  aria-current={isExactOrSub ? 'page' : undefined}
                   className={cn(
-                    'rounded-sm px-3 py-2.5 text-sm font-medium transition-colors',
+                    'flex min-h-11 items-center gap-2.5 rounded-sm px-3 text-sm font-medium transition-colors',
                     isExactOrSub
-                      ? 'bg-brand-primary text-white font-semibold shadow-1'
+                      ? 'bg-surface-strong font-semibold text-brand-primary'
                       : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
                   )}
                 >
-                  {item.label}
+                  <Icon className="size-4 shrink-0" aria-hidden />
+                  <span className="truncate">{item.label}</span>
                 </Link>
               );
             })}
@@ -120,7 +117,7 @@ export function MobileNavDrawer({ user, open, onClose }: MobileNavDrawerProps) {
 }
 
 interface MobileCollapsibleGroupProps {
-  item: ReturnType<typeof getNavItems>[number];
+  item: NavItem;
   pathname: string;
   onClose: () => void;
   defaultOpen: boolean;
@@ -132,8 +129,7 @@ function MobileCollapsibleGroup({
   onClose,
   defaultOpen,
 }: MobileCollapsibleGroupProps) {
-  const isExactOrSub =
-    pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const isExactOrSub = isNavItemActive(pathname, item.href);
   const [isOpenManual, setIsOpenManual] = React.useState<boolean | null>(null);
 
   const open = isOpenManual ?? (defaultOpen || isExactOrSub);
@@ -146,16 +142,18 @@ function MobileCollapsibleGroup({
     >
       <CollapsibleTrigger
         className={cn(
-          'group flex w-full items-center justify-between rounded-sm px-3 py-2.5 text-sm font-medium transition-colors text-left',
+          'group flex min-h-11 w-full items-center gap-2.5 rounded-sm px-3 text-left text-sm font-medium transition-colors',
           isExactOrSub && !open
-            ? 'bg-surface-muted text-brand-primary font-semibold'
+            ? 'bg-surface-strong font-semibold text-brand-primary'
             : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
         )}
       >
-        <span>{item.label}</span>
+        <item.icon className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">{item.label}</span>
         <ChevronDown
+          aria-hidden
           className={cn(
-            'size-4 text-text-tertiary transition-transform duration-200 group-hover:text-text-primary',
+            'ml-auto size-4 shrink-0 text-text-tertiary transition-transform duration-200',
             open && 'rotate-180 text-text-primary',
           )}
         />
@@ -171,7 +169,7 @@ function MobileCollapsibleGroup({
               className={cn(
                 'rounded-sm px-3 py-2 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-brand-primary text-white font-semibold shadow-1'
+                  ? 'bg-surface-strong font-semibold text-brand-primary'
                   : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
               )}
             >
