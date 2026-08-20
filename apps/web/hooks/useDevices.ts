@@ -75,3 +75,25 @@ export function useActivateDevice() {
       }),
   });
 }
+
+export function useUpdateAttendanceStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      isValid,
+      violationReason,
+    }: {
+      id: string;
+      isValid: boolean;
+      violationReason?: string | null;
+    }) =>
+      apiFetch<AttendanceRecordResponse>(`/devices/attendance/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isValid, violationReason }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices', 'attendance'] });
+    },
+  });
+}

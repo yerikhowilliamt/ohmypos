@@ -2,13 +2,23 @@
 
 import * as React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { MoreHorizontal, ShieldCheck, ShieldAlert } from 'lucide-react';
 import type {
   AttendanceRecordResponse,
   AttendanceViolationReason,
   BranchResponse,
 } from '@ohmypos/api-contracts';
 import { Badge } from '@ohmypos/ui/components/badge';
+import { Button } from '@ohmypos/ui/components/button';
 import { Checkbox } from '@ohmypos/ui/components/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@ohmypos/ui/components/dropdown-menu';
 import { Label } from '@ohmypos/ui/components/label';
 import {
   Select,
@@ -18,7 +28,10 @@ import {
   SelectValue,
 } from '@ohmypos/ui/components/select';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
-import { useAttendanceRecords } from '@/hooks/useDevices';
+import {
+  useAttendanceRecords,
+  useUpdateAttendanceStatus,
+} from '@/hooks/useDevices';
 
 const VIOLATION_LABELS: Record<AttendanceViolationReason, string> = {
   NO_DEVICE_COOKIE: 'Tanpa Cookie Toko (HP Pribadi)',
@@ -39,6 +52,32 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
     branchId: selectedBranchId === 'ALL' ? undefined : selectedBranchId,
     violationOnly,
   });
+  const updateStatusMutation = useUpdateAttendanceStatus();
+
+  const handleSetValid = React.useCallback(
+    (recordId: string) => {
+      updateStatusMutation.mutate({
+        id: recordId,
+        isValid: true,
+        violationReason: null,
+      });
+    },
+    [updateStatusMutation],
+  );
+
+  const handleSetViolation = React.useCallback(
+    (
+      recordId: string,
+      reason: AttendanceViolationReason = 'NO_DEVICE_COOKIE',
+    ) => {
+      updateStatusMutation.mutate({
+        id: recordId,
+        isValid: false,
+        violationReason: reason,
+      });
+    },
+    [updateStatusMutation],
+  );
 
   const columns = React.useMemo<ColumnDef<AttendanceRecordResponse>[]>(
     () => [
@@ -97,7 +136,12 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
         ),
         cell: ({ row }) =>
           row.original.isValid ? (
-            <Badge variant="success">Valid</Badge>
+            <Badge
+              variant="secondary"
+              className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
+            >
+              Valid
+            </Badge>
           ) : (
             <Badge variant="destructive">Pelanggaran</Badge>
           ),
@@ -116,8 +160,79 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
             </span>
           ),
       },
+      {
+        id: 'actions',
+        header: () => <span className="text-right block">Koreksi</span>,
+        cell: ({ row }) => {
+          const record = row.original;
+          const isPending = updateStatusMutation.isPending;
+
+          return (
+            <div className="text-right">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-7 p-0 text-text-tertiary hover:text-text-primary"
+                    disabled={isPending}
+                  >
+                    <span className="sr-only">Buka menu koreksi</span>
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel className="text-xs">
+                    Ubah Status Absensi
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {!record.isValid ? (
+                    <DropdownMenuItem
+                      onClick={() => handleSetValid(record.id)}
+                      className="text-xs text-emerald-700 dark:text-emerald-400 gap-2 cursor-pointer"
+                    >
+                      <ShieldCheck className="size-3.5" />
+                      Tandai Sebagai Valid
+                    </DropdownMenuItem>
+                  ) : (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleSetViolation(record.id, 'NO_DEVICE_COOKIE')
+                        }
+                        className="text-xs text-rose-600 dark:text-rose-400 gap-2 cursor-pointer"
+                      >
+                        <ShieldAlert className="size-3.5" />
+                        Tandai: HP Pribadi
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleSetViolation(record.id, 'DEVICE_WRONG_BRANCH')
+                        }
+                        className="text-xs text-rose-600 dark:text-rose-400 gap-2 cursor-pointer"
+                      >
+                        <ShieldAlert className="size-3.5" />
+                        Tandai: Salah Cabang
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleSetViolation(record.id, 'DEVICE_NOT_REGISTERED')
+                        }
+                        className="text-xs text-rose-600 dark:text-rose-400 gap-2 cursor-pointer"
+                      >
+                        <ShieldAlert className="size-3.5" />
+                        Tandai: Tak Terdaftar
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+      },
     ],
-    [],
+    [handleSetValid, handleSetViolation, updateStatusMutation.isPending],
   );
 
   return (
