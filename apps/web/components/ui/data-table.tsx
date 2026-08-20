@@ -31,6 +31,7 @@ import {
 import { Input } from '@ohmypos/ui/components/input';
 import { Button } from '@ohmypos/ui/components/button';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
+import { cn } from '@ohmypos/ui/lib/utils';
 import { exportRowsToXlsx, type ExportColumn } from '@/lib/export';
 
 /**
@@ -103,6 +104,13 @@ interface DataTableProps<TData, TValue> {
    * values. Only rendered when both this and `exportFilename` are set. */
   exportColumns?: ExportColumn<TData>[];
   exportFilename?: string;
+  /**
+   * DESIGN.md §41.4: the identifying column stays pinned while the table
+   * scrolls horizontally. On by default — it is a general backoffice rule, not
+   * a per-table choice. Pass `false` for a table whose first column is not the
+   * identifier (none today).
+   */
+  stickyFirstColumn?: boolean;
 }
 
 function ExportButton<TData>({
@@ -152,6 +160,24 @@ function getColumnAlign(
   return undefined;
 }
 
+/**
+ * The pinned first column (DESIGN.md §41.4). A sticky cell needs its own opaque
+ * background or the scrolled content shows through it, and it needs to track
+ * the row's hover state or the pinned cell visibly desyncs from its row — hence
+ * the `[tr:hover_&]` arbitrary variant rather than inheriting `hover:` from the
+ * row. The right-edge shadow only appears once the container is actually
+ * scrolled, via `left-0` against the container's own scroll position.
+ */
+function stickyCellClass(
+  isFirst: boolean,
+  isHeader: boolean,
+): string | undefined {
+  if (!isFirst) return undefined;
+  return isHeader
+    ? 'sticky left-0 z-20 bg-surface-muted'
+    : 'sticky left-0 z-10 bg-surface-raised [tr:hover_&]:bg-surface-muted';
+}
+
 /** Sortable column header (DESIGN.md §28) — click toggles asc/desc. */
 export function SortableHeader<TData>({
   label,
@@ -192,6 +218,7 @@ export function DataTable<TData, TValue>({
   emptyDescription,
   exportColumns,
   exportFilename,
+  stickyFirstColumn = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -269,7 +296,16 @@ export function DataTable<TData, TValue>({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={getColumnAlign(header.column.columnDef.meta)}
+                    data-sticky={
+                      stickyFirstColumn && header.index === 0
+                        ? 'true'
+                        : undefined
+                    }
+                    className={cn(
+                      getColumnAlign(header.column.columnDef.meta),
+                      stickyFirstColumn &&
+                        stickyCellClass(header.index === 0, true),
+                    )}
                   >
                     {header.isPlaceholder
                       ? null
@@ -288,10 +324,16 @@ export function DataTable<TData, TValue>({
                 key={row.id}
                 data-state={row.getIsSelected() && 'selected'}
               >
-                {row.getVisibleCells().map((cell) => (
+                {row.getVisibleCells().map((cell, index) => (
                   <TableCell
                     key={cell.id}
-                    className={getColumnAlign(cell.column.columnDef.meta)}
+                    data-sticky={
+                      stickyFirstColumn && index === 0 ? 'true' : undefined
+                    }
+                    className={cn(
+                      getColumnAlign(cell.column.columnDef.meta),
+                      stickyFirstColumn && stickyCellClass(index === 0, false),
+                    )}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>

@@ -96,7 +96,7 @@ describe('Sidebar — expanded (>=1024px)', () => {
     // Only the leaf is current — the sibling leaf sharing the /sales prefix
     // must not also be marked.
     expect(
-      screen.getByRole('link', { name: 'Transaksi Kasir' }),
+      screen.getByRole('link', { name: 'Transaksi Penjualan' }),
     ).not.toHaveAttribute('aria-current');
   });
 

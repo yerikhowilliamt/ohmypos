@@ -101,7 +101,7 @@ export function Sidebar({ user }: { user: UserResponse }) {
       aria-label="Navigasi utama"
       className={cn(
         'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-border-default bg-surface-raised md:flex',
-        isRail ? 'w-16' : 'w-[216px]',
+        isRail ? 'w-16' : 'w-54',
       )}
     >
       {/* Brand mark — §16, top of the sidebar */}
@@ -123,7 +123,7 @@ export function Sidebar({ user }: { user: UserResponse }) {
               width={32}
               height={32}
               priority
-              className="size-8 object-contain"
+              className="h-6 w-full object-contain"
             />
           ) : (
             <Image
@@ -132,7 +132,7 @@ export function Sidebar({ user }: { user: UserResponse }) {
               width={142}
               height={40}
               priority
-              className="h-8 w-auto object-contain"
+              className="h-6 w-full object-contain"
             />
           )}
         </Link>
@@ -144,7 +144,7 @@ export function Sidebar({ user }: { user: UserResponse }) {
         <div className="relative px-3 pb-3">
           <Search
             aria-hidden
-            className="pointer-events-none absolute left-5 top-1/2 size-4 -translate-y-1/2 text-text-tertiary"
+            className="pointer-events-none absolute left-5 top-2/5 size-4 -translate-y-1/2 text-text-tertiary"
           />
           <Input
             type="search"

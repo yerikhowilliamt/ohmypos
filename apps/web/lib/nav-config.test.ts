@@ -10,7 +10,7 @@ describe('getNavItems', () => {
       '/help',
     ]);
     expect(kasirItems[0].children).toEqual([
-      { href: '/sales', label: 'Transaksi Kasir' },
+      { href: '/sales', label: 'Transaksi Penjualan' },
       { href: '/sales/history', label: 'Riwayat Transaksi' },
     ]);
   });
@@ -50,7 +50,7 @@ describe('getNavItems', () => {
     ]);
     expect(hrefs[0]).toBe('/dashboard');
     expect(items.find((item) => item.href === '/sales')?.children).toEqual([
-      { href: '/sales', label: 'Transaksi Kasir' },
+      { href: '/sales', label: 'Transaksi Penjualan' },
       { href: '/sales/history', label: 'Riwayat Transaksi' },
     ]);
     expect(

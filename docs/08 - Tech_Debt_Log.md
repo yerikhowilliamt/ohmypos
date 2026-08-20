@@ -39,6 +39,42 @@
 
 ## Log
 
+### DEBT-030 — OWNER's POS branch selection is not persisted across visits
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-051 (OWNER branch-selectable POS access)
+- **Description:** `PosScreen.tsx`'s `selectedBranchId` state is seeded once from the `branchId` prop and otherwise lives only in component state — every fresh visit to `/sales` as OWNER resets to unselected, showing the "Pilih cabang untuk memulai transaksi" placeholder again even if they picked the same branch five minutes ago.
+- **Why deferred:** Deliberate, not an oversight — put directly to the user via `AskUserQuestion` with three UX options (blocking picker screen, header dropdown with no persistence, persisted pill matching the DEBT-005 "Kemang · Terkunci" concept). The header-dropdown-without-persistence option was explicitly chosen, on the reasoning that OWNER POS use is expected to be occasional, not the daily cashier flow persistence would meaningfully help.
+- **Impact if unaddressed:** A minor repeated-friction cost only — one extra dropdown pick per `/sales` visit for OWNER. No correctness or data impact; `branchId` is attribution-only (ADR-004).
+- **Trigger condition:** OWNER reports this as a recurring annoyance, or POS becomes a regular (not occasional) OWNER workflow.
+- **Proposed resolution:** Persist the last-picked branch in `localStorage` (or a small pill in the header showing the active branch, editable — closer to the DEBT-005 pattern), read on mount with the same SSR-safe guard `useMediaQuery.ts` already establishes for client-only state.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-029 — Duplicate `useBranches` hook (`hooks/useBranches.ts` vs. inside `hooks/useExpenses.ts`)
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-051 (OWNER branch-selectable POS access) — pre-existing, not introduced by this task
+- **Description:** Two independent `useBranches()` implementations exist, both calling `GET /branches` but caching under different React Query keys: the canonical `apps/web/hooks/useBranches.ts` (`BRANCHES_QUERY_KEYS.branches`, also home to `useCreateBranch`/`useUpdateBranch`/`useDeleteBranch`) and a second one defined inside `apps/web/hooks/useExpenses.ts` (`EXPENSES_QUERY_KEYS.branches`), used by `ReportsClient.tsx`. TASK-051 used the canonical one for the new POS branch picker and left the duplicate untouched.
+- **Why deferred:** Out of scope for TASK-051 (a POS access feature, not a hooks cleanup) — fixing it means finding and updating every `ReportsClient.tsx`-side consumer of the `useExpenses.ts` copy, which risks touching unrelated report-filtering behavior for no benefit to the task at hand.
+- **Impact if unaddressed:** Two independent React Query cache entries for the same server data — a branch created/renamed/deleted invalidates only one of the two query keys depending on which mutation ran, so the other screen can show stale branch data until its own next refetch trigger.
+- **Trigger condition:** A bug report of stale branch names/lists on the Reports page after a branch is edited elsewhere, or the next time either file is touched for an unrelated reason.
+- **Proposed resolution:** Delete the `useBranches` defined in `useExpenses.ts`, re-point `ReportsClient.tsx` at `hooks/useBranches.ts`, confirm the query key change doesn't break any test asserting on `EXPENSES_QUERY_KEYS.branches`.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-028 — `brand.primary` fill with white text fails WCAG 2.2 AA
+
+- **Date logged:** 2026-08-20
+- **Found during:** UI Revamp Phase 4 accessibility audit (TASK-050)
+- **Description:** `--color-brand-primary` (`#00BFFF`) with `text-inverse`/`text-white` is used for every primary button fill (`buttonVariants.default` in `packages/ui/src/components/ui/button.tsx`, e.g. the POS "Bayar" CTA and the mobile order bar's "Lihat Pesanan" pill) and measures roughly **2.12:1** against white (computed by hand from the WCAG relative-luminance formula: `L(#00BFFF) ≈ 0.445`, `L(white) = 1.0`, ratio `= 1.05 / 0.495 ≈ 2.12`). AA requires 4.5:1 for normal text; DESIGN.md §42 requires AA specifically for "brand-colored buttons."
+- **Why deferred:** Fixing it means either a darker brand shade for text-bearing fills or dark text on the existing fill — a DESIGN.md §9 token decision, not a component-level edit, and out of this phase's scope (no schema/token-authority change without a decision).
+- **Impact if unaddressed:** The single most load-bearing button in the product (POS "Bayar") is under the AA contrast floor for low-vision users; a border/underline is not present as a non-color fallback.
+- **Trigger condition:** Before any accessibility-conformance claim is made externally, or when a token decision is next revisited (§9).
+- **Proposed resolution:** Add a `--color-brand-primary-strong` token for text-bearing fills (buttons, filled badges) and keep `#00BFFF` for borders, indicators, and tints where the 4.5:1 text rule doesn't apply — or switch the fill to dark text. Either requires a DESIGN.md §9 decision before implementation.
+- **Priority:** Medium
+- **Status:** Open
+
 ### DEBT-027 — POS order panel omits customer, tax, and the §24.3 dropdown
 
 - **Date logged:** 2026-08-20

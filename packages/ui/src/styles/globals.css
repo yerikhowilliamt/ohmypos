@@ -301,3 +301,23 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* ==============================================================
+ * Reduced motion
+ *
+ * DESIGN.md §14: motion communicates state change and must never be
+ * decorative — so when the viewer asks for less of it, the state change is
+ * still applied, just instantly. `0.01ms` rather than `0` keeps animation
+ * end events firing, which Radix relies on to unmount closed overlays.
+ * ============================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
