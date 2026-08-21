@@ -39,6 +39,18 @@
 
 ## Log
 
+### DEBT-035 — Hybrid dark-mode theme triggering across `[data-theme='dark']` and `.dark` selectors
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-061 (Standardize Shadcn Dark Mode Support)
+- **Description:** Dark mode styling currently matches both `.dark` and `[data-theme='dark']` attribute scopes, with `AppShell` toggling both an attribute and a CSS class on its outer container.
+- **Why deferred:** Allows backwards-compatibility with custom scoped containers while simultaneously supporting standard shadcn `dark:` tailwind variants without needing full migration to `next-themes` library.
+- **Impact if unaddressed:** Dual styling hooks add slight redundancy to CSS bundle selectors, but no visual or functional issues.
+- **Trigger condition:** When unifying the app shell to a full Next-Themes context or when implementing system-preference (`prefers-color-scheme`) auto-detection.
+- **Proposed resolution:** Standardize on either pure `.dark` class or standard `next-themes` ThemeProvider across all layouts and modals.
+- **Priority:** Low
+- **Status:** Open
+
 ### DEBT-033 — E2E `resetDatabase()` helpers omit `Device`, breaking two suites on `devices_branch_id_fkey`
 
 - **Date logged:** 2026-08-21

@@ -11,6 +11,7 @@ import { useIsMobile, useIsRail } from '@/hooks/useMediaQuery';
 import { getBreadcrumbSegments } from '@/lib/nav-config';
 import { persistThemeCookie } from '@/lib/theme-client';
 import type { Theme } from '@/lib/theme';
+import { ThemeProvider } from '@/lib/theme-context';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
@@ -59,35 +60,44 @@ export function AppShell({
   }, []);
 
   return (
-    <div
-      ref={setShellEl}
-      data-theme={enableDarkMode ? theme : undefined}
-      className={cn(
-        'flex bg-surface-base',
-        isPos ? 'h-dvh overflow-hidden' : 'min-h-dvh',
-      )}
+    <ThemeProvider
+      theme={theme}
+      toggleTheme={toggleTheme}
+      enableDarkMode={enableDarkMode}
     >
-      <PortalContainerContext.Provider value={enableDarkMode ? shellEl : null}>
-        <SidebarProvider isMobile={isMobile} open={!isRail}>
-          <Sidebar user={user} />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Topbar
-              variant={variant}
-              breadcrumb={breadcrumb}
-              enableDarkMode={enableDarkMode}
-              theme={theme}
-              onToggleTheme={toggleTheme}
-            />
-            <main
-              className={cn(
-                'min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-5 xl:p-6',
-              )}
-            >
-              {children}
-            </main>
-          </div>
-        </SidebarProvider>
-      </PortalContainerContext.Provider>
-    </div>
+      <div
+        ref={setShellEl}
+        data-theme={enableDarkMode ? theme : undefined}
+        className={cn(
+          'flex bg-surface-base',
+          enableDarkMode && theme === 'dark' && 'dark',
+          isPos ? 'h-dvh overflow-hidden' : 'min-h-dvh',
+        )}
+      >
+        <PortalContainerContext.Provider
+          value={enableDarkMode ? shellEl : null}
+        >
+          <SidebarProvider isMobile={isMobile} open={!isRail}>
+            <Sidebar user={user} />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Topbar
+                variant={variant}
+                breadcrumb={breadcrumb}
+                enableDarkMode={enableDarkMode}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+              />
+              <main
+                className={cn(
+                  'min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-5 xl:p-6',
+                )}
+              >
+                {children}
+              </main>
+            </div>
+          </SidebarProvider>
+        </PortalContainerContext.Provider>
+      </div>
+    </ThemeProvider>
   );
 }

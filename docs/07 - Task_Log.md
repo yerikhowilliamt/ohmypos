@@ -41,6 +41,71 @@
 
 ## Log
 
+### TASK-063 — Fix Mobile Dark Mode Toggle in Topbar & Enable Dark Mode on Shared Routes
+
+- **Date:** 2026-08-21
+- **Module / Phase:** Topbar (`apps/web/components/shell/Topbar.tsx`), Shared Layout (`apps/web/app/(shared)/layout.tsx`)
+- **Objective:** Fix mobile dark mode button not rendering due to desktop-only wrapper container, and enable dark mode support on shared routes (including `/profile` Pengaturan).
+- **Relevant docs:** `docs/DESIGN.md` §15, §16, §17
+- **What was done:**
+  - `apps/web/components/shell/Topbar.tsx`: Moved the mobile theme toggle button outside of `hidden md:flex` wrapper to ensure it renders on mobile devices.
+  - `apps/web/app/(shared)/layout.tsx`: Passed `enableDarkMode` and `initialTheme={initialTheme}` to `AppShell` so `/profile` (Pengaturan) and other shared pages follow the active dark mode theme.
+  - Ran `turbo run lint typecheck test --filter=web` (all 4 tasks passed, 328 tests green).
+- **Status:** Done.
+- **Handoff notes:** The theme toggle is visible in mobile viewports, and navigating to `/profile` now renders with dark surfaces when dark mode is enabled.
+
+### TASK-062 — Add Dark Mode Toggle Button to POS Screen and Mobile Topbar
+
+- **Date:** 2026-08-21
+- **Module / Phase:** POS Screen (`apps/web/components/pos/PosPageHeader.tsx`), Shell (`apps/web/components/shell/Topbar.tsx`, `AppShell.tsx`, `apps/web/lib/theme-context.tsx`)
+- **Objective:** Add dark mode toggle button to the POS sales header (`PosPageHeader`) on desktop and mobile topbar, powered by a shared React theme context.
+- **Relevant docs:** `docs/DESIGN.md` §18, §23
+- **What was done:**
+  - Added `apps/web/lib/theme-context.tsx` (`ThemeProvider`, `useTheme()`) and wrapped `AppShell`.
+  - Added theme toggle button beside the product search bar in `PosPageHeader.tsx`.
+  - Added mobile theme toggle button in `Topbar.tsx` for POS/default responsive views.
+  - Updated tests in `Topbar.test.tsx`.
+  - Ran `turbo run lint typecheck test --filter=web` (all 4 tasks passed, 328 tests green).
+- **Status:** Done.
+- **Handoff notes:** Cashiers and owners can now toggle dark mode directly on `/sales` on desktop and mobile.
+
+### TASK-061 — Standardize Shadcn Dark Mode Support with `.dark` CSS Selector
+
+- **Date:** 2026-08-21
+- **Module / Phase:** UI Theme Tokens (`packages/ui/src/styles/globals.css`, `apps/web/components/shell/AppShell.tsx`)
+- **Objective:** Adopt standard shadcn dark mode pattern (`.dark` class selector alongside `[data-theme='dark']`) across the app shell and UI design tokens.
+- **Relevant docs:** `docs/DESIGN.md` §6.6, Shadcn Dark Mode Conventions
+- **What was done:**
+  - `packages/ui/src/styles/globals.css`: Extended dark theme selector to `.dark, [data-theme='dark']`.
+  - `apps/web/components/shell/AppShell.tsx`: Added conditional `.dark` class to shell wrapper when dark mode is enabled and active.
+  - Ran `turbo run lint typecheck test --filter=web --filter=@ohmypos/ui` (all 7 tasks passed, 328 tests green).
+- **Status:** Done.
+- **Handoff notes:** Components using standard shadcn `dark:` variants or CSS variable tokens now seamlessly activate via both `.dark` and `[data-theme='dark']`.
+
+### TASK-060 — Enable Dark Mode Support on POS Sales Route
+
+- **Date:** 2026-08-21
+- **Module / Phase:** POS Layout (`apps/web/app/(pos)/layout.tsx`)
+- **Objective:** Enable dark mode on POS sales route (`(pos)/*`) so that when the theme preference is dark, POS layouts and screens follow the dark theme styling.
+- **Relevant docs:** `docs/DESIGN.md` §15, ADR-011
+- **What was done:**
+  - `apps/web/app/(pos)/layout.tsx`: Passed `enableDarkMode` and `initialTheme={initialTheme}` to `AppShell`.
+  - Ran `turbo run lint typecheck test --filter=web` (all 4 tasks passed, 328 tests green).
+- **Status:** Done.
+- **Handoff notes:** POS routes (`/sales`, `/sales/history`) now respect dark mode (`data-theme="dark"`).
+
+### TASK-059 — Fix Dark Mode Theme Overrides for Shadcn Sidebar Tokens
+
+- **Date:** 2026-08-21
+- **Module / Phase:** UI Design Tokens (`packages/ui/src/styles/globals.css`)
+- **Objective:** Fix sidebar staying light in dark mode by adding explicit `--color-sidebar-*` token overrides inside the `[data-theme='dark']` CSS block.
+- **Relevant docs:** `docs/DESIGN.md` §8.2, §16
+- **What was done:**
+  - `packages/ui/src/styles/globals.css`: Added explicit dark overrides for `--color-sidebar`, `--color-sidebar-foreground`, `--color-sidebar-primary`, `--color-sidebar-primary-foreground`, `--color-sidebar-accent`, `--color-sidebar-accent-foreground`, `--color-sidebar-border`, and `--color-sidebar-ring` inside `[data-theme='dark']`.
+  - Ran `turbo run lint typecheck test --filter=web --filter=@ohmypos/ui` (all 7 tasks passed, 328 tests green).
+- **Status:** Done.
+- **Handoff notes:** When toggling dark mode in back-office routes (`data-theme="dark"`), sidebar elements now re-theme to Obsidian dark surfaces (`#1a1e26`) with gold accents.
+
 ### TASK-058 — Fix Opening Stock Invalidation, Input Formatting, & Active Sidebar Theme
 
 - **Date:** 2026-08-21

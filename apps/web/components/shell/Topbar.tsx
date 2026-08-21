@@ -41,8 +41,8 @@ export function Topbar({
       data-testid="topbar"
       className={
         variant === 'pos'
-          ? 'flex h-[52px] shrink-0 items-center justify-between border-b border-border-default bg-surface-raised px-4 md:hidden'
-          : 'flex h-[52px] shrink-0 items-center justify-between border-b border-border-default bg-surface-raised px-4 md:px-5 xl:px-6'
+          ? 'flex h-13 shrink-0 items-center justify-between border-b border-border-default bg-surface-raised px-4 md:hidden'
+          : 'flex h-13 shrink-0 items-center justify-between border-b border-border-default bg-surface-raised px-4 md:px-5 xl:px-6'
       }
     >
       <div className="flex items-center gap-3">
@@ -60,7 +60,7 @@ export function Topbar({
 
         <Link href="/" className="flex items-center md:hidden">
           <Image
-            src="/logo.png"
+            src="/logo-rm-bg.png"
             alt="OhMyPos"
             width={110}
             height={30}
@@ -92,6 +92,28 @@ export function Topbar({
           </nav>
         )}
       </div>
+
+      {/* Mobile theme toggle for pos & default when dark mode is enabled */}
+      {enableDarkMode && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={onToggleTheme}
+          aria-pressed={theme === 'dark'}
+          aria-label={
+            theme === 'dark' ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'
+          }
+          data-testid="topbar-theme-toggle-mobile"
+          className="flex size-10 items-center justify-center rounded-sm text-text-secondary hover:bg-surface-muted hover:text-text-primary md:hidden"
+        >
+          {theme === 'dark' ? (
+            <Sun className="size-5" />
+          ) : (
+            <Moon className="size-5" />
+          )}
+        </Button>
+      )}
 
       <div className="hidden items-center gap-2 md:flex">
         {/* Back-office-only (§8.2 of the current DESIGN.md) — never rendered

@@ -1,5 +1,5 @@
 import { AppShell } from '@/components/shell/AppShell';
-import { requireRole } from '@/lib/session';
+import { getInitialTheme, requireRole } from '@/lib/session';
 
 /**
  * Routes reachable by every authenticated role — self-service profile (Phase
@@ -15,5 +15,10 @@ export default async function SharedLayout({
   children: React.ReactNode;
 }) {
   const user = await requireRole(['KASIR', 'ADMIN', 'OWNER']);
-  return <AppShell user={user}>{children}</AppShell>;
+  const initialTheme = await getInitialTheme();
+  return (
+    <AppShell user={user} enableDarkMode initialTheme={initialTheme}>
+      {children}
+    </AppShell>
+  );
 }
