@@ -53,6 +53,9 @@ export function useUpsertOpeningStock() {
           variables.periodMonth,
         ),
       });
+      queryClient.invalidateQueries({
+        queryKey: INVENTORY_QUERY_KEYS.inventorySummary(variables.periodMonth),
+      });
     },
   });
 }

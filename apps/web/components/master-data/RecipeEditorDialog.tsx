@@ -133,7 +133,7 @@ export function RecipeEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[620px] max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-155 max-h-[90vh] flex flex-col">
         <form
           onSubmit={handleSubmit(onSubmit)}
           noValidate
@@ -338,7 +338,7 @@ export function RecipeEditorDialog({
                                     ? '0.025'
                                     : '1'
                                 }
-                                className="numeric font-mono h-9 pr-12 text-sm"
+                                className="numeric font-mono h-9 pr-12 text-sm placeholder:text-text-primary/35"
                                 aria-invalid={Boolean(rowError?.quantityUsed)}
                                 {...register(`items.${index}.quantityUsed`)}
                               />

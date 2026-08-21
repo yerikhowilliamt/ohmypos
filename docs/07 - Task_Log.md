@@ -41,6 +41,22 @@
 
 ## Log
 
+### TASK-058 — Fix Opening Stock Invalidation, Input Formatting, & Active Sidebar Theme
+
+- **Date:** 2026-08-21
+- **Module / Phase:** Inventory module (`apps/web/components/inventory`, `apps/web/hooks/useInventory.ts`), UI tokens (`packages/ui/src/styles/globals.css`)
+- **Objective:** Fix three frontend UI/UX issues: (1) Ensure opening stock submission automatically invalidates and refreshes the "Ringkasan Pergerakan Stok" table query, (2) update active navigation link text color in the sidebar to `text-text-gold`, and (3) clean up opening stock worksheet quantity input formatting to avoid unwanted default zeros / `.0000` decimals and display clean placeholder values.
+- **Relevant docs:** PRD §5.5, §5.6, `docs/DESIGN.md` §8.2, §16.
+- **What was done:**
+  - `apps/web/hooks/useInventory.ts`: Added `queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEYS.inventorySummary(variables.periodMonth) })` to `useUpsertOpeningStock` onSuccess callback.
+  - `packages/ui/src/styles/globals.css`: Updated `--color-sidebar-accent-foreground` from `var(--color-text-primary)` to `var(--color-text-gold)`.
+  - `apps/web/components/inventory/OpeningStockWorksheetTable.tsx`: Reset default quantity to empty string (`''`) when undeclared; formatted declared quantities and carry forward placeholders with `formatQuantity(...)` (trimming trailing zeros like `.0000`).
+  - `apps/web/components/inventory/InventorySummaryTable.tsx`: Ensured all summary table quantities use `formatQuantity(...)` consistently.
+  - Unit tests updated and verified in `useInventory.test.ts`, `OpeningStockWorksheetTable.test.tsx`, and `InventorySummaryTable.test.tsx`.
+  - Monorepo checks verified clean: `pnpm turbo run lint typecheck test` (13/13 tasks passed).
+- **Status:** Done.
+- **Handoff notes:** When users record opening stock, both the worksheet and summary tabs reflect current formatted figures immediately without requiring page refresh.
+
 ### TASK-057 — Upgrade PDF Parser to pdfjs-dist & Add PDF Password Support
 
 - **Date:** 2026-08-21

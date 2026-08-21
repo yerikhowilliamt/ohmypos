@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-017 — Opening stock mutation did not invalidate inventory summary query cache
+
+- **Date found:** 2026-08-21
+- **Found during:** TASK-058 (Opening Stock & Inventory UI Fixes)
+- **Symptom:** After successfully saving opening stock in the "Stok Awal" tab, switching to the "Ringkasan Pergerakan Stok" tab did not reflect updated opening stock values until a manual page refresh.
+- **Root cause:** `useUpsertOpeningStock`'s `onSuccess` handler only invalidated the `openingStockWorksheet` query key and forgot to invalidate `inventorySummary`. TanStack Query continued serving stale cached data for the summary endpoint.
+- **Resolution:** Added `queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEYS.inventorySummary(variables.periodMonth) })` to `useUpsertOpeningStock` in `apps/web/hooks/useInventory.ts`.
+- **Prevention:** When a write mutation affects multiple dashboards/views, audit all query keys reading that mutated domain and write unit tests asserting query invalidations for all related view keys.
+- **Severity:** Low — UI cache staleness only, database was updated correctly.
+
 ### ERR-016 — `pdfjs-dist` ESM bundle fails in Jest CommonJS runtime with `Cannot use import.meta outside a module`
 
 - **Date found:** 2026-08-21

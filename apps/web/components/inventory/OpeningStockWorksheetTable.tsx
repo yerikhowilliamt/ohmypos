@@ -62,7 +62,9 @@ export function OpeningStockWorksheetTable({
       periodMonth,
       entries: rows.map((row) => ({
         rawMaterialId: row.rawMaterialId,
-        quantity: row.declaredQuantity ?? row.carryForwardQuantity ?? '0',
+        quantity: row.declaredQuantity
+          ? formatQuantity(row.declaredQuantity)
+          : '',
         unitPrice: row.requiresUnitPrice
           ? (row.declaredUnitPrice ?? row.currentUnitCost)
           : undefined,
@@ -214,7 +216,11 @@ export function OpeningStockWorksheetTable({
                                 {...inputField}
                                 type="text"
                                 inputMode="decimal"
-                                placeholder="0"
+                                placeholder={
+                                  meta?.carryForwardQuantity
+                                    ? formatQuantity(meta.carryForwardQuantity)
+                                    : '0'
+                                }
                                 className="font-mono text-sm h-9"
                                 aria-label={`Stok fisik ${meta?.name}`}
                                 aria-invalid={Boolean(rowError?.quantity)}

@@ -189,7 +189,7 @@
   --color-sidebar-primary: var(--color-brand-primary);
   --color-sidebar-primary-foreground: var(--color-text-inverse);
   --color-sidebar-accent: var(--color-surface-strong);
-  --color-sidebar-accent-foreground: var(--color-text-primary);
+  --color-sidebar-accent-foreground: var(--color-text-gold);
   --color-sidebar-border: var(--color-border-default);
   --color-sidebar-ring: var(--color-focus-ring);
 

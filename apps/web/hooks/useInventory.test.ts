@@ -69,7 +69,7 @@ describe('useInventory hooks', () => {
     );
   });
 
-  it('upserts opening stock and calls PUT /inventory/opening-stock', async () => {
+  it('upserts opening stock, calls PUT, and invalidates both worksheet and summary queries', async () => {
     const payload = {
       periodMonth: '2026-08',
       entries: [
@@ -104,9 +104,24 @@ describe('useInventory hooks', () => {
 
     vi.mocked(apiModule.apiFetch).mockResolvedValueOnce(mockResponse);
 
-    const wrapper = createWrapper();
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    function Wrapper({ children }: { children: React.ReactNode }) {
+      return React.createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        children,
+      );
+    }
+
     const { result } = renderHook(() => useUpsertOpeningStock(), {
-      wrapper,
+      wrapper: Wrapper,
     });
 
     result.current.mutate(payload);
@@ -120,5 +135,11 @@ describe('useInventory hooks', () => {
       },
     );
     expect(result.current.data).toEqual(mockResponse);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['inventory', 'opening-stock', 'worksheet', '2026-08'],
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['inventory', 'summary', '2026-08'],
+    });
   });
 });

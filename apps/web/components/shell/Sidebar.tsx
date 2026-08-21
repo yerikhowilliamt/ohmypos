@@ -49,7 +49,7 @@ function ActiveIndicator() {
   return (
     <span
       aria-hidden
-      className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-pill bg-brand-primary"
+      className="absolute left-0 top-1/2 h-5 w-0.75 -translate-y-1/2 rounded-pill bg-brand-primary"
     />
   );
 }
