@@ -34,9 +34,12 @@ describe('Topbar — dark mode toggle', () => {
     expect(screen.queryByTestId('topbar-theme-toggle')).toBeNull();
   });
 
-  it('omits the toggle on the pos variant even if enableDarkMode were true', () => {
+  it('renders mobile theme toggle on pos variant when enableDarkMode is true', () => {
     renderTopbar(<Topbar variant="pos" enableDarkMode theme="light" />);
     expect(screen.queryByTestId('topbar-theme-toggle')).toBeNull();
+    expect(
+      screen.getByTestId('topbar-theme-toggle-mobile'),
+    ).toBeInTheDocument();
   });
 
   it('reflects the current theme via aria-pressed and swaps the icon label', () => {

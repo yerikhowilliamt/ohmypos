@@ -296,6 +296,7 @@
  * which stays a fixed dark surface in both themes.
  * ============================================================== */
 
+.dark,
 [data-theme='dark'] {
   /* Surfaces */
   --color-surface-base: #12151b;
@@ -354,6 +355,16 @@
   --color-input: #2a2e38;
   --color-background: #12151b;
   --color-foreground: #f5f2ec;
+
+  /* Shadcn Sidebar aliases */
+  --color-sidebar: #1a1e26;
+  --color-sidebar-foreground: #f5f2ec;
+  --color-sidebar-primary: #c5a880;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: #2b2a29;
+  --color-sidebar-accent-foreground: #c5a880;
+  --color-sidebar-border: #2a2e38;
+  --color-sidebar-ring: rgba(197, 168, 128, 0.45);
 
   /* Shadows need much higher opacity to read against a dark surface. */
   --shadow-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3);

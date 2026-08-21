@@ -1,9 +1,11 @@
 'use client';
 
 import * as React from 'react';
+import { Button } from '@ohmypos/ui/components/button';
 import { Input } from '@ohmypos/ui/components/input';
-import { Search } from 'lucide-react';
+import { Moon, Search, Sun } from 'lucide-react';
 import { formatLongDate } from '@/lib/formatters';
+import { useTheme } from '@/lib/theme-context';
 
 interface PosPageHeaderProps {
   query: string;
@@ -47,6 +49,8 @@ export function PosPageHeader({
     return () => window.clearTimeout(timer);
   }, []);
 
+  const { theme, toggleTheme, enableDarkMode } = useTheme();
+
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
@@ -63,21 +67,44 @@ export function PosPageHeader({
         </p>
       </div>
 
-      <div className="relative w-full sm:w-72">
-        <Search
-          aria-hidden
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-tertiary"
-        />
-        <Input
-          id="pos-search"
-          type="search"
-          autoComplete="off"
-          placeholder="Cari produk…"
-          aria-label="Cari produk"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          className="h-10 pl-9"
-        />
+      <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="relative flex-1 sm:w-72">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-tertiary"
+          />
+          <Input
+            id="pos-search"
+            type="search"
+            autoComplete="off"
+            placeholder="Cari produk…"
+            aria-label="Cari produk"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            className="h-10 pl-9"
+          />
+        </div>
+
+        {enableDarkMode && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggleTheme}
+            aria-pressed={theme === 'dark'}
+            aria-label={
+              theme === 'dark' ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'
+            }
+            data-testid="pos-theme-toggle"
+            className="hidden sm:flex size-10 shrink-0 items-center justify-center rounded-sm text-text-secondary hover:bg-surface-muted hover:text-text-primary"
+          >
+            {theme === 'dark' ? (
+              <Sun className="size-4" />
+            ) : (
+              <Moon className="size-4" />
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -37,6 +37,22 @@
 
 ## Log
 
+### ERR-018 — Sidebar and shared layouts failed to inherit dark mode tokens
+
+- **Date found:** 2026-08-21
+- **Found during:** TASK-059, TASK-060, TASK-063 (Dark Mode Enhancements)
+- **Symptom:** Sidebar remained light-themed when dark mode was activated in back-office, `/sales` and `/profile` (shared route) were not rendering dark surfaces, and mobile theme toggle was invisible.
+- **Root cause:** 
+  1. Tailwind v4 CSS variable alias (`--color-sidebar: var(--color-surface-raised)`) didn't re-resolve without explicit overrides under the `.dark, [data-theme='dark']` block.
+  2. `PosLayout` and `SharedLayout` did not pass `enableDarkMode` or `initialTheme` to `AppShell`.
+  3. Mobile theme toggle button in `Topbar.tsx` was placed inside a container with `hidden md:flex`.
+- **Resolution:**
+  1. Added explicit `--color-sidebar-*` token definitions to `.dark, [data-theme='dark']` in `packages/ui/src/styles/globals.css`.
+  2. Updated `apps/web/app/(pos)/layout.tsx` and `apps/web/app/(shared)/layout.tsx` to read `getInitialTheme()` and pass `enableDarkMode` to `AppShell`.
+  3. Moved mobile theme toggle outside the desktop-only container in `Topbar.tsx`.
+- **Prevention:** When extending theming support to new layouts or responsive views, test all layout wrappers and breakpoints (`isMobile`, `isRail`, `desktop`) under both theme states.
+- **Severity:** Low — visual theme styling only, business logic intact.
+
 ### ERR-017 — Opening stock mutation did not invalidate inventory summary query cache
 
 - **Date found:** 2026-08-21
