@@ -14,16 +14,27 @@ import {
   PopoverTrigger,
 } from '@ohmypos/ui/components/popover';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@ohmypos/ui/components/tooltip';
+  Sidebar as SidebarPrimitive,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
+} from '@ohmypos/ui/components/sidebar';
 import { cn } from '@ohmypos/ui/lib/utils';
 import { ChevronDown, LogOut, Search, Settings } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useIsRail } from '@/hooks/useMediaQuery';
 import { apiFetch } from '@/lib/api';
 import {
   filterNavItems,
@@ -32,19 +43,6 @@ import {
   type NavItem,
 } from '@/lib/nav-config';
 import { SidebarAccountCard } from './SidebarAccountCard';
-
-/**
- * DESIGN.md §16 + §41.5. `min-h-10` is the 40px minimum touch target; the row
- * is a tinted pill when active, never a fully saturated block.
- */
-const ROW =
-  'relative flex min-h-10 items-center gap-2.5 rounded-sm px-3 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
-const ROW_ACTIVE = 'bg-surface-strong font-semibold text-brand-primary';
-const ROW_IDLE =
-  'text-text-secondary hover:bg-surface-muted hover:text-text-primary';
-/** The 64px rail: no label, so the row becomes a centered 40px square. */
-const RAIL_ROW =
-  'relative mx-auto flex size-10 items-center justify-center rounded-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
 
 /** §16: "brand indicator" — a 3px bar on the leading edge of the active row. */
 function ActiveIndicator() {
@@ -56,24 +54,24 @@ function ActiveIndicator() {
   );
 }
 
-function ComingSoonTag() {
-  return (
-    <span className="ml-auto shrink-0 rounded-pill bg-surface-muted px-2 py-0.5 text-xs font-medium text-text-tertiary">
-      Coming soon
-    </span>
-  );
-}
-
 /**
  * Renders only the nav links `role` can reach (System Design §5). This is UX
  * only — RoleGuard/BranchScopeGuard in apps/api are the real enforcement.
+ *
+ * One tree serves all three responsive states — desktop (≥1024px,
+ * expanded), tablet rail (768–1023px, icon-only), and mobile (<768px,
+ * rendered inside a Sheet by `SidebarPrimitive` itself) — instead of three
+ * hand-maintained copies. `state`/`isMobile` come from `useSidebar()`
+ * (`AppShell` supplies `open`/`isMobile` from `useIsRail()`/`useIsMobile()`).
  */
 export function Sidebar({ user }: { user: UserResponse }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isRail = useIsRail();
+  const { state, isMobile, setOpenMobile } = useSidebar();
+  const isRailCollapsed = state === 'collapsed' && !isMobile;
   const [query, setQuery] = React.useState('');
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const [logoutError, setLogoutError] = React.useState<string | null>(null);
 
   const items = React.useMemo(() => getNavItems(user.role), [user.role]);
   const visible = React.useMemo(
@@ -81,66 +79,56 @@ export function Sidebar({ user }: { user: UserResponse }) {
     [items, query],
   );
 
+  const closeMobile = () => setOpenMobile(false);
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
+    setLogoutError(null);
     try {
       await apiFetch('/auth/logout', { method: 'POST' });
       router.push('/login');
       router.refresh();
     } catch {
       setIsLoggingOut(false);
+      setLogoutError('Gagal keluar. Coba lagi.');
     }
   };
 
   const isSettingsActive = pathname === '/profile';
 
   return (
-    <aside
+    <SidebarPrimitive
       data-testid="sidebar"
-      data-rail={isRail || undefined}
+      data-rail={isRailCollapsed || undefined}
       aria-label="Navigasi utama"
-      className={cn(
-        'sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-border-default bg-surface-raised md:flex',
-        isRail ? 'w-16' : 'w-54',
-      )}
     >
       {/* Brand mark — §16, top of the sidebar */}
-      <div
+      <SidebarHeader
         className={cn(
-          'flex h-14 shrink-0 items-center',
-          isRail ? 'justify-center' : 'px-3',
+          'flex h-14 shrink-0 flex-row items-center',
+          isRailCollapsed ? 'justify-center' : 'px-3',
         )}
       >
         <Link
           href="/"
+          onClick={closeMobile}
           aria-label="OhMyPos"
-          className="inline-flex items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+          className="inline-flex w-full items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
         >
-          {isRail ? (
-            <Image
-              src="/logo.png"
-              alt="OhMyPos"
-              width={32}
-              height={32}
-              priority
-              className="h-6 w-full object-contain"
-            />
-          ) : (
-            <Image
-              src="/logo.svg"
-              alt="OhMyPos"
-              width={142}
-              height={40}
-              priority
-              className="h-6 w-full object-contain"
-            />
-          )}
+          <Image
+            src="/logo-rm-bg.png"
+            alt="OhMyPos"
+            width={isRailCollapsed ? 32 : 120}
+            height={isRailCollapsed ? 32 : 40}
+            priority
+            className="h-6 w-full object-contain"
+          />
         </Link>
-      </div>
+      </SidebarHeader>
 
       {/* Sidebar search — §16. Hidden on the rail: there is no room for an
           input, and the rail's flyouts already expose every child. */}
-      {!isRail && (
+      {!isRailCollapsed && (
         <div className="relative px-3 pb-3">
           <Search
             aria-hidden
@@ -159,114 +147,154 @@ export function Sidebar({ user }: { user: UserResponse }) {
         </div>
       )}
 
-      {/* "Menu" section label — §16 */}
-      {!isRail && (
-        <p className="px-3 pb-1 text-xs font-medium uppercase tracking-wider text-text-tertiary">
-          Menu
-        </p>
-      )}
+      <SidebarContent className={isRailCollapsed ? 'px-2' : 'px-3'}>
+        <SidebarGroup>
+          {!isRailCollapsed && <SidebarGroupLabel>Menu</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {visible.length === 0 && (
+                <p className="px-1 py-2 text-xs text-text-tertiary">
+                  Menu tidak ditemukan.
+                </p>
+              )}
 
-      <nav
-        aria-label="Menu"
-        className={cn(
-          'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-2',
-          isRail ? 'px-2' : 'px-3',
-        )}
-      >
-        {visible.length === 0 && (
-          <p className="px-3 py-2 text-xs text-text-tertiary">
-            Menu tidak ditemukan.
-          </p>
-        )}
-
-        {visible.map((item) =>
-          isRail ? (
-            <RailNavItem key={item.href} item={item} pathname={pathname} />
-          ) : (
-            <ExpandedNavItem key={item.href} item={item} pathname={pathname} />
-          ),
-        )}
-      </nav>
+              {visible.map((item) =>
+                isRailCollapsed ? (
+                  <RailNavItem
+                    key={item.href}
+                    item={item}
+                    pathname={pathname}
+                  />
+                ) : (
+                  <ExpandedNavItem
+                    key={item.href}
+                    item={item}
+                    pathname={pathname}
+                    onNavigate={closeMobile}
+                  />
+                ),
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
 
       {/* Bottom-pinned block — §16: Settings, Log out, then the Account Card */}
-      <div
-        className={cn(
-          'mt-auto flex shrink-0 flex-col gap-1 border-t border-border-default py-2',
-          isRail ? 'px-2' : 'px-3',
-        )}
-      >
-        <SidebarAction
-          isRail={isRail}
-          label="Pengaturan"
-          icon={<Settings className="size-4 shrink-0" aria-hidden />}
-          href="/profile"
-          isActive={isSettingsActive}
-        />
-        <SidebarAction
-          isRail={isRail}
-          label={isLoggingOut ? 'Keluar…' : 'Keluar'}
-          icon={<LogOut className="size-4 shrink-0" aria-hidden />}
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-          tone="danger"
-        />
-        <SidebarAccountCard user={user} isRail={isRail} />
-      </div>
-    </aside>
+      <SidebarFooter className={isRailCollapsed ? 'px-2' : 'px-3'}>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              tooltip="Pengaturan"
+              data-active={isSettingsActive}
+            >
+              <Link href="/profile" onClick={closeMobile}>
+                {isSettingsActive && <ActiveIndicator />}
+                <Settings className="size-4 shrink-0" aria-hidden />
+                <span className="truncate">Pengaturan</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip={isLoggingOut ? 'Keluar…' : 'Keluar'}
+              tone="danger"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+            >
+              <LogOut className="size-4 shrink-0" aria-hidden />
+              <span className="truncate">
+                {isLoggingOut ? 'Keluar…' : 'Keluar'}
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {logoutError && (
+            <p role="alert" className="px-3 text-xs text-status-danger">
+              {logoutError}
+            </p>
+          )}
+        </SidebarMenu>
+        <SidebarAccountCard user={user} isRail={isRailCollapsed} />
+      </SidebarFooter>
+    </SidebarPrimitive>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Expanded (>=1024px)                                                 */
+/* Expanded (>=1024px) and mobile (<768px, inside the Sheet)           */
 /* ------------------------------------------------------------------ */
+
+function ComingSoonTag() {
+  return (
+    <SidebarMenuBadge className="text-text-tertiary">
+      Coming soon
+    </SidebarMenuBadge>
+  );
+}
 
 function ExpandedNavItem({
   item,
   pathname,
+  onNavigate,
 }: {
   item: NavItem;
   pathname: string;
+  onNavigate: () => void;
 }) {
   const Icon = item.icon;
   const isActive = isNavItemActive(pathname, item.href);
 
   if (item.comingSoon) {
     return (
-      <span
-        data-testid={`nav-coming-soon-${item.href}`}
-        className={cn(ROW, 'cursor-default text-text-tertiary')}
-      >
-        <Icon className="size-4 shrink-0" aria-hidden />
-        <span className="truncate">{item.label}</span>
-        <ComingSoonTag />
-      </span>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          disabled
+          data-testid={`nav-coming-soon-${item.href}`}
+          className="cursor-default text-text-tertiary"
+        >
+          <Icon className="size-4 shrink-0" aria-hidden />
+          <span className="truncate">{item.label}</span>
+          <ComingSoonTag />
+        </SidebarMenuButton>
+      </SidebarMenuItem>
     );
   }
 
   if (item.children && item.children.length > 0) {
-    return <ExpandedNavGroup item={item} pathname={pathname} />;
+    return (
+      <ExpandedNavGroup
+        item={item}
+        pathname={pathname}
+        onNavigate={onNavigate}
+      />
+    );
   }
 
   return (
-    <Link
-      href={item.href}
-      aria-current={isActive ? 'page' : undefined}
-      data-active={isActive || undefined}
-      className={cn(ROW, isActive ? ROW_ACTIVE : ROW_IDLE)}
-    >
-      {isActive && <ActiveIndicator />}
-      <Icon className="size-4 shrink-0" aria-hidden />
-      <span className="truncate">{item.label}</span>
-    </Link>
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild data-active={isActive}>
+        <Link
+          href={item.href}
+          onClick={onNavigate}
+          aria-current={isActive ? 'page' : undefined}
+        >
+          {isActive && <ActiveIndicator />}
+          <Icon className="size-4 shrink-0" aria-hidden />
+          <span className="truncate">{item.label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
 function ExpandedNavGroup({
   item,
   pathname,
+  onNavigate,
 }: {
   item: NavItem;
   pathname: string;
+  onNavigate: () => void;
 }) {
   const Icon = item.icon;
   const isSectionActive = isNavItemActive(pathname, item.href);
@@ -274,58 +302,47 @@ function ExpandedNavGroup({
   const open = openOverride ?? isSectionActive;
 
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={setOpenOverride}
-      className="flex flex-col gap-0.5"
-    >
-      <CollapsibleTrigger
-        data-testid={`nav-group-${item.href}`}
-        className={cn(
-          ROW,
-          'group w-full text-left',
-          // §16: a collapsed parent whose section is active still reads as the
-          // current section; an *expanded* parent does not, because one of its
-          // children carries the active pill instead.
-          isSectionActive && !open ? ROW_ACTIVE : ROW_IDLE,
-        )}
-      >
-        {isSectionActive && !open && <ActiveIndicator />}
-        <Icon className="size-4 shrink-0" aria-hidden />
-        <span className="truncate">{item.label}</span>
-        <ChevronDown
-          aria-hidden
-          className={cn(
-            'ml-auto size-4 shrink-0 text-text-tertiary transition-transform duration-200',
-            open && 'rotate-180 text-text-primary',
-          )}
-        />
-      </CollapsibleTrigger>
-
-      <CollapsibleContent className="ml-[22px] flex flex-col gap-0.5 border-l border-border-default pl-2">
-        {item.children!.map((child) => {
-          // Exact match only: `/sales` is a prefix of `/sales/history`.
-          const childActive = pathname === child.href;
-          return (
-            <Link
-              key={child.href}
-              href={child.href}
-              aria-current={childActive ? 'page' : undefined}
-              data-active={childActive || undefined}
+    <Collapsible open={open} onOpenChange={setOpenOverride}>
+      <SidebarMenuItem>
+        <CollapsibleTrigger asChild>
+          <SidebarMenuButton
+            data-testid={`nav-group-${item.href}`}
+            data-active={isSectionActive && !open}
+          >
+            {isSectionActive && !open && <ActiveIndicator />}
+            <Icon className="size-4 shrink-0" aria-hidden />
+            <span className="truncate">{item.label}</span>
+            <ChevronDown
+              aria-hidden
               className={cn(
-                'flex min-h-10 items-center rounded-sm px-3 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
-                childActive
-                  ? 'bg-surface-strong font-semibold text-brand-primary'
-                  : // §16: non-active items in an expanded group are plain
-                    // text with no background.
-                    'font-medium text-text-secondary hover:text-text-primary',
+                'ml-auto size-4 shrink-0 text-text-tertiary transition-transform duration-200',
+                open && 'rotate-180 text-text-primary',
               )}
-            >
-              <span className="truncate">{child.label}</span>
-            </Link>
-          );
-        })}
-      </CollapsibleContent>
+            />
+          </SidebarMenuButton>
+        </CollapsibleTrigger>
+        <CollapsibleContent asChild>
+          <SidebarMenuSub>
+            {item.children!.map((child) => {
+              // Exact match only: `/sales` is a prefix of `/sales/history`.
+              const childActive = pathname === child.href;
+              return (
+                <SidebarMenuSubItem key={child.href}>
+                  <SidebarMenuSubButton asChild isActive={childActive}>
+                    <Link
+                      href={child.href}
+                      onClick={onNavigate}
+                      aria-current={childActive ? 'page' : undefined}
+                    >
+                      <span className="truncate">{child.label}</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              );
+            })}
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuItem>
     </Collapsible>
   );
 }
@@ -337,142 +354,74 @@ function ExpandedNavGroup({
 function RailNavItem({ item, pathname }: { item: NavItem; pathname: string }) {
   const Icon = item.icon;
   const isActive = isNavItemActive(pathname, item.href);
+  const tooltip = item.comingSoon ? `${item.label} — Coming soon` : item.label;
 
   // §41.2: an expandable group opens as a flyout submenu on the rail, not as
   // an inline indented list.
   if (item.children && item.children.length > 0 && !item.comingSoon) {
     return (
-      <Popover>
-        <PopoverTrigger
-          data-testid={`nav-rail-group-${item.href}`}
-          aria-label={item.label}
-          className={cn(RAIL_ROW, isActive ? ROW_ACTIVE : ROW_IDLE)}
-        >
-          {isActive && <ActiveIndicator />}
-          <Icon className="size-4" aria-hidden />
-        </PopoverTrigger>
-        <PopoverContent side="right" align="start" className="w-56 p-2">
-          <p className="px-2 pb-1 text-xs font-semibold text-text-tertiary">
-            {item.label}
-          </p>
-          {item.children!.map((child) => {
-            const childActive = pathname === child.href;
-            return (
-              <Link
-                key={child.href}
-                href={child.href}
-                aria-current={childActive ? 'page' : undefined}
-                className={cn(
-                  'flex min-h-10 items-center rounded-sm px-2 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
-                  childActive
-                    ? 'bg-surface-strong font-semibold text-brand-primary'
-                    : 'font-medium text-text-secondary hover:bg-surface-muted hover:text-text-primary',
-                )}
-              >
-                {child.label}
-              </Link>
-            );
-          })}
-        </PopoverContent>
-      </Popover>
+      <SidebarMenuItem>
+        <Popover>
+          <PopoverTrigger asChild>
+            <SidebarMenuButton
+              data-testid={`nav-rail-group-${item.href}`}
+              aria-label={item.label}
+              data-active={isActive}
+            >
+              {isActive && <ActiveIndicator />}
+              <Icon className="size-4" aria-hidden />
+            </SidebarMenuButton>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start" className="w-56 p-2">
+            <p className="px-2 pb-1 text-xs font-semibold text-text-tertiary">
+              {item.label}
+            </p>
+            {item.children!.map((child) => {
+              const childActive = pathname === child.href;
+              return (
+                <Link
+                  key={child.href}
+                  href={child.href}
+                  aria-current={childActive ? 'page' : undefined}
+                  className={cn(
+                    'flex min-h-10 items-center rounded-sm px-2 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                    childActive
+                      ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground'
+                      : 'font-medium text-text-secondary hover:bg-surface-muted hover:text-text-primary',
+                  )}
+                >
+                  {child.label}
+                </Link>
+              );
+            })}
+          </PopoverContent>
+        </Popover>
+      </SidebarMenuItem>
     );
   }
 
-  // §41.2: labels appear in a tooltip, not permanently. `aria-label` carries
-  // the same text for screen readers and for tests, since a Radix tooltip only
-  // renders on hover/focus (§43: hover is never the only path).
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        tooltip={tooltip}
+        data-active={isActive && !item.comingSoon}
+      >
         <Link
           href={item.comingSoon ? '#' : item.href}
           aria-disabled={item.comingSoon || undefined}
           aria-current={isActive ? 'page' : undefined}
           aria-label={item.label}
-          data-active={isActive || undefined}
-          className={cn(
-            RAIL_ROW,
+          className={
             item.comingSoon
               ? 'pointer-events-none text-text-tertiary'
-              : isActive
-                ? ROW_ACTIVE
-                : ROW_IDLE,
-          )}
+              : undefined
+          }
         >
-          {isActive && <ActiveIndicator />}
+          {isActive && !item.comingSoon && <ActiveIndicator />}
           <Icon className="size-4" aria-hidden />
         </Link>
-      </TooltipTrigger>
-      <TooltipContent side="right">
-        {item.comingSoon ? `${item.label} — Coming soon` : item.label}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Bottom-pinned actions                                               */
-/* ------------------------------------------------------------------ */
-
-function SidebarAction({
-  isRail,
-  label,
-  icon,
-  href,
-  onClick,
-  disabled,
-  isActive,
-  tone = 'default',
-}: {
-  isRail: boolean;
-  label: string;
-  icon: React.ReactNode;
-  href?: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  isActive?: boolean;
-  tone?: 'default' | 'danger';
-}) {
-  const className = cn(
-    isRail ? RAIL_ROW : ROW,
-    tone === 'danger'
-      ? 'text-status-danger hover:bg-surface-muted disabled:opacity-50'
-      : isActive
-        ? ROW_ACTIVE
-        : ROW_IDLE,
-    !isRail && 'cursor-pointer',
-  );
-
-  const body = (
-    <>
-      {isActive && <ActiveIndicator />}
-      {icon}
-      {!isRail && <span className="truncate">{label}</span>}
-    </>
-  );
-
-  const control = href ? (
-    <Link href={href} aria-label={label} className={className}>
-      {body}
-    </Link>
-  ) : (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      className={cn(className, 'w-full text-left')}
-    >
-      {body}
-    </button>
-  );
-
-  if (!isRail) return control;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{control}</TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }

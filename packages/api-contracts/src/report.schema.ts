@@ -144,6 +144,11 @@ export const DailyIncomeRowSchema = z.object({
   /** WIB calendar day. Present for EVERY day in range — zero-filled (ADR-018). */
   date: ReportDate,
   income: MoneyString,
+  /** Σ (SaleItem.hppAtSale × quantity) for sales sold that WIB day. */
+  cogs: MoneyString,
+  /** income − cogs − operating expenses that day — same definition as
+   * ProfitLossResponse.netProfit, just per day. Can go negative. */
+  netProfit: SignedMoneyString,
   entryCount: z.number().int(),
 });
 export type DailyIncomeRow = z.infer<typeof DailyIncomeRowSchema>;

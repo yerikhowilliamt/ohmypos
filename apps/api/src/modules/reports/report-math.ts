@@ -54,6 +54,8 @@ export interface DailyIncomeBucket {
   date: string;
   income: Prisma.Decimal;
   entryCount: number;
+  cogs: Prisma.Decimal;
+  operatingExpenses: Prisma.Decimal;
 }
 
 /**
@@ -75,6 +77,8 @@ export function fillDailyGaps(
         date,
         income: new Prisma.Decimal(0),
         entryCount: 0,
+        cogs: new Prisma.Decimal(0),
+        operatingExpenses: new Prisma.Decimal(0),
       },
   );
 }

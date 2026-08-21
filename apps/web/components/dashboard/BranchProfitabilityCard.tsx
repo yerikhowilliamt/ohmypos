@@ -129,7 +129,7 @@ export function BranchProfitabilityCard({
                       {item.isProfitable ? (
                         <Badge
                           variant="secondary"
-                          className="h-5 px-2 text-[10px] font-semibold bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
+                          className="h-5 px-2 text-[10px] font-semibold bg-status-success/10 text-status-success border-status-success/30"
                         >
                           Profit
                         </Badge>

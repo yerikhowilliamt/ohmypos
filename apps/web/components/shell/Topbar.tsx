@@ -1,12 +1,13 @@
 'use client';
 
 import { Button } from '@ohmypos/ui/components/button';
-import { Menu } from 'lucide-react';
+import { useSidebar } from '@ohmypos/ui/components/sidebar';
+import { Menu, Moon, Sun } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import type { Theme } from '@/lib/theme';
 
 interface TopbarProps {
-  onOpenMobileNav?: () => void;
   /**
    * `'default'` renders the 52px Backoffice strip from DESIGN.md §15/§17.
    * `'pos'` renders only the mobile hamburger row — §15 is explicit that POS
@@ -19,13 +20,22 @@ interface TopbarProps {
    * the page's own header (§18) already carries the title there.
    */
   breadcrumb?: string[];
+  /** Back-office-only dark mode toggle — never passed for POS or shared
+   * routes, so the button structurally cannot render there. */
+  enableDarkMode?: boolean;
+  theme?: Theme;
+  onToggleTheme?: () => void;
 }
 
 export function Topbar({
-  onOpenMobileNav,
   variant = 'default',
   breadcrumb,
+  enableDarkMode,
+  theme,
+  onToggleTheme,
 }: TopbarProps) {
+  const { setOpenMobile } = useSidebar();
+
   return (
     <header
       data-testid="topbar"
@@ -41,7 +51,7 @@ export function Topbar({
           type="button"
           variant="ghost"
           size="icon-sm"
-          onClick={onOpenMobileNav}
+          onClick={() => setOpenMobile(true)}
           aria-label="Buka menu"
           className="flex size-10 items-center justify-center rounded-sm text-text-secondary hover:bg-surface-muted hover:text-text-primary md:hidden"
         >
@@ -50,7 +60,7 @@ export function Topbar({
 
         <Link href="/" className="flex items-center md:hidden">
           <Image
-            src="/logo.svg"
+            src="/logo.png"
             alt="OhMyPos"
             width={110}
             height={30}
@@ -83,22 +93,49 @@ export function Topbar({
         )}
       </div>
 
-      {/* Branch context — §17. Back-office data is all-branch by construction:
-          stock and cash are centralized pools with no per-branch balance
-          anywhere in the schema (ADR-004), so this is a statement of fact, not
-          a disabled selector. There is no branch-switch control in v1. */}
-      {variant === 'default' && (
-        <span
-          data-testid="topbar-branch-context"
-          className="hidden items-center gap-2 rounded-pill bg-surface-muted px-3 py-1 text-xs font-medium text-text-secondary md:inline-flex"
-        >
+      <div className="hidden items-center gap-2 md:flex">
+        {/* Back-office-only (§8.2 of the current DESIGN.md) — never rendered
+            for POS (`variant='pos'` never reaches this block) or shared
+            routes (`enableDarkMode` is never passed there). */}
+        {variant === 'default' && enableDarkMode && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onToggleTheme}
+            aria-pressed={theme === 'dark'}
+            aria-label={
+              theme === 'dark' ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'
+            }
+            data-testid="topbar-theme-toggle"
+            className="flex size-9 items-center justify-center rounded-sm text-text-secondary hover:bg-surface-muted hover:text-text-primary"
+          >
+            {theme === 'dark' ? (
+              <Sun className="size-4" />
+            ) : (
+              <Moon className="size-4" />
+            )}
+          </Button>
+        )}
+
+        {/* Branch context — §17. Back-office data is all-branch by
+            construction: stock and cash are centralized pools with no
+            per-branch balance anywhere in the schema (ADR-004), so this is a
+            statement of fact, not a disabled selector. There is no
+            branch-switch control in v1. */}
+        {variant === 'default' && (
           <span
-            aria-hidden
-            className="size-1.5 rounded-pill bg-accent-inflow"
-          />
-          Semua Cabang
-        </span>
-      )}
+            data-testid="topbar-branch-context"
+            className="inline-flex items-center gap-2 rounded-pill bg-surface-muted px-3 py-1 text-xs font-medium text-text-secondary"
+          >
+            <span
+              aria-hidden
+              className="size-1.5 rounded-pill bg-accent-inflow"
+            />
+            Semua Cabang
+          </span>
+        )}
+      </div>
     </header>
   );
 }

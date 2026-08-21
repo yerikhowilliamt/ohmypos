@@ -117,8 +117,7 @@ export function DailyIncomeView({ data, isLoading }: DailyIncomeViewProps) {
         <ReportLineChart
           data={chartData}
           xKey="date"
-          yKey="income"
-          label="Pendapatan"
+          lines={[{ key: 'income', label: 'Pendapatan' }]}
           tooltipFormatter={(v) => formatCurrency(v)}
         />
       ) : (

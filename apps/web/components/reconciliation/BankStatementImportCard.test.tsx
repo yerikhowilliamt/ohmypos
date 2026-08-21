@@ -46,7 +46,7 @@ describe('BankStatementImportCard', () => {
       },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /impor csv/i }));
+    fireEvent.click(screen.getByRole('button', { name: /impor mutasi/i }));
 
     await waitFor(() => {
       expect(apiModule.apiFetch).toHaveBeenCalledWith(
@@ -80,11 +80,77 @@ describe('BankStatementImportCard', () => {
     fireEvent.change(screen.getByTestId('import-file-input'), {
       target: { files: [new File(['x'], 'bca.csv')] },
     });
-    fireEvent.click(screen.getByRole('button', { name: /impor csv/i }));
+    fireEvent.click(screen.getByRole('button', { name: /impor mutasi/i }));
 
     expect(await screen.findByTestId('import-error')).toHaveTextContent(
       /unsupported format/i,
     );
+  });
+
+  it('posts a PDF format to the PDF route and offers a .pdf file picker', async () => {
+    vi.mocked(apiModule.apiFetch).mockResolvedValue({
+      imported: 57,
+      skipped: 0,
+      total: 57,
+    });
+
+    renderWithClient(<BankStatementImportCard accounts={accounts} />);
+
+    fireEvent.click(screen.getByLabelText(/akun bank/i));
+    fireEvent.click(
+      await screen.findByRole('option', { name: accounts[0].name }),
+    );
+
+    fireEvent.click(screen.getByLabelText(/format bank/i));
+    fireEvent.click(
+      await screen.findByRole('option', { name: /mandiri \(pdf/i }),
+    );
+
+    // The picker must follow the chosen format, not stay on CSV.
+    expect(screen.getByTestId('import-file-input')).toHaveAttribute(
+      'accept',
+      '.pdf,application/pdf',
+    );
+
+    fireEvent.change(screen.getByTestId('import-file-input'), {
+      target: { files: [new File(['%PDF-1.5'], 'mutasi.pdf')] },
+    });
+
+    const passwordInput = screen.getByTestId('import-password-input');
+    expect(passwordInput).toBeInTheDocument();
+    fireEvent.change(passwordInput, { target: { value: '010190' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /impor mutasi/i }));
+
+    await waitFor(() => {
+      expect(apiModule.apiFetch).toHaveBeenCalledWith(
+        `/import/pdf/${accounts[0].id}?format=MANDIRI_PDF&password=010190`,
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  it('drops an already-chosen file when the format changes', async () => {
+    renderWithClient(<BankStatementImportCard accounts={accounts} />);
+
+    fireEvent.click(screen.getByLabelText(/akun bank/i));
+    fireEvent.click(
+      await screen.findByRole('option', { name: accounts[0].name }),
+    );
+    fireEvent.change(screen.getByTestId('import-file-input'), {
+      target: { files: [new File(['x'], 'bca.csv')] },
+    });
+    expect(screen.getByRole('button', { name: /impor mutasi/i })).toBeEnabled();
+
+    // Switching to PDF must not leave the CSV staged for upload.
+    fireEvent.click(screen.getByLabelText(/format bank/i));
+    fireEvent.click(
+      await screen.findByRole('option', { name: /mandiri \(pdf/i }),
+    );
+
+    expect(
+      screen.getByRole('button', { name: /impor mutasi/i }),
+    ).toBeDisabled();
   });
 
   it('requires an account before the import button becomes enabled', () => {
@@ -94,6 +160,8 @@ describe('BankStatementImportCard', () => {
       target: { files: [new File(['x'], 'bca.csv')] },
     });
 
-    expect(screen.getByRole('button', { name: /impor csv/i })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /impor mutasi/i }),
+    ).toBeDisabled();
   });
 });

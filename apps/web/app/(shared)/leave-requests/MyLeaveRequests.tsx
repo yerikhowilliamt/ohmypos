@@ -36,13 +36,13 @@ const STATUS_CONFIG = {
     label: 'Menunggu',
     variant: 'secondary' as const,
     className:
-      'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
+      'bg-status-warning/10 text-status-warning border-status-warning/30',
   },
   APPROVED: {
     label: 'Disetujui',
     variant: 'secondary' as const,
     className:
-      'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+      'bg-status-success/10 text-status-success border-status-success/30',
   },
   REJECTED: {
     label: 'Ditolak',

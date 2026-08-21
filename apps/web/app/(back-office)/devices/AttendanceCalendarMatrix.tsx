@@ -265,19 +265,19 @@ export function AttendanceCalendarMatrix({
           Keterangan:
         </span>
         <div className="flex items-center gap-1.5">
-          <span className="size-3 rounded-full bg-emerald-500 inline-block shadow-sm" />
+          <span className="size-3 rounded-full bg-status-success inline-block shadow-sm" />
           <span>Hadir (Valid)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="size-3 rounded-full bg-amber-500 inline-block shadow-sm" />
+          <span className="size-3 rounded-full bg-status-warning inline-block shadow-sm" />
           <span>Pelanggaran (HP/Luar)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="size-3 rounded-full bg-sky-500 inline-block shadow-sm" />
+          <span className="size-3 rounded-full bg-status-info inline-block shadow-sm" />
           <span>Cuti / Izin</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="size-3 rounded-full bg-slate-200 dark:bg-slate-700 inline-block" />
+          <span className="size-3 rounded-full bg-border-strong inline-block" />
           <span>Tidak Hadir / Libur</span>
         </div>
       </div>
@@ -364,13 +364,13 @@ export function AttendanceCalendarMatrix({
                                 className="size-6 mx-auto rounded-md flex items-center justify-center transition-transform hover:scale-110 focus:outline-none focus:ring-1 focus:ring-brand-primary"
                               >
                                 {status.type === 'VALID' ? (
-                                  <span className="size-3.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100 dark:ring-emerald-950" />
+                                  <span className="size-3.5 rounded-full bg-status-success ring-2 ring-status-success/15" />
                                 ) : status.type === 'VIOLATION' ? (
-                                  <span className="size-3.5 rounded-full bg-amber-500 ring-2 ring-amber-100 dark:ring-amber-950" />
+                                  <span className="size-3.5 rounded-full bg-status-warning ring-2 ring-status-warning/15" />
                                 ) : status.type === 'LEAVE' ? (
-                                  <span className="size-3.5 rounded-full bg-sky-500 ring-2 ring-sky-100 dark:ring-sky-950" />
+                                  <span className="size-3.5 rounded-full bg-status-info ring-2 ring-status-info/15" />
                                 ) : (
-                                  <span className="size-1.5 rounded-full bg-slate-200 dark:bg-slate-700" />
+                                  <span className="size-1.5 rounded-full bg-border-strong" />
                                 )}
                               </button>
                             </PopoverTrigger>
@@ -387,7 +387,7 @@ export function AttendanceCalendarMatrix({
                                   {cashier.name}
                                 </p>
                                 {status.type === 'VALID' && (
-                                  <div className="text-emerald-700 dark:text-emerald-400">
+                                  <div className="text-status-success">
                                     <p className="font-semibold flex items-center gap-1">
                                       <ShieldCheck className="size-3.5" /> Hadir
                                       (Valid)
@@ -408,7 +408,7 @@ export function AttendanceCalendarMatrix({
                                   </div>
                                 )}
                                 {status.type === 'VIOLATION' && (
-                                  <div className="text-amber-700 dark:text-amber-400">
+                                  <div className="text-status-warning">
                                     <p className="font-semibold flex items-center gap-1">
                                       <ShieldAlert className="size-3.5" />{' '}
                                       Pelanggaran
@@ -422,14 +422,14 @@ export function AttendanceCalendarMatrix({
                                         minute: '2-digit',
                                       })}
                                     </p>
-                                    <p className="text-[11px] text-rose-600 font-medium">
+                                    <p className="text-[11px] text-status-danger font-medium">
                                       {status.data.violationReason ??
                                         'HP Pribadi'}
                                     </p>
                                   </div>
                                 )}
                                 {status.type === 'LEAVE' && (
-                                  <div className="text-sky-700 dark:text-sky-400">
+                                  <div className="text-status-info">
                                     <p className="font-semibold flex items-center gap-1">
                                       <CalendarCheck className="size-3.5" />{' '}
                                       Cuti / Izin Disetujui

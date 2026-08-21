@@ -17,9 +17,27 @@ const period = {
 const withRows: DailyIncomeResponse = {
   period,
   rows: [
-    { date: '2026-08-01', income: '1500000.00', entryCount: 12 },
-    { date: '2026-08-02', income: '0.00', entryCount: 0 },
-    { date: '2026-08-03', income: '2200000.00', entryCount: 18 },
+    {
+      date: '2026-08-01',
+      income: '1500000.00',
+      cogs: '600000.00',
+      netProfit: '900000.00',
+      entryCount: 12,
+    },
+    {
+      date: '2026-08-02',
+      income: '0.00',
+      cogs: '0.00',
+      netProfit: '0.00',
+      entryCount: 0,
+    },
+    {
+      date: '2026-08-03',
+      income: '2200000.00',
+      cogs: '900000.00',
+      netProfit: '1300000.00',
+      entryCount: 18,
+    },
   ],
   total: '3700000.00',
   averagePerDay: '1233333.33',

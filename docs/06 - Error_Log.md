@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-016 — `pdfjs-dist` ESM bundle fails in Jest CommonJS runtime with `Cannot use import.meta outside a module`
+
+- **Date found:** 2026-08-21
+- **Found during:** TASK-057 (Upgrade PDF Parser to pdfjs-dist)
+- **Symptom:** `pnpm --filter api test` crashed in `pdf-text.util.spec.ts` with `SyntaxError: Cannot use 'import.meta' outside a module` when importing `pdfjs-dist/build/pdf.mjs` or `unpdf`.
+- **Root cause:** `apps/api` compiles and tests under CommonJS (`"module": "commonjs"`), while `pdfjs-dist` v4 and `unpdf` ship modern ES modules utilizing `import.meta.url`. Jest's CJS runtime executor cannot parse `import.meta` without `--experimental-vm-modules`.
+- **Resolution:** Pinned `pdfjs-dist` to `^3.11.174` and consumed its official CommonJS legacy build via `require('pdfjs-dist/legacy/build/pdf.js')` with proper TypeScript typing casts.
+- **Prevention:** For libraries dealing with PDF/WASM/Canvas in NestJS/CJS environments, always check for dedicated `legacy/build/*.js` builds or ensure CJS compatibility before runtime invocation.
+- **Severity:** Low — caught during CI/test execution, resolved before merge.
+
 ### ERR-015 — Test fixture with `hasRecipe: false` made a product silently un-addable to cart
 
 - **Date found:** 2026-08-20

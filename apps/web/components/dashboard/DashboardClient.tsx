@@ -103,6 +103,7 @@ export function DashboardClient() {
       (dailyIncome?.rows ?? []).map((row) => ({
         date: row.date.slice(5),
         income: Number(row.income),
+        netProfit: Number(row.netProfit),
       })),
     [dailyIncome],
   );
@@ -188,8 +189,18 @@ export function DashboardClient() {
                 <ReportLineChart
                   data={dailyIncomeChartData}
                   xKey="date"
-                  yKey="income"
-                  label="Pendapatan"
+                  lines={[
+                    {
+                      key: 'income',
+                      label: 'Omset',
+                      color: 'var(--color-brand-primary)',
+                    },
+                    {
+                      key: 'netProfit',
+                      label: 'Laba Bersih',
+                      color: 'var(--color-accent-inflow)',
+                    },
+                  ]}
                   height={240}
                   tooltipFormatter={(v) => formatCurrency(v)}
                 />
