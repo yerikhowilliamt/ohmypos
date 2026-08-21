@@ -1,0 +1,141 @@
+name: CI
+
+# Matches docs/04 - Engineering_Playbook.md §14 steps 1-3 (install, quality
+# gate, audit). Step 4 (build/push images) lives in cd.yml, gated on this
+# workflow succeeding on main.
+
+on:
+  pull_request:
+  push:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '11.21.0'
+
+jobs:
+  quality:
+    name: Lint, Typecheck, Unit Test, Build, Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      # Cache is best-effort: turbo's own input-hashing keeps a stale restore
+      # safe, it just costs a rebuild on a miss rather than producing wrong
+      # output.
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # apps/api/src/generated is gitignored (ADR-003) — every downstream
+      # lint/typecheck/test/build step needs it to exist first.
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+        env:
+          DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/ohmypos_db?schema=public'
+
+      # One combined invocation, not one job per task: lint/typecheck/test/build
+      # all depend on `^build` in turbo.json (packages/api-contracts must build
+      # first). Parallel GitHub Actions jobs don't share a live turbo cache
+      # within one run, so splitting these into separate jobs would rebuild
+      # api-contracts redundantly in each one for no real parallelism gain —
+      # turbo already parallelizes its own task graph inside a single runner.
+      - name: Quality gate (lint, typecheck, unit test, build)
+        run: pnpm exec turbo run lint typecheck test build
+
+      # Non-blocking: findings still show up in the log, but a transitive
+      # advisory with no upstream fix yet (e.g. via @nestjs/swagger) shouldn't
+      # turn every PR red. Revisit if this needs to gate merges again.
+      - name: Dependency audit
+        run: pnpm audit
+        continue-on-error: true
+
+  e2e:
+    name: API E2E Tests (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ohmypos_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ohmypos_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/ohmypos_db?schema=public'
+      PORT: 4013
+      NODE_ENV: test
+      CORS_ORIGIN: 'http://localhost:3001'
+      # Throwaway CI-only values — this Postgres and these tokens live only
+      # for the duration of this job, so there's nothing sensitive to protect.
+      JWT_SECRET: 'ci-test-access-secret'
+      JWT_REFRESH_SECRET: 'ci-test-refresh-secret'
+      JWT_EXPIRES_IN: '1d'
+      JWT_REFRESH_EXPIRES_IN: '30d'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+
+      # test:e2e is invoked directly (jest, not `turbo run test`) because it
+      # needs a real Postgres and isn't wired into turbo's `test` task — that
+      # task is used by `pnpm test`/`pnpm check` locally and must keep working
+      # without a database. Since it bypasses turbo here, turbo's `^build`
+      # guarantee doesn't apply automatically, so build api's workspace
+      # dependencies (packages/api-contracts) explicitly before running.
+      - name: Build api's workspace dependencies
+        run: pnpm exec turbo run build --filter=api^...
+
+      # deploy, not dev — dev prompts interactively and is for local use only.
+      - name: Apply migrations
+        run: pnpm --filter api exec prisma migrate deploy
+
+      - name: Run e2e tests
+        run: pnpm --filter api test:e2e

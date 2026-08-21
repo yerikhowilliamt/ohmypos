@@ -1,0 +1,1148 @@
+/**
+ * OhMyPos — Purchasing & Payables E2E Tests (PRD §5.3, ADR-004, ADR-006, ADR-007, ADR-011, ADR-014, Playbook §10).
+ *
+ * Auth-aware end-to-end test suite testing:
+ * - ADR-006 binary branch (PAID -> LedgerEntry XOR UNPAID -> Payable)
+ * - Stock movement on all purchases under FOR UPDATE lock (ADR-007)
+ * - Central purchase ledger attribution to Pusat (ADR-014)
+ * - Settlement flow, over-settlement rejection, concurrency lock under Promise.allSettled
+ * - Rollback guarantees across transactional operations
+ * - RBAC & BranchScopeGuard enforcement
+ * - Decimal scale preservation and balance integrity re-derivation
+ */
+import { INestApplication } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import cookieParser from 'cookie-parser';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import {
+  PayableResponse,
+  PayableSupplierSummary,
+  SupplierPurchaseResponse,
+} from '@ohmypos/api-contracts';
+import { AppModule } from '../src/app.module';
+import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
+import { PrismaService } from '../src/common/prisma/prisma.service';
+import { Prisma } from '../src/generated/prisma/client';
+
+describe('Purchasing & Payables (e2e)', () => {
+  let app: INestApplication<App>;
+  let prisma: PrismaService;
+
+  const password = 'TestPassword123!';
+  const owner = { email: 'pp-owner@test.local', cookies: [] as string[] };
+  const admin = { email: 'pp-admin@test.local', cookies: [] as string[] };
+  const kasir1 = { email: 'pp-kasir1@test.local', cookies: [] as string[] };
+  const kasir2 = { email: 'pp-kasir2@test.local', cookies: [] as string[] };
+
+  let branch1Id: string;
+  let branch2Id: string;
+  let centralBranchId: string;
+  let defaultAccountId: string;
+
+  let rawMaterialGulaId: string;
+  let rawMaterialKopiId: string;
+  let supplierAId: string;
+  let supplierBId: string;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.use(cookieParser());
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalFilters(new PostgresTriggerExceptionFilter());
+    await app.init();
+
+    prisma = app.get(PrismaService);
+    await cleanup();
+
+    // Ensure system branches and categories exist
+    const centralBranch = await prisma.branch.upsert({
+      where: { name: 'Pusat (Dapur Sentral)' },
+      update: {},
+      create: { name: 'Pusat (Dapur Sentral)', address: 'Dapur Sentral' },
+    });
+    centralBranchId = centralBranch.id;
+
+    const b1 = await prisma.branch.create({
+      data: { name: 'PP Test Branch 1', address: 'Jl. Test 1' },
+    });
+    branch1Id = b1.id;
+
+    const b2 = await prisma.branch.create({
+      data: { name: 'PP Test Branch 2', address: 'Jl. Test 2' },
+    });
+    branch2Id = b2.id;
+
+    const account = await prisma.account.upsert({
+      where: { id: '00000000-0000-4000-8000-000000000002' },
+      update: {},
+      create: {
+        id: '00000000-0000-4000-8000-000000000002',
+        name: 'Bank Utama',
+        type: 'BANK',
+        openingBalance: '0',
+      },
+    });
+    defaultAccountId = account.id;
+
+    await prisma.category.upsert({
+      where: { name: 'Pembelian Bahan Baku' },
+      update: {},
+      create: { name: 'Pembelian Bahan Baku', type: 'OUTFLOW' },
+    });
+
+    const bcrypt = await import('bcrypt');
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await prisma.user.createMany({
+      data: [
+        { name: 'PP Owner', email: owner.email, passwordHash, role: 'OWNER' },
+        { name: 'PP Admin', email: admin.email, passwordHash, role: 'ADMIN' },
+        {
+          name: 'PP Kasir 1',
+          email: kasir1.email,
+          passwordHash,
+          role: 'KASIR',
+          branchId: branch1Id,
+        },
+        {
+          name: 'PP Kasir 2',
+          email: kasir2.email,
+          passwordHash,
+          role: 'KASIR',
+          branchId: branch2Id,
+        },
+      ],
+    });
+
+    owner.cookies = await login(owner.email);
+    admin.cookies = await login(admin.email);
+    kasir1.cookies = await login(kasir1.email);
+    kasir2.cookies = await login(kasir2.email);
+
+    // Create test raw materials
+    const gula = await prisma.rawMaterial.create({
+      data: {
+        name: 'PP Gula Pasir',
+        unit: 'kg',
+        unitCost: '12000.00',
+        currentStock: '10.0000',
+        lowStockThreshold: '2.0000',
+      },
+    });
+    rawMaterialGulaId = gula.id;
+
+    const kopi = await prisma.rawMaterial.create({
+      data: {
+        name: 'PP Kopi Arabika',
+        unit: 'kg',
+        unitCost: '85000.00',
+        currentStock: '5.0000',
+        lowStockThreshold: '1.0000',
+      },
+    });
+    rawMaterialKopiId = kopi.id;
+
+    // Create test suppliers
+    const sA = await prisma.supplier.create({
+      data: {
+        name: 'PP Toko Bahan Kue',
+        contact: '0812-9999-8888',
+      },
+    });
+    supplierAId = sA.id;
+
+    const sB = await prisma.supplier.create({
+      data: {
+        name: 'PP CV Roastery Nusantara',
+        contact: '0813-7777-6666',
+      },
+    });
+    supplierBId = sB.id;
+  });
+
+  afterAll(async () => {
+    await cleanup();
+    await app.close();
+  });
+
+  async function login(email: string): Promise<string[]> {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email, password })
+      .expect(200);
+    return res.get('Set-Cookie') ?? [];
+  }
+
+  async function cleanup() {
+    // Delete in FK-safe reverse order
+    await prisma.payableSettlement.deleteMany({});
+    await prisma.payable.deleteMany({});
+    await prisma.supplierPurchaseItem.deleteMany({});
+    await prisma.supplierPurchase.deleteMany({});
+    await prisma.stockMovement.deleteMany({});
+    await prisma.ledgerEntry.deleteMany({
+      where: {
+        OR: [
+          { sourceType: { in: ['PURCHASE', 'PAYABLE_SETTLEMENT'] } },
+          {
+            branch: { name: { in: ['PP Test Branch 1', 'PP Test Branch 2'] } },
+          },
+          { note: { contains: 'PP Test' } },
+        ],
+      },
+    });
+    await prisma.supplier.deleteMany({
+      where: {
+        name: { startsWith: 'PP ' },
+      },
+    });
+    await prisma.rawMaterial.deleteMany({
+      where: {
+        name: { startsWith: 'PP ' },
+      },
+    });
+    await prisma.user.deleteMany({
+      where: {
+        email: {
+          in: [owner.email, admin.email, kasir1.email, kasir2.email],
+        },
+      },
+    });
+    await prisma.branch.deleteMany({
+      where: {
+        name: { in: ['PP Test Branch 1', 'PP Test Branch 2'] },
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 1. ADR-006 Binary Branch & Stock Movements
+  // ---------------------------------------------------------------------------
+  describe('ADR-006 Binary Branch & Stock Inbound', () => {
+    it('Case 1: PAID purchase creates LedgerEntry and NO Payable', async () => {
+      const initialStockKopi = (
+        await prisma.rawMaterial.findUniqueOrThrow({
+          where: { id: rawMaterialKopiId },
+        })
+      ).currentStock;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierBId,
+          branchId: null, // Central purchase
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'PAID',
+          accountId: defaultAccountId,
+          note: 'PP Test Paid Purchase',
+          items: [
+            {
+              rawMaterialId: rawMaterialKopiId,
+              quantity: '2.0000',
+              unitCost: '85000.00',
+            },
+          ],
+        })
+        .expect(201);
+
+      const body = res.body as SupplierPurchaseResponse;
+      expect(body.isCentral).toBe(true);
+      expect(body.branchId).toBeNull();
+      expect(body.paymentStatus).toBe('PAID');
+      expect(body.totalAmount).toBe('170000.00');
+      expect(body.ledgerEntryId).not.toBeNull();
+      expect(body.payableId).toBeNull();
+
+      // Verify LedgerEntry in DB
+      const ledgerEntry = await prisma.ledgerEntry.findUniqueOrThrow({
+        where: { id: body.ledgerEntryId! },
+      });
+      expect(ledgerEntry.sourceType).toBe('PURCHASE');
+      expect(ledgerEntry.sourceId).toBe(body.id);
+      expect(ledgerEntry.type).toBe('OUTFLOW');
+      expect(ledgerEntry.amount.toFixed(2)).toBe('170000.00');
+      expect(ledgerEntry.branchId).toBe(centralBranchId); // ADR-014
+
+      // Verify zero Payable rows exist for this purchase
+      const payableCount = await prisma.payable.count({
+        where: { supplierPurchaseId: body.id },
+      });
+      expect(payableCount).toBe(0);
+
+      // Verify stock incremented
+      const updatedStockKopi = (
+        await prisma.rawMaterial.findUniqueOrThrow({
+          where: { id: rawMaterialKopiId },
+        })
+      ).currentStock;
+      expect(updatedStockKopi.minus(initialStockKopi).toFixed(4)).toBe(
+        '2.0000',
+      );
+    });
+
+    it('Case 2: UNPAID purchase creates Payable and NO LedgerEntry', async () => {
+      const initialStockGula = (
+        await prisma.rawMaterial.findUniqueOrThrow({
+          where: { id: rawMaterialGulaId },
+        })
+      ).currentStock;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: branch1Id,
+          purchaseDate: '2026-08-16T11:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          note: 'PP Test Unpaid Purchase',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '5.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
+
+      const body = res.body as SupplierPurchaseResponse;
+      expect(body.isCentral).toBe(false);
+      expect(body.branchId).toBe(branch1Id);
+      expect(body.paymentStatus).toBe('UNPAID');
+      expect(body.totalAmount).toBe('60000.00');
+      expect(body.ledgerEntryId).toBeNull();
+      expect(body.payableId).not.toBeNull();
+
+      // Verify NO LedgerEntry exists for this purchase
+      const ledgerCount = await prisma.ledgerEntry.count({
+        where: { sourceType: 'PURCHASE', sourceId: body.id },
+      });
+      expect(ledgerCount).toBe(0);
+
+      // Verify Payable exists in DB with OPEN status and matching balance
+      const payable = await prisma.payable.findUniqueOrThrow({
+        where: { id: body.payableId! },
+      });
+      expect(payable.status).toBe('OPEN');
+      expect(payable.originalAmount.toFixed(2)).toBe('60000.00');
+      expect(payable.remainingBalance.toFixed(2)).toBe('60000.00');
+
+      // Verify stock incremented
+      const updatedStockGula = (
+        await prisma.rawMaterial.findUniqueOrThrow({
+          where: { id: rawMaterialGulaId },
+        })
+      ).currentStock;
+      expect(updatedStockGula.minus(initialStockGula).toFixed(4)).toBe(
+        '5.0000',
+      );
+    });
+
+    it('Case 3: StockMovement is recorded with exact quantity and snapshot unit cost', async () => {
+      // Creates its own purchase and queries by referenceId rather than reading
+      // the most recent rows globally: an ordering-based query passes even when
+      // the movements are attached to the wrong purchase, which is precisely
+      // the defect this case exists to catch.
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: branch1Id,
+          purchaseDate: '2026-08-16T12:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          note: 'PP Test Stock Movement Purchase',
+          items: [
+            {
+              rawMaterialId: rawMaterialKopiId,
+              quantity: '1.5000',
+              unitCost: '85000.00',
+            },
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '3.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
+
+      const purchaseId = (res.body as SupplierPurchaseResponse).id;
+
+      const movements = await prisma.stockMovement.findMany({
+        where: { referenceType: 'PURCHASE', referenceId: purchaseId },
+      });
+
+      // Exactly one movement per line, no more and no fewer.
+      expect(movements).toHaveLength(2);
+      expect(movements.every((m) => m.direction === 'IN')).toBe(true);
+      expect(movements.every((m) => m.branchId === branch1Id)).toBe(true);
+
+      const kopiMovement = movements.find(
+        (m) => m.rawMaterialId === rawMaterialKopiId,
+      );
+      const gulaMovement = movements.find(
+        (m) => m.rawMaterialId === rawMaterialGulaId,
+      );
+
+      expect(kopiMovement).toBeDefined();
+      expect(kopiMovement!.quantity.toFixed(4)).toBe('1.5000');
+      expect(kopiMovement!.unitCostAtMovement.toFixed(2)).toBe('85000.00');
+
+      expect(gulaMovement).toBeDefined();
+      expect(gulaMovement!.quantity.toFixed(4)).toBe('3.0000');
+      expect(gulaMovement!.unitCostAtMovement.toFixed(2)).toBe('12000.00');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 2. Settlement Flow & Concurrency
+  // ---------------------------------------------------------------------------
+  describe('Settlement Flow & Concurrency', () => {
+    let testPayableId: string;
+    let testPurchaseId: string;
+
+    beforeEach(async () => {
+      // Create a fresh unpaid purchase of 60,000.00 for settlement tests
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: branch1Id,
+          purchaseDate: '2026-08-16T12:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          note: 'PP Test Settlement Target',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '5.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
+
+      const createRes = res.body as SupplierPurchaseResponse;
+      testPurchaseId = createRes.id;
+      testPayableId = createRes.payableId!;
+    });
+
+    it('Case 4: Partial settlement reduces balance, updates status, and generates LedgerEntry', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/payables/${testPayableId}/settlements`)
+        .set('Cookie', owner.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '20000.00',
+          settledAt: '2026-08-16T14:00:00.000Z',
+          note: 'PP Test Partial Settle 1',
+        })
+        .expect(201);
+
+      const body = res.body as PayableResponse;
+      expect(body.remainingBalance).toBe('40000.00');
+      expect(body.settledAmount).toBe('20000.00');
+      expect(body.status).toBe('PARTIALLY_SETTLED');
+      expect(body.settlements.length).toBe(1);
+      expect(body.settlements[0].amount).toBe('20000.00');
+
+      // Verify parent purchase moved to PARTIALLY_PAID
+      const purchase = await prisma.supplierPurchase.findUniqueOrThrow({
+        where: { id: testPurchaseId },
+      });
+      expect(purchase.paymentStatus).toBe('PARTIALLY_PAID');
+      expect(purchase.ledgerEntryId).toBeNull();
+
+      // Verify LedgerEntry created for settlement amount
+      const settlementEntry = await prisma.ledgerEntry.findUniqueOrThrow({
+        where: { id: body.settlements[0].ledgerEntryId },
+      });
+      expect(settlementEntry.sourceType).toBe('PAYABLE_SETTLEMENT');
+      expect(settlementEntry.amount.toFixed(2)).toBe('20000.00');
+      expect(settlementEntry.sourceId).toBe(body.settlements[0].id);
+    });
+
+    it('Case 5: Settlement to zero marks Payable SETTLED and Purchase PAID', async () => {
+      // Settle first 20,000.00
+      await request(app.getHttpServer())
+        .post(`/api/v1/payables/${testPayableId}/settlements`)
+        .set('Cookie', owner.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '20000.00',
+          settledAt: '2026-08-16T14:00:00.000Z',
+        })
+        .expect(201);
+
+      // Settle remaining 40,000.00
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/payables/${testPayableId}/settlements`)
+        .set('Cookie', owner.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '40000.00',
+          settledAt: '2026-08-16T15:00:00.000Z',
+        })
+        .expect(201);
+
+      const body = res.body as PayableResponse;
+      expect(body.remainingBalance).toBe('0.00');
+      expect(body.settledAmount).toBe('60000.00');
+      expect(body.status).toBe('SETTLED');
+      expect(body.settlements.length).toBe(2);
+
+      // Parent purchase paymentStatus is PAID, ledgerEntryId is still null
+      const purchase = await prisma.supplierPurchase.findUniqueOrThrow({
+        where: { id: testPurchaseId },
+      });
+      expect(purchase.paymentStatus).toBe('PAID');
+      expect(purchase.ledgerEntryId).toBeNull();
+    });
+
+    it('Case 6: Over-settlement is rejected with 400 and writes nothing', async () => {
+      // Partial settle 20,000 -> 40,000 remaining
+      await request(app.getHttpServer())
+        .post(`/api/v1/payables/${testPayableId}/settlements`)
+        .set('Cookie', owner.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '20000.00',
+          settledAt: '2026-08-16T14:00:00.000Z',
+        })
+        .expect(201);
+
+      // Try settling 40,000.01
+      await request(app.getHttpServer())
+        .post(`/api/v1/payables/${testPayableId}/settlements`)
+        .set('Cookie', owner.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '40000.01',
+          settledAt: '2026-08-16T15:00:00.000Z',
+        })
+        .expect(400);
+
+      // Verify state was not modified
+      const payable = await prisma.payable.findUniqueOrThrow({
+        where: { id: testPayableId },
+        include: { settlements: true },
+      });
+      expect(payable.remainingBalance.toFixed(2)).toBe('40000.00');
+      expect(payable.settlements.length).toBe(1);
+    });
+
+    it('Case 7: Settling an already-settled payable is rejected with 409', async () => {
+      // Full settle 60,000.00
+      await request(app.getHttpServer())
+        .post(`/api/v1/payables/${testPayableId}/settlements`)
+        .set('Cookie', owner.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '60000.00',
+          settledAt: '2026-08-16T14:00:00.000Z',
+        })
+        .expect(201);
+
+      // Try settling 1.00 more
+      await request(app.getHttpServer())
+        .post(`/api/v1/payables/${testPayableId}/settlements`)
+        .set('Cookie', owner.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '1.00',
+          settledAt: '2026-08-16T15:00:00.000Z',
+        })
+        .expect(409);
+    });
+
+    it('Case 8: Concurrency — FOR UPDATE lock prevents over-settlement under Promise.allSettled', async () => {
+      // Two concurrent settlement requests of 60,000.00 each on a 60,000.00 payable
+      const [res1, res2] = await Promise.all([
+        request(app.getHttpServer())
+          .post(`/api/v1/payables/${testPayableId}/settlements`)
+          .set('Cookie', owner.cookies)
+          .send({
+            accountId: defaultAccountId,
+            amount: '60000.00',
+            settledAt: '2026-08-16T14:00:00.000Z',
+          }),
+        request(app.getHttpServer())
+          .post(`/api/v1/payables/${testPayableId}/settlements`)
+          .set('Cookie', owner.cookies)
+          .send({
+            accountId: defaultAccountId,
+            amount: '60000.00',
+            settledAt: '2026-08-16T14:00:00.000Z',
+          }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([201, 409]); // Winner gets 201, second gets 409 already settled
+
+      const payable = await prisma.payable.findUniqueOrThrow({
+        where: { id: testPayableId },
+        include: { settlements: true },
+      });
+      expect(payable.remainingBalance.toFixed(2)).toBe('0.00');
+      expect(payable.status).toBe('SETTLED');
+      expect(payable.settlements.length).toBe(1);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 3. Rollback Guarantees (Playbook §7)
+  // ---------------------------------------------------------------------------
+  describe('Transaction Rollback Guarantees', () => {
+    it('Case 9: Purchase rolls back completely if any line contains a non-existent rawMaterialId', async () => {
+      const stockBefore = (
+        await prisma.rawMaterial.findUniqueOrThrow({
+          where: { id: rawMaterialGulaId },
+        })
+      ).currentStock;
+
+      const fakeMaterialId = '99999999-9999-4999-8999-999999999999';
+
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T13:00:00.000Z',
+          paymentStatus: 'PAID',
+          accountId: defaultAccountId,
+          note: 'PP Test Doomed Purchase',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '10.0000',
+              unitCost: '12000.00',
+            },
+            {
+              rawMaterialId: fakeMaterialId,
+              quantity: '5.0000',
+              unitCost: '10000.00',
+            },
+          ],
+        })
+        .expect(404);
+
+      // Verify zero changes occurred in DB
+      const stockAfter = (
+        await prisma.rawMaterial.findUniqueOrThrow({
+          where: { id: rawMaterialGulaId },
+        })
+      ).currentStock;
+      expect(stockAfter.toFixed(4)).toBe(stockBefore.toFixed(4));
+
+      const doomedPurchase = await prisma.supplierPurchase.findFirst({
+        where: { note: 'PP Test Doomed Purchase' },
+      });
+      expect(doomedPurchase).toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 4. RBAC & BranchScopeGuard Enforcement
+  // ---------------------------------------------------------------------------
+  describe('RBAC & BranchScopeGuard Enforcement', () => {
+    it('Case 10: OWNER POST with branchId = null succeeds as central purchase', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierBId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'PAID',
+          accountId: defaultAccountId,
+          items: [
+            {
+              rawMaterialId: rawMaterialKopiId,
+              quantity: '1.0000',
+              unitCost: '85000.00',
+            },
+          ],
+        })
+        .expect(201);
+
+      const body = res.body as SupplierPurchaseResponse;
+      expect(body.isCentral).toBe(true);
+      expect(body.branchId).toBeNull();
+    });
+
+    it('Case 11: KASIR POST with branchId = null is rejected with 403 Forbidden', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', kasir1.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(403);
+    });
+
+    it('Case 12: KASIR POST with branchId omitted is rejected with 403 by guard before Zod pipe', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', kasir1.cookies)
+        .send({
+          supplierId: supplierAId,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(403);
+    });
+
+    it('Case 13: KASIR POST with own branchId succeeds with 201', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', kasir1.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: branch1Id,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
+
+      const body = res.body as SupplierPurchaseResponse;
+      expect(body.branchId).toBe(branch1Id);
+    });
+
+    it('Case 14: KASIR POST with another branch ID is rejected with 403 Forbidden', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', kasir1.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: branch2Id,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(403);
+    });
+
+    it('Case 15: KASIR GET /supplier-purchases?branchId=<own> filters to own branch data only', async () => {
+      // Data the cashier must NOT see has to actually exist, or `.every()` on an
+      // empty list passes while the filter is broken — the vacuous-assertion
+      // trap ERR-002 was found through. OWNER creates both because it bypasses
+      // BranchScopeGuard.
+      const otherBranchRes = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierBId,
+          branchId: branch2Id,
+          purchaseDate: '2026-08-16T13:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          note: 'PP Test Other Branch Purchase',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
+      const otherBranchPurchaseId = (
+        otherBranchRes.body as SupplierPurchaseResponse
+      ).id;
+
+      const centralRes = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierBId,
+          branchId: null,
+          purchaseDate: '2026-08-16T13:30:00.000Z',
+          paymentStatus: 'UNPAID',
+          note: 'PP Test Central Purchase For Filter',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
+      const centralPurchaseId = (centralRes.body as SupplierPurchaseResponse)
+        .id;
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/supplier-purchases?branchId=${branch1Id}`)
+        .set('Cookie', kasir1.cookies)
+        .expect(200);
+
+      const items = (res.body as { data: SupplierPurchaseResponse[] }).data;
+      const returnedIds = items.map((p) => p.id);
+
+      // Non-empty, or every assertion below is vacuous.
+      expect(items.length).toBeGreaterThan(0);
+      expect(items.every((p) => p.branchId === branch1Id)).toBe(true);
+      // Named exclusions, so the test fails loudly if the filter ever widens.
+      expect(returnedIds).not.toContain(otherBranchPurchaseId);
+      expect(returnedIds).not.toContain(centralPurchaseId);
+    });
+
+    it('Case 16: KASIR and ADMIN POST /payables/:id/settlements get 403; OWNER succeeds', async () => {
+      // Find an open payable
+      const payable = await prisma.payable.findFirstOrThrow({
+        where: { status: 'OPEN' },
+      });
+
+      // Kasir gets 403
+      await request(app.getHttpServer())
+        .post(`/api/v1/payables/${payable.id}/settlements`)
+        .set('Cookie', kasir1.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '1000.00',
+          settledAt: '2026-08-16T15:00:00.000Z',
+        })
+        .expect(403);
+
+      // Admin gets 403
+      await request(app.getHttpServer())
+        .post(`/api/v1/payables/${payable.id}/settlements`)
+        .set('Cookie', admin.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '1000.00',
+          settledAt: '2026-08-16T15:00:00.000Z',
+        })
+        .expect(403);
+
+      // Owner gets 201
+      await request(app.getHttpServer())
+        .post(`/api/v1/payables/${payable.id}/settlements`)
+        .set('Cookie', owner.cookies)
+        .send({
+          accountId: defaultAccountId,
+          amount: '1000.00',
+          settledAt: '2026-08-16T15:00:00.000Z',
+        })
+        .expect(201);
+    });
+
+    it('Case 17: KASIR GET /payables gets 403 Forbidden', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/payables')
+        .set('Cookie', kasir1.cookies)
+        .expect(403);
+    });
+
+    it('Case 18: Unauthenticated requests get 401 Unauthorized', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/supplier-purchases')
+        .expect(401);
+
+      await request(app.getHttpServer()).get('/api/v1/payables').expect(401);
+
+      await request(app.getHttpServer()).get('/api/v1/suppliers').expect(401);
+    });
+
+    it('Case 19: KASIR POST /suppliers gets 403; KASIR GET /suppliers gets 200', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/suppliers')
+        .set('Cookie', kasir1.cookies)
+        .send({ name: 'Unauthorized Supplier' })
+        .expect(403);
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/suppliers')
+        .set('Cookie', kasir1.cookies)
+        .expect(200);
+
+      const resBody = res.body as { data: unknown[] };
+      expect(Array.isArray(resBody.data)).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 5. Contract Validation, Decimals & Integrity
+  // ---------------------------------------------------------------------------
+  describe('Contract Validation & Decimal Discipline', () => {
+    it('Case 20: Money and quantity strings maintain scale formatting in responses', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const resBody = res.body as { data: SupplierPurchaseResponse[] };
+      const purchases = resBody.data;
+      expect(purchases.length).toBeGreaterThan(0);
+      for (const p of purchases) {
+        expect(p.totalAmount).toMatch(/^\d+\.\d{2}$/);
+        for (const item of p.items) {
+          expect(item.quantity).toMatch(/^\d+\.\d{4}$/);
+          expect(item.unitCost).toMatch(/^\d+\.\d{2}$/);
+          expect(item.lineTotal).toMatch(/^\d+\.\d{2}$/);
+        }
+      }
+    });
+
+    it('Case 21: paymentStatus: PARTIALLY_PAID in create payload is rejected with 400', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'PARTIALLY_PAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(400);
+    });
+
+    it('Case 22: PAID without accountId, or UNPAID with accountId is rejected with 400', async () => {
+      // PAID without accountId
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'PAID',
+          // accountId missing
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(400);
+
+      // UNPAID with accountId
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          accountId: defaultAccountId,
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(400);
+    });
+
+    it('Case 23: Invalid payloads (duplicate items, 0 quantity, invalid precision) get 400', async () => {
+      // Duplicate rawMaterialId
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '2.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(400);
+
+      // Zero quantity
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '0.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(400);
+
+      // Empty items array
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          items: [],
+        })
+        .expect(400);
+    });
+
+    it('Case 24: Client-supplied totalAmount in purchase payload is ignored', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate: '2026-08-16T10:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          totalAmount: '1.00', // client sends spoofed total
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '2.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
+
+      const body = res.body as SupplierPurchaseResponse;
+      expect(body.totalAmount).toBe('24000.00'); // Server-computed total wins
+    });
+
+    it('Case 25: Deleting a referenced supplier fails with 409 Conflict', async () => {
+      await request(app.getHttpServer())
+        .delete(`/api/v1/suppliers/${supplierAId}`)
+        .set('Cookie', owner.cookies)
+        .expect(409);
+    });
+
+    it('Case 26: GET /payables/summary returns running balance per supplier', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/payables/summary')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const summaries = res.body as PayableSupplierSummary[];
+      expect(Array.isArray(summaries)).toBe(true);
+      for (const s of summaries) {
+        expect(s.supplierId).toBeDefined();
+        expect(s.supplierName).toBeDefined();
+        expect(s.openPayableCount).toBeGreaterThanOrEqual(1);
+        expect(s.totalOutstanding).toMatch(/^\d+\.\d{2}$/);
+      }
+    });
+
+    it('Case 27: Balance integrity — stored remainingBalance equals re-derived balance for all payables', async () => {
+      const allPayables = await prisma.payable.findMany({
+        include: { settlements: true },
+      });
+
+      expect(allPayables.length).toBeGreaterThan(0);
+      for (const p of allPayables) {
+        const totalSettled = p.settlements.reduce(
+          (sum, s) => sum.plus(s.amount),
+          new Prisma.Decimal(0),
+        );
+        const derivedRemaining = p.originalAmount.minus(totalSettled);
+        expect(p.remainingBalance.toFixed(2)).toBe(derivedRemaining.toFixed(2));
+      }
+    });
+
+    it('Case 28: assigning a purchase to the central kitchen branch is rejected with 400 (ADR-014)', async () => {
+      // `Pusat (Dapur Sentral)` exists only to satisfy LedgerEntry.branchId's
+      // NOT NULL. A purchase attributed to it directly would report
+      // isCentral: false while being central — so the ADR's rule is enforced,
+      // not merely documented. branchId: null stays the only way to say central.
+      const centralBranch = await prisma.branch.findUniqueOrThrow({
+        where: { name: 'Pusat (Dapur Sentral)' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: centralBranch.id,
+          purchaseDate: '2026-08-16T16:00:00.000Z',
+          paymentStatus: 'UNPAID',
+          note: 'PP Test Central Branch Misuse',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(400);
+
+      expect((res.body as { message: string }).message).toContain(
+        'branchId: null',
+      );
+
+      // Rolled back: the rejection happens inside the transaction, so nothing
+      // may survive it.
+      const leaked = await prisma.supplierPurchase.count({
+        where: { branchId: centralBranch.id },
+      });
+      expect(leaked).toBe(0);
+    });
+  });
+});

@@ -1,0 +1,47 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# turborepo
+.turbo/
+
+# test output
+coverage/
+
+# env — never commit real secrets (Handbook §6: synthetic data only)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Prisma 7 emits the client as TypeScript into the source tree — generated, never edited by hand.
+apps/api/src/generated/
+
+# local execution prompts for future phases — not repo content
+docs/planning-prompts/
+
+# local phase plans and AI-review remediation specs — working documents, not repo content
+docs/plannings/
+docs/remediations/
+docs/reports/
+
+# playwright MCP snapshot artifacts — generated during E2E sessions, not repo content
+.playwright-mcp/

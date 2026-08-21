@@ -250,7 +250,7 @@ Constraint: unique(`productId`, `rawMaterialId`).
 | rawMaterialId | uuid (FK → RawMaterial) | |
 | periodMonth | Date | first day of the month this applies to |
 | quantity | Decimal | |
-| unitPrice | Decimal | used if no purchase has happened yet that month |
+| unitPrice | Decimal, nullable | required if no purchase has happened in the period; must be omitted/null if a purchase already exists (PRD §5.5, Phase 6) |
 | createdAt / updatedAt | DateTime | |
 
 Constraint: unique(`rawMaterialId`, `periodMonth`).

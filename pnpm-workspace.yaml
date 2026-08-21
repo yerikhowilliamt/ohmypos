@@ -1,0 +1,26 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  # Native resolver binding pulled in by eslint-config-next's import resolver.
+  # Its postinstall fetches the platform binary; without it, `eslint` in
+  # apps/web cannot resolve imports.
+  # Prisma's postinstall fetches the platform query-engine binaries; without it
+  # the client cannot connect (ADR-003).
+  '@prisma/engines': true
+  prisma: true
+  # Analytics-only package pulled in transitively. Nothing depends on it
+  # functioning, so its install script stays blocked (Playbook §12).
+  '@scarf/scarf': false
+  unrs-resolver: true
+  # Native password-hashing binding (ADR-011). Its install step compiles/fetches
+  # the platform binary; without it, login cannot hash or verify a password.
+  bcrypt: true
+minimumReleaseAgeExclude:
+  - '@turbo/darwin-64@2.10.10'
+  - '@turbo/darwin-arm64@2.10.10'
+  - '@turbo/linux-64@2.10.10'
+  - '@turbo/linux-arm64@2.10.10'
+  - '@turbo/windows-64@2.10.10'
+  - '@turbo/windows-arm64@2.10.10'
+  - turbo@2.10.10
