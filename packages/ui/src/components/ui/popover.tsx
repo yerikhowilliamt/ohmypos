@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { cn } from '@ohmypos/ui/lib/utils';
+import { usePortalContainer } from '@ohmypos/ui/lib/portal-container';
 
 function Popover(props: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
@@ -27,8 +28,9 @@ function PopoverContent({
   collisionPadding = 8,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  const container = usePortalContainer();
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={container}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}

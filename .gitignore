@@ -45,3 +45,7 @@ docs/reports/
 
 # playwright MCP snapshot artifacts — generated during E2E sessions, not repo content
 .playwright-mcp/
+
+# real bank e-statements used as parser reference — contain account numbers and
+# counterparty names. Test fixtures are generated synthetically instead (ADR: PDF import).
+docs/e-statement/

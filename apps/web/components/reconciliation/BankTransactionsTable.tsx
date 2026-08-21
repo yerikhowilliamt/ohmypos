@@ -6,6 +6,7 @@ import type { BankTransactionResponse } from '@ohmypos/api-contracts';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Button } from '@ohmypos/ui/components/button';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import { formatCurrency } from '@/lib/formatters';
 import {
   formatTransactionStatus,
@@ -13,6 +14,14 @@ import {
   getFlowIndicatorClasses,
   getTransactionStatusBadgeClasses,
 } from '@/lib/vocabulary';
+
+const exportColumns: ExportColumn<BankTransactionResponse>[] = [
+  { header: 'Tanggal', accessor: (row) => new Date(row.txnDate) },
+  { header: 'Keterangan', accessor: (row) => row.description },
+  { header: 'Arah', accessor: (row) => formatTransactionType(row.type) },
+  { header: 'Jumlah (IDR)', accessor: (row) => Number(row.amount) },
+  { header: 'Status', accessor: (row) => formatTransactionStatus(row.status) },
+];
 
 interface BankTransactionsTableProps {
   transactions: BankTransactionResponse[];
@@ -114,6 +123,8 @@ export function BankTransactionsTable({
       searchPlaceholder="Cari keterangan…"
       emptyMessage="Belum ada transaksi bank."
       emptyDescription="Impor rekening koran CSV untuk mulai merekonsiliasi."
+      exportColumns={exportColumns}
+      exportFilename={`transaksi-bank_${new Date().toISOString().slice(0, 10)}.xlsx`}
     />
   );
 }

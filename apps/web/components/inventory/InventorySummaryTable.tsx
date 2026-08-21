@@ -5,6 +5,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import { formatQuantity } from '@/lib/formatters';
 import {
   formatStockStatus,
@@ -16,6 +17,8 @@ import type { InventorySummaryRow } from '@ohmypos/api-contracts';
 interface InventorySummaryTableProps {
   rows: InventorySummaryRow[];
   isLoading?: boolean;
+  /** `YYYY-MM` period the summary was fetched for — only used to name the export file. */
+  period?: string;
 }
 
 const columns: ColumnDef<InventorySummaryRow>[] = [
@@ -116,6 +119,20 @@ const columns: ColumnDef<InventorySummaryRow>[] = [
   },
 ];
 
+const exportColumns: ExportColumn<InventorySummaryRow>[] = [
+  { header: 'Bahan Baku', accessor: (row) => row.name },
+  { header: 'Satuan', accessor: (row) => row.unit },
+  { header: 'Stok Awal', accessor: (row) => Number(row.openingQuantity) },
+  { header: 'Masuk', accessor: (row) => Number(row.inQuantity) },
+  { header: 'Keluar', accessor: (row) => Number(row.outQuantity) },
+  { header: 'Stok Akhir', accessor: (row) => Number(row.closingQuantity) },
+  {
+    header: 'Batas Minimum',
+    accessor: (row) => Number(row.lowStockThreshold),
+  },
+  { header: 'Status', accessor: (row) => formatStockStatus(row.status) },
+];
+
 /**
  * Dashboard 5 (PRD §5.6) — read-only inventory summary table.
  *
@@ -128,6 +145,7 @@ const columns: ColumnDef<InventorySummaryRow>[] = [
 export function InventorySummaryTable({
   rows,
   isLoading = false,
+  period,
 }: InventorySummaryTableProps) {
   if (isLoading) {
     return (
@@ -151,6 +169,8 @@ export function InventorySummaryTable({
       searchLabel="Cari bahan baku"
       emptyMessage="Tidak ada data stok"
       emptyDescription="Belum ada bahan baku atau pergerakan stok pada periode ini."
+      exportColumns={exportColumns}
+      exportFilename={`ringkasan-stok_${period ?? new Date().toISOString().slice(0, 7)}.xlsx`}
     />
   );
 }

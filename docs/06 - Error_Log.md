@@ -37,6 +37,128 @@
 
 ## Log
 
+### ERR-017 — Opening stock mutation did not invalidate inventory summary query cache
+
+- **Date found:** 2026-08-21
+- **Found during:** TASK-058 (Opening Stock & Inventory UI Fixes)
+- **Symptom:** After successfully saving opening stock in the "Stok Awal" tab, switching to the "Ringkasan Pergerakan Stok" tab did not reflect updated opening stock values until a manual page refresh.
+- **Root cause:** `useUpsertOpeningStock`'s `onSuccess` handler only invalidated the `openingStockWorksheet` query key and forgot to invalidate `inventorySummary`. TanStack Query continued serving stale cached data for the summary endpoint.
+- **Resolution:** Added `queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEYS.inventorySummary(variables.periodMonth) })` to `useUpsertOpeningStock` in `apps/web/hooks/useInventory.ts`.
+- **Prevention:** When a write mutation affects multiple dashboards/views, audit all query keys reading that mutated domain and write unit tests asserting query invalidations for all related view keys.
+- **Severity:** Low — UI cache staleness only, database was updated correctly.
+
+### ERR-016 — `pdfjs-dist` ESM bundle fails in Jest CommonJS runtime with `Cannot use import.meta outside a module`
+
+- **Date found:** 2026-08-21
+- **Found during:** TASK-057 (Upgrade PDF Parser to pdfjs-dist)
+- **Symptom:** `pnpm --filter api test` crashed in `pdf-text.util.spec.ts` with `SyntaxError: Cannot use 'import.meta' outside a module` when importing `pdfjs-dist/build/pdf.mjs` or `unpdf`.
+- **Root cause:** `apps/api` compiles and tests under CommonJS (`"module": "commonjs"`), while `pdfjs-dist` v4 and `unpdf` ship modern ES modules utilizing `import.meta.url`. Jest's CJS runtime executor cannot parse `import.meta` without `--experimental-vm-modules`.
+- **Resolution:** Pinned `pdfjs-dist` to `^3.11.174` and consumed its official CommonJS legacy build via `require('pdfjs-dist/legacy/build/pdf.js')` with proper TypeScript typing casts.
+- **Prevention:** For libraries dealing with PDF/WASM/Canvas in NestJS/CJS environments, always check for dedicated `legacy/build/*.js` builds or ensure CJS compatibility before runtime invocation.
+- **Severity:** Low — caught during CI/test execution, resolved before merge.
+
+### ERR-015 — Test fixture with `hasRecipe: false` made a product silently un-addable to cart
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-051 (OWNER branch-selectable POS access) — writing `PosScreen.owner-branch.test.tsx`
+- **Symptom:** `fireEvent.click(screen.getByTestId('product-card-...'))` produced no visible error, but `cart-total` stayed `Rp 0` and the submit button stayed disabled — the click appeared to do nothing.
+- **Root cause:** `canAddProduct()` (`apps/web/lib/pos/availability.ts`) unconditionally returns `false` for any product with `hasRecipe: false` — `hppAtSale` would have to be `null` at sale time, which the server rejects (`RecipeIncompleteException`, ADR-015) — so `ProductCard`'s `<Button disabled={!addable}>` silently no-ops the click. The new test's product fixture was copied loosely from an unrelated earlier fixture (`AIR`/Air Mineral in `PosScreen.test.tsx`, which is deliberately non-addable to test the "no recipe" empty state) instead of the addable `KOPI_SUSU` shape.
+- **Resolution:** Changed the fixture to `hasRecipe: true` with an empty `recipeItems: []` (a valid "recipe exists, needs no ingredients" edge case `canAddProduct` accepts), and gave it a non-null `hpp`/`margin` to match.
+- **Prevention:** When writing a new POS test fixture meant to be addable, copy the shape of an existing *addable* fixture (`KOPI_SUSU`/`LATTE` in `PosScreen.test.tsx`, both `hasRecipe: true`) rather than assuming `hasRecipe: false` is a harmless default — it silently disables the primary interaction instead of throwing.
+- **Severity:** Low — test-authoring error only, caught before merge, no production impact.
+
+### ERR-014 — Radix `Select` leaves `<body>` with `pointer-events: none` briefly after closing, swallowing the next test click
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-051 (OWNER branch-selectable POS access) — writing `PosScreen.owner-branch.test.tsx`
+- **Symptom:** After `fireEvent.click`-ing a `SelectItem` to pick a branch (confirmed selected — the trigger's displayed value updated correctly), the immediately-following `fireEvent.click` on a `ProductCard` did nothing: `cart-total` stayed `Rp 0`, `cart-submit` stayed disabled, and `await screen.findByText('Penjualan tercatat')` timed out.
+- **Root cause:** Radix `Select`'s portal sets `document.body.style.pointerEvents = 'none'` while open and clears it asynchronously (via an effect, not synchronously with the click handler) once it closes. A `fireEvent.click` fired on a different element in the same synchronous test step can land while `<body>` still has `pointer-events: none`, which silently blocks the click from reaching its target in jsdom — no error is thrown, the click simply does nothing.
+- **Resolution:** Added an explicit wait after every Select interaction in the test's `pickBranch()` helper: `await waitFor(() => expect(document.body.style.pointerEvents).not.toBe('none'))` before issuing any further `fireEvent.click`.
+- **Prevention:** Any future test that interacts with a Radix `Select` (or other Radix component using the same body-lock pattern — `Dialog`, `Sheet`, `Popover`) and then immediately clicks something else outside it must wait for `document.body.style.pointerEvents` to clear first, not just for the visible DOM state to update. No prior test in this codebase exercised a full open-select-then-pick-an-item flow (`ReportFilterBar.test.tsx` only asserts static `disabled` state on the trigger), so this gotcha had no existing precedent to follow.
+- **Severity:** Low — test-infrastructure gotcha only, caught before merge, no production impact.
+
+### ERR-013 — Prettier formatting error on multi-line destructured props and JSX attributes
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-047 (UI Revamp Phase 1: App Shell & Modern Sidebar Navigation)
+- **Symptom:** `pnpm --filter web lint` failed with `prettier/prettier` errors in two new files: `SidebarAccountCard.tsx` (an inline destructured props type `{ user, className }: { user: UserResponse; className?: string }` that Prettier wanted expanded across lines) and `Topbar.tsx` (a self-closing `<span aria-hidden className="..." />` that Prettier wanted with each attribute on its own line).
+- **Root cause:** Hand-written JSX/TS was typed to fit Prettier's *printWidth* visually but didn't match its actual line-length/wrapping algorithm for object type literals and multi-attribute JSX tags — the same class of error as ERR-012, just triggered by different constructs (component prop types and JSX attribute lists instead of a `z.infer<...>` export).
+- **Resolution:** Ran `npx eslint --fix` scoped to the two files; Prettier auto-reformatted both to its canonical wrapping and `pnpm --filter web lint` then passed clean.
+- **Prevention:** Same as ERR-012 — run `pnpm turbo run lint` (or `pnpm --filter web lint --fix`) immediately after writing new TSX/TS files, before declaring a task's quality gate green, rather than assuming hand-formatted code already matches Prettier's output.
+- **Severity:** Low
+
+---
+
+### ERR-012 — Prettier ESLint formatting error on single-line inferred type definition
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-046 (All Employees Leave History View in Leave Requests Page)
+- **Symptom:** Turbo lint failed on `packages/api-contracts` with `prettier/prettier` error on `export type LeaveRequestUserSummary = z.infer<typeof LeaveRequestUserSummarySchema>;`.
+- **Root cause:** Prettier max line length configuration expected a line break inside the `z.infer<...>` type declaration for longer identifier names.
+- **Resolution:** Re-formatted the type export to span multiple lines matching Prettier rules (`export type LeaveRequestUserSummary = z.infer<\n  typeof LeaveRequestUserSummarySchema\n>;`) and executed `pnpm --filter web lint --fix`.
+- **Prevention:** Always run `pnpm turbo run lint` after editing TypeScript contracts and schema files before finishing a task.
+- **Severity:** Low
+
+---
+
+### ERR-011 — Incorrect password in seed credential mental model during test login
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-044 (Phase 13 E2E Verification)
+- **Symptom:** Cashier test login with `Password123!` failed with `401 Invalid credentials`.
+- **Root cause:** Default seed password defined in `apps/api/prisma/seed.ts` is `ChangeMe123!`, not `Password123!`.
+- **Resolution:** Re-attempted login with standard seed password `ChangeMe123!` per `.agents/skills/e2e-playwright/SKILL.md` credentials table.
+- **Prevention:** Always consult `.agents/skills/e2e-playwright/SKILL.md` for seed user credentials before initiating browser test runs.
+- **Severity:** Low — testing workflow error only, no production impact.
+
+---
+
+### ERR-010 — Next.js Route Interception on Direct Relative `fetch('/api/v1/...')` Calls
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-037 (Product Photo Upload)
+- **Symptom:** Product photo upload threw `Failed to fetch / Server Action not found` when trying to POST to `/api/v1/products/:id/photo`.
+- **Root cause:** Direct relative `fetch('/api/v1/...')` in client components was intercepted by Next.js App Router routing rather than dispatching to the standalone NestJS backend at `http://localhost:4015/api/v1`.
+- **Resolution:** Replaced raw `fetch()` calls with the centralized `apiFetch` helper in `apps/web/lib/api.ts` which uses `NEXT_PUBLIC_API_BASE_URL` and properly handles multipart `FormData` without manually overriding boundary headers.
+- **Prevention:** Always use `apiFetch` from `apps/web/lib/api.ts` for all API calls in `apps/web` hooks and services.
+- **Severity:** Medium
+
+---
+
+### ERR-009 — Comma-formatted decimal inputs rejected by regex before transform in Zod primitive schema
+
+- **Date found:** 2026-08-20
+- **Found during:** TASK-038 (Recipe Decimal Input Validation)
+- **Symptom:** Recipe editor rejected user input like `0,025` with `must be a decimal number written as a string` despite valid numeric intent.
+- **Root cause:** `decimalString` primitive schema applied `.regex(/^-?\d+(?:\.\d+)?$/)` before `.transform()`, which failed on Indonesian/European comma decimals (`0,5`).
+- **Resolution:** Updated `DECIMAL_PATTERN` to `/^-?\d+(?:[.,]\d+)?$/` and sanitized `,` to `.` via `.transform()` before scale and precision checks.
+- **Prevention:** Decimal primitive schemas must accept comma and dot separators prior to string normalization.
+- **Severity:** Medium
+
+---
+
+### ERR-008 — Missing `prisma generate` step after manual Prisma schema edits causes stale TypeScript client types
+
+- **Date found:** 2026-08-19
+- **Found during:** TASK-035 (Phase 11 — Attendance & Device Tracking)
+- **Symptom:** `pnpm turbo run lint typecheck` failed in `apps/api` with `Property 'device' does not exist on type 'PrismaService'` and `Property 'attendanceRecord' does not exist on type 'PrismaService'`.
+- **Root cause:** The Prisma schema migration was applied via `prisma migrate dev`, but the generated Prisma Client types in `apps/api/src/generated/prisma` were not regenerated / out of sync with the new schema models.
+- **Resolution:** Ran `pnpm --filter api exec prisma generate` to rebuild the TypeScript client types matching the updated schema.
+- **Prevention:** Include `prisma generate` in local development workflows or schema change execution scripts whenever `schema.prisma` is modified.
+- **Severity:** Low
+
+---
+
+### ERR-007 — Remote Cloudinary avatars blocked by Next.js Content Security Policy
+
+- **Date found:** 2026-08-19
+- **Found during:** Phase 10b (TASK-034) — testing profile photo upload and avatar rendering in `apps/web`.
+- **Symptom:** Profile photos uploaded to Cloudinary did not render in the browser (`<img>` broken/blocked).
+- **Root cause:** `apps/web/next.config.ts` configured strict `Content-Security-Policy` with `img-src 'self' data: blob:`, blocking external image domains including Cloudinary CDN (`https://res.cloudinary.com`).
+- **Resolution:** Added `https://res.cloudinary.com` to `img-src` in `securityHeaders` in `next.config.ts`.
+- **Prevention:** Whenever adding new remote media hosting services, check and update CSP headers in `next.config.ts` alongside API contracts.
+- **Severity:** Low — UI display issue, caught and resolved during task verification.
+
 ### ERR-006 — Cash-balance running total used the wrong end of `resolveReportRange`, including same-day entries it should have excluded
 
 - **Date found:** 2026-08-18

@@ -41,6 +41,593 @@
 
 ## Log
 
+### TASK-058 — Fix Opening Stock Invalidation, Input Formatting, & Active Sidebar Theme
+
+- **Date:** 2026-08-21
+- **Module / Phase:** Inventory module (`apps/web/components/inventory`, `apps/web/hooks/useInventory.ts`), UI tokens (`packages/ui/src/styles/globals.css`)
+- **Objective:** Fix three frontend UI/UX issues: (1) Ensure opening stock submission automatically invalidates and refreshes the "Ringkasan Pergerakan Stok" table query, (2) update active navigation link text color in the sidebar to `text-text-gold`, and (3) clean up opening stock worksheet quantity input formatting to avoid unwanted default zeros / `.0000` decimals and display clean placeholder values.
+- **Relevant docs:** PRD §5.5, §5.6, `docs/DESIGN.md` §8.2, §16.
+- **What was done:**
+  - `apps/web/hooks/useInventory.ts`: Added `queryClient.invalidateQueries({ queryKey: INVENTORY_QUERY_KEYS.inventorySummary(variables.periodMonth) })` to `useUpsertOpeningStock` onSuccess callback.
+  - `packages/ui/src/styles/globals.css`: Updated `--color-sidebar-accent-foreground` from `var(--color-text-primary)` to `var(--color-text-gold)`.
+  - `apps/web/components/inventory/OpeningStockWorksheetTable.tsx`: Reset default quantity to empty string (`''`) when undeclared; formatted declared quantities and carry forward placeholders with `formatQuantity(...)` (trimming trailing zeros like `.0000`).
+  - `apps/web/components/inventory/InventorySummaryTable.tsx`: Ensured all summary table quantities use `formatQuantity(...)` consistently.
+  - Unit tests updated and verified in `useInventory.test.ts`, `OpeningStockWorksheetTable.test.tsx`, and `InventorySummaryTable.test.tsx`.
+  - Monorepo checks verified clean: `pnpm turbo run lint typecheck test` (13/13 tasks passed).
+- **Status:** Done.
+- **Handoff notes:** When users record opening stock, both the worksheet and summary tabs reflect current formatted figures immediately without requiring page refresh.
+
+### TASK-057 — Upgrade PDF Parser to pdfjs-dist & Add PDF Password Support
+
+- **Date:** 2026-08-21
+- **Module / Phase:** Import module (`apps/api/src/modules/import`), `packages/api-contracts`, reconciliation UI (`apps/web/components/reconciliation`, `apps/web/hooks/useReconciliation.ts`)
+- **Objective:** Replace outdated `pdf-parse@1.1.4` (which failed on modern PDF xref streams, Chrome Print to PDF output, and uncompressed PDF test fixtures) with modern `pdfjs-dist@^3.11.174` (legacy build for Node CJS runtime) and add optional password decryption support across API contracts, NestJS import controller/service, and web reconciliation import card.
+- **Relevant docs:** ADR-022, DEBT-031, DEBT-032.
+- **What was done:**
+  - `apps/api/package.json`: Replaced `pdf-parse@1.1.4` with `pdfjs-dist@^3.11.174`. Removed legacy `.d.ts` override.
+  - `packages/api-contracts/src/bank-transaction.schema.ts`: Added `ImportPdfQuerySchema` (`format`, optional `password`).
+  - `apps/api/src/modules/import/interfaces/bank-parser.interface.ts`: Updated `BankParser.parse(fileBuffer, options?: { password?: string })`.
+  - `apps/api/src/modules/import/parsers/pdf-text.util.ts`: Rewrote PDF text & geometry extraction using `pdfjsLib.getDocument({ data, password, isEvalSupported: false, useSystemFonts: true, disableFontFace: true })`. Maintained strict error mapping for password-protected & corrupted files.
+  - `apps/api/src/modules/import/parsers/mandiri-pdf.parser.ts`: Forwarded `options?: { password?: string }` to `extractPdfPages`.
+  - `apps/api/src/modules/import/import.controller.ts` & `import.service.ts`: Extended `POST /import/pdf/:accountId` with optional query param `password`.
+  - `apps/web/components/reconciliation/BankStatementImportCard.tsx` & `useReconciliation.ts`: Added optional password input field when PDF format is selected; forwarded password to API query string.
+  - Unit tests: Added `pdf-text.util.spec.ts` testing valid synthetic PDF extraction with exact coordinates & invalid PDF rejection. Updated `BankStatementImportCard.test.tsx` for password flow.
+  - Full suite verified: `pnpm run check` (`turbo run lint typecheck test`) passing cleanly across all workspaces.
+- **Status:** Done.
+
+### TASK-056 — Import bank statements from Mandiri PDF e-statements, alongside CSV
+
+- **Date:** 2026-08-21
+- **Module / Phase:** Import module (`apps/api/src/modules/import`), `packages/api-contracts`, reconciliation UI (`apps/web/components/reconciliation`, `apps/web/hooks/useReconciliation.ts`)
+- **Objective:** The bank delivers mutasi rekening as PDF e-statements, so users had to convert to CSV before reconciling. Add PDF import while keeping CSV working. Scope confirmed with the user as **Mandiri only**.
+- **Relevant docs:** **ADR-022** (written by this task), PRD §5.7/§7/§10, System Design §4/§6.5, ADR-010 (contracts are the source of truth), ADR-011 (import stays ADMIN/OWNER).
+- **What was done:** Added `pdf-parse@1.1.4` to `apps/api`. New files: `parsers/pdf-text.util.ts` (custom `pagerender` + `%PDF-` signature check + password/corrupt-file error mapping), `parsers/mandiri-pdf.parser.ts`, `parsers/pdf-parse.d.ts` (local subpath types, avoids a second dependency), `parsers/mandiri-pdf.parser.spec.ts` (11 cases). Added `POST /import/pdf/:accountId` beside the CSV route; renamed `ImportService.importCsv` → `importStatement`; added `MANDIRI_PDF` to `BankParserFactory`. Added `BankImportFormatSchema` + `BANK_IMPORT_FORMATS` to `bank-transaction.schema.ts` and drove the web format picker, file `accept`, and upload route from it. Added three e2e cases (`concurrency`, `auth-rbac`). Added `docs/e-statement/` to `.gitignore`. No schema/migration change.
+- **Decisions made during this task:** All the substantive ones are in ADR-022. Two worth repeating because they are easy to undo by accident: (1) **the row `No` is excluded from `dedupHash`** — it restarts at 1 per statement, so including it would double-import on an overlapping period; (2) **file type is detected by `%PDF-` signature, never mimetype** — Nest's `FileTypeValidator` was tried first and rejected legitimate CSV uploads in our own e2e suite, because the multipart mimetype is client-supplied. Also: parsing is done by **column x-position**, not line regex, because `pdf-parse`'s default renderer joins runs with no separator and splits lines on exact float equality of the baseline.
+- **Status:** Done
+- **Handoff notes:** Verified against the user's real 6-page, 57-transaction statement: all 57 rows parsed and the amounts reconcile exactly from the opening balance to the stated closing balance. That file is a personal financial record and is **git-ignored** — do not commit anything from `docs/e-statement/`. Consequently there is **no e2e test that parses a real PDF**; an attempt to hand-generate a fixture PDF failed because the pdf.js bundled in `pdf-parse@1.1.4` rejects hand-written xref tables ("bad XRef entry"), even a spec-canonical one. If you want that coverage, use a real PDF-writing library rather than reviving the hand-rolled generator. Two known gaps: **`docs/e-statement/mutasi bca.pdf` is actually a Bank Sultra statement**, not BCA — its layout is fully documented in ADR-022's context and is unimplemented; and **password-protected PDFs are rejected**, since `pdf-parse` has no password support (`pdfjs-dist`/`unpdf` would, but are ESM-only against this CJS build). Unrelated pre-existing breakage found while running the suite: `allocation-sum.e2e-spec.ts` and `reconciliation-addendum.e2e-spec.ts` fail in `resetDatabase()` with `devices_branch_id_fkey`, because no e2e spec deletes `Device` rows before `branch.deleteMany()`. Not caused by this task and left untouched (scope) — see Tech Debt log.
+
+### TASK-055 — Daily "Laba Bersih" alongside Omset on the dashboard trend chart
+
+- **Date:** 2026-08-21
+- **Module / Phase:** Reports module (`apps/api/src/modules/reports`), `packages/api-contracts`, dashboard (`apps/web/components/dashboard`, `apps/web/components/reports`)
+- **Objective:** Show both Omset (gross/"kotor") and Laba Bersih (net profit/"bersih") on the dashboard's "Tren Pendapatan Harian" chart, per user request. Clarified via `AskUserQuestion` that "bersih" means the same `netProfit` already computed period-level in `ProfitLossResponse` (Omset − COGS − Operating Expenses), just not previously computed per day — **not** a gross/net split of revenue itself, which ADR-015 explicitly designed out of this schema (no discount/tax/refund columns).
+- **Relevant docs:** ADR-005 (HPP snapshot at sale time), ADR-015 (no gross/net revenue split — confirms this task is about profit, not revenue), ADR-017/018 (P&L definitions, WIB day bucketing), `docs/DESIGN.md` (unchanged by this task).
+- **What was done:**
+  - **`apps/api/src/modules/reports/report-filters.ts`**: added `wibDayOfSoldAt()`, a sibling to the existing `wibDayOfEntryDate()` but bucketing on `sales.sold_at` instead of `ledger_entries.entry_date` — needed because COGS must be grouped by the day a sale happened, not a ledger day.
+  - **`apps/api/src/modules/reports/reports.service.ts`, `dailyIncome()`**: now runs three parallel raw-SQL aggregates instead of one — the existing income-per-day query, a new COGS-per-day query (`sale_items` joined to `sales`, grouped by `wibDayOfSoldAt()`), and a new operating-expenses-per-day query (`ledger_entries` OUTFLOW `source_type='MANUAL'`, grouped by `wibDayOfEntryDate()`) — mirroring `profitLoss()`'s existing `Promise.all` two-query pattern. Merges the three result sets **over the union of every day-key appearing in any of them**, not just income's days — a day with a `MANUAL` expense but zero sales would otherwise silently lose that expense from `netProfit` if only income-days were iterated (a real edge case, not hypothetical — caught during planning, not after a bug report).
+  - **`apps/api/src/modules/reports/reports.mapper.ts`**: `toDailyIncomeResponse` now computes `netProfit = income − cogs − operatingExpenses` per bucket (same formula as `toProfitLossResponse`'s period-level `netProfit`) and returns `cogs`/`netProfit` per row.
+  - **`apps/api/src/modules/reports/report-math.ts`**: `DailyIncomeBucket` gained `cogs`/`operatingExpenses` fields; `fillDailyGaps`'s zero-default bucket updated to match.
+  - **`packages/api-contracts/src/report.schema.ts`**: `DailyIncomeRowSchema` gained `cogs: MoneyString` and `netProfit: SignedMoneyString` (a day can run at a loss).
+  - **Unrelated pre-existing bug found and fixed while touching the chart code**: `apps/web/components/reports/ReportChart.tsx`'s `ReportBarChart`/`ReportLineChart` both hardcoded `fill`/`stroke` as `` `var(--color-${key})` `` — reconstructing a CSS variable name from the data key instead of using the actual `color` value already accepted as a prop. Confirmed via `grep` that every existing caller's key (`'value'`, `'total'`, `'income'`) doesn't match a real design token, so **none of these charts were rendering their intended color** before this fix — `IncomeByPaymentMethodView.tsx` even passed an explicit `color: 'var(--color-accent-inflow)'` that was silently ignored. Fixed both components to use the resolved `color` (explicit or from the `CHART_COLORS` fallback array) directly. This had to be fixed as part of this task regardless, since the new second line would have inherited the same bug.
+  - **`apps/web/components/reports/ReportChart.tsx`**: `ReportLineChart` changed from a single `yKey`/`label`/`color` prop set to a `lines: {key,label,color}[]` array, mirroring `ReportBarChart`'s existing `bars` shape — renders one `<Line>` per entry.
+  - **`apps/web/components/dashboard/DashboardClient.tsx`**: `dailyIncomeChartData` now also maps `netProfit`; the chart call passes two lines — Omset (`--color-brand-primary`, unchanged default) and Laba Bersih (`--color-accent-inflow`, green — reusing this app's existing "positive money" convention rather than a new token).
+  - **`apps/web/components/reports/DailyIncomeView.tsx`** (the `/reports/daily` detail page, a second consumer of `ReportLineChart`): migrated to the new `lines` prop shape with a single entry — content unchanged, dashboard-only ask.
+  - Tests: extended `report-math.spec.ts` (`fillDailyGaps` new fields) and `report-filters.spec.ts` (new `wibDayOfSoldAt` case); updated `DailyIncomeView.test.tsx`'s fixture rows to the new schema shape; extended `apps/api/test/reports.e2e-spec.ts`'s Case 21 (WIB-day-bucketing test) with the correct `cogs`/`netProfit` values for its fixture data, and added Case 22 asserting `netProfit` against independently-known fixture values (branch A's 2025-03-15 sale: 1×Kopi + 3×Teh = 11000.00 COGS, matching an existing period-level assertion elsewhere in the same suite) rather than a self-referential formula check.
+  - **A real assumption error caught by the e2e suite, not by inspection**: Case 21's expected COGS was first written as `0.00` on the assumption its fixture used plain `postLedgerEntry` calls; running the e2e suite immediately failed and revealed the fixture actually uses `postSale` (1× Snack, hpp 2000.00) — corrected to the real expected values (`cogs: '2000.00'`, `netProfit: '3000.00'`) after reading the actual fixture setup. Left in this log because it's a concrete example of why the e2e suite was run rather than trusting a plan-time assumption.
+  - Ran `turbo run lint typecheck test build` for `api`, `@ohmypos/api-contracts`, and `web`: all green (api unit: 152/152, web: 326/326). Additionally ran the reports e2e suite directly against the compose Postgres (`pnpm test:e2e -- reports.e2e-spec`, port 5433, confirmed reachable): 58/58 passing, including the two updated/added daily-income cases.
+- **Decisions made during this task:** (1) Three parallel grouped SQL aggregates merged in TypeScript, not a single mega-join or an N+1 per-day loop — matches this file's own documented principle ("Aggregation happens in Postgres, not in Node") and the existing `profitLoss()` two-query pattern. (2) Did not create a second endpoint (`/reports/daily-profit`) — would have duplicated range-resolution/gap-filling logic and added a second round trip for what's conceptually one per-day report. (3) Fixed the `ReportChart.tsx` color bug in the same change rather than filing it separately, since the new second line would have silently inherited it.
+- **Status:** Done.
+- **Handoff notes:** No live browser verification was possible this session (Chrome extension not connected, checked again at the end of this task) — the reports e2e suite (which exercises the real endpoint against a real Postgres, not just unit-level mocks) is what backs correctness here, not just `lint`/`typecheck`/`test`/`build`. Still worth a manual look at `/dashboard` to confirm the two lines render distinguishably and the tooltip/legend name both series correctly, and a look at `/reports/daily` to confirm its single-line chart is visually unchanged after the prop-shape migration.
+
+### TASK-054 — Adopt shadcn/ui's Sidebar component
+
+- **Date:** 2026-08-21
+- **Module / Phase:** Shell (`apps/web/components/shell`, `packages/ui`), follow-up to TASK-053
+- **Objective:** Replace the hand-built app-shell sidebar (three separate hand-maintained render paths — desktop expanded, tablet icon-rail, and a fully independent mobile copy in `MobileNavDrawer.tsx`) with shadcn/ui's official `Sidebar` component family, per explicit user request ("gunakan komponen sidebar shadcn"). Not a redesign of nav content/IA.
+- **Relevant docs:** DESIGN.md §8.2 (sidebar visual spec — outcome-only, doesn't mandate an implementation). Plan approved via Claude Code Plan Mode (3 options: full primitive adoption [chosen], shell/chrome-only adoption [rejected — doesn't remove the desktop/rail duplication], cosmetic token rename only [rejected — doesn't use the actual component]).
+- **What was done:**
+  - New `packages/ui/src/components/ui/sidebar.tsx` — a from-scratch port of shadcn's Sidebar primitive family (`SidebarProvider`, `Sidebar`, `SidebarHeader`/`Content`/`Footer`, `SidebarGroup*`, `SidebarMenu*` incl. `SidebarMenuButton`'s built-in collapsed-state tooltip, `SidebarMenuSub*`, `SidebarInput`, `SidebarSeparator`, `SidebarTrigger`, `SidebarInset`, `useSidebar`), no new npm dependency (every primitive it needs — `Sheet`, `Tooltip`, `Separator`, `Skeleton`, `Input`, `Button` — already existed in `packages/ui`, already portal-patched from TASK-053's dark-mode work). Three deliberate deviations from stock, all because this repo's rail/expanded switch is breakpoint-forced, never a user preference: `isMobile` is a required prop instead of an internal breakpoint hook (reuses `apps/web/hooks/useMediaQuery.ts`'s existing `useIsRail`/`useIsMobile` as the single source of truth); `open` is always controlled with no cookie-persistence write; no desktop `SidebarTrigger`/`SidebarRail` rendered and the stock Cmd/Ctrl+B shortcut was dropped entirely (it would silently do nothing since desktop collapse isn't user-togglable in this pass). Also pruned `SidebarRail`, `SidebarMenuAction`, `SidebarGroupAction`, and `toggleSidebar`/`setOpen` from the exported surface — they'd have been dead/inert exports with nothing calling them, which didn't sit right against how carefully unused code has been avoided elsewhere this session; can be added back if a future task actually needs user-togglable desktop collapse.
+  - `packages/ui/src/styles/globals.css`: added 8 new `--color-sidebar-*` tokens as `var()` aliases onto existing tokens (not new hex), e.g. `--color-sidebar-accent: var(--color-surface-strong)`. Because they're `var()` indirections, back-office dark mode's `[data-theme='dark']` block re-resolves them automatically — no separate dark-mode entries needed for the sidebar tokens.
+  - `apps/web/components/shell/Sidebar.tsx` — full rebuild on the new primitives. One JSX tree now serves all three responsive states instead of three: `ExpandedNavItem`/`ExpandedNavGroup` (desktop ≥1024px, driven by `Collapsible`+`SidebarMenuSub`, shadcn's own documented composition) also serve mobile (rendered inside `SidebarProvider`'s own Sheet when `isMobile` is true — no separate mobile component needed anymore); `RailNavItem` (768–1023px) keeps the existing `Popover`-based flyout for nested groups (deliberately not switched to `DropdownMenu` — these are a positioned link list, not a command menu, and swapping would add untested keyboard semantics for no requested benefit) and gets leaf tooltips for free from `SidebarMenuButton`'s built-in `tooltip` prop. `state`/`isMobile` come from `useSidebar()`; `AppShell` supplies `open`/`isMobile`.
+  - `apps/web/components/shell/AppShell.tsx`: wraps children in `SidebarProvider` (inside the existing `PortalContainerContext.Provider`, so dark-mode-themed popups keep working), fed `open={!useIsRail()}` and `isMobile={useIsMobile()}`. Deleted `mobileNavOpen` state and the `onOpenMobileNav`/`onClose` prop-drilling entirely. Deliberately did **not** adopt `SidebarInset` for the main content wrapper — POS's `h-dvh overflow-hidden` single-viewport requirement (three-zone layout) is hand-tuned, and re-verifying it against `SidebarInset`'s own sizing assumptions was judged an unnecessary regression risk for a component-swap task.
+  - `apps/web/components/shell/Topbar.tsx`: mobile hamburger's `onClick` now calls `useSidebar().setOpenMobile(true)` directly instead of an `onOpenMobileNav` prop threaded from `AppShell` — same "always opens, never toggles" semantic as before (closing still happens via link click or overlay/Escape inside the Sheet).
+  - **Retired `apps/web/components/shell/MobileNavDrawer.tsx` and `LogoutButton.tsx`** (deleted both files) — `MobileNavDrawer` was the third hand-maintained copy of the nav tree and the actual source of this session's earlier drift bug (a nested-active-link style fix had to be applied to two files by hand); `Sidebar`'s own mobile Sheet rendering replaces it structurally, so the two trees can no longer drift. `LogoutButton.tsx` had no remaining call sites once `MobileNavDrawer` was gone (confirmed via `grep` before deleting); its one behavior worth keeping — a `role="alert"` message on failed logout, which the `Sidebar.tsx` inline logout action previously swallowed silently — was folded into the new unified footer logout action as a small opportunistic fix.
+  - `apps/web/components/shell/Sidebar.test.tsx` and `Topbar.test.tsx` reworked (not just passthrough): both now wrap in a `SidebarProvider` (a `renderSidebar`/`renderTopbar` helper, since `Sidebar`/`Topbar` call `useSidebar()` and throw without a provider ancestor — matching real usage, `Topbar` is never rendered outside `AppShell`'s `SidebarProvider` in production either). `setViewport()`/`matchMedia` mocking was removed from `Sidebar.test.tsx` — no longer needed since rail/mobile state is now passed as explicit `isRail`/`isMobile` params to the render helper rather than derived from a hook inside the component under test. Active-row class assertions updated from the literal string `bg-surface-strong` to `bg-sidebar-accent` (same computed color via the new token alias, different class name on the DOM node). Added one new test case (`Sidebar — mobile (<768px)`) asserting the mobile Sheet renders the same active-state styling as desktop — this is the specific regression class (mobile vs. desktop drift) the migration was meant to structurally prevent, and no equivalent test existed before since mobile only lived in the now-deleted `MobileNavDrawer`, which had no test file of its own.
+  - Ran `turbo run lint typecheck test build` for both `web` and `@ohmypos/ui`: all green — 49 test files / 326 tests pass (312 pre-existing + 4 dark-mode + 10 reworked/added sidebar), production build succeeds.
+- **Decisions made during this task:** (1) Pruned several stock shadcn exports (`SidebarRail`, `SidebarMenuAction`, `SidebarGroupAction`, `toggleSidebar`) rather than porting them "for future use" as the approved plan suggested — flagged above, a deliberate deviation from the literal plan text in favor of not shipping dead code, consistent with this session's general practice. (2) Kept `Popover` (not `DropdownMenu`) for the rail's nested-group flyout — already-styled, already-accessible, and switching primitives for a positioned link list would add new keyboard-nav semantics nobody asked for. (3) `SidebarInset` was evaluated and explicitly not adopted, to avoid re-deriving POS's exact-one-viewport sizing contract against a different primitive's assumptions.
+- **Status:** Done.
+- **Handoff notes:** No live browser verification was possible this session (Chrome extension not connected, checked at both the start and end of this task) — `lint`/`typecheck`/`test`/`build` all green is what backs this entry. Before calling this fully shipped, still owed: (1) the manual checklist from the plan (desktop/rail/mobile visual+keyboard check at each breakpoint, back-office dark-mode toggle confirming the sidebar and its `Popover`/`Tooltip`/Sheet popups all re-theme via the new `--color-sidebar-*` var() aliases and stay portaled inside the `data-theme` subtree, POS route still exactly one viewport tall with only `<main>` scrolling); (2) `apps/web/components/shell/Topbar.tsx`'s mobile-width logo still references the old `/logo.png` while `Sidebar.tsx` uses `/logo-rm-bg.png` — a pre-existing drift from before this task (not touched, out of scope for a component-swap task, but worth a follow-up pass); (3) `docs/plannings/ui-revamp-phase-5-premium-tokens.md` is still stale/superseded (flagged in TASK-052, still not addressed).
+
+### TASK-053 — Dark mode for back-office only
+
+- **Date:** 2026-08-21
+- **Module / Phase:** Shell theming (`apps/web/components/shell`, `packages/ui`), follow-up to TASK-052
+- **Objective:** Add a dark theme for night-shift back-office staff (ADMIN/OWNER), scoped so it can never apply to POS (well-lit retail counters) or the `(shared)` route group (profile/help/leave-requests — reachable by KASIR). User explicitly asked for back-office only.
+- **Relevant docs:** `docs/DESIGN.md` §6.6 (new — dark token values), System Design §5 (role/route scoping). Plan approved via Claude Code Plan Mode before implementation, per AGENTS.md's plan-before-code + 3-option requirement (options: scoped `data-theme` CSS-variable theme [chosen], `next-themes` + per-component `dark:` classes [rejected — new dependency, reintroduces the exact dead-`dark:`-class pattern removed in TASK-052], fully duplicated dark shell components [rejected — doubles shell maintenance forever]).
+- **What was done:**
+  - New `apps/web/lib/theme.ts` (`Theme` type, `THEME_COOKIE_NAME`, `isTheme` guard) and `apps/web/lib/theme-client.ts` (`persistThemeCookie` — plain `document.cookie` write, non-HttpOnly, no sensitive data). `apps/web/lib/session.ts` gained `getInitialTheme()` next to the existing `requireRole`, reusing its already-imported `cookies()` pattern for a server-side, FOUC-free initial read.
+  - **Portal-container fix** (the non-obvious part): Radix `Sheet`/`Dialog`/`Popover`/`DropdownMenu`/`Select`/`Tooltip` all mount into `document.body` by default, outside any `data-theme` scope on the shell. Without a fix, every dropdown/dialog/popover/tooltip and the mobile nav drawer itself (built on `Sheet`) would have stayed light even in a dark back-office — not a corner case, it's most of the interactive surface (28+ back-office files use these primitives). Added `packages/ui/src/lib/portal-container.ts` (`PortalContainerContext`, default `null`, `usePortalContainer()`), and patched all 6 primitives' `*.Portal` call sites to pass `container={usePortalContainer()}`. Default `null` means "fall back to Radix's own `document.body` behavior" — strictly additive, zero change for POS/shared/login, which never provide the context.
+  - `apps/web/components/shell/AppShell.tsx`: new `enableDarkMode?: boolean` (default `false`) and `initialTheme?: Theme` (default `'light'`) props; owns `theme` state + `toggleTheme()` (flips + calls `persistThemeCookie`); root wrapper div now uses `ref={setShellEl}` (a `useState<HTMLDivElement | null>`, not `useRef`, so the Provider re-renders once the DOM node exists) and sets `data-theme={enableDarkMode ? theme : undefined}`; wraps its children in `<PortalContainerContext.Provider value={enableDarkMode ? shellEl : null}>`; passes `enableDarkMode`/`theme`/`onToggleTheme` to `Topbar`.
+  - `apps/web/app/(back-office)/layout.tsx` is the **only** layout that opts in — reads `getInitialTheme()`, passes `enableDarkMode` (bare, i.e. `true`) + `initialTheme` to `AppShell`. `(pos)/layout.tsx` and `(shared)/layout.tsx` were **not touched at all** — this is the actual scope guarantee: neither ever passes `enableDarkMode`, so `AppShell`'s default applies regardless of what the theme cookie holds in the browser (e.g. an ADMIN who enables dark mode, then clicks into `/profile`, gets a fresh unscoped `AppShell` mount there).
+  - `apps/web/components/shell/Topbar.tsx`: new `enableDarkMode?`/`theme?`/`onToggleTheme?` props; a Sun/Moon icon toggle button (`data-testid="topbar-theme-toggle"`, `aria-pressed`, localized `aria-label`) renders inside the existing `variant === 'default'` right-aligned block (restructured that block into a wrapping `<div className="hidden items-center gap-2 md:flex">` so the toggle and the "Semua Cabang" branch-context badge sit side by side), gated on `variant === 'default' && enableDarkMode` — the same shape already used for the branch badge, so it structurally cannot render for POS or shared.
+  - `packages/ui/src/styles/globals.css`: added a `[data-theme='dark']` block after `:root`, reusing the existing Obsidian surfaces (`#12151B`/`#1A1E26`) as the base. Full value list and the WCAG reasoning behind each is in `docs/DESIGN.md` §6.6 (added this task) — not repeated here.
+  - New `apps/web/components/shell/Topbar.test.tsx` (4 tests, no prior coverage of this file): toggle renders when `enableDarkMode` is true on `variant="default"`, is absent when `enableDarkMode` isn't passed (shared routes) and on `variant="pos"` even if `enableDarkMode` were somehow true, and `aria-pressed`/`aria-label` track the `theme` prop across a rerender.
+  - Ran `turbo run lint typecheck test build` (both `web` and `@ohmypos/ui`): all green — 49 test files / 325 tests pass (including the new `Topbar.test.tsx`), production build succeeds.
+- **Decisions made during this task:**
+  1. **Status/accent color values are a deliberate compromise, not an oversight.** Computed WCAG contrast (relative-luminance formula, not eyeballed) for every candidate: a single status color cannot simultaneously hit 4.5:1 as plain text on the dark surface *and* 4.5:1 as a white-text solid fill (badges/KPI cards) — the two requirements pull in opposite directions. Text usage dominates (122 `text-status-danger` call sites vs. 9 solid `bg-status-danger` fills, per `grep`), so values were picked to clear AA for the text case (`status-danger` #E5484D → 4.67:1 on the base surface) while landing close-but-short for the solid-fill case (white on #E5484D → 3.91:1) — the same shape of trade-off already present and accepted in the light theme (white text on the gold primary button is 2.26:1, computed the same way, pre-existing and out of this task's scope to fix). Financial accents (`accent-inflow`/`accent-outflow`) have zero solid-fill usage in the codebase, so they went straight to the fully legible value (8.02:1 / 6.79:1) with no compromise needed.
+  2. **`--color-text-inverse` was deliberately left out of the dark override.** Its only consumer is `packages/ui/src/components/ui/tooltip.tsx`'s `bg-surface-dark` chip, which is a fixed dark surface in *both* themes (not tied to `data-theme`) — overriding `text-inverse` to a dark value for the dark theme would have made tooltip text render dark-on-dark inside back-office dark mode, an invisible-text regression. Caught by checking actual usage (`grep`) before assuming the override was needed, not by inspection alone.
+  3. Chose a plain non-HttpOnly cookie over a Server Action for persisting the toggle — the theme change applies instantly via client state, the cookie only needs to be *read* on the next request, and this repo has no existing `'use server'`/Route Handler pattern to extend for something this low-stakes.
+- **Status:** Done.
+- **Handoff notes:** No live browser verification was possible this session (Chrome extension not connected, both when this task started and when it finished) — automated verification (`lint`/`typecheck`/`test`/`build`, all green) is what backs this entry; the manual checklist below is still owed before calling this fully shipped:
+  1. ADMIN/OWNER on `/dashboard` → toggle appears in Topbar (desktop width) next to "Semua Cabang"; toggling flips the whole shell dark, **including** a screen that opens a `Select`/`Dialog`/`Popover` (e.g. `apps/web/app/(back-office)/devices/AddDeviceDialog.tsx`) — this is the direct regression check on the portal-container fix, the part most likely to have a subtle bug if something was missed.
+  2. Open `MobileNavDrawer` at a narrow viewport with dark active — confirm it's dark (same portal check, `Sheet`-based).
+  3. Client-navigate to `/profile` or `/help` and to `/sales` (as OWNER) — confirm both stay light regardless of the toggle state just set, with no flash.
+  4. Hard-reload a back-office page with dark active — confirm it loads dark immediately (FOUC check on `initialTheme`).
+  5. Browser devtools contrast checker against the pairs in `docs/DESIGN.md` §6.6, especially the status/accent solid-fill cases flagged in decision (1) above — the computed numbers are believed correct but haven't been eyeballed on an actual rendered screen yet.
+  6. `docs/plannings/ui-revamp-phase-5-premium-tokens.md` is still stale/superseded (unrelated to this task, flagged in TASK-052) — not addressed here either.
+
+### TASK-052 — UI Revamp Phase 5: "Quiet Luxury" token rebrand — closeout & consistency pass
+
+- **Date:** 2026-08-21
+- **Module / Phase:** UI Revamp Phase 5 (premium/luxury visual direction), supersedes the plan in `docs/plannings/ui-revamp-phase-5-premium-tokens.md`
+- **Objective:** Finish and verify a luxury/premium palette rebrand ("Quiet Luxury Outside, High-Precision Engine Inside" — Champagne Gold/Warm Bronze/Obsidian) that had already been substantially started outside this session (uncommitted working-tree changes present at session start: rewritten `docs/DESIGN.md`, rewritten `packages/ui/src/styles/globals.css` token layer, a new brand mark (`logo.png`, `favicon.ico`), and partial edits to `Sidebar.tsx`/`badge.tsx`/`button.tsx`/`layout.tsx`/`login/page.tsx`). This session did **not** author that initial direction — it inherited it, confirmed with the user that it (not the previously-planned sapphire "Ink & Brass" direction) is the one to continue, then closed the remaining gaps.
+- **Relevant docs:** `docs/DESIGN.md` (rewritten; now 13 sections instead of the previous 56 — §5 Typography, §6 Color Tokens, §7 Radius/Elevation, §8 Shell/Nav, §13 Anti-Patterns are the ones most load-bearing for this task). `docs/plannings/ui-revamp-phase-5-premium-tokens.md` is now **stale/superseded** — it describes a sapphire "Ink & Brass" direction that was never implemented; the shipped direction is Champagne Gold instead. That planning doc has not been deleted but should not be used as a reference for the current token values.
+- **What was done:**
+  - Verified `packages/ui/src/styles/globals.css` (already rewritten before this session) matches `docs/DESIGN.md` §6/§7 token-for-token (brand/accent/status/surface/text/border/radius/shadow) — no drift found, no edit needed there.
+  - `apps/web/components/shell/Sidebar.tsx`: removed a now-unused `next/image` import (both rail and expanded logo branches had been collapsed to the same plain `<img>` markup, leaving `Image` imported but unused), deduplicated the now-identical rail/expanded logo ternary into one render, and aligned the two nested-nav-group active-link styles (`text-brand-primary` → `text-text-primary`) with the already-updated top-level `ROW_ACTIVE` convention so active state reads consistently at every nav depth.
+  - `apps/web/components/shell/Topbar.tsx` and `apps/web/components/shell/MobileNavDrawer.tsx`: swapped their brand mark from the old `/logo.svg` to `/logo.png`, matching the swap already made in `Sidebar.tsx` and `login/page.tsx` — these two files had been missed by the in-progress rebrand and were the only remaining `logo.svg` references outside the (now-orphaned) file itself.
+  - Cleaned the 5 pre-existing token-drift files flagged in an earlier session (raw Tailwind palette colors + dead `dark:` classes — this repo has no dark-mode mechanism, so every `dark:` class was inert): `apps/web/components/dashboard/BranchProfitabilityCard.tsx`, `apps/web/app/(shared)/leave-requests/MyLeaveRequests.tsx`, `apps/web/app/(shared)/leave-requests/OwnerReviewQueue.tsx`, `apps/web/app/(back-office)/devices/AttendanceLogTable.tsx`, `apps/web/app/(back-office)/devices/AttendanceCalendarMatrix.tsx`. All raw `emerald-`/`amber-`/`rose-`/`sky-`/`slate-` classes replaced with semantic `--color-status-*` tokens (`status-success`/`status-warning`/`status-danger`, and `status-info` for the one four-way case — attendance's "Cuti/Izin" state — that didn't map to success/warning/danger); the "no data" placeholder dot now uses `border-strong`. All `dark:` variants deleted.
+  - Fixed a pre-existing Prettier formatting error in `apps/web/app/layout.tsx` (the already-in-progress `Cormorant_Garamond` font import) that was failing `lint`.
+  - Ran `turbo run lint typecheck test --filter=web --filter=@ohmypos/ui`: lint and typecheck clean (only pre-existing, unrelated `react-hooks/incompatible-library` warnings from `react-hook-form`'s `watch()` in three dialogs remain — not touched, out of scope), all 321 web tests pass including `Sidebar.test.tsx` (9 tests, unaffected by the active-style/import edits).
+- **Decisions made during this task:** (1) Confirmed with the user via `AskUserQuestion` which in-progress direction to continue — chose "continue the existing Champagne Gold work" over "run the old sapphire plan," since running the old plan would have overwritten real, already-substantially-correct work. (2) Left `QuantityStepper.tsx`'s `rounded-pill` outer control as-is despite `DESIGN.md` §7.1 now explicitly listing "stepper controls" under `radius.sm` — a test (`OrderPanel.test.tsx:35`) asserts `rounded-pill` on that exact element, and changing an established, tested UI pattern to satisfy a doc line felt like scope creep beyond "finish the rebrand"; flagged here instead of silently changed. (3) Did not attempt a full visual redesign pass of POS/back-office surfaces against the new DESIGN.md's §9/§10 (Obsidian order panel option, "count card" category filters, etc.) — those are net-new design decisions requiring visual judgment calls, not bugs in already-started work, and were left out of scope for this closeout task.
+- **Status:** Done (closeout of the palette/shell/token-consistency work). Not done: a full POS/back-office visual audit against the new DESIGN.md's more detailed §9/§10 guidance (Obsidian dark order panel, category "count cards" instead of pills, gold product-card accents gated on real data) — flagged as follow-up below, not attempted here.
+- **Handoff notes:** No live browser check was possible this session (Chrome extension not connected); relied on `lint`/`typecheck`/`test` (all green) plus pre-existing QA screenshots in `docs/screenshoots/` (captured during the earlier, out-of-session logo work) showing the intended sidebar look already renders correctly. Before the next visual pass: (1) `docs/plannings/ui-revamp-phase-5-premium-tokens.md` should be rewritten or marked superseded — it currently documents token values that were never shipped and will mislead a future reader; (2) DESIGN.md §9.4 raises an Obsidian-dark POS order panel option that `CartPanel.tsx`/`PosOrderSheet.tsx` don't currently implement (they're still light) — worth a deliberate decision with the user rather than assuming; (3) `apps/web/public/logo.svg` and `logo.webp` are now orphaned (nothing references them) and can likely be deleted once confirmed unused elsewhere.
+
+### TASK-051 — OWNER branch-selectable POS access + rename "Transaksi Kasir" → "Transaksi Penjualan"
+
+- **Date:** 2026-08-20
+- **Module / Phase:** POS access (`apps/web/app/(pos)/sales`), post UI-revamp
+- **Objective:** Let OWNER actually use the POS (previously hard-blocked with a warning whenever `user.branchId` was `null`, even though the nav already linked there), picking which branch a sale is attributed to via a header dropdown. Rename the feature from "Transaksi Kasir" to "Transaksi Penjualan" now that it isn't cashier-exclusive.
+- **Relevant docs:** ADR-011 (OWNER is "unscoped, all-branch access" — this task completes that, doesn't violate it), ADR-004 (`Sale.branchId` is attribution-only, not a data-partitioning key), ADR-014/015 (`CentralBranchNotSellableException`).
+- **What was done:**
+  - Investigated first (two Explore passes): confirmed `POST /sales` already allows `@Roles('KASIR', 'ADMIN', 'OWNER')` and `BranchScopeGuard` already passes OWNER/ADMIN through unscoped — the gap was frontend-only. **No schema, migration, `api-contracts`, or backend guard change was needed or made.**
+  - `apps/web/lib/nav-config.ts`: renamed both `{ href: '/sales', label: 'Transaksi Kasir' }` entries (KASIR and OWNER) to `'Transaksi Penjualan'`.
+  - `apps/web/app/(pos)/sales/page.tsx`: removed the `!user.branchId && user.role === 'OWNER'` blocking block entirely; now always renders `<PosScreen branchId={user.branchId ?? null} role={user.role} />`. The KASIR block (`!user.branchId && user.role === 'KASIR'`) is untouched.
+  - `apps/web/components/pos/PosPageHeader.tsx`: renamed the `<h1>` to "Transaksi Penjualan"; added an optional `branchPicker?: React.ReactNode` slot rendered under the title, `undefined` for KASIR.
+  - `apps/web/components/pos/PosScreen.tsx`: `branchId` prop is now `string | null`. Added `selectedBranchId` state seeded from the prop, a `useBranches()` call, a `sellableBranches` filter excluding the seeded central branch (`CENTRAL_BRANCH_NAME = 'Pusat (Dapur Sentral)'`, a new local constant — no shared frontend constant existed), and `needsBranchSelection = role === 'OWNER' && selectedBranchId === null`. When true: header still renders (with the `Select`), but `CategoryFilterRow`/`ProductGrid`/`CartPanel`/`PosOrderSheet` are all replaced by a single placeholder ("Pilih cabang untuk memulai transaksi."). `handleSubmit` now sends `selectedBranchId` and gained a `selectedBranchId === null` guard. OWNER can change the branch at any time, including with cart lines already present — `branchId` is never wired into stock/availability computation, only into the submit payload.
+  - Added `apps/web/components/pos/PosScreen.owner-branch.test.tsx` (5 tests, new file — `PosScreen.test.tsx` stays byte-identical, matching the pattern every prior UI-revamp phase used). Updated the two pre-existing hardcoded-label assertions this rename broke: `apps/web/components/shell/Sidebar.test.tsx:99` and both occurrences in `apps/web/lib/nav-config.test.ts`.
+- **Decisions made during this task:** (1) UX shape (dropdown-in-header vs. full blocking picker screen vs. persisted pill) was put to the user directly via `AskUserQuestion` with previews — they picked the header-dropdown option; the plan (and this entry) reflects that choice, not an assumption. (2) No persistence (localStorage) across visits — deliberate, matches the chosen UX description and avoids complexity for what's expected to be occasional OWNER use rather than daily cashier use. (3) Central-branch exclusion uses a plain exact-match string constant rather than the existing fragile `.toLowerCase().includes('pusat')` precedent in `BranchProfitabilityCard.tsx` — flagged in the plan, not fixed (out of scope). (4) Did not touch the pre-existing duplicate `useBranches` hook (`hooks/useBranches.ts` vs. a second one inside `hooks/useExpenses.ts`) — used the canonical one, left the duplication as-is (out of scope for this task).
+- **Status:** Done
+- **Handoff notes:** `turbo run lint typecheck test build` green (15/15 tasks), `PosScreen.test.tsx` unmodified and passing. One test-infra note worth keeping: Radix `Select` sets `pointer-events: none` on `<body>` while its portal is open and clears it asynchronously on close — a `fireEvent.click` fired immediately after picking a `SelectItem` can land before that cleanup runs and silently do nothing. `PosScreen.owner-branch.test.tsx`'s `pickBranch()` helper waits on `document.body.style.pointerEvents` before continuing; reuse that pattern for any future test that both interacts with a `Select` and then immediately clicks something else. Manually verified end-to-end against the running dev server: OWNER login → no more warning block, header shows "Cabang" dropdown, placeholder before picking; picking a branch reveals the grid/cart; central branch never appears as an option; added a product, paid, **switched branch with the item still in cart**, submitted — the sale in `/sales/history` was correctly attributed to the branch selected at submit time (not the one selected when the item was added); logged back in as KASIR and confirmed zero visual/behavioral change (no dropdown, no placeholder, straight to the grid).
+
+### TASK-050 — UI Revamp Phase 4: Responsive Polish, Backoffice Alignment & Accessibility QA
+
+- **Date:** 2026-08-20
+- **Module / Phase:** UI Revamp Phase 4 (final phase), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Objective:** Close the four remaining responsive/a11y gaps: POS has no mobile bottom sheet below 768px, POS stacks instead of staying side-by-side at 768–1023px (tablet), backoffice tables lose their identifying column on horizontal scroll, and nothing respects `prefers-reduced-motion`.
+- **Relevant docs:** DESIGN.md §14 (Motion), §28 (Data Tables), §41.1–§41.6 (Responsive), §42 (Accessibility), §43 (Touch and Pointer), §44 (Component State Rules).
+- **What was done:**
+  - **Breakpoint fix (§41.1):** `PosScreen.tsx`'s zone wrapper, the product-discovery `<section>`, and its scroll wrapper moved from `lg:` (1024px) to `md:` (768px) — the bug was that Phases 2–3 wrote the tablet/mobile split at `lg`, putting the 768–1023px tablet band on the mobile side of the line and stacking the order panel under the grid instead of keeping both zones side by side per §41.3. `CartPanel.tsx`'s width step-down (`md:w-[320px] lg:w-[360px] xl:w-[380px]`) makes the same move.
+  - **Mobile bottom sheet (§41.3):** added `apps/web/components/pos/PosOrderSheet.tsx` — below 768px a collapsed bar (item count + total + "Lihat Pesanan") replaces the in-flow panel; tapping it opens a `Sheet` containing the *same* `CartPanel` instance the wider layouts render (passed as `children`, so there is no second copy to drift). `PosScreen.tsx` now builds `cartPanel` once and conditionally mounts it inline (`!isMobile`) or inside the sheet (`isMobile`), gated by the existing `useIsMobile()` hook. The old always-mounted floating cart bar (with its own `formatCurrency`/`ShoppingBag`/`Button` imports) was deleted.
+  - **Sticky identifying column (§41.4):** `apps/web/components/ui/data-table.tsx` — added `stickyFirstColumn` prop (default `true`, since §41.4 is a general backoffice rule, not per-table) and a `stickyCellClass` helper (`sticky left-0`, opaque background, `[tr:hover_&]` variant so the pinned cell tracks row hover) applied to both header and body first cells via `data-sticky`. Takes effect for all 17 `DataTable` consumers automatically through the shared wrapper. Added `data-table.test.tsx` (4 tests: pins by default, doesn't pin other columns, pins the header, can be turned off).
+  - **Reduced motion (§14):** appended a `@media (prefers-reduced-motion: reduce)` block to `packages/ui/src/styles/globals.css` — `animation-duration`/`transition-duration: 0.01ms !important` (not `0`, so Radix's animation-end unmount logic still fires) plus `scroll-behavior: auto`.
+  - **Two bugs found and fixed during manual verification, not in the plan's literal snippets:**
+    1. `PosOrderSheet`'s `SheetHeader`/`SheetTitle` rendered a second, visually duplicate "Detail Pesanan" heading on top of `CartPanel`'s own header (which already renders that title + the "Kosongkan" button) — confirmed live in the browser at 500×800. Fixed by making the `SheetHeader` `sr-only`; Radix's Dialog still gets an accessible name, but only one heading is visible.
+    2. `CartPanel`'s root was unconditionally `shrink-0`, which is correct in the desktop/tablet row layout (holds its fixed width against `ProductGrid`) but meant that inside the mobile sheet's bounded-height column it refused to shrink to fit — `sheetRect.height` (512px, `max-h-[85dvh]`) vs. `scrollHeight` (653px), `overflow-y: visible` on `SheetContent`, so "Bayar" was clipped below the viewport with **no way to scroll to it at all**, not merely "reachable only after scrolling." Root cause confirmed via `window.getComputedStyle`/`getBoundingClientRect` in the live browser. Fixed by changing `CartPanel`'s className from `shrink-0` to `shrink md:shrink-0` — at mobile it now shrinks into the sheet's flex container, activating its own internal `overflow-y-auto` order-list region while the header and the payment/CTA foot (both already `shrink-0`) stay pinned.
+- **Decisions made during this task:** No tablet slide-over variant was built for the order panel — §41.3 makes it conditional ("if horizontal space is too tight"), and at 768px the 3-column grid remained usable in manual testing (confirmed live: 64px rail + 320px panel leaves enough room). Both fixes above stayed within the phase's existing file manifest (`PosOrderSheet.tsx`, `CartPanel.tsx`) rather than expanding scope.
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test build` green (15/15 tasks) — 320/320 web tests (316 + 4 new `data-table.test.tsx`, including `PosScreen.test.tsx`'s suite unmodified per the plan's DoD), 0 lint errors (same 4 pre-existing unrelated `react-hook-form` warnings as prior phases). All four E2E scenarios from the plan's §6 were run live against `localhost:3001`/`localhost:4015` via Chrome automation and passed: (A) KASIR checkout at 1440×900 — search, add×2, pay, sale appears first in `/sales/history`; (B) the same checkout at 500×800 — order bar → sheet → pay → bar disappears (this is where the two bugs above were caught); (C) OWNER/KASIR at 900×700 — 64px rail with click-triggered flyout (hover events don't fire reliably through CDP automation — visually confirmed via a real click instead), `/master-data`'s product table keeps "Nama Produk" pinned while scrolling right past Status/Aksi, `/sales` keeps both zones side by side; (D) OWNER/ADMIN/KASIR sidebar contents match `getNavItems(role)` exactly — ADMIN shows only Data Master + Rekonsiliasi, KASIR shows only Penjualan/Cuti/Bantuan. Contrast math for DEBT item below confirmed by hand: `#00BFFF` vs. white ≈ 2.12:1. Not measured with a ruler in this session: exact pixel touch-target sizes (§5.2) and a full keyboard-only pass (§5.5's Tab/Esc walk) — both were exercised functionally (Esc closes the sheet's Radix dialog by construction; every interactive element already carries `focus-visible:ring-2`) but not itemized target-by-target. This closes the UI Revamp roadmap — see `docs/plannings/ui-revamp-design-alignment.md` for the four-phase summary.
+
+### TASK-049 — UI Revamp Phase 3: POS Order Panel & Transaction Flow
+
+- **Date:** 2026-08-20
+- **Module / Phase:** UI Revamp Phase 3 (POS order panel), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Objective:** Restructure zone 3's `CartPanel` into DESIGN.md §24's top-to-bottom anatomy — panel header, order list of single rows with a unified pill stepper, summary block, payment method, full-width primary CTA pinned at the bottom — without changing any cart *behaviour*.
+- **Relevant docs:** DESIGN.md §18.1, §20, §24, §24.1, §24.2, §24.3, §25, §26, §27, §41.5; ADR-004, ADR-013, ADR-015; DEBT-004.
+- **What was done:**
+  - Added `apps/web/components/pos/QuantityStepper.tsx` — a single bordered pill holding `[−][qty][+]`, replacing three separate `Button`s. Decrement is `disabled` at `quantity <= 1` (§25's current wording moves "remove item" to the row's dedicated delete icon), rather than editing `cartReducer`'s DECREMENT branch, which four test files cover.
+  - Added `apps/web/components/pos/OrderSummary.tsx` — Subtotal (n) then Total bayar, divider between, no tax row (`Sale.totalAmount` is Σ line totals only, ADR-015 decision 1).
+  - Rewrote `CartLineRow.tsx` — thumbnail (resolved by `CartPanel` from the product list, since `CartLine` deliberately carries no photo), name, `QuantityStepper`, mono line total, dedicated top-right trash icon in `status-danger`, dividers between rows instead of a per-row card border. Over-committed state is a tinted background + left accent bar rather than a border.
+  - Rewrote `CartPanel.tsx` — panel header ("Detail Pesanan" + Kosongkan), internally-scrolling order list, pinned foot (error banner → `OrderSummary` → `PaymentMethodPicker` → full-width "Bayar" CTA with a `Send` icon). Takes a new `productPhotos: Map<string, string | null>` prop.
+  - `PaymentMethodPicker.tsx`: 4 targeted edits — visible "Metode pembayaran:" label, horizontal scroll instead of wrap so the control's height never pushes the CTA off-panel, `shrink-0` tiles, updated doc comment recording the §24.3 dropdown deviation.
+  - `PosScreen.tsx`: added a `productPhotos` memo (productId → photoUrl, from the same `productList` the grid renders) and passed it into `CartPanel`.
+  - Added `apps/web/components/pos/OrderPanel.test.tsx` (9 tests) covering `QuantityStepper`, `OrderSummary`, and `CartLineRow` in isolation.
+- **Decisions made during this task:** None beyond what the plan already specified — this task was a literal, section-by-section execution of a pre-approved plan (no approval checkpoint inside the phase, per the plan's §0.8). Three documented DESIGN.md deviations, logged as **DEBT-027**: (1) no customer combobox (§18.1) — no `Customer` model exists; (2) no Service Tax row (§24.2) — `Sale.totalAmount` has no tax column; (3) payment method stays a segmented tile control rather than the §24.3 dropdown, on §26/§43/§41.5 touch-target grounds and because ~15 existing POS tests select a method via `payment-method-<id>` tile clicks.
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test` green (13/13 tasks) — 312/312 web tests (including `PosScreen.test.tsx`'s full 14-test regression suite, unmodified), 151/151 api tests, 0 lint errors (same 4 pre-existing unrelated `react-hook-form` warnings as TASK-047/048). `lib/pos/` was not touched — `cart.reducer.ts`, `cart-totals.ts`, `availability.ts`, `submit-error.ts`, `to-create-sale.ts` are byte-identical to before this task. Manually verified against the running dev server (`localhost:3001`/`localhost:4015`) at 1440×900 as the seeded KASIR (`kasir@ohmypos.local`): panel header reads "Detail Pesanan"; empty state shows both §27 lines; adding products renders one row per line with thumbnail, red top-right trash icon, pill stepper (decrement correctly disabled at quantity 1), and a mono right-aligned line total, separated by hairlines; the order list scrolls internally while summary/payment/CTA stay pinned; overriding a price live-updates Subtotal/Total bayar and shows the "Harga khusus" badge; payment tiles scroll horizontally and selecting one enables the "Bayar" CTA; a full submit produced a correct receipt (itemized, override reflected, Rp 95.000 total) and cleared the cart back to the empty state. Did **not** verify tablet/mobile breakpoints, tab order, or exact pixel touch-target measurements (plan §7.2–§7.3) in this session — those remain outstanding for whoever picks up Phase 4. Phase 4 (mobile bottom sheet) can mount the same `CartPanel` as-is — it is self-contained and prop-driven, and its foot (summary → payment → CTA) is already a single pinned block per the plan's §9 handoff notes.
+
+### TASK-048 — UI Revamp Phase 2: POS Product Discovery & Filter Cards
+
+- **Date:** 2026-08-20
+- **Module / Phase:** UI Revamp Phase 2 (POS product discovery zone), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Objective:** Turn POS's middle zone from a search box over a plain card grid into DESIGN.md's §20/§21/§22 product discovery zone — a page header with the live WIB date and right-aligned search, a row of bordered filter cards with live counts, and a fixed-column grid whose first cell is the Add-New-Product affordance.
+- **Relevant docs:** DESIGN.md §18, §20, §21, §21.1, §22, §23, §41.3, §41.5; ADR-013 (advisory headroom); ADR-011 (role-gated `/master-data`); DEBT-018, DEBT-004.
+- **What was done:**
+  - Appended `formatLongDate` to `apps/web/lib/formatters.ts` — Indonesian long-date format pinned to `Asia/Jakarta`, since `report.schema.ts` pins every report range to that zone and a browser-local date would disagree with it near midnight. Tests appended to `formatters.test.ts`.
+  - Added `apps/web/lib/pos/product-filters.ts` (pure module) with `bucketOf`/`sellableProducts`/`countByBucket`/`filterProducts`. DESIGN.md §22 illustrates the filter row with menu categories, but `Product` has no category column (DEBT-018) — the row instead buckets by the cart-aware makeable-quantity headroom already computed in `availability.ts` (Semua Produk / Siap Dibuat / Stok Habis / Tanpa Resep), same card anatomy, real predicates. Covered by `product-filters.test.ts` (12 tests).
+  - Added `apps/web/components/pos/PosPageHeader.tsx` (title + WIB date, rendered client-side only post-mount to avoid an SSR/browser timezone hydration mismatch, re-stamped at local midnight) and `CategoryFilterRow.tsx` (§22's bordered radiogroup cards with live counts).
+  - Added `AddProductCard.tsx` (§21.1's dashed-border grid-first-cell, links to `/master-data`, shown only when `canCreateProducts` — ADR-011 restricts that route to ADMIN/OWNER).
+  - Rewrote `ProductCard.tsx` (image now fills the card's top edge-to-edge at a fixed aspect ratio with an `ImageOff` placeholder when absent, `radius.lg`, brand-border highlight on the most-recently-added product) and `ProductGrid.tsx` (search/filter state moved out to `PosScreen`; grid now takes `canCreateProducts`, `highlightedProductId`, `isFiltered` for a distinct no-result-vs-empty-catalogue message). All pre-existing `data-testid`s (`product-card-*`, `product-in-cart-*`, `product-headroom-*`) and the literal string `Belum ada resep` were preserved unchanged.
+  - `PosScreen.tsx`: both exported components now take a `role: UserRole` prop; added bucket/query/highlight state and the three-zone layout (`<section>` product-discovery panel wrapping header + filter row + scrollable grid, sibling to `CartPanel`). `app/(pos)/sales/page.tsx` passes `role={user.role}` through.
+  - Added `apps/web/components/pos/ProductDiscovery.test.tsx` (7 tests) covering `CategoryFilterRow` rendering/selection and `ProductGrid`'s role-gated Add card, highlight, and empty-state copy.
+  - **Post-implementation fix:** the plan's §7.1.5 layout applied `h-full`/`min-h-0`/`flex-1`/`overflow-y-auto` to the product-discovery section and its grid wrapper unconditionally, but `CartPanel` is `shrink-0` (its own natural content height, `CartPanel.tsx:84`) and only the `lg:flex-row` split was breakpoint-gated. Below `lg` (mobile/tablet, stacked column), the bounded-height section was forced to compete for leftover space against CartPanel's full natural height — on a phone-width viewport CartPanel's content alone exceeds the viewport, squeezing the product grid into a sliver with a broken nested-scroll region. Found via manual mobile verification (see Handoff notes) and reported by the user as "ui mobile untuk transaksi kasir nya rusak". Fixed by moving `h-full`/`min-h-0`/`flex-1`/`overflow-y-auto` behind `lg:` on the outer wrapper, the `<section>`, and the grid's scroll wrapper, so mobile/tablet fall back to natural stacked flow relying on `AppShell`'s own `<main>` scroll — unchanged from how Phase 1 already worked — while desktop keeps the fixed, non-scrolling three-zone layout the plan intended.
+- **Decisions made during this task:** (1) The §22 filter-row deviation (availability buckets, not menu categories) was pre-approved in the plan itself, 2026-08-20 — logged as **DEBT-026**, and DEBT-018 updated to Partially resolved. (2) §21.2's discount tag was left unbuilt for the same reason DEBT-004 already gives (no discount/original-price field on `Product`; the per-line price override is the entire mechanism) — noted as an addendum on DEBT-004 rather than a new entry. (3) `PosPageHeader`'s mount-effect `setState` call needed a targeted `eslint-disable-next-line react-hooks/set-state-in-effect` — this is a one-time sync with the client clock for SSR-hydration safety, not the derived-state render cascade that rule guards against; not caught by the plan's literal snippet, fixed during the lint verification pass. (4) The mobile-layout regression above was not caught by lint/typecheck/tests (all pass regardless of Tailwind breakpoint gating) — only manual viewport verification surfaces it, which is why the plan's §9.2 step exists; skipping it initially is what let this ship.
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test --filter=web` green (4/4 tasks, 303/303 tests, 0 lint errors — same 4 pre-existing unrelated `react-hook-form` warnings as TASK-047). Manually verified in Chrome at ~500×659 (mobile: hamburger topbar, full-width search, horizontally-scrolling filter row, 2-column grid, natural page scroll into the Pesanan/CartPanel section, floating "Lihat Pesanan" bar updates on add-to-cart) after the fix above. Did **not** verify 1440×900 desktop three-zone layout, the 900×700 tablet rail, or the KASIR/OWNER Add-card visibility difference in this session — this session's browser tool could only reliably resize a *freshly created* tab (resizing an already-navigated tab's window had no effect on its viewport), so only one viewport was checked; the rest of the plan's §9.2 checklist is still outstanding. **What Phase 3 needs:** `PosScreen`'s right zone is still today's `CartPanel`, positioned as zone 3 of the `flex ... lg:flex-row` row from §7.1.5 of the Phase 2 plan (now with `h-full`/`min-h-0` gated to `lg:`, see the fix above) — Phase 3 replaces only the panel's internals, not the wrapper or any prop passed into it, and must keep the `lg:`-gating rather than reintroducing an unconditional fixed-height layout. `CartPanel.tsx`, `CartLineRow.tsx`, `PaymentMethodPicker.tsx`, and `cart.reducer.ts` were untouched in this task.
+
+### TASK-047 — UI Revamp Phase 1: App Shell & Modern Sidebar Navigation
+
+- **Date:** 2026-08-20
+- **Module / Phase:** UI Revamp Phase 1 (app shell + sidebar), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Objective:** Replace the flat, fully-saturated sidebar with the anatomy DESIGN.md §16 specifies (search, "Menu" label, tinted active pill, icons, 768–1023px icon rail, account card/avatar), and give POS a fixed-height shell so Phases 2–4 can build a non-scrolling three-zone layout on top of it.
+- **Relevant docs:** DESIGN.md §15–17, §41.1–41.6, §42; AGENTS.md governance (no schema/dependency/contract changes, no Git writes).
+- **What was done:**
+  - Added `apps/web/hooks/useMediaQuery.ts` (SSR-safe `useSyncExternalStore`-based media query hook, `useIsRail`/`useIsMobile`) with `useMediaQuery.test.ts`.
+  - Rewrote `apps/web/lib/nav-config.ts`: every `NavItem` now carries a `lucide-react` icon, added `isNavItemActive` and `filterNavItems` pure helpers, added optional `comingSoon` tag support. Appended new test blocks to `nav-config.test.ts`; all prior `getNavItems` assertions kept passing unchanged.
+  - Added `apps/web/components/shell/SidebarAccountCard.tsx` (extracted account identity block; renders a full card at ≥1024px and an avatar + popover at the 768–1023px rail).
+  - Rewrote `apps/web/components/shell/Sidebar.tsx`: sidebar search input, "Menu" section label, tinted `bg-surface-strong`/brand-text active pill with a 3px left indicator bar (replacing the old fully-saturated `bg-brand-primary text-white`), 64px icon-only rail at tablet width with flyout `Popover` submenus and hover `Tooltip` labels, `min-h-10`/`size-10` touch targets (§41.5).
+  - Rewrote `apps/web/components/shell/Topbar.tsx`: added a `variant` prop (`'default' | 'pos'`) and an all-branch "Semua Cabang" branch-context pill for the Backoffice topbar (§17).
+  - Rewrote `apps/web/components/shell/AppShell.tsx`: added a `variant` prop switching the outer container/`<main>` between the normal scrolling shell and a `h-dvh overflow-hidden` POS shell with an internally-scrolling `<main>`.
+  - `apps/web/app/(pos)/layout.tsx`: passes `variant="pos"` to `AppShell`. `(back-office)` and `(shared)` layouts unchanged (default variant).
+  - Edited `apps/web/components/shell/MobileNavDrawer.tsx` to reuse `isNavItemActive`/`NavItem`/`ROLE_LABEL` from the files above, added icons and the same tinted-pill active styling to both flat links and collapsible groups.
+  - Added `apps/web/components/shell/Sidebar.test.tsx` covering expanded (search, active pill, filtering, auto-expand, role visibility) and rail (icon-only layout, flyout, avatar popover) behaviour.
+- **Decisions made during this task:** (1) One `AppShell` with a `variant` prop rather than a dedicated `PosShell` — `(pos)` also contains `/sales/history`, an ordinary scrolling table page, so a POS-only shell component would have forced `overflow-hidden` onto it too. (2) A JS `useMediaQuery`/`useIsRail` hook rather than CSS-only breakpoints, because §41.2 requires different markup at the rail width (a `Popover` flyout instead of an inline indented list), which CSS cannot produce. (3) Cashier branch-name context (§17's `Kemang · Terkunci`) was **not** implemented — logged as tech debt below, see DEBT-005.
+- **Status:** Done
+- **Handoff notes:** `pnpm turbo run lint typecheck test` green (4/4 tasks, 282/282 tests, 0 lint errors — 4 pre-existing unrelated React Compiler warnings only). Manually verified in Chrome at 1440×900 (expanded sidebar, tinted active pill, branch-context pill), 900×700 (64px icon rail, flyout submenu on click, avatar popover), 500×800 (hamburger drawer with icons and tinted active pill), and `/sales` at 1440×900 (no 52px topbar, POS shell renders with the group auto-expanded and its active child pill-highlighted). Did not test logging in as ADMIN/KASIR interactively — role-based nav visibility is covered by `Sidebar.test.tsx` instead. **What Phase 2 needs:** `AppShell variant="pos"`'s `<main>` is `min-h-0 flex-1 overflow-y-auto`, sized to the viewport minus the mobile topbar; `useIsRail`/`useIsMobile` from `hooks/useMediaQuery.ts` are ready for the product grid and bottom sheet.
+
+### TASK-046 — All Employees Leave History View in Leave Requests Page
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Leave Requests (Phase 12, ADR-021)
+- **Objective:** Add employee leave history view to `/leave-requests` page allowing owners to see all employees' historical leave requests alongside the pending review queue.
+- **Relevant docs:** ADR-021, AGENTS.md, `04 - Engineering_Playbook.md`
+- **What was done:**
+  - Updated `LeaveRequestResponse` and `LeaveRequestUserSummary` schema in `packages/api-contracts/src/leave-request.schema.ts` to include employee summary (`name`, `email`).
+  - Updated `LeaveRequestsService` in `apps/api` to `include` user relation details (`name`, `email`, `id`) in `findMine`, `findAll`, `approve`, and `reject`.
+  - Refactored `OwnerReviewQueue` in `apps/web` with Radix `Tabs` for "Menunggu Persetujuan" and "Riwayat Semua Cuti".
+  - Added dynamic filtering by employee (User) and status (Pending/Approved/Rejected) in the history tab.
+  - Updated E2E test in `apps/api/test/leave-requests.e2e-spec.ts` to verify user details in leave request queries.
+- **Decisions made during this task:** Added user metadata directly into `LeaveRequestResponse` query join, avoiding multiple fragmented frontend network round-trips.
+- **Status:** Done
+- **Handoff notes:** All unit and e2e test suites passing cleanly (`turbo run lint typecheck test`).
+
+### TASK-045 — Export (XLSX) Buttons Across Key Data Pages
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Cross-cutting frontend feature — Reports, Expenses, Inventory, Reconciliation, Devices/Attendance
+- **Objective:** Add Export buttons to the pages where exporting to a spreadsheet has real business value (accounting rekap, payroll, audit trail) — the app previously had no export functionality anywhere.
+- **Relevant docs:** N/A — purely additive frontend feature, no schema/migration or API contract change; scope and format (XLSX) were confirmed with the user directly before implementation.
+- **What was done:**
+  - Added `exceljs` as a new dependency to `apps/web` (dynamic-imported inside the export handler so it never lands in the initial bundle — only pages with an Export button pay for it, and only once clicked).
+  - Added `apps/web/lib/export.ts` (`exportRowsToXlsx`, `exportMatrixToXlsx`, and the exported-for-testing `buildWorkbook`) plus `export.test.ts` (3 tests: header row, native cell types, empty-row case).
+  - Extended the shared `apps/web/components/ui/data-table.tsx` with optional `exportColumns`/`exportFilename` props — renders an Export button in the toolbar that exports the currently filtered/searched rows (`table.getFilteredRowModel()`), not the full unfiltered dataset.
+  - Wired `exportColumns` into every existing `DataTable` consumer that qualified: `GeneralExpenseTab`, `PurchaseEntryTab`, `PayablesTab` (Expenses); `InventorySummaryTable` (threaded a new `period` prop from `InventoryClient` for the filename); `BankTransactionsTable` (Reconciliation); `AttendanceLogTable` (Devices); and 4 of the 5 Reports views — `DailyIncomeView`, `TopProductsView`, `ProductProfitView`, `IncomeByPaymentMethodView` — all of which already used the same shared `DataTable`, so no bespoke per-tab export logic was needed there (a simplification over the original plan, which hadn't yet noticed this).
+  - Added a bespoke Export button to `ProfitLossView` (single KPI-summary object, no table) calling `exportRowsToXlsx` directly with a one-row export.
+  - Added a bespoke Export button to `AttendanceCalendarMatrix` (staff × day-of-month grid) calling `exportMatrixToXlsx`, reusing its existing `cashiers`/`daysArray`/`getDayStatus` state.
+  - Explicit scope exclusions (confirmed with user up front): Master Data, Users, Branches, Accounts — low export value, and Users holds semi-sensitive staff data.
+- **Decisions made during this task:**
+  - Format: XLSX over CSV — native numeric/date cell types (summable in Excel, no re-parsing needed) and no Indonesian-locale delimiter ambiguity (Excel there defaults to `;`, not `,`). Presented as a 3-option plan (XLSX/CSV/both) via plan mode and approved before implementation, per AGENTS.md's dependency-approval gate.
+  - Library: `exceljs` over `xlsx`/SheetJS — SheetJS's npm-published releases are stale (development moved to their own CDN after v0.18.5) and the npm package carries a known prototype-pollution advisory; `exceljs` is actively maintained and published directly to npm.
+- **Status:** Done
+- **Handoff notes:**
+  - Verified via `lint`/`typecheck`/full test suite (261 tests, all passing) and via a direct API-login + curl fetch of the SSR HTML, confirming the Export button renders correctly for Expenses/Reconciliation/Attendance. Reports and Inventory render behind a `React.Suspense` boundary (required by `useSearchParams()`), so static curl can't observe their post-hydration DOM — same `DataTable` code path, but unverified live. Nobody has clicked Export in an actual browser yet and confirmed a `.xlsx` downloads and opens with correct data (the Claude-in-Chrome extension wasn't connected this session) — see DEBT-024.
+  - Export filenames on the 5 Reports views use the export-time date, not the report's selected `startDate`/`endDate` — see DEBT-025.
+
+### TASK-044 — Help / Documentation Page (Phase 13)
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Documentation / Help Page (Phase 13)
+- **Objective:** Provide a dedicated role-aware Help/Documentation ("Bantuan") page with step-by-step guidance rendered through accessible accordion components without introducing new dependencies or MDX pipelines.
+- **Relevant docs:** `docs/plannings/phase-13-help-page.md`, AGENTS.md, DESIGN.md
+- **What was done:**
+  - Added Accordion component in `packages/ui/src/components/ui/accordion.tsx` wrapping `radix-ui` Accordion primitives.
+  - Authored structured static typed guide data in `apps/web/lib/help-content.ts` with role-based filtering (`getHelpSections`).
+  - Created shared help page `apps/web/app/(shared)/help/page.tsx` and client component `HelpClient.tsx`.
+  - Updated `apps/web/lib/nav-config.ts` to include `/help` in navigation for `KASIR` and `OWNER` (omitting sidebar link for `ADMIN` per AGENTS.md constraints while keeping URL accessible).
+  - Updated unit tests in `apps/web/lib/nav-config.test.ts`.
+  - Ran turbo lint, typecheck, and full test suite across workspace.
+  - Verified live E2E rendering and role-based filtering for `OWNER`, `KASIR`, and `ADMIN` via Playwright.
+- **Status:** Done
+- **Handoff notes:**
+  - Next phases in HR-lite/backlog can proceed independently.
+
+### TASK-043 — Attendance Monthly Calendar & Leave Matrix
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Devices & Attendance Tracking / Cuti (Phase 11 & 12 Integration)
+- **Objective:** Provide a monthly attendance calendar grid/matrix (Option 1) mapping each cashier to days 1..31 with status indicators (Hadir Valid, Pelanggaran, Cuti/Izin Disetujui, Libur/Kosong) and interactive popover details.
+- **Relevant docs:** ADR-021, PRD §5.4
+- **What was done:**
+  - Created `AttendanceCalendarMatrix` component (`apps/web/app/(back-office)/devices/AttendanceCalendarMatrix.tsx`).
+  - Integrated `useUsers`, `useAttendanceRecords`, and `useAllLeaveRequests` to cross-reference daily cashier presence with official approved leaves.
+  - Implemented day popover showing login timestamp, device label, and leave reasons.
+  - Added tab switcher in `apps/web/app/(back-office)/devices/attendance/AttendanceClient.tsx` (Kalender Matriks & Riwayat Log Detail).
+  - Verified live E2E via Playwright and saved screenshot to `docs/screenshoots/attendance-calendar-matrix.png`.
+- **Status:** Done
+
+### TASK-042 — Attendance Status Manual Override by Owner
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Devices & Attendance Tracking (Phase 11 Extension)
+- **Objective:** Allow Owner to manually update/correct attendance validity status (e.g. override system errors, mark as Valid or specific Violation reason) via `PATCH /devices/attendance/:id`.
+- **Relevant docs:** ADR-021, AGENTS.md
+- **What was done:**
+  - Added `UpdateAttendanceStatusSchema` in `@ohmypos/api-contracts`.
+  - Added `updateStatus` method in `AttendanceService` and endpoint `PATCH /devices/attendance/:id` in `DevicesController` (OWNER-only).
+  - Added `useUpdateAttendanceStatus` mutation in `apps/web/hooks/useDevices.ts`.
+  - Added row action DropdownMenu in `AttendanceLogTable.tsx` allowing Owner to toggle record validity ("Tandai Sebagai Valid", "Tandai: HP Pribadi", "Tandai: Salah Cabang", "Tandai: Tak Terdaftar").
+  - Verified live E2E in browser via Playwright and captured screenshot to `docs/screenshoots/attendance-status-override-menu.png`.
+- **Status:** Done
+
+### TASK-041 — Dashboard Compact Branch Profitability Card
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Dashboard UI
+- **Objective:** Consolidate branch profitability into a single clean minimalist card showing top 3 branches with branch name, Profit/Loss badge, and total omset/revenue.
+- **Relevant docs:** PRD §5.4, DESIGN.md
+- **What was done:**
+  - Simplified `apps/web/components/dashboard/BranchProfitabilityCard.tsx` into a single compact card showing max 3 operational branches sorted by omset.
+  - Displayed essential info: Nama Cabang, Badge Status (`Profit` / `Tidak Profit`), Omset per cabang, dan progress bar horizontal minimalis.
+  - Verified live rendering in Playwright, and passed all linter, typecheck, and unit tests across workspace.
+  - Captured screenshot in `docs/screenshoots/dashboard-branch-profitability-single-card.png`.
+- **Status:** Done
+
+### TASK-040 — Dashboard Branch Profitability Horizontal Bar Chart
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Dashboard & Reports
+- **Objective:** Convert the branch profitability card from a data table into an analytical Horizontal Bar Chart with custom tooltips (Revenue, Net Profit, Margin %) and inflow/outflow conditional color fills.
+- **Relevant docs:** PRD §5.4, DESIGN.md §36/§37
+- **What was done:**
+  - Refactored `apps/web/components/dashboard/BranchProfitabilityCard.tsx` from `@ohmypos/ui` Table to Recharts `BarChart` (`layout="vertical"`).
+  - Configured XAxis numeric with compact Indonesian numbers and YAxis with branch names.
+  - Added conditional bar fill colors: emerald green (`--color-accent-inflow`) for profit branches (net profit >= 0) and red (`--color-accent-outflow`) for loss branches.
+  - Added rich analytical tooltip detailing Pendapatan, Laba Bersih, dan Margin %.
+  - Verified live rendering via Playwright and saved screenshot to `docs/screenshoots/dashboard-branch-profitability-barchart.png`.
+- **Decisions made during this task:**
+  - Dynamic bar chart height based on the number of operational branches (`Math.max(220, branchResults.length * 60 + 50)`).
+- **Status:** Done
+
+### TASK-039 — Dashboard Branch Profitability Card
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Dashboard & Reports
+- **Objective:** Display branch profitability metrics (Revenue, COGS, Opex, Net Profit, Margin %, Profit/Loss badge status) on the main Owner Dashboard.
+- **Relevant docs:** PRD §5.4, ADR-014, ADR-017
+- **What was done:**
+  - Created `BranchProfitabilityCard` component (`apps/web/components/dashboard/BranchProfitabilityCard.tsx`).
+  - Integrated real-time query per operational branch to `useProfitLoss({ startDate, endDate, branchId })`.
+  - Filtered out the Central/Pusat kitchen inventory pool, displaying retail selling branches.
+  - Added summary status badges: Profit (emerald), Rugi/Tidak Profit (destructive), Impas (outline), and margin breakdown.
+  - Embedded into `apps/web/components/dashboard/DashboardClient.tsx`.
+  - Verified live via Playwright E2E and saved screenshot to `docs/screenshoots/dashboard-branch-profitability.png`.
+- **Decisions made during this task:**
+  - Used `@ohmypos/ui` shadcn `Table`, `Badge`, `Card`, and `Skeleton` primitives.
+- **Status:** Done
+
+### TASK-038 — Recipe Decimal Parsing & E2E Playwright Verification
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Master Data (Recipe/BOM) & E2E Testing
+- **Objective:** Fix decimal input validation for recipe ingredients supporting comma format ("0,025") and dot format ("0.025"), verify live in browser via Playwright.
+- **Relevant docs:** ADR-010, ADR-012, Playbook §5
+- **What was done:**
+  - Updated `decimalString` in `packages/api-contracts/src/primitives.ts` to accept `/^-?\d+(?:[.,]\d+)?$/` and sanitize comma to dot via transform.
+  - Updated `RecipeEditorDialog.tsx` to sanitize input strings before mutation submission.
+  - Verified live E2E browser flow via Playwright: logged in as Owner, opened Product & Recipe table, edited recipes for Air Mineral and Burger using decimal quantities with commas (`0,05`) and dots (`0.03`), successfully computed Live HPP and Margins without any validation errors.
+  - Captured verification screenshot in `docs/screenshoots/master-data-updated-recipe.png`.
+- **Decisions made during this task:**
+  - Comma and dot inputs are both supported seamlessly across API contracts.
+- **Status:** Done
+
+### TASK-037 — Product Photo Upload & Display
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Master Data & POS (Products)
+- **Objective:** Enable OWNER/ADMIN to upload product photos to Cloudinary and display product photos in Master Data Table, Form Dialog, and POS cards.
+- **Relevant docs:** ADR-020 (Cloudinary Pattern), AGENTS.md, PRD §5.1
+- **What was done:**
+  - Added `photoUrl String? @map("photo_url")` to `Product` model in `apps/api/prisma/schema.prisma` and applied migration `20260820013927_add_product_photo_url`.
+  - Updated `@ohmypos/api-contracts` (`ProductResponseSchema` with `photoUrl: z.string().nullable().optional()`).
+  - Added `ProductPhotoService` in `apps/api/src/modules/products/product-photo.service.ts` with unit test in `product-photo.spec.ts`.
+  - Added `POST /products/:id/photo` endpoint with `FileInterceptor` in `ProductsController` (OWNER/ADMIN only).
+  - Updated `useMasterData.ts` in `apps/web` with `useUploadProductPhoto` mutation.
+  - Updated `ProductFormDialog` with photo upload selector/preview and multipart upload integration.
+  - Updated `ProductsTable` to show product image thumbnail in the product column.
+  - Updated POS `ProductCard` to render product image banner.
+  - Verified tests, lint, and typechecks across monorepo.
+- **Decisions made during this task:**
+  - Cloudinary public ID follows deterministic pattern `product_<productId>` with `overwrite: true` to prevent orphan image storage.
+- **Status:** Done
+- **Handoff notes:**
+  - Standard Cloudinary credentials (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`) in API env are shared with user profile photo uploads.
+
+### TASK-036 — Phase 12: Leave Requests (Cuti)
+
+- **Date:** 2026-08-20
+- **Module / Phase:** Phase 12 — Leave Requests (Cuti)
+- **Objective:** Enable employees (KASIR) to submit leave requests and view submission history, while providing an OWNER-only review and approval/rejection queue.
+- **Relevant docs:** ADR-021, `docs/plannings/phase-12-leave-requests.md`, AGENTS.md
+- **What was done:**
+  - Added Prisma model `LeaveRequest` and enum `LeaveRequestStatus` in `apps/api/prisma/schema.prisma` with relations to `User` (`leaveRequests`, `reviewedLeaveRequests`), and applied migration `20260820010402_add_leave_requests`.
+  - Added API contracts in `packages/api-contracts/src/leave-request.schema.ts` (`CreateLeaveRequestSchema`, `LeaveRequestListQuerySchema`, `LeaveRequestResponseSchema`) and exported in `index.ts`.
+  - Implemented backend module `apps/api/src/modules/leave-requests/` (`leave-requests.exceptions.ts`, `leave-requests.dto.ts`, `leave-requests.service.ts`, `leave-requests.controller.ts`, `leave-requests.module.ts`).
+  - Registered `LeaveRequestsModule` in `apps/api/src/app.module.ts`.
+  - Created frontend React Query hooks in `apps/web/hooks/useLeaveRequests.ts`.
+  - Built frontend UI under `apps/web/app/(shared)/leave-requests/` (`page.tsx`, `LeaveRequestsClient.tsx`, `MyLeaveRequests.tsx`, `OwnerReviewQueue.tsx`).
+  - Updated `apps/web/lib/nav-config.ts` to include `/leave-requests` for `KASIR` and `OWNER`, and updated `nav-config.test.ts`.
+  - Added full e2e test suite in `apps/api/test/leave-requests.e2e-spec.ts` covering submission, self-listing, date validation, RBAC restrictions (KASIR forbidden from all/review), and Owner approval/rejection workflows.
+  - Verified with unit tests, e2e tests, linter, and typecheck across the monorepo.
+- **Decisions made during this task:**
+  - Leave dates are calendar days (`@db.Date`), validated with `startDate <= endDate` at the contract schema level.
+  - Review queue for Owner defaults to `PENDING` items for simple triage in v1.
+- **Status:** Done
+- **Handoff notes:**
+  - Phase 12 fully complete and tested.
+
+### TASK-035 — Phase 11: Attendance & Device Tracking
+
+- **Date:** 2026-08-19
+- **Module / Phase:** Phase 11 — Attendance & Device Tracking
+- **Objective:** Track KASIR login timestamp and physical device validity using signed HttpOnly device cookies activated via an authenticated OWNER ceremony; surface attendance violations as non-blocking login warning banners.
+- **Relevant docs:** ADR-021, `docs/plannings/phase-11-attendance-device-tracking.md`, AGENTS.md
+- **What was done:**
+  - Added ADR-021 in `docs/02 - ADR.md` documenting scope expansion for Attendance/Device Tracking & Leave Requests.
+  - Added Prisma models `Device`, `AttendanceRecord`, and enum `AttendanceViolationReason` in `apps/api/prisma/schema.prisma` and applied migration `20260819151056_add_devices_and_attendance`.
+  - Implemented HMAC-SHA256 device cookie signing & timing-safe verification utility (`apps/api/src/common/utils/device-cookie.util.ts`) with Jest unit tests.
+  - Added device contracts (`packages/api-contracts/src/device.schema.ts`) and extended `LoginResponseSchema` with `attendance` field in `packages/api-contracts/src/auth.schema.ts`.
+  - Built `devices` backend module (`devices.controller.ts`, `devices.service.ts`, `attendance.service.ts`, `devices.dto.ts`, `devices.exceptions.ts`, `devices.module.ts`).
+  - Integrated `AttendanceService` into `AuthService.login()` and `AuthController.login()` to inspect cookies for `KASIR` logins and record attendance.
+  - Registered `DevicesModule` in `apps/api/src/app.module.ts` and set cookie constants (`DEVICE_COOKIE`, `DEVICE_COOKIE_MAX_AGE`).
+  - Built frontend pages and components: `/devices` listing with `AddDeviceDialog`, `/devices/attendance` log monitoring page with `AttendanceLogTable`, `/devices/activate` page, `useDevices` and `useAttendanceRecords` hooks, updated `nav-config.ts` (adding `/devices` with submenus `Daftar Perangkat` & `Log Absensi` for OWNER) and `nav-config.test.ts`, plus non-blocking attendance warning banner on `/login`.
+  - Refactored `/devices` and `/devices/attendance` UI to replace native elements and custom tables with `@ohmypos/ui` shadcn primitives (`Badge`, `Checkbox`, `Select`, `Table`) and TanStack `DataTable` with client-side search and sorting.
+  - Added `GET /devices/attendance` endpoint for real-time Owner monitoring of cashier login times, device names, and violation statuses with branch and violation filters.
+  - Verified with unit tests, linting, and typechecks across all packages.
+- **Decisions made during this task:**
+  - `Device` scoped to `Branch`, not `User` (terminals shared per branch).
+  - Attendance recording is strictly for `KASIR` logins; `ADMIN` and `OWNER` logins return `attendance: null`.
+  - Login always succeeds for valid credentials; unregistered or mismatched device results in `isValid: false` warning banner rather than login failure.
+  - Owner activation endpoint `POST /devices/activate` requires authenticated OWNER role rather than public endpoint.
+- **Status:** Done
+- **Handoff notes:**
+  - Documented accepted residual risk in `08 - Tech_Debt_Log.md`: cashier with physical dev tools access could extract and copy the device cookie to a personal device.
+  - Ready for Phase 12 (Leave Requests) which builds on ADR-021 and existing `(shared)` route group patterns.
+
+### TASK-034 — Phase 10b: Profile Photo Upload (Cloudinary)
+
+- **Date:** 2026-08-19
+- **Module / Phase:** Phase 10b — Profile Photo Upload
+- **Objective:** Implement self-service profile photo upload using Cloudinary for storage and transformation, adding `User.photoUrl` and `POST /auth/me/photo`.
+- **Relevant docs:** ADR-020, ERD §7 Note 4 (Superseded), PRD v1.1
+- **What was done:**
+  - Authored and approved ADR-020 reversing ERD §7 Note 4.
+  - Added `cloudinary` dependency to `apps/api`.
+  - Updated `apps/api/prisma/schema.prisma` with `photoUrl String? @map("photo_url")` on `User` model, generated and executed migration `20260819141846_add_user_photo_url`.
+  - Updated `@ohmypos/api-contracts` (`UserResponseSchema` with `photoUrl: z.string().nullable()`, `UploadPhotoResponseSchema`).
+  - Added `ProfilePhotoService`, `InvalidImageFileException`, and `POST /auth/me/photo` in `apps/api`.
+  - Updated `AuthService` and `UsersService` to include `photoUrl` in response mapping.
+  - Added `useUploadPhoto` mutation hook and `PhotoForm` component in `apps/web`.
+  - Set Cloudinary upload target folder to `ohmypos` with public ID format `user_<userId>`.
+  - Updated CSP headers in `apps/web/next.config.ts` to allow `https://res.cloudinary.com` under `img-src`.
+  - Added profile photo avatar rendering to `Sidebar.tsx`.
+  - Removed server-side thumbnail crop transformation in `ProfilePhotoService` so the original photo is preserved intact in Cloudinary.
+  - Added unit test `profile-photo.spec.ts`.
+- **Decisions made during this task:**
+  - Cloudinary public ID is deterministic (`ohmypos/user_<userId>`) with `overwrite: true` to avoid orphan image accumulation.
+  - Storing original aspect ratio without server-side crop; circular/square presentation handled in frontend CSS.
+- **Status:** Done
+- **Handoff notes:** Requires real `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` in environment variables when deployed.
+
+### TASK-033 — Remove Redundant Branch Label from Topbar
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web Layout Shell (`Topbar.tsx`, `AppShell.tsx`)
+- **Objective:** Hapus label "Semua Cabang" / "Cabang Terkunci" dari Topbar karena data bersifat terpusat (ADR-004) dan filter cabang sudah tersedia secara lokal di modul yang relevan (Laporan & Riwayat Penjualan).
+- **Relevant docs:** DESIGN.md §17, ADR-004
+- **What was done:**
+  1. Menghapus helper `branchLabel` dan elemen teks cabang dari `Topbar.tsx`.
+  2. Menyembunyikan topbar pada layar desktop (`md:hidden`) karena fungsi profil dan menu telah berpindah penuh ke sidebar.
+  3. Memperbarui `AppShell.tsx` dan memverifikasi lint, typecheck, dan unit test.
+- **Status:** Done
+- **Handoff notes:** Lolos lint, typecheck, dan seluruh unit test.
+
+### TASK-032 — Refactor Sidebar Footer Layout with Explicit Settings, Logout, and User Info
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web Layout Shell (`Sidebar.tsx`)
+- **Objective:** Hilangkan dropdown pada avatar user di footer sidebar; susun secara vertikal: tombol Pengaturan (`/profile`), tombol Keluar (Logout), lalu kartu info statis profil user (foto/avatar, nama, dan role).
+- **Relevant docs:** DESIGN.md §16–18, PRD §5
+- **What was done:**
+  1. Menghapus wrapper `DropdownMenu` dari kartu user di sidebar.
+  2. Menambahkan tombol navigasi link `Pengaturan` (`/profile`) dengan icon `Settings`.
+  3. Menambahkan tombol aksi `Keluar` (`Logout`) langsung dengan icon `LogOut` berwarna merah (danger) di bawah tombol pengaturan.
+  4. Menempatkan kartu informasi statis identitas profil user di urutan paling bawah (avatar inisial, nama user, dan label role).
+- **Status:** Done
+- **Handoff notes:** Lint, typecheck, dan unit test seluruhnya lulus.
+
+### TASK-031 — Move User Profile & Role to Sidebar Footer
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web Layout Shell (`Sidebar.tsx`, `Topbar.tsx`, `AppShell.tsx`)
+- **Objective:** Pindahkan identitas profil user dari topbar ke footer bawah sidebar dengan avatar inisial, nama user, role label, dan popup menu aksi (Profil & Logout).
+- **Relevant docs:** DESIGN.md §16–18, PRD §5
+- **What was done:**
+  1. Menghapus dropdown profile dari `Topbar.tsx` dan menyederhanakan topbar menjadi hanya indikator cabang & mobile menu button.
+  2. Menambahkan user identity footer di `Sidebar.tsx` (paling bawah): avatar lingkaran inisial, nama user, role badge, serta chevron selector.
+  3. Mengintegrasikan popup `DropdownMenu` (Profil Saya & Logout) di footer sidebar.
+  4. Mengupdate `AppShell.tsx` agar mengalirkan prop `user: UserResponse` ke `Sidebar`.
+- **Status:** Done
+- **Handoff notes:** Lint, typecheck, dan unit test (40 test file, 257 passed) lulus.
+
+### TASK-030 — Enhance Back-Office Dashboard with Rich Visualizations & Donut Payment Chart
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web Dashboard (`DashboardClient.tsx`, `ReportChart.tsx`)
+- **Objective:** Tingkatkan kepadatan informasi halaman dashboard dengan menambahkan diagram lingkaran (donut chart) porsi metode pembayaran (dalam persentase & nominal), peringkat 5 produk terlaris, feed transaksi terkini, serta card peringatan aksi cepat (bahan baku menipis & utang terbuka).
+- **Relevant docs:** DESIGN.md, PRD §5.4
+- **What was done:**
+  1. Menambahkan komponen `ReportPieChart` pada `ReportChart.tsx` berbasis Recharts `PieChart`, `Pie`, dan `Cell` lengkap dengan tooltip persentase dan nominal terformat.
+  2. Memperbarui `DashboardClient.tsx` untuk mengonsumsi data `useIncomeByPaymentMethod`, `useTopProducts`, `useSales` (recent sales), `useInventorySummary`, dan `usePayablesSummary`.
+  3. Menyusun layout grid 2 baris yang informatif dan responsif:
+     - Baris 1: Ringkasan KPI Utama (Kas, Laba Bersih, Utang, Stok).
+     - Baris 2: Tren Pendapatan Harian (Line Chart) + Diagram Lingkaran Metode Pembayaran (Donut Chart dengan legend persentase).
+     - Baris 3: Top 5 Produk Terlaris, Feed Transaksi Kasir Terkini, dan Status Perhatian / Aksi Operasional (Low Stock & Utang Supplier).
+- **Status:** Done
+- **Handoff notes:** Lint, typecheck, dan unit test lolos.
+
+### TASK-029 — Collapsible Sidebar & Mobile Navigation for Sub-routes
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web UI shell navigation (`Sidebar.tsx`, `MobileNavDrawer.tsx`, `@ohmypos/ui/collapsible`)
+- **Objective:** Buat parent sidebar dengan sub-menu dapat di-expand/collapse ketika diklik menggunakan komponen shadcn Collapsible.
+- **Relevant docs:** DESIGN.md, PRD §5
+- **What was done:**
+  1. Menambahkan komponen shadcn UI `Collapsible`, `CollapsibleTrigger`, `CollapsibleContent` di `packages/ui/src/components/ui/collapsible.tsx` berbasis Radix UI.
+  2. Mengubah `Sidebar.tsx` dan `MobileNavDrawer.tsx` agar menggunakan `Collapsible` dengan chevron icon indikator animasi rotasi.
+  3. Menangani auto-expand ketika user berada di dalam active sub-route sambil tetap mengizinkan toggle buka-tutup manual.
+- **Status:** Done
+- **Handoff notes:** Lolos lint, typecheck, dan seluruh unit test.
+
+### TASK-028 — Split Back-Office Routes into Dedicated Sub-Routes
+
+- **Date:** 2026-08-19
+- **Module / Phase:** apps/web routing refactor (`/master-data`, `/expenses`, `/reports`)
+- **Objective:** Pecah halaman back-office yang sebelumnya menggunakan internal client tabs menjadi URL sub-routes terpisah dengan navigasi sidebar bertingkat.
+- **Relevant docs:** PRD §5, ADR-011, System Design v4 §5
+- **What was done:**
+  1. **Master Data Sub-routes:**
+     - `/master-data`: Produk & Resep / BOM (`MasterDataClient` tab `products`)
+     - `/master-data/raw-materials`: Bahan Baku (`MasterDataClient` tab `raw-materials`)
+  2. **Expenses Sub-routes:**
+     - `/expenses`: Pengeluaran Umum (`ExpensesClient` tab `general`)
+     - `/expenses/purchases`: Pembelian Bahan Baku (`ExpensesClient` tab `purchases`)
+     - `/expenses/payables`: Pelunasan Utang (`ExpensesClient` tab `payables`)
+  3. **Reports Sub-routes:**
+     - `/reports`: Laba Rugi (`ReportsClient` tab `profit-loss`)
+     - `/reports/product-profit`: Laba per Produk
+     - `/reports/payment-methods`: Pendapatan per Metode Bayar
+     - `/reports/top-products`: 10 Produk Terlaris
+     - `/reports/daily`: Pendapatan Harian
+  4. **Navigasi & Filter:**
+     - Memperbarui `nav-config.ts` dan `nav-config.test.ts` untuk sub-menu `Data Master`, `Pengeluaran`, dan `Laporan`.
+     - Mempertahankan query params tanggal dan cabang (`startDate`, `endDate`, `branchId`) saat berpindah tab sub-route laporan.
+- **Decisions made during this task:** Menggunakan navigasi berbasis Link untuk tab bar atas agar setiap halaman memiliki URL unik yang bookmarkable tanpa menghilangkan UX tab switching.
+- **Status:** Done
+- **Handoff notes:** Semua test (`vitest`), lint, dan typecheck lolos.
+
+### TASK-027 — Split Sales Navigation, Sales History & Receipt Printing
+
+- **Date:** 2026-08-19
+- **Module / Phase:** Phase 8c Addendum / Sales History & Struk (`(pos)/sales/history`)
+- **Objective:** Pisahkan menu Penjualan di sidebar menjadi sub-menu Transaksi Kasir (`/sales`) dan Riwayat Transaksi (`/sales/history`), serta sediakan UI preview & cetak struk (faktur kasir) dengan nama usaha dan cabang.
+- **Relevant docs:** PRD §5.2, ADR-011, DESIGN.md
+- **What was done:**
+  1. **Navigasi Nested (`apps/web/lib/nav-config.ts`):** Menambahkan dukungan nested items `children` pada `NavItem`. Membuka menu sub-item Penjualan (`Transaksi Kasir` dan `Riwayat Transaksi`) untuk role `KASIR` dan `OWNER`.
+  2. **Sidebar & Mobile Navigation:** Memperbarui `Sidebar.tsx` dan `MobileNavDrawer.tsx` agar merender sub-menu berjenjang dengan active indicator yang presisi.
+  3. **Role Gating:** Memperbarui `(pos)/layout.tsx` dan `/sales/page.tsx` untuk mengizinkan role `KASIR` dan `OWNER`.
+  4. **Riwayat Penjualan (`apps/web/app/(pos)/sales/history`):**
+     - Membuat `page.tsx` dan `SalesHistoryClient.tsx` dengan filter cabang (khusus Owner) dan date-range filter.
+     - Membuat `SalesHistoryTable.tsx` berbasis `DataTable` lengkap dengan pencarian dan sorting.
+     - Menambahkan hook `useSales` di `apps/web/hooks/usePos.ts`.
+  5. **Struk & Invoice (`SaleReceiptDialog.tsx` & `SaleSuccessDialog.tsx`):**
+     - Menampilkan nama usaha (`NEXT_PUBLIC_BUSINESS_NAME` / fallback) dan nama cabang.
+     - Mendukung aksi cetak struk via `window.print()`.
+  6. **Testing:** Menambahkan unit test `SalesHistoryTable.test.tsx` dan memperbarui `nav-config.test.ts`.
+- **Status:** Done
+- **Handoff notes:** Semua unit tests dan linter pass (40 test suites, 257 tests passed). PR diajukan ke branch `dev`.
+
+---
+
 ### TASK-026 — Payment Methods (Accounts) Management UI & POS Revamp Preparation
 
 - **Date:** 2026-08-19

@@ -5,6 +5,7 @@ import { Dialog as SheetPrimitive } from 'radix-ui';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import { cn } from '@ohmypos/ui/lib/utils';
+import { usePortalContainer } from '@ohmypos/ui/lib/portal-container';
 
 function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -75,8 +76,9 @@ function SheetContent({
   showClose = true,
   ...props
 }: SheetContentProps) {
+  const container = usePortalContainer();
   return (
-    <SheetPortal>
+    <SheetPortal container={container}>
       <SheetOverlay />
       <SheetPrimitive.Content
         data-slot="sheet-content"

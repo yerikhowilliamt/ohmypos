@@ -18,6 +18,7 @@ import {
 } from '@ohmypos/ui/components/tabs';
 import type { UpsertOpeningStock } from '@ohmypos/api-contracts';
 import { AlertCircle, CheckCircle2, Boxes } from 'lucide-react';
+import { Skeleton } from '@ohmypos/ui/components/skeleton';
 
 function getCurrentMonthString(): string {
   const d = new Date();
@@ -92,17 +93,18 @@ export function InventoryClient() {
   return (
     <div className="space-y-6">
       {/* Header section with title and period navigator */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="w-full lg:w-3/5">
           <div className="flex items-center gap-2">
             <Boxes className="size-6 text-brand-primary" />
             <h1 className="text-2xl font-bold tracking-tight text-text-primary">
-              Inventori
+              Stok Bahan Baku
             </h1>
           </div>
           <p className="mt-1 text-sm text-text-secondary">
-            Pantau ringkasan pergerakan dan catat stok awal bahan baku per
-            periode.
+            Pantau stok bahan baku dan catat stok awal di awal periode
+            operasional. Rincian stok awal, penambahan dari belanja, pemakaian
+            dari penjualan, dan stok akhir.
           </p>
         </div>
 
@@ -119,7 +121,7 @@ export function InventoryClient() {
 
       <Tabs defaultValue="summary">
         <TabsList>
-          <TabsTrigger value="summary">Ringkasan Stok</TabsTrigger>
+          <TabsTrigger value="summary">Ringkasan Pergerakan Stok</TabsTrigger>
           <TabsTrigger value="opening">Stok Awal</TabsTrigger>
         </TabsList>
 
@@ -132,7 +134,7 @@ export function InventoryClient() {
               error={summaryError}
             />
           ) : (
-            <InventorySummaryTable rows={summary?.data ?? []} />
+            <InventorySummaryTable rows={summary?.data ?? []} period={period} />
           )}
         </TabsContent>
 
@@ -158,12 +160,7 @@ export function InventoryClient() {
 
           {/* Main Content Areas: Loading, Error, or Worksheet Table */}
           {isWorksheetLoading ? (
-            <div className="p-12 text-center rounded-md border border-border-default bg-surface-raised">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary mx-auto mb-3" />
-              <p className="text-sm text-text-secondary">
-                Memuat lembar kerja stok awal periode {period}...
-              </p>
-            </div>
+            <TableSkeleton />
           ) : isWorksheetError ? (
             <div className="p-8 text-center rounded-md border border-status-danger/30 bg-status-danger/5 text-status-danger">
               <AlertCircle className="size-8 mx-auto mb-2 opacity-80" />
@@ -190,15 +187,21 @@ export function InventoryClient() {
   );
 }
 
-function SummaryLoading() {
+/** Mirrors DashboardClient's list-skeleton pattern, sized for a table. */
+function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="p-12 text-center rounded-md border border-border-default bg-surface-raised">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary mx-auto mb-3" />
-      <p className="text-sm text-text-secondary">
-        Memuat ringkasan stok periode ini...
-      </p>
+    <div className="rounded-md border border-border-default bg-surface-raised p-4">
+      <div className="space-y-2">
+        {Array.from({ length: rows }, (_, i) => (
+          <Skeleton key={i} className="h-9 w-full" />
+        ))}
+      </div>
     </div>
   );
+}
+
+function SummaryLoading() {
+  return <TableSkeleton />;
 }
 
 function DataError({ title, error }: { title: string; error: unknown }) {

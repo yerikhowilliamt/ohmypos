@@ -123,9 +123,9 @@ export function EditUserDialog({
       <DialogContent className="sm:max-w-[480px]">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <DialogHeader>
-            <DialogTitle>Edit Pengguna</DialogTitle>
+            <DialogTitle>Ubah Data Pengguna</DialogTitle>
             <DialogDescription>
-              Perbarui data staf, peran akses, atau penugasan cabang.
+              Perbarui data nama, peran akses, atau cabang penugasan pengguna.
             </DialogDescription>
           </DialogHeader>
 

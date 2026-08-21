@@ -4,7 +4,7 @@ import { BranchesClient } from './BranchesClient';
 
 export const metadata: Metadata = {
   title: 'Cabang — OhMyPos',
-  description: 'Kelola daftar cabang',
+  description: 'Daftar cabang toko dan outlet aktif',
 };
 
 export default async function BranchesPage() {

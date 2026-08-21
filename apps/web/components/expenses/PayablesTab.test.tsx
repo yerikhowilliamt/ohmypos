@@ -135,7 +135,9 @@ describe('PayablesTab', () => {
 
     // Dialog opens with title and supplier name
     expect(
-      await screen.findByRole('heading', { name: 'Bayar Utang' }),
+      await screen.findByRole('heading', {
+        name: /pembayaran utang|bayar utang/i,
+      }),
     ).toBeDefined();
     expect(screen.getAllByText('CV Sumber Rasa').length).toBeGreaterThan(0);
   });

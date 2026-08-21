@@ -155,7 +155,9 @@ function mockReads(onPost?: () => Promise<unknown>) {
 }
 
 async function renderScreen() {
-  const result = renderWithClient(<PosScreen branchId={BRANCH_ID} />);
+  const result = renderWithClient(
+    <PosScreen branchId={BRANCH_ID} role="KASIR" />,
+  );
   await screen.findByTestId(`product-card-${KOPI_SUSU}`);
   return result;
 }
@@ -267,6 +269,7 @@ describe('PosScreen — price override', () => {
     await renderScreen();
 
     addToCart(KOPI_SUSU);
+    fireEvent.click(screen.getByTestId(/^cart-price-edit-/));
     const priceInput = screen.getByTestId(/^cart-price-/);
 
     fireEvent.change(priceInput, { target: { value: '15000' } });
@@ -371,6 +374,7 @@ describe('PosScreen — submit failures', () => {
     await renderScreen();
 
     addToCart(KOPI_SUSU);
+    fireEvent.click(screen.getByTestId(/^cart-price-edit-/));
     const priceInput = screen.getByTestId(/^cart-price-/);
     fireEvent.change(priceInput, { target: { value: '15000' } });
     await selectCash();

@@ -1,58 +1,66 @@
-import type { UserResponse } from '@ohmypos/api-contracts';
+'use client';
+
 import { Button } from '@ohmypos/ui/components/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@ohmypos/ui/components/dropdown-menu';
-import { Menu, User } from 'lucide-react';
+import { useSidebar } from '@ohmypos/ui/components/sidebar';
+import { Menu, Moon, Sun } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { LogoutButton } from './LogoutButton';
-
-const ROLE_LABEL: Record<UserResponse['role'], string> = {
-  KASIR: 'Kasir',
-  ADMIN: 'Admin',
-  OWNER: 'Owner',
-};
-
-/**
- * Owner/Admin see "Semua Cabang" — stock and cash are centralized pools with
- * no per-branch balance (ADR-004), so there's nothing for a branch selector
- * to filter yet. Kasir gets a fixed, non-interactive branch label
- * (DESIGN.md §17) — never a branch-switch control.
- */
-function branchLabel(user: UserResponse): string {
-  return user.role === 'KASIR' ? 'Cabang Terkunci' : 'Semua Cabang';
-}
+import type { Theme } from '@/lib/theme';
 
 interface TopbarProps {
-  user: UserResponse;
-  onOpenMobileNav?: () => void;
+  /**
+   * `'default'` renders the 52px Backoffice strip from DESIGN.md §15/§17.
+   * `'pos'` renders only the mobile hamburger row — §15 is explicit that POS
+   * has no separate horizontal topbar.
+   */
+  variant?: 'default' | 'pos';
+  /**
+   * Current-page orientation (§17), e.g. `["Data Master", "Bahan Baku"]`.
+   * Desktop-only — mobile has no room next to the hamburger + logo row, and
+   * the page's own header (§18) already carries the title there.
+   */
+  breadcrumb?: string[];
+  /** Back-office-only dark mode toggle — never passed for POS or shared
+   * routes, so the button structurally cannot render there. */
+  enableDarkMode?: boolean;
+  theme?: Theme;
+  onToggleTheme?: () => void;
 }
 
-export function Topbar({ user, onOpenMobileNav }: TopbarProps) {
+export function Topbar({
+  variant = 'default',
+  breadcrumb,
+  enableDarkMode,
+  theme,
+  onToggleTheme,
+}: TopbarProps) {
+  const { setOpenMobile } = useSidebar();
+
   return (
-    <header className="flex h-[52px] shrink-0 items-center justify-between border-b border-border-default bg-surface-raised px-4 sm:px-6">
+    <header
+      data-testid="topbar"
+      className={
+        variant === 'pos'
+          ? 'flex h-[52px] shrink-0 items-center justify-between border-b border-border-default bg-surface-raised px-4 md:hidden'
+          : 'flex h-[52px] shrink-0 items-center justify-between border-b border-border-default bg-surface-raised px-4 md:px-5 xl:px-6'
+      }
+    >
       <div className="flex items-center gap-3">
-        {/* Mobile menu button */}
+        {/* Below 768px the sidebar is hidden (§41.2) and this is the only way in. */}
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
-          onClick={onOpenMobileNav}
+          onClick={() => setOpenMobile(true)}
           aria-label="Buka menu"
-          className="flex size-8 items-center justify-center rounded-xs text-text-secondary hover:bg-surface-muted hover:text-text-primary md:hidden cursor-pointer"
+          className="flex size-10 items-center justify-center rounded-sm text-text-secondary hover:bg-surface-muted hover:text-text-primary md:hidden"
         >
           <Menu className="size-5" />
         </Button>
 
-        {/* Mobile logo when sidebar is hidden */}
         <Link href="/" className="flex items-center md:hidden">
           <Image
-            src="/logo.svg"
+            src="/logo.png"
             alt="OhMyPos"
             width={110}
             height={30}
@@ -61,35 +69,73 @@ export function Topbar({ user, onOpenMobileNav }: TopbarProps) {
           />
         </Link>
 
-        {/* Desktop / tablet branch label */}
-        <span className="hidden text-sm font-medium text-text-secondary sm:inline-block">
-          {branchLabel(user)}
-        </span>
+        {variant === 'default' && breadcrumb && breadcrumb.length > 0 && (
+          <nav
+            aria-label="Breadcrumb"
+            data-testid="topbar-breadcrumb"
+            className="hidden items-center gap-1.5 text-xs text-text-tertiary md:flex"
+          >
+            {breadcrumb.map((segment, idx) => (
+              <span key={segment} className="flex items-center gap-1.5">
+                {idx > 0 && <span aria-hidden>›</span>}
+                <span
+                  className={
+                    idx === breadcrumb.length - 1
+                      ? 'font-medium text-text-secondary'
+                      : undefined
+                  }
+                >
+                  {segment}
+                </span>
+              </span>
+            ))}
+          </nav>
+        )}
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-2 rounded-sm px-2 py-1 text-sm font-medium text-text-primary hover:bg-surface-strong/60 cursor-pointer min-w-0">
-          <span className="truncate max-w-[90px] sm:max-w-[200px]">
-            {user.name}
-          </span>
-          <span className="shrink-0 text-xs text-text-tertiary">
-            {ROLE_LABEL[user.role]}
-          </span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <Link
-            href="/profile"
-            className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm font-medium text-text-primary hover:bg-surface-strong/60"
+      <div className="hidden items-center gap-2 md:flex">
+        {/* Back-office-only (§8.2 of the current DESIGN.md) — never rendered
+            for POS (`variant='pos'` never reaches this block) or shared
+            routes (`enableDarkMode` is never passed there). */}
+        {variant === 'default' && enableDarkMode && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onToggleTheme}
+            aria-pressed={theme === 'dark'}
+            aria-label={
+              theme === 'dark' ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'
+            }
+            data-testid="topbar-theme-toggle"
+            className="flex size-9 items-center justify-center rounded-sm text-text-secondary hover:bg-surface-muted hover:text-text-primary"
           >
-            <User className="size-4" />
-            Profil Saya
-          </Link>
-          <DropdownMenuSeparator />
-          <LogoutButton />
-        </DropdownMenuContent>
-      </DropdownMenu>
+            {theme === 'dark' ? (
+              <Sun className="size-4" />
+            ) : (
+              <Moon className="size-4" />
+            )}
+          </Button>
+        )}
+
+        {/* Branch context — §17. Back-office data is all-branch by
+            construction: stock and cash are centralized pools with no
+            per-branch balance anywhere in the schema (ADR-004), so this is a
+            statement of fact, not a disabled selector. There is no
+            branch-switch control in v1. */}
+        {variant === 'default' && (
+          <span
+            data-testid="topbar-branch-context"
+            className="inline-flex items-center gap-2 rounded-pill bg-surface-muted px-3 py-1 text-xs font-medium text-text-secondary"
+          >
+            <span
+              aria-hidden
+              className="size-1.5 rounded-pill bg-accent-inflow"
+            />
+            Semua Cabang
+          </span>
+        )}
+      </div>
     </header>
   );
 }

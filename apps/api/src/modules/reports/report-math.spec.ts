@@ -55,7 +55,13 @@ describe('Report math (report-math.ts)', () => {
 
     it('inserts zero rows for days with no income, preserving order', () => {
       const filled = fillDailyGaps(days, [
-        { date: '2025-03-02', income: d('50000.00'), entryCount: 2 },
+        {
+          date: '2025-03-02',
+          income: d('50000.00'),
+          entryCount: 2,
+          cogs: d('20000.00'),
+          operatingExpenses: d('5000.00'),
+        },
       ]);
       expect(filled.map((r) => r.date)).toEqual(days);
       expect(filled.map((r) => r.income.toFixed(2))).toEqual([
@@ -64,12 +70,24 @@ describe('Report math (report-math.ts)', () => {
         '0.00',
       ]);
       expect(filled.map((r) => r.entryCount)).toEqual([0, 2, 0]);
+      expect(filled.map((r) => r.cogs.toFixed(2))).toEqual([
+        '0.00',
+        '20000.00',
+        '0.00',
+      ]);
+      expect(filled.map((r) => r.operatingExpenses.toFixed(2))).toEqual([
+        '0.00',
+        '5000.00',
+        '0.00',
+      ]);
     });
 
     it('returns one row per day even when nothing is present', () => {
       const filled = fillDailyGaps(days, []);
       expect(filled).toHaveLength(3);
       expect(filled.every((r) => r.income.isZero())).toBe(true);
+      expect(filled.every((r) => r.cogs.isZero())).toBe(true);
+      expect(filled.every((r) => r.operatingExpenses.isZero())).toBe(true);
     });
   });
 

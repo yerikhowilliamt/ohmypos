@@ -33,6 +33,7 @@ export function toProductWithHppResponse(
     name: product.name,
     sellPrice: product.sellPrice.toFixed(2),
     isActive: product.isActive,
+    photoUrl: product.photoUrl ?? null,
     hpp: hpp ? hpp.toFixed(2) : null,
     hasRecipe,
     margin: hpp ? product.sellPrice.minus(hpp).toFixed(2) : null,

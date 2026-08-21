@@ -111,6 +111,14 @@ browser_snapshot → baca ref dari yaml output
 browser_click → target: "eXXX" (ref dari snapshot)
 ```
 
+## Lokasi Penyimpanan Screenshot
+
+Setiap kali memanggil tool `playwright_browser_take_screenshot`, simpan file hasil screenshot ke dalam folder **`docs/screenshoots/`** (contoh: `docs/screenshoots/login-attendance-warning.png`).
+
+```
+playwright_browser_take_screenshot → filename: "docs/screenshoots/<nama-file>.png"
+```
+
 ## Verifikasi Otomatis setelah Mutasi
 
 TanStack Query (`queryClient.invalidateQueries`) otomatis memperbarui data

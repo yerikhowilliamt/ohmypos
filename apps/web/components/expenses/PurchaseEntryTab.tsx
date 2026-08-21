@@ -12,6 +12,7 @@ import {
 import { Badge } from '@ohmypos/ui/components/badge';
 import { useSupplierPurchases } from '@/hooks/useExpenses';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import type { SupplierPurchaseResponse } from '@ohmypos/api-contracts';
 import { PurchaseEntryFormDialog } from './PurchaseEntryFormDialog';
 import { CentralBranchTag } from './CentralBranchTag';
@@ -74,6 +75,17 @@ const columns: ColumnDef<SupplierPurchaseResponse>[] = [
   },
 ];
 
+const exportColumns: ExportColumn<SupplierPurchaseResponse>[] = [
+  { header: 'Tanggal', accessor: (row) => new Date(row.purchaseDate) },
+  { header: 'Pemasok', accessor: (row) => row.supplierName },
+  { header: 'Lokasi', accessor: (row) => row.branchId ?? 'Pusat' },
+  {
+    header: 'Status',
+    accessor: (row) => formatPaymentStatus(row.paymentStatus),
+  },
+  { header: 'Total (IDR)', accessor: (row) => Number(row.totalAmount) },
+];
+
 export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [unpaidBanner, setUnpaidBanner] = React.useState<string | null>(null);
@@ -93,7 +105,7 @@ export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
           </h2>
           <p className="text-xs text-text-secondary">
             Stok bertambah segera; pengeluaran hanya tercatat jika dibayar
-            langsung (ADR-006).
+            langsung.
           </p>
         </div>
         <Button
@@ -132,6 +144,8 @@ export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
         data={purchases}
         isLoading={isLoading}
         emptyMessage="Belum ada pembelian tercatat."
+        exportColumns={exportColumns}
+        exportFilename={`pembelian-bahan-baku_${new Date().toISOString().slice(0, 10)}.xlsx`}
       />
 
       <PurchaseEntryFormDialog

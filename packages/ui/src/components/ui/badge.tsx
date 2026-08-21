@@ -3,11 +3,12 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@ohmypos/ui/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-pill border px-2.5 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-focus-ring',
+  'inline-flex items-center rounded-xs border px-2 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-focus-ring',
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-brand-primary text-white',
+        default:
+          'border-border-gold bg-brand-primary-soft text-text-primary font-semibold',
         secondary: 'border-transparent bg-surface-dark text-white',
         destructive: 'border-transparent bg-status-danger text-white',
         outline: 'border-border-default text-text-primary bg-surface-raised',

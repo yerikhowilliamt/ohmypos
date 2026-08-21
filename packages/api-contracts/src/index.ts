@@ -19,6 +19,8 @@ export * from './allocation.schema';
 export * from './matching.schema';
 export * from './reconciliation.schema';
 export * from './user.schema';
+export * from './device.schema';
+export * from './leave-request.schema';
 export * from './auth.schema';
 export * from './raw-material.schema';
 export * from './product.schema';

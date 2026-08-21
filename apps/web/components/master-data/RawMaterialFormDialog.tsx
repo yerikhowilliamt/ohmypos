@@ -111,16 +111,15 @@ export function RawMaterialFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-120">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <DialogHeader>
             <DialogTitle>
               {isEdit ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}
             </DialogTitle>
             <DialogDescription>
-              {isEdit
-                ? 'Perbarui informasi bahan baku atau biaya per unit.'
-                : 'Daftarkan bahan baku baru yang digunakan dalam resep atau inventaris.'}
+              Isi data bahan mentah atau bahan baku yang digunakan untuk resep
+              menu.
             </DialogDescription>
           </DialogHeader>
 

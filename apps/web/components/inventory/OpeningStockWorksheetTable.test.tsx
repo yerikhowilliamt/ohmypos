@@ -72,7 +72,7 @@ describe('OpeningStockWorksheetTable component', () => {
     expect(susuPriceInput).toHaveValue('20.000'); // prefilled with currentUnitCost
   });
 
-  it('pre-fills declaredQuantity when present, or carryForwardQuantity as default', () => {
+  it('pre-fills declaredQuantity when present, and leaves empty with carryForwardQuantity as placeholder', () => {
     render(
       <OpeningStockWorksheetTable
         periodMonth="2026-08"
@@ -84,8 +84,9 @@ describe('OpeningStockWorksheetTable component', () => {
     const kopiQtyInput = screen.getByLabelText('Stok fisik Biji Kopi Arabika');
     const susuQtyInput = screen.getByLabelText('Stok fisik Susu UHT Fresh');
 
-    expect(kopiQtyInput).toHaveValue('12.0000'); // from declaredQuantity
-    expect(susuQtyInput).toHaveValue('5.0000'); // fallback to carryForwardQuantity
+    expect(kopiQtyInput).toHaveValue('12'); // formatted without trailing .0000
+    expect(susuQtyInput).toHaveValue(''); // no default value, only placeholder
+    expect(susuQtyInput).toHaveAttribute('placeholder', '5'); // placeholder from carryForwardQuantity
   });
 
   it('submits valid form data correctly on save button click', async () => {
@@ -115,7 +116,7 @@ describe('OpeningStockWorksheetTable component', () => {
         entries: [
           {
             rawMaterialId: '11111111-1111-4111-8111-111111111111',
-            quantity: '12.0000',
+            quantity: '12',
             unitPrice: undefined,
           },
           {

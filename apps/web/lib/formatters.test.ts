@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatCurrency,
   formatQuantity,
+  formatLongDate,
   formatMarginPercentage,
   formatPercent,
   formatThousands,
@@ -105,6 +106,22 @@ describe('formatters', () => {
       expect(unformatThousands('20000')).toBe('20000');
       expect(unformatThousands('')).toBe('');
       expect(unformatThousands(null)).toBe('');
+    });
+  });
+
+  describe('formatLongDate', () => {
+    it('formats an instant as the Indonesian long date in WIB', () => {
+      // 2026-08-20T02:00:00Z is 09:00 on 20 August in Jakarta (UTC+7).
+      expect(formatLongDate(new Date('2026-08-20T02:00:00.000Z'))).toBe(
+        'Kamis, 20 Agustus 2026',
+      );
+    });
+
+    it('uses the Jakarta day, not UTC, across the date boundary', () => {
+      // 2026-08-19T18:00:00Z is already 01:00 on 20 August in Jakarta.
+      expect(formatLongDate(new Date('2026-08-19T18:00:00.000Z'))).toBe(
+        'Kamis, 20 Agustus 2026',
+      );
     });
   });
 });

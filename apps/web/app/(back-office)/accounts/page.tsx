@@ -4,7 +4,7 @@ import { AccountsClient } from './AccountsClient';
 
 export const metadata: Metadata = {
   title: 'Metode Pembayaran — OhMyPos',
-  description: 'Kelola daftar metode pembayaran kas dan bank',
+  description: 'Daftar rekening bank dan kas toko',
 };
 
 export default async function AccountsPage() {

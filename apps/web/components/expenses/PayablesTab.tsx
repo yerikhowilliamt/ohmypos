@@ -14,7 +14,21 @@ import {
 import type { PayableResponse } from '@ohmypos/api-contracts';
 import { usePayables, usePayablesSummary } from '@/hooks/useExpenses';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type { ExportColumn } from '@/lib/export';
 import { PayableSettlementDialog } from './PayableSettlementDialog';
+
+const exportColumns: ExportColumn<PayableResponse>[] = [
+  { header: 'Pemasok', accessor: (row) => row.supplierName },
+  {
+    header: 'Jumlah Awal (IDR)',
+    accessor: (row) => Number(row.originalAmount),
+  },
+  {
+    header: 'Sisa Utang (IDR)',
+    accessor: (row) => Number(row.remainingBalance),
+  },
+  { header: 'Status', accessor: (row) => formatPayableStatus(row.status) },
+];
 
 /** PayableStatus and PaymentStatus share the same three-tier semantics
  * (open/partial/settled vs unpaid/partial/paid) — the shared badge palette
@@ -168,6 +182,8 @@ export function PayablesTab() {
         data={payables}
         isLoading={isLoading}
         emptyMessage="Belum ada utang tercatat."
+        exportColumns={exportColumns}
+        exportFilename={`utang-pemasok_${new Date().toISOString().slice(0, 10)}.xlsx`}
       />
 
       <PayableSettlementDialog

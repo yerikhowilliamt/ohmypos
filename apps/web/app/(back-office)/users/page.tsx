@@ -4,7 +4,7 @@ import { UsersClient } from './UsersClient';
 
 export const metadata: Metadata = {
   title: 'Pengguna — OhMyPos',
-  description: 'Kelola akun staf dan peran akses',
+  description: 'Kelola akun staf, kasir, dan hak akses pengguna',
 };
 
 export default async function Page() {

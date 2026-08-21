@@ -3,13 +3,10 @@ import { PosScreen } from '@/components/pos/PosScreen';
 import { getSession } from '@/lib/session';
 
 /**
- * POS / Sales Entry (PRD §5.2, DESIGN.md §20). The only route a KASIR can reach —
- * `(pos)/layout.tsx` already gates the role; this page resolves the session again
- * only to read `branchId`, which `CreateSaleSchema` requires and which must come
- * from the server, never from client state.
- *
- * `AppShell` supplies the `<main>` wrapper and the sidebar, so this renders the
- * two remaining zones directly.
+ * POS / Sales Entry (PRD §5.2, DESIGN.md §20).
+ * Accessible by KASIR and OWNER. For KASIR, user.branchId is required — it is
+ * their only branch. OWNER has no fixed branch (ADR-011: unscoped, all-branch
+ * access); PosScreen renders a branch picker for them instead.
  */
 export default async function SalesPage() {
   const user = await getSession();
@@ -18,10 +15,10 @@ export default async function SalesPage() {
     redirect('/login');
   }
 
-  // ADR-011 §2: `branchId` is required when `role = KASIR` and null otherwise.
+  // ADR-011 §2: `branchId` is required when `role = KASIR`.
   // A KASIR without one cannot record a sale — `BranchScopeGuard` would reject
   // every attempt — so this fails loudly here rather than at submit time.
-  if (!user.branchId) {
+  if (!user.branchId && user.role === 'KASIR') {
     return (
       <div
         role="alert"
@@ -33,5 +30,5 @@ export default async function SalesPage() {
     );
   }
 
-  return <PosScreen branchId={user.branchId} />;
+  return <PosScreen branchId={user.branchId ?? null} role={user.role} />;
 }

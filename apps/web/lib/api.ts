@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4013/api/v1';
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4015/api/v1';
 
 /** Thrown by `apiFetch` for any non-2xx response; carries the HTTP status so
  * callers — and the refresh-on-401 logic below — can branch on it.
@@ -23,8 +23,9 @@ async function doFetch<T>(path: string, init?: RequestInit): Promise<T> {
   // A FormData body must NOT carry an explicit Content-Type: the browser has to
   // set `multipart/form-data; boundary=…` itself, and an explicit header would
   // omit the boundary and make the request unparseable server-side. The only
-  // caller today is the bank-statement CSV import (POST /import/csv/:accountId,
-  // PRD §5.7); every other call site is JSON and keeps its previous behaviour.
+  // callers today are the bank-statement imports (POST /import/csv/:accountId
+  // and /import/pdf/:accountId, PRD §5.7); every other call site is JSON and
+  // keeps its previous behaviour.
   const isFormData =
     typeof FormData !== 'undefined' && init?.body instanceof FormData;
 

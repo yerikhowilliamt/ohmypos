@@ -3,12 +3,6 @@
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { BarChart3 } from 'lucide-react';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@ohmypos/ui/components/tabs';
 import { useBranches } from '@/hooks/useExpenses';
 import {
   useDailyIncome,
@@ -24,16 +18,16 @@ import { IncomeByPaymentMethodView } from './IncomeByPaymentMethodView';
 import { TopProductsView } from './TopProductsView';
 import { DailyIncomeView } from './DailyIncomeView';
 
-const TABS = [
-  { id: 'profit-loss', label: 'Laba Rugi' },
-  { id: 'product-profit', label: 'Laba per Produk' },
-  { id: 'income-by-payment-method', label: 'Pendapatan per Metode Bayar' },
-  { id: 'top-products', label: '10 Produk Terlaris' },
-  { id: 'daily-income', label: 'Pendapatan Harian' },
-] as const;
-type TabId = (typeof TABS)[number]['id'];
-const DEFAULT_TAB: TabId = 'profit-loss';
-const TAB_IDS = TABS.map((t) => t.id);
+type TabId =
+  | 'profit-loss'
+  | 'product-profit'
+  | 'income-by-payment-method'
+  | 'top-products'
+  | 'daily-income';
+
+interface ReportsClientProps {
+  forcedTab?: TabId;
+}
 
 /**
  * Local calendar date as `YYYY-MM-DD` — NOT `date.toISOString().slice(0, 10)`,
@@ -55,13 +49,36 @@ function getDefaultRange(): { startDate: string; endDate: string } {
   return { startDate: toIsoDate(firstOfMonth), endDate: toIsoDate(now) };
 }
 
+const REPORT_TITLES: Record<TabId, { title: string; desc: string }> = {
+  'profit-loss': {
+    title: 'Laba Rugi',
+    desc: 'Pantau laporan laba rugi, pendapatan harian, dan analisis produk terlaris.',
+  },
+  'product-profit': {
+    title: 'Laba per Produk',
+    desc: 'Laporan keuntungan dan margin laba per menu produk',
+  },
+  'income-by-payment-method': {
+    title: 'Pendapatan per Metode Bayar',
+    desc: 'Laporan pendapatan berdasarkan metode pembayaran yang digunakan',
+  },
+  'top-products': {
+    title: '10 Produk Terlaris',
+    desc: 'Daftar menu produk paling laris dan kontribusi keuntungannya',
+  },
+  'daily-income': {
+    title: 'Pendapatan Harian',
+    desc: 'Laporan rincian pendapatan harian per metode pembayaran',
+  },
+};
+
 /**
  * Dashboard 3 (PRD §5.4) — OWNER-only reports, all backed by the read-only
  * Phase 7 endpoints (ADR-008: computed at query time, nothing recomputed
- * here). One shared filter bar drives all five tabs; only the active tab's
- * query is enabled so switching tabs doesn't fire five requests at once.
+ * here). One shared filter bar drives all views; only the active tab's
+ * query is enabled so switching pages doesn't fire five requests at once.
  */
-export function ReportsClient() {
+export function ReportsClient({ forcedTab }: ReportsClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -70,10 +87,16 @@ export function ReportsClient() {
   const startDate = searchParams.get('startDate') || defaultRange.startDate;
   const endDate = searchParams.get('endDate') || defaultRange.endDate;
   const branchId = searchParams.get('branchId') || undefined;
-  const rawTab = searchParams.get('tab');
-  const activeTab: TabId = (TAB_IDS as readonly string[]).includes(rawTab ?? '')
-    ? (rawTab as TabId)
-    : DEFAULT_TAB;
+
+  const activeTab: TabId = React.useMemo(() => {
+    if (forcedTab) return forcedTab;
+    if (pathname.includes('/product-profit')) return 'product-profit';
+    if (pathname.includes('/payment-methods'))
+      return 'income-by-payment-method';
+    if (pathname.includes('/top-products')) return 'top-products';
+    if (pathname.includes('/daily')) return 'daily-income';
+    return 'profit-loss';
+  }, [forcedTab, pathname]);
 
   const updateParams = React.useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -121,11 +144,10 @@ export function ReportsClient() {
         <BarChart3 className="size-6 text-brand-primary" />
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-text-primary">
-            Laporan
+            {REPORT_TITLES[activeTab].title}
           </h1>
           <p className="text-sm text-text-secondary">
-            Laba rugi, penjualan, dan arus kas — terkonsolidasi per rentang
-            tanggal dan cabang.
+            {REPORT_TITLES[activeTab].desc}
           </p>
         </div>
       </div>
@@ -140,55 +162,40 @@ export function ReportsClient() {
         onBranchChange={(value) => updateParams({ branchId: value })}
       />
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => updateParams({ tab: value })}
-      >
-        <div className="overflow-x-auto">
-          <TabsList className="w-max">
-            {TABS.map((tab) => (
-              <TabsTrigger key={tab.id} value={tab.id} className="shrink-0">
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
+      {activeTab === 'profit-loss' && (
+        <ProfitLossView
+          data={profitLoss.data}
+          isLoading={profitLoss.isLoading}
+        />
+      )}
 
-        <TabsContent value="profit-loss">
-          <ProfitLossView
-            data={profitLoss.data}
-            isLoading={profitLoss.isLoading}
-          />
-        </TabsContent>
+      {activeTab === 'product-profit' && (
+        <ProductProfitView
+          data={productProfit.data}
+          isLoading={productProfit.isLoading}
+        />
+      )}
 
-        <TabsContent value="product-profit">
-          <ProductProfitView
-            data={productProfit.data}
-            isLoading={productProfit.isLoading}
-          />
-        </TabsContent>
+      {activeTab === 'income-by-payment-method' && (
+        <IncomeByPaymentMethodView
+          data={incomeByPaymentMethod.data}
+          isLoading={incomeByPaymentMethod.isLoading}
+        />
+      )}
 
-        <TabsContent value="income-by-payment-method">
-          <IncomeByPaymentMethodView
-            data={incomeByPaymentMethod.data}
-            isLoading={incomeByPaymentMethod.isLoading}
-          />
-        </TabsContent>
+      {activeTab === 'top-products' && (
+        <TopProductsView
+          filters={filters}
+          enabled={isRangeValid && activeTab === 'top-products'}
+        />
+      )}
 
-        <TabsContent value="top-products">
-          <TopProductsView
-            filters={filters}
-            enabled={isRangeValid && activeTab === 'top-products'}
-          />
-        </TabsContent>
-
-        <TabsContent value="daily-income">
-          <DailyIncomeView
-            data={dailyIncome.data}
-            isLoading={dailyIncome.isLoading}
-          />
-        </TabsContent>
-      </Tabs>
+      {activeTab === 'daily-income' && (
+        <DailyIncomeView
+          data={dailyIncome.data}
+          isLoading={dailyIncome.isLoading}
+        />
+      )}
     </div>
   );
 }

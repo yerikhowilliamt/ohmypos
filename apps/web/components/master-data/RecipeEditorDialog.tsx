@@ -109,9 +109,15 @@ export function RecipeEditorDialog({
     if (!product) return;
     setServerError(null);
     try {
+      const sanitizedValues: ReplaceRecipe = {
+        items: values.items.map((item) => ({
+          rawMaterialId: item.rawMaterialId,
+          quantityUsed: String(item.quantityUsed).trim().replace(',', '.'),
+        })),
+      };
       await replaceRecipeMutation.mutateAsync({
         productId: product.id,
-        data: values,
+        data: sanitizedValues,
       });
       onOpenChange(false);
     } catch (error) {
@@ -127,7 +133,7 @@ export function RecipeEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[620px] max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-155 max-h-[90vh] flex flex-col">
         <form
           onSubmit={handleSubmit(onSubmit)}
           noValidate
@@ -139,8 +145,11 @@ export function RecipeEditorDialog({
                 <ChefHat className="size-5 text-white" />
               </div>
               <div>
-                <DialogTitle>Resep / Komposisi (BOM)</DialogTitle>
+                <DialogTitle>Resep & Takaran Menu</DialogTitle>
                 <DialogDescription>
+                  Tentukan takaran bahan baku yang terpakai otomatis setiap
+                  produk ini terjual.
+                  <br />
                   Produk:{' '}
                   <span className="font-semibold text-text-primary">
                     {product?.name}
@@ -200,7 +209,7 @@ export function RecipeEditorDialog({
           <div className="my-4 flex-1 overflow-y-auto pr-1 space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                Daftar Bahan Baku Digunakan
+                Bahan Baku yang Digunakan
               </Label>
               <Button
                 type="button"
@@ -257,108 +266,110 @@ export function RecipeEditorDialog({
                       data-testid={`recipe-row-${index}`}
                       className="rounded-sm border border-border-default bg-surface-raised p-3 shadow-1 space-y-2"
                     >
-                      <div className="grid grid-cols-12 gap-2 items-start">
-                        {/* Raw Material Select */}
-                        <div className="col-span-12 sm:col-span-8 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <Label
-                              htmlFor={`items.${index}.rawMaterialId`}
-                              className="text-[11px] font-medium text-text-secondary"
-                            >
-                              Bahan Baku #{index + 1}
-                            </Label>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              data-testid={`remove-ingredient-btn-${index}`}
-                              title="Hapus baris bahan"
-                              onClick={() => remove(index)}
-                              className="size-6 text-status-danger hover:bg-status-danger/10"
-                            >
-                              <Trash2 className="size-4" />
-                              <span className="sr-only">Hapus baris</span>
-                            </Button>
-                          </div>
-                          <Controller
-                            control={control}
-                            name={`items.${index}.rawMaterialId`}
-                            render={({ field: selectField }) => (
-                              <Select
-                                value={selectField.value}
-                                onValueChange={selectField.onChange}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="grid grid-cols-12 gap-2 items-start">
+                          {/* Raw Material Select */}
+                          <div className="col-span-12 sm:col-span-8 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <Label
+                                htmlFor={`items.${index}.rawMaterialId`}
+                                className="text-[11px] font-medium text-text-secondary"
                               >
-                                <SelectTrigger
-                                  id={`items.${index}.rawMaterialId`}
-                                  data-testid={`raw-material-select-${index}`}
-                                  aria-invalid={Boolean(
-                                    rowError?.rawMaterialId,
-                                  )}
-                                  className="h-9 text-sm"
+                                Bahan Baku #{index + 1}
+                              </Label>
+                            </div>
+                            <Controller
+                              control={control}
+                              name={`items.${index}.rawMaterialId`}
+                              render={({ field: selectField }) => (
+                                <Select
+                                  value={selectField.value}
+                                  onValueChange={selectField.onChange}
                                 >
-                                  <SelectValue placeholder="-- Pilih Bahan Baku --" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {rawMaterials.map((rm) => (
-                                    <SelectItem key={rm.id} value={rm.id}>
-                                      {rm.name} ({rm.unit}) —{' '}
-                                      {formatCurrency(rm.unitCost)}/{rm.unit}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
-                          {rowError?.rawMaterialId && (
-                            <p
-                              role="alert"
-                              className="text-[11px] text-status-danger"
-                            >
-                              {rowError.rawMaterialId.message}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Quantity Input */}
-                        <div className="col-span-12 sm:col-span-4 space-y-1">
-                          <Label
-                            htmlFor={`items.${index}.quantityUsed`}
-                            className="text-[11px] font-medium text-text-secondary block"
-                          >
-                            Takaran per Porsi{' '}
-                            {selectedRm ? `(${selectedRm.unit})` : ''}
-                          </Label>
-                          <div className="relative">
-                            <Input
-                              id={`items.${index}.quantityUsed`}
-                              data-testid={`quantity-input-${index}`}
-                              type="text"
-                              inputMode="decimal"
-                              placeholder={
-                                selectedRm?.unit === 'kg' ||
-                                selectedRm?.unit === 'liter'
-                                  ? '0.025'
-                                  : '1'
-                              }
-                              className="numeric font-mono h-9 pr-12 text-sm"
-                              aria-invalid={Boolean(rowError?.quantityUsed)}
-                              {...register(`items.${index}.quantityUsed`)}
+                                  <SelectTrigger
+                                    id={`items.${index}.rawMaterialId`}
+                                    data-testid={`raw-material-select-${index}`}
+                                    aria-invalid={Boolean(
+                                      rowError?.rawMaterialId,
+                                    )}
+                                    className="h-9 text-sm"
+                                  >
+                                    <SelectValue placeholder="-- Pilih Bahan Baku --" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {rawMaterials.map((rm) => (
+                                      <SelectItem key={rm.id} value={rm.id}>
+                                        {rm.name} ({rm.unit}) —{' '}
+                                        {formatCurrency(rm.unitCost)}/{rm.unit}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
                             />
-                            {selectedRm && (
-                              <span className="absolute right-2.5 top-2 text-xs font-mono text-text-tertiary">
-                                {selectedRm.unit}
-                              </span>
+                            {rowError?.rawMaterialId && (
+                              <p
+                                role="alert"
+                                className="text-[11px] text-status-danger"
+                              >
+                                {rowError.rawMaterialId.message}
+                              </p>
                             )}
                           </div>
-                          {rowError?.quantityUsed && (
-                            <p
-                              role="alert"
-                              className="text-[11px] text-status-danger"
+
+                          {/* Quantity Input */}
+                          <div className="col-span-12 sm:col-span-4 space-y-1">
+                            <Label
+                              htmlFor={`items.${index}.quantityUsed`}
+                              className="text-[11px] font-medium text-text-secondary block"
                             >
-                              {rowError.quantityUsed.message}
-                            </p>
-                          )}
+                              Takaran per Porsi{' '}
+                              {selectedRm ? `(${selectedRm.unit})` : ''}
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                id={`items.${index}.quantityUsed`}
+                                data-testid={`quantity-input-${index}`}
+                                type="text"
+                                inputMode="decimal"
+                                placeholder={
+                                  selectedRm?.unit === 'kg' ||
+                                  selectedRm?.unit === 'liter'
+                                    ? '0.025'
+                                    : '1'
+                                }
+                                className="numeric font-mono h-9 pr-12 text-sm placeholder:text-text-primary/35"
+                                aria-invalid={Boolean(rowError?.quantityUsed)}
+                                {...register(`items.${index}.quantityUsed`)}
+                              />
+                              {selectedRm && (
+                                <span className="absolute right-2.5 top-2 text-xs font-mono text-text-tertiary">
+                                  {selectedRm.unit}
+                                </span>
+                              )}
+                            </div>
+                            {rowError?.quantityUsed && (
+                              <p
+                                role="alert"
+                                className="text-[11px] text-status-danger"
+                              >
+                                {rowError.quantityUsed.message}
+                              </p>
+                            )}
+                          </div>
                         </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          data-testid={`remove-ingredient-btn-${index}`}
+                          title="Hapus baris bahan"
+                          onClick={() => remove(index)}
+                          className="size-4 text-status-danger hover:bg-status-danger/10"
+                        >
+                          <Trash2 className="size-4" />
+                          <span className="sr-only">Hapus baris</span>
+                        </Button>
                       </div>
                     </div>
                   );

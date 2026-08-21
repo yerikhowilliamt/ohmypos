@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Image as ImageIcon, Upload } from 'lucide-react';
 import {
   CreateProductSchema,
   type CreateProduct,
@@ -21,8 +22,13 @@ import { Input } from '@ohmypos/ui/components/input';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
 import { Label } from '@ohmypos/ui/components/label';
 import { Checkbox } from '@ohmypos/ui/components/checkbox';
-import { useCreateProduct, useUpdateProduct } from '@/hooks/useMasterData';
+import {
+  useCreateProduct,
+  useUpdateProduct,
+  useUploadProductPhoto,
+} from '@/hooks/useMasterData';
 import { formatCurrency, formatMarginPercentage } from '@/lib/formatters';
+import Image from 'next/image';
 
 interface ProductFormDialogProps {
   open: boolean;
@@ -37,9 +43,13 @@ export function ProductFormDialog({
 }: ProductFormDialogProps) {
   const isEdit = Boolean(product);
   const [serverError, setServerError] = React.useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
+  const uploadPhotoMutation = useUploadProductPhoto();
 
   const {
     register,
@@ -77,21 +87,41 @@ export function ProductFormDialog({
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       setServerError(null);
+      setSelectedFile(null);
+      setPhotoPreview(null);
     }
     onOpenChange(newOpen);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    const url = URL.createObjectURL(file);
+    setPhotoPreview(url);
   };
 
   const onSubmit = async (values: CreateProduct) => {
     setServerError(null);
     try {
+      let targetProductId = product?.id;
       if (isEdit && product) {
         await updateMutation.mutateAsync({
           id: product.id,
           data: values,
         });
       } else {
-        await createMutation.mutateAsync(values);
+        const created = await createMutation.mutateAsync(values);
+        targetProductId = created.id;
       }
+
+      if (selectedFile && targetProductId) {
+        await uploadPhotoMutation.mutateAsync({
+          id: targetProductId,
+          file: selectedFile,
+        });
+      }
+
       onOpenChange(false);
     } catch (error) {
       setServerError(
@@ -103,7 +133,12 @@ export function ProductFormDialog({
   };
 
   const isPending =
-    isSubmitting || createMutation.isPending || updateMutation.isPending;
+    isSubmitting ||
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    uploadPhotoMutation.isPending;
+
+  const currentPhoto = photoPreview ?? product?.photoUrl;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -114,13 +149,53 @@ export function ProductFormDialog({
               {isEdit ? 'Edit Produk' : 'Tambah Produk Baru'}
             </DialogTitle>
             <DialogDescription>
-              {isEdit
-                ? 'Perbarui nama, harga jual, atau status aktif produk.'
-                : 'Daftarkan menu atau produk baru untuk dijual di kasir/POS.'}
+              Isi rincian produk menu yang akan dijual di kasir.
             </DialogDescription>
           </DialogHeader>
 
           <div className="mt-4 space-y-4">
+            {/* Product Photo Upload Field */}
+            <div className="space-y-1.5">
+              <Label>Foto Produk</Label>
+              <div className="flex items-center gap-4">
+                <div className="relative size-20 shrink-0 overflow-hidden rounded-md border border-border-default bg-surface-muted flex items-center justify-center">
+                  {currentPhoto ? (
+                    <Image
+                      src={currentPhoto}
+                      alt="Preview"
+                      className="size-full object-cover"
+                      width={80}
+                      height={80}
+                    />
+                  ) : (
+                    <ImageIcon className="size-8 text-text-tertiary" />
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="default"
+                    className="gap-1.5"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="size-3.5" />
+                    {currentPhoto ? 'Ganti Foto' : 'Pilih Foto'}
+                  </Button>
+                  <p className="text-[11px] text-text-tertiary">
+                    Format: JPG, PNG, WebP (Maks 5MB)
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="product-name">Nama Produk / Menu</Label>
               <Input

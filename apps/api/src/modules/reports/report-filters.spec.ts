@@ -6,7 +6,12 @@
  * (not `AND TRUE`) when no branch is filtered.
  */
 import { resolveReportRange } from '../../common/period';
-import { ledgerScope, saleScope, wibDayOfEntryDate } from './report-filters';
+import {
+  ledgerScope,
+  saleScope,
+  wibDayOfEntryDate,
+  wibDayOfSoldAt,
+} from './report-filters';
 
 describe('Report SQL fragments (report-filters.ts)', () => {
   const range = resolveReportRange('2025-03-01', '2025-03-31');
@@ -42,6 +47,15 @@ describe('Report SQL fragments (report-filters.ts)', () => {
     // Two conversions: one out of the naive-UTC column, one into WIB.
     expect(sql.sql.match(/AT TIME ZONE/g)).toHaveLength(2);
     expect(sql.sql).toContain(`'UTC'`);
+    expect(sql.sql).toContain('to_char');
+    expect(sql.values).toEqual(['Asia/Jakarta']);
+  });
+
+  it('buckets by the sale date, not the ledger entry date', () => {
+    const sql = wibDayOfSoldAt();
+    expect(sql.sql.match(/AT TIME ZONE/g)).toHaveLength(2);
+    expect(sql.sql).toContain('s.sold_at');
+    expect(sql.sql).not.toContain('le.entry_date');
     expect(sql.sql).toContain('to_char');
     expect(sql.values).toEqual(['Asia/Jakarta']);
   });

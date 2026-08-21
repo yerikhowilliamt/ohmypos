@@ -120,9 +120,8 @@ export function AccountFormDialog({
               {isEdit ? 'Edit Metode Pembayaran' : 'Tambah Metode Pembayaran'}
             </DialogTitle>
             <DialogDescription>
-              {isEdit
-                ? 'Perbarui data akun kas & bank atau metode pembayaran.'
-                : 'Daftarkan akun kas, e-wallet/QRIS, atau bank baru.'}
+              Tambah rekening bank atau kas tunai untuk mencatat aliran uang
+              masuk dan keluar.
             </DialogDescription>
           </DialogHeader>
 

@@ -17,6 +17,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Download,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -30,6 +31,8 @@ import {
 import { Input } from '@ohmypos/ui/components/input';
 import { Button } from '@ohmypos/ui/components/button';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
+import { cn } from '@ohmypos/ui/lib/utils';
+import { exportRowsToXlsx, type ExportColumn } from '@/lib/export';
 
 /**
  * OhMyPos data table (shadcn pattern over @tanstack/react-table + @ohmypos/ui
@@ -96,6 +99,55 @@ interface DataTableProps<TData, TValue> {
   searchLabel?: string;
   emptyMessage?: string;
   emptyDescription?: string;
+  /** Raw-value column spec for the Export button — parallel to `columns` but
+   * without JSX cells, since a spreadsheet needs plain string/number/Date
+   * values. Only rendered when both this and `exportFilename` are set. */
+  exportColumns?: ExportColumn<TData>[];
+  exportFilename?: string;
+  /**
+   * DESIGN.md §41.4: the identifying column stays pinned while the table
+   * scrolls horizontally. On by default — it is a general backoffice rule, not
+   * a per-table choice. Pass `false` for a table whose first column is not the
+   * identifier (none today).
+   */
+  stickyFirstColumn?: boolean;
+}
+
+function ExportButton<TData>({
+  table,
+  exportColumns,
+  exportFilename,
+}: {
+  table: ReturnType<typeof useReactTable<TData>>;
+  exportColumns: ExportColumn<TData>[];
+  exportFilename: string;
+}) {
+  const [isExporting, setIsExporting] = React.useState(false);
+  const rowCount = table.getFilteredRowModel().rows.length;
+
+  const handleExport = React.useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const rows = table.getFilteredRowModel().rows.map((row) => row.original);
+      await exportRowsToXlsx(exportFilename, exportColumns, rows);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [table, exportColumns, exportFilename]);
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="default"
+      onClick={handleExport}
+      disabled={rowCount === 0 || isExporting}
+      className="h-6"
+    >
+      <Download className="size-4" />
+      Export
+    </Button>
+  );
 }
 
 /** Reads `meta.align` from a column definition; columns opt into alignment. */
@@ -106,6 +158,24 @@ function getColumnAlign(
   if (align === 'right') return 'text-right';
   if (align === 'center') return 'text-center';
   return undefined;
+}
+
+/**
+ * The pinned first column (DESIGN.md §41.4). A sticky cell needs its own opaque
+ * background or the scrolled content shows through it, and it needs to track
+ * the row's hover state or the pinned cell visibly desyncs from its row — hence
+ * the `[tr:hover_&]` arbitrary variant rather than inheriting `hover:` from the
+ * row. The right-edge shadow only appears once the container is actually
+ * scrolled, via `left-0` against the container's own scroll position.
+ */
+function stickyCellClass(
+  isFirst: boolean,
+  isHeader: boolean,
+): string | undefined {
+  if (!isFirst) return undefined;
+  return isHeader
+    ? 'sticky left-0 z-20 bg-surface-muted'
+    : 'sticky left-0 z-10 bg-surface-raised [tr:hover_&]:bg-surface-muted';
 }
 
 /** Sortable column header (DESIGN.md §28) — click toggles asc/desc. */
@@ -146,6 +216,9 @@ export function DataTable<TData, TValue>({
   searchLabel,
   emptyMessage = 'Tidak ada data',
   emptyDescription,
+  exportColumns,
+  exportFilename,
+  stickyFirstColumn = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -168,17 +241,30 @@ export function DataTable<TData, TValue>({
   const hasActiveFilters = columnFilters.some(
     (f) => f.value !== '' && f.value !== undefined,
   );
+  const canExport = Boolean(exportColumns && exportFilename);
+  const hasSearch = Boolean(searchColumns && searchColumns.length > 0);
 
   return (
     <div className="rounded-md border border-border-default bg-surface-raised overflow-hidden">
-      {searchColumns && searchColumns.length > 0 && (
-        <div className="p-4 border-b border-border-default">
-          <DataTableToolbar
-            table={table}
-            searchColumns={searchColumns}
-            searchPlaceholder={searchPlaceholder}
-            searchLabel={searchLabel}
-          />
+      {(hasSearch || canExport) && (
+        <div className="p-4 border-b border-border-default flex items-center justify-between gap-3">
+          {hasSearch ? (
+            <DataTableToolbar
+              table={table}
+              searchColumns={searchColumns}
+              searchPlaceholder={searchPlaceholder}
+              searchLabel={searchLabel}
+            />
+          ) : (
+            <div />
+          )}
+          {canExport && exportColumns && exportFilename && (
+            <ExportButton
+              table={table}
+              exportColumns={exportColumns}
+              exportFilename={exportFilename}
+            />
+          )}
         </div>
       )}
 
@@ -210,7 +296,16 @@ export function DataTable<TData, TValue>({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={getColumnAlign(header.column.columnDef.meta)}
+                    data-sticky={
+                      stickyFirstColumn && header.index === 0
+                        ? 'true'
+                        : undefined
+                    }
+                    className={cn(
+                      getColumnAlign(header.column.columnDef.meta),
+                      stickyFirstColumn &&
+                        stickyCellClass(header.index === 0, true),
+                    )}
                   >
                     {header.isPlaceholder
                       ? null
@@ -229,10 +324,16 @@ export function DataTable<TData, TValue>({
                 key={row.id}
                 data-state={row.getIsSelected() && 'selected'}
               >
-                {row.getVisibleCells().map((cell) => (
+                {row.getVisibleCells().map((cell, index) => (
                   <TableCell
                     key={cell.id}
-                    className={getColumnAlign(cell.column.columnDef.meta)}
+                    data-sticky={
+                      stickyFirstColumn && index === 0 ? 'true' : undefined
+                    }
+                    className={cn(
+                      getColumnAlign(cell.column.columnDef.meta),
+                      stickyFirstColumn && stickyCellClass(index === 0, false),
+                    )}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>

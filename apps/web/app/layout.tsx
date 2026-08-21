@@ -1,10 +1,21 @@
 import type { Metadata } from 'next';
-import { JetBrains_Mono, Plus_Jakarta_Sans } from 'next/font/google';
+import {
+  Cormorant_Garamond,
+  JetBrains_Mono,
+  Plus_Jakarta_Sans,
+} from 'next/font/google';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import './globals.css';
 
-// DESIGN.md: Plus Jakarta Sans for all UI text, JetBrains Mono for every
+// DESIGN.md: Cormorant Garamond for luxury display/brand headings,
+// Plus Jakarta Sans for all UI text, JetBrains Mono for every
 // numeric/tabular value (prices, HPP, stock quantities, totals).
+const cormorantGaramond = Cormorant_Garamond({
+  variable: '--font-cormorant-garamond',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+});
+
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: '--font-plus-jakarta',
   subsets: ['latin'],
@@ -71,7 +82,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html
       lang="id"
-      className={`${plusJakartaSans.variable} ${jetBrainsMono.variable} h-full antialiased`}
+      className={`${cormorantGaramond.variable} ${plusJakartaSans.variable} ${jetBrainsMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <QueryProvider>{children}</QueryProvider>

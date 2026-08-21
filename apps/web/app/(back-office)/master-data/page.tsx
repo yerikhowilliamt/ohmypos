@@ -3,16 +3,16 @@ import { requireRole } from '@/lib/session';
 import { MasterDataClient } from './MasterDataClient';
 
 export const metadata: Metadata = {
-  title: 'Data Master — OhMyPos',
-  description: 'Kelola data produk, resep, dan bahan baku',
+  title: 'Produk & Resep — Data Master — OhMyPos',
+  description: 'Daftar menu produk dan resep bahan baku',
 };
 
-export default async function MasterDataPage() {
+export default async function MasterDataProductsPage() {
   await requireRole(['ADMIN', 'OWNER']);
 
   return (
     <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
-      <MasterDataClient />
+      <MasterDataClient initialTab="products" />
     </main>
   );
 }

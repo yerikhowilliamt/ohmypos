@@ -140,12 +140,9 @@ export function PayableSettlementDialog({
       <DialogContent className="sm:max-w-[440px]">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <DialogHeader>
-            <DialogTitle>Bayar Utang</DialogTitle>
+            <DialogTitle>Catat Pembayaran Utang</DialogTitle>
             <DialogDescription>
-              Pemasok:{' '}
-              <span className="font-semibold text-text-primary">
-                {payable?.supplierName}
-              </span>
+              Catat pelunasan atau cicilan pembayaran tagihan ke pemasok.
             </DialogDescription>
           </DialogHeader>
 

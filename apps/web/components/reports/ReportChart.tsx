@@ -4,8 +4,12 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -131,12 +135,12 @@ export function ReportBarChart({
           <ChartTooltip
             content={<ChartTooltipContent formatter={barTooltipFormatter} />}
           />
-          {bars.map((bar) => (
+          {bars.map((bar, index) => (
             <Bar
               key={bar.key}
               dataKey={bar.key}
               name={bar.label}
-              fill={`var(--color-${bar.key})`}
+              fill={bar.color ?? CHART_COLORS[index % CHART_COLORS.length]}
               radius={[4, 4, 0, 0]}
             />
           ))}
@@ -146,12 +150,16 @@ export function ReportBarChart({
   );
 }
 
+interface ReportLineChartSeries {
+  key: string;
+  label: string;
+  color?: string;
+}
+
 interface ReportLineChartProps {
   data: ChartRow[];
   xKey: string;
-  yKey: string;
-  label: string;
-  color?: string;
+  lines: ReportLineChartSeries[];
   height?: number;
   /** Y-axis tick label — stays short (e.g. "150 rb") so it never clips against the chart edge. */
   tickFormatter?: (value: number) => string;
@@ -159,20 +167,25 @@ interface ReportLineChartProps {
   tooltipFormatter?: (value: number) => string;
 }
 
-/** Single-series trend line — daily income (PRD §5.4's literal "trend lines"). */
+/** Trend line(s) — daily income (PRD §5.4's literal "trend lines"), one or
+ * more series sharing the same x-axis. */
 export function ReportLineChart({
   data,
   xKey,
-  yKey,
-  label,
-  color = CHART_COLORS[0],
+  lines,
   height = 280,
   tickFormatter = compactNumber,
   tooltipFormatter = tickFormatter,
 }: ReportLineChartProps) {
-  const chartConfig = {
-    [yKey]: { label, color },
-  } as ChartConfig;
+  const chartConfig = Object.fromEntries(
+    lines.map((line, index) => [
+      line.key,
+      {
+        label: line.label,
+        color: line.color ?? CHART_COLORS[index % CHART_COLORS.length],
+      },
+    ]),
+  ) as ChartConfig;
 
   const lineTooltipFormatter = (value: unknown, name: unknown) => (
     <span className="flex items-center gap-2">
@@ -215,16 +228,99 @@ export function ReportLineChart({
               />
             }
           />
-          <Line
-            type="monotone"
-            dataKey={yKey}
-            name={label}
-            stroke={`var(--color-${yKey})`}
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4 }}
-          />
+          {lines.map((line, index) => (
+            <Line
+              key={line.key}
+              type="monotone"
+              dataKey={line.key}
+              name={line.label}
+              stroke={line.color ?? CHART_COLORS[index % CHART_COLORS.length]}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4 }}
+            />
+          ))}
         </LineChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
+export interface PieChartItem {
+  name: string;
+  value: number;
+  percentage: number;
+  color?: string;
+}
+
+interface ReportPieChartProps {
+  data: PieChartItem[];
+  height?: number;
+  valueFormatter?: (value: number) => string;
+}
+
+/** Donut / Pie chart for distribution metrics with percentage share */
+export function ReportPieChart({
+  data,
+  height = 260,
+  valueFormatter = compactNumber,
+}: ReportPieChartProps) {
+  const chartConfig = Object.fromEntries(
+    data.map((item, index) => [
+      item.name,
+      {
+        label: item.name,
+        color: item.color ?? CHART_COLORS[index % CHART_COLORS.length],
+      },
+    ]),
+  ) as ChartConfig;
+
+  const pieTooltipFormatter = (value: unknown, name: unknown) => {
+    const item = data.find((d) => d.name === name);
+    return (
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="text-text-secondary">{String(name)}:</span>
+          <span className="font-mono tabular-nums font-semibold">
+            {valueFormatter(Number(value ?? 0))}
+          </span>
+        </div>
+        {item && (
+          <span className="text-xs text-text-tertiary">
+            Porsi: {item.percentage.toFixed(1)}%
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ height }} className="w-full">
+      <ChartContainer config={chartConfig} className="h-full w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <ChartTooltip
+              content={<ChartTooltipContent formatter={pieTooltipFormatter} />}
+            />
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+            >
+              {data.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={
+                    entry.color ?? CHART_COLORS[index % CHART_COLORS.length]
+                  }
+                />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
       </ChartContainer>
     </div>
   );

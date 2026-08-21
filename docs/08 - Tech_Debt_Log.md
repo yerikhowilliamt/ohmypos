@@ -39,6 +39,221 @@
 
 ## Log
 
+### DEBT-033 — E2E `resetDatabase()` helpers omit `Device`, breaking two suites on `devices_branch_id_fkey`
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-056 (PDF import) — encountered while running the full e2e suite; **not caused by that task**, and left untouched to respect scope.
+- **Description:** `allocation-sum.e2e-spec.ts` and `reconciliation-addendum.e2e-spec.ts` call a local `resetDatabase()` that deletes `branch` rows without first deleting `devices`. `Device` has a required FK to `Branch` (ADR-021), so once any `Device` row exists both suites fail in `beforeAll` with `Foreign key constraint violated on the constraint: devices_branch_id_fkey`. No e2e spec anywhere deletes `Device` rows (`grep -l "device.deleteMany" apps/api/test/*.ts` returns nothing).
+- **Why deferred:** Out of scope for the task that found it, and the fix touches shared test fixtures that other in-flight branch work also edits — a conflict risk better taken deliberately than incidentally.
+- **Impact if unaddressed:** 14 e2e tests fail permanently, so the suite cannot gate a merge. Worse, the failure is in setup rather than assertions, so it masks any real regression those two suites would otherwise catch.
+- **Trigger condition:** Immediately — the suite is already red on this branch. Certainly before the Devices feature merges to `main`.
+- **Proposed resolution:** Add `await prisma.attendanceRecord.deleteMany({}); await prisma.device.deleteMany({});` before the `branch.deleteMany()` in both helpers. Better: extract the duplicated `resetDatabase()` into one shared `test/reset-database.ts` so a new FK only has to be handled once — several specs currently carry near-identical copies.
+- **Priority:** High
+- **Status:** Open
+
+### DEBT-032 — No end-to-end test parses a real PDF bank statement
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-056 (PDF import)
+- **Description:** `MandiriPdfParser` is unit-tested against extracted text geometry, and the HTTP route is e2e-tested for error paths (wrong container, non-PDF bytes, RBAC). Nothing exercises `pdf-parse` on a genuine PDF in CI. Real statements are the user's personal financial records and are git-ignored; an attempt to hand-generate a fixture PDF failed because the pdf.js bundled in `pdf-parse@1.1.4` rejects hand-written xref tables with "bad XRef entry" — including a spec-canonical minimal PDF — so the generator was removed rather than left as dead code.
+- **Why deferred:** Correctness was verified manually and thoroughly against the real 57-transaction statement (every row parsed; amounts reconcile exactly from opening to stated closing balance), and closing the gap properly needs a PDF-writing dependency, which is an approval gate.
+- **Impact if unaddressed:** A regression in `pdf-text.util.ts`'s renderer — the y-clustering tolerance or the x-gap join threshold — would not be caught by CI, only by a user's failed import. The unit tests feed synthetic items and would still pass.
+- **Trigger condition:** A second bank parser is added (the renderer stops being single-use), or any change to the clustering/gap constants in `pdf-text.util.ts`.
+- **Proposed resolution:** Add a dev-only PDF writer (`pdf-lib` generates spec-valid xref tables) and commit a small synthetic fixture with fake names and account numbers, laid out on the real column grid. Then assert the full `MandiriPdfParser.parse()` path and add a happy-path import + re-import dedup case to `concurrency.e2e-spec.ts`.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-034 — BCA PDF e-statement import is not implemented (no real sample available)
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-056 (PDF import)
+- **Description:** Only Mandiri PDF import exists (ADR-022). A genuine BCA PDF e-statement was never available to derive a parser from — `docs/e-statement/mutasi bca.pdf` turned out to be a **Bank Sultra** statement mislabeled by filename (tracked separately in DEBT-031), not an actual BCA export. BCA users are still CSV-only.
+- **Why deferred:** Building `bank-sultra-pdf.parser.ts` from the mislabeled sample would have shipped a parser keyed `BCA_PDF` that silently mis-parses real BCA statements, which is worse than not having the format at all — a reconciliation import that returns plausible-looking wrong numbers is more dangerous than one that's simply unavailable. No real BCA PDF sample was on hand to verify against.
+- **Impact if unaddressed:** BCA users must keep using CSV import (unaffected, still works); no regression, just a gap. If someone adds a `BCA_PDF` format key without a real sample to verify against, ADR-022's column-geometry approach (`mandiri-pdf.parser.ts`) makes it easy to accidentally ship on the Bank Sultra layout instead.
+- **Trigger condition:** A real BCA PDF e-statement becomes available (redacted or not) to derive and verify the column layout against — same verification bar as Mandiri (§ADR-022: parse every row, reconcile opening→closing balance exactly).
+- **Proposed resolution:** Once a genuine BCA sample exists: dump its geometry the same way `mandiri-pdf.parser.ts` was derived (extract positioned text runs, identify fixed column x-ranges, confirm balance reconciliation across all rows), add `BCA_PDF` to `BankImportFormatSchema`/`BANK_IMPORT_FORMATS`, and add a `bca-pdf.parser.ts` + spec. Do **not** reuse the Bank Sultra layout from DEBT-031 for this — they are different issuers with different table structures, confirmed by direct inspection.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-031 — Mandiri PDF parser is tuned to one issuer and one sample
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-056 (PDF import), updated in TASK-057
+- **Description:** Two remaining limits from ADR-022. (a) The column x-ranges in `mandiri-pdf.parser.ts` were derived from a single real statement; a Mandiri layout change silently yields zero rows rather than an error. (b) `docs/e-statement/mutasi bca.pdf` is actually a **Bank Sultra** statement (`CR`/`DB` column, `Rp 5,044,800` amounts) and is unimplemented — its layout is recorded in ADR-022. Note: Password protection support was resolved in TASK-057 using `pdfjs-dist`.
+- **Why deferred:** (a) is inherent to parsing a format nobody publishes a spec for. (b) was explicitly scoped out by the user. (c) needs `pdfjs-dist`/`unpdf`, both ESM-only and incompatible with this repo's `module: commonjs` build without a `new Function("import(...)")` hack.
+- **Impact if unaddressed:** A layout change looks like an empty statement, not a failure — the most dangerous shape for a reconciliation feature, since a silently-missing transaction is invisible. Bank Sultra users have no import path. Every Mandiri import carries a manual unlock step.
+- **Trigger condition:** An import returns `total: 0` for a file that visibly contains transactions; or a second bank needs importing; or users start reporting the unlock step as friction.
+- **Proposed resolution:** For (a), treat `total: 0` on a valid PDF as a distinct warning in the UI rather than a bland success, and add a running-balance reconciliation check that warns when parsed amounts do not chain from opening to closing balance. For (b), add `BANK_SULTRA_PDF` using the layout in ADR-022. For (c), migrate the extractor to `unpdf` (its CJS build is compatible) and add an optional password field — deliberately kept out of the current UI.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-030 — OWNER's POS branch selection is not persisted across visits
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-051 (OWNER branch-selectable POS access)
+- **Description:** `PosScreen.tsx`'s `selectedBranchId` state is seeded once from the `branchId` prop and otherwise lives only in component state — every fresh visit to `/sales` as OWNER resets to unselected, showing the "Pilih cabang untuk memulai transaksi" placeholder again even if they picked the same branch five minutes ago.
+- **Why deferred:** Deliberate, not an oversight — put directly to the user via `AskUserQuestion` with three UX options (blocking picker screen, header dropdown with no persistence, persisted pill matching the DEBT-005 "Kemang · Terkunci" concept). The header-dropdown-without-persistence option was explicitly chosen, on the reasoning that OWNER POS use is expected to be occasional, not the daily cashier flow persistence would meaningfully help.
+- **Impact if unaddressed:** A minor repeated-friction cost only — one extra dropdown pick per `/sales` visit for OWNER. No correctness or data impact; `branchId` is attribution-only (ADR-004).
+- **Trigger condition:** OWNER reports this as a recurring annoyance, or POS becomes a regular (not occasional) OWNER workflow.
+- **Proposed resolution:** Persist the last-picked branch in `localStorage` (or a small pill in the header showing the active branch, editable — closer to the DEBT-005 pattern), read on mount with the same SSR-safe guard `useMediaQuery.ts` already establishes for client-only state.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-029 — Duplicate `useBranches` hook (`hooks/useBranches.ts` vs. inside `hooks/useExpenses.ts`)
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-051 (OWNER branch-selectable POS access) — pre-existing, not introduced by this task
+- **Description:** Two independent `useBranches()` implementations exist, both calling `GET /branches` but caching under different React Query keys: the canonical `apps/web/hooks/useBranches.ts` (`BRANCHES_QUERY_KEYS.branches`, also home to `useCreateBranch`/`useUpdateBranch`/`useDeleteBranch`) and a second one defined inside `apps/web/hooks/useExpenses.ts` (`EXPENSES_QUERY_KEYS.branches`), used by `ReportsClient.tsx`. TASK-051 used the canonical one for the new POS branch picker and left the duplicate untouched.
+- **Why deferred:** Out of scope for TASK-051 (a POS access feature, not a hooks cleanup) — fixing it means finding and updating every `ReportsClient.tsx`-side consumer of the `useExpenses.ts` copy, which risks touching unrelated report-filtering behavior for no benefit to the task at hand.
+- **Impact if unaddressed:** Two independent React Query cache entries for the same server data — a branch created/renamed/deleted invalidates only one of the two query keys depending on which mutation ran, so the other screen can show stale branch data until its own next refetch trigger.
+- **Trigger condition:** A bug report of stale branch names/lists on the Reports page after a branch is edited elsewhere, or the next time either file is touched for an unrelated reason.
+- **Proposed resolution:** Delete the `useBranches` defined in `useExpenses.ts`, re-point `ReportsClient.tsx` at `hooks/useBranches.ts`, confirm the query key change doesn't break any test asserting on `EXPENSES_QUERY_KEYS.branches`.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-028 — `brand.primary` fill with white text fails WCAG 2.2 AA
+
+- **Date logged:** 2026-08-20
+- **Found during:** UI Revamp Phase 4 accessibility audit (TASK-050)
+- **Description:** `--color-brand-primary` (`#00BFFF`) with `text-inverse`/`text-white` is used for every primary button fill (`buttonVariants.default` in `packages/ui/src/components/ui/button.tsx`, e.g. the POS "Bayar" CTA and the mobile order bar's "Lihat Pesanan" pill) and measures roughly **2.12:1** against white (computed by hand from the WCAG relative-luminance formula: `L(#00BFFF) ≈ 0.445`, `L(white) = 1.0`, ratio `= 1.05 / 0.495 ≈ 2.12`). AA requires 4.5:1 for normal text; DESIGN.md §42 requires AA specifically for "brand-colored buttons."
+- **Why deferred:** Fixing it means either a darker brand shade for text-bearing fills or dark text on the existing fill — a DESIGN.md §9 token decision, not a component-level edit, and out of this phase's scope (no schema/token-authority change without a decision).
+- **Impact if unaddressed:** The single most load-bearing button in the product (POS "Bayar") is under the AA contrast floor for low-vision users; a border/underline is not present as a non-color fallback.
+- **Trigger condition:** Before any accessibility-conformance claim is made externally, or when a token decision is next revisited (§9).
+- **Proposed resolution:** Add a `--color-brand-primary-strong` token for text-bearing fills (buttons, filled badges) and keep `#00BFFF` for borders, indicators, and tints where the 4.5:1 text rule doesn't apply — or switch the fill to dark text. Either requires a DESIGN.md §9 decision before implementation.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-027 — POS order panel omits customer, tax, and the §24.3 dropdown
+
+- **Date logged:** 2026-08-20
+- **Found during:** UI Revamp Phase 3 (POS Order Panel & Transaction Flow)
+- **Description:** Three deviations from DESIGN.md's order-panel spec. (1) §18.1's "Type or Select Customer" combobox is not built — no `Customer` model exists anywhere in `schema.prisma`, and `CreateSaleSchema` has no customer field. (2) §24.2's Service Tax row is not built — `Sale.totalAmount` is Σ `SaleItem.lineTotal` with no tax column (ADR-015 decision 1, DEBT-004). (3) §24.3 specifies a dropdown for the payment method; a segmented tile control (`PaymentMethodPicker`) was kept instead — §26 requires the payment path to stay visible, §43 forbids depending on precise pointer positioning, there are only a handful of `Account` rows, and converting would mean rewriting the selection step ~15 POS tests depend on (`fireEvent.click(getByTestId('payment-method-<id>'))`).
+- **Why deferred:** (1) and (2) would render UI promising behaviour the system does not have — DEBT-004's standing judgement against fabricated fields. (3) is a deliberate form-factor deviation, not deferred work; §24.3's placement (directly above the CTA) and visible label are still honoured.
+- **Impact if unaddressed:** None currently for (3) — fully functional as built. For (1)/(2): sales cannot be attributed to a named customer, and the summary block cannot show a tax line even if the business later needs one, without a schema change first.
+- **Trigger condition:** (1) the owner asks to attach customers to sales; (2) tax or member discounts are decided — per DEBT-004 these must be decided together, since either changes the meaning of every reported total; (3) the payment method list grows past roughly eight accounts, at which point a fixed 2-column grid (the layout as of 2026-08-20, replacing an earlier horizontally-scrolling row that visibly overflowed the panel's fixed width — see the same day's overflow fix) starts requiring vertical scroll of its own.
+- **Proposed resolution:** (1)/(2) require a schema-approval gate (new `Customer` model / tax column) before any frontend work. (3) would mean swapping `PaymentMethodPicker`'s tiles for a Radix `Select` and rewriting the ~15 dependent test assertions to open the select before clicking an item.
+- **Priority:** Low
+- **Status:** Open
+
+**Addendum (unrelated to the three deviations above, logged in the same task):** `cart.reducer.ts`'s `DECREMENT` action still removes a line at `quantity <= 1`, citing an earlier reading of §25 in its own comment. The new `QuantityStepper` disables the decrement button at quantity 1 instead of touching that tested reducer, so the remove-at-1 branch is now unreachable from the UI (removal happens only via the row's trash icon) and the reducer's comment cites a superseded reading of §25. Left as-is deliberately — `cart.reducer.test.ts` still exercises that branch directly. Trigger to clean up: the next time `cart.reducer.ts` is touched for an unrelated reason, delete the dead branch and correct the comment.
+
+### DEBT-026 — Cashier branch context absent from the topbar
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-047 (UI Revamp Phase 1: App Shell & Modern Sidebar Navigation)
+- **Description:** DESIGN.md §17 requires the cashier's topbar to read a branch identifier such as `Kemang · Terkunci`. `UserResponseSchema` (`packages/api-contracts/src/user.schema.ts`) carries `branchId` but no branch name, and `GET /branches` is OWNER-only, so a KASIR session has no way to resolve its own `branchId` to a display name. Only the Owner/Admin half of §17 ("Semua Cabang") was implemented in `Topbar.tsx`.
+- **Why deferred:** Resolving it requires adding a field to the auth/session API contract (ADR-010), which is outside the scope of a frontend-shell-only phase and needs its own approval per AGENTS.md governance.
+- **Impact if unaddressed:** A KASIR's topbar has no branch confirmation, which the design intends as a lightweight "you're locked to this branch" reassurance — cosmetic, not a security or correctness gap (branch scoping is enforced server-side by `BranchScopeGuard`, not by this label).
+- **Trigger condition:** When the next phase touching `Topbar.tsx`, the auth session contract, or KASIR-facing UX picks this up, or when a user/QA pass flags the missing branch label.
+- **Proposed resolution:** Add `branchName: string | null` to `UserResponseSchema`, populate it in the users/auth mapper (a simple join on `Branch.name`), and render it in `Topbar.tsx` for `variant="default"` when `user.role === 'KASIR'`.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-014 — Unpaginated Leave Requests List in All-Employees View
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-046 (All Employees Leave History View in Leave Requests Page)
+- **Description:** `GET /leave-requests` and `useAllLeaveRequests` return the entire list of leave requests in a single unpaginated array, filtered optionally by status and user.
+- **Why deferred:** In small-to-medium retail operations with single-tenant branch staff (v1 PRD scope), total annual leave requests per store remain under a few hundred records, well within single-query memory and network limits.
+- **Impact if unaddressed:** At higher transaction scale over multiple years with large staff counts, loading the full array could increase payload size and DOM node rendering overhead in the history table.
+- **Trigger condition:** When total historical leave requests exceed 500 records or table loading latency exceeds 300ms.
+- **Proposed resolution:** Introduce cursor or offset pagination in `LeaveRequestListQuerySchema` and `LeaveRequestsService.findAll`, utilizing TanStack Table / React Query infinite query pagination on the frontend.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-013 — Accordion animation keyframes omitted and static TypeScript help content
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-044 (Phase 13: Help / Documentation Page)
+- **Description:** 
+  1. `AccordionContent` in `packages/ui/src/components/ui/accordion.tsx` renders show/hide transitions with instantaneous snapping rather than smooth open/close height animations because `tailwindcss-animate` keyframes (`accordion-down` / `accordion-up`) are not configured in Tailwind setup.
+  2. Help documentation is authored as a static TypeScript array in `apps/web/lib/help-content.ts` rather than a full MDX / markdown rendering pipeline.
+- **Why deferred:** 
+  1. Adding `tailwindcss-animate` or heavy CSS animation plugins is out of scope and requires dependency additions. Radix UI accessibility and state toggling work seamlessly without animation.
+  2. Content is authored directly by developers and typed checks prevent schema regressions without adding markdown-rendering dependencies (`contentlayer`, `next-mdx-remote`, etc.).
+- **Impact if unaddressed:**
+  - Minor visual lack of accordion expanding transition animation.
+  - Adding rich formatting (images, video embeds, complex markdown tables) to help guides requires JSX changes rather than writing markdown.
+- **Trigger condition:**
+  - When design guidelines mandate animated accordion collapsible states across design systems or non-technical administrators need to edit help articles via CMS/Markdown.
+- **Proposed resolution:**
+  - Configure standard CSS keyframe animations for Radix accordion content heights in `globals.css`.
+  - Introduce MDX rendering if help guides scale into a full knowledge base.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
+### DEBT-012 — Attendance & Leave calendar matrix client-side cross-referencing
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-043 (Attendance Monthly Calendar & Leave Matrix)
+- **Description:** `AttendanceCalendarMatrix` fetches all cashiers (`useUsers`), attendance records (`useAttendanceRecords`), and approved leaves (`useAllLeaveRequests`) separately, then maps attendance status per day (1..31) on the client side.
+- **Why deferred:** Number of active cashiers per business in v1 is small (2–10 cashiers) and date math in memory is instantaneous (<2ms).
+- **Impact if unaddressed:** If cashier count grows to hundreds or thousands across dozens of franchises, fetching all records and mapping client-side could cause unnecessary data over-fetching.
+- **Trigger condition:** When store cashier staff count exceeds 50 users or matrix rendering experiences noticeable lag on month change.
+- **Proposed resolution:** Create a dedicated backend aggregation endpoint (e.g. `GET /devices/attendance/matrix?year=2026&month=8`) returning the pre-calculated daily matrix status per user directly from a single SQL query.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
+### DEBT-011 — Dashboard branch profitability queries fan-out client-side via `useQueries`
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-041 (Branch Profitability Card)
+- **Description:** `BranchProfitabilityCard` executes one HTTP request per retail branch to `/reports/profit-loss?branchId=...` using TanStack `useQueries` in parallel rather than requesting a single aggregated multi-branch endpoint.
+- **Why deferred:** Business scope in v1 consists of 2–3 physical branches; the overhead of 2–3 lightweight parallel requests is negligible (<50ms).
+- **Impact if unaddressed:** If the number of physical branches grows to dozens, client dashboard initial load will trigger dozens of parallel HTTP requests.
+- **Trigger condition:** When active store branch count exceeds 5 branches or backend report latency increases on dashboard load.
+- **Proposed resolution:** Introduce an aggregated multi-branch endpoint (e.g. `GET /reports/profit-loss/branches`) in `apps/api/src/modules/reports` returning all branch P&L summaries in a single SQL query.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
+### DEBT-010 — Physical Device Cookie Extraction / DevTools Cloning
+
+- **Date logged:** 2026-08-19
+- **Found during:** Phase 11 (TASK-035: Attendance & Device Tracking, ADR-021)
+- **Description:** Device identification relies on a long-lived HttpOnly signed cookie (`ohmypos_device`). An employee with physical access and technical familiarity could inspect browser storage / network requests on the store tablet and copy the signed cookie onto a personal device to pass the attendance check.
+- **Why deferred:** Acceptable residual risk for v1 in typical retail operations. Browser fingerprinting is unreliable and brittle across browser updates; hardware-bound WebAuthn / client certificate enrollment adds massive operational complexity for store tablet setup.
+- **Impact if unaddressed:** A tech-savvy employee could bypass attendance violation logging from their personal phone.
+- **Trigger condition:** Evidence of employee spoofing attendance via copied device cookies or request for hardware-level device attestation.
+- **Proposed resolution:** Implement WebAuthn / hardware-backed device keys (FIDO2 / passkey enrollment) or a dedicated installed wrapper app with secure enclave binding.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
+### DEBT-009 — Cloudinary direct upload vs server-side proxy
+
+- **Date logged:** 2026-08-19
+- **Found during:** Phase 10b (TASK-034: Profile Photo Upload)
+- **Description:** File foto profil diupload ke backend API (`POST /auth/me/photo`) menggunakan multipart parser NestJS/Multer lalu diproxy streaming ke Cloudinary. Belum menggunakan signed direct upload URL dari browser langsung ke Cloudinary.
+- **Why deferred:** Volume upload avatar profil internal staff rendah, alur streaming server-side sederhana dan memvalidasi ukuran serta sesi otentikasi secara sentral tanpa memaparkan credential signature endpoint tambahan.
+- **Impact if unaddressed:** Sedikit konsumsi bandwidth & memory upload stream pada server backend saat user upload foto.
+- **Trigger condition:** Volume user bertambah drastis atau ada upload gambar/aset berskala besar di masa mendatang.
+- **Proposed resolution:** Implementasi signed upload URL endpoint (`/auth/me/photo/sign`) dan upload langsung dari browser ke Cloudinary.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
+### DEBT-008 — Thermal printer ESC/POS command integration for receipts
+
+- **Date logged:** 2026-08-19
+- **Found during:** TASK-027 (Sales History & Receipt Printing)
+- **Description:** Struk penjualan saat ini dicetak menggunakan dialog browser standar (`window.print()`). Integrasi direct printing ke Bluetooth/USB thermal printer via ESC/POS protocol / WebUSB / WebBluetooth belum diimplementasikan.
+- **Why deferred:** Browser print dialog sudah mencukupi untuk MVP desktop/tablet, format CSS `@media print` sudah rapi, dan menghindari dependensi hardware khusus di tahap awal.
+- **Impact if unaddressed:** Pengguna POS fisik perlu konfirmasi manual di dialog cetak browser setiap kali print struk ke thermal printer.
+- **Trigger condition:** Merchant membutuhkan print cepat otomatis 58mm/80mm tanpa popup print browser.
+- **Proposed resolution:** Implementasi driver client WebBluetooth / WebUSB atau websocket print service lokal dengan payload ESC/POS.
+- **Priority:** Low
+- **Status:** Open
+
+---
+
 ### DEBT-001 — Reports computed at query time, no materialized views
 
 - **Date logged:** 2026-08-12
@@ -74,7 +289,7 @@
 - **Trigger condition:** The business owner asks for any one of them, or Phase 3's `Sale` flow is specified — whichever comes first.
 - **Proposed resolution:** Take them one at a time through the normal schema-approval gate. Tax and discount should be decided together, before `Sale` is built, because both change the total's definition.
 - **Priority:** Medium
-- **Status:** Partially resolved (2026-08-16) — Tax, discount, and order type decided per ADR-015 (Phase 5 planning): none get schema support in v1. `Sale.totalAmount = Σ SaleItem.lineTotal`; discounts are expressed through the existing per-line price override (`unitPriceAtSale` + `isPriceOverridden`). SKU/barcode scanning, the expense approval state, and the cashier shift remain **Open** — none of the three is touched by Phase 5 and each still needs its own approval pass.
+- **Status:** Partially resolved (2026-08-16) — Tax, discount, and order type decided per ADR-015 (Phase 5 planning): none get schema support in v1. `Sale.totalAmount = Σ SaleItem.lineTotal`; discounts are expressed through the existing per-line price override (`unitPriceAtSale` + `isPriceOverridden`). SKU/barcode scanning, the expense approval state, and the cashier shift remain **Open** — none of the three is touched by Phase 5 and each still needs its own approval pass. (2026-08-20, UI Revamp Phase 2) DESIGN.md §21.2's discount tag on the product card was likewise left unbuilt for the same reason — `Product` has no discount/original-price field, so a strikethrough that can never trigger would repeat the mistake this entry already rejected.
 
 ### DEBT-006 — RawMaterial.unitCost not updated by purchases
 
@@ -215,7 +430,7 @@
 - **Trigger condition:** The business owner asks for menu categories or product photos; or a cashier reports losing an order to a refresh.
 - **Proposed resolution:** Categories and images are additive schema work through the normal approval gate. Cart persistence is frontend-only — persist the reducer state to `sessionStorage`, keyed by branch, and rehydrate on mount.
 - **Priority:** Low
-- **Status:** Open
+- **Status:** Partially resolved (2026-08-20, UI Revamp Phase 2) — (1) the §22 filter row now exists, bound to availability buckets rather than menu categories; see **DEBT-026**. (2), (3) (pre-existing — `Product.photoUrl` already rendered before this phase, unaffected by DEBT-018's original wording), and (4) remain **Open**.
 
 ### DEBT-019 — `NEXT_PUBLIC_API_BASE_URL` fallback port disagrees with the actual API port
 
@@ -274,6 +489,42 @@
 - **Impact if unaddressed:** Anyone running `db:seed` gets KASIR accounts that can log in (auth doesn't check this) but are invisible to any future branch-scoped reporting/filtering that assumes every KASIR has a branch — a state that could otherwise only be reached by a bug, now reachable by just seeding fresh.
 - **Trigger condition:** Next time `seed.ts` is touched for any reason, or before any task that relies on seeded KASIR accounts already having a valid branch assignment.
 - **Proposed resolution:** Have `seed.ts` create (or look up) a branch before creating its KASIR rows and assign `branchId` to it, so the seed itself satisfies the same invariant the service layer enforces — or route seed user-creation through `UsersService` instead of `prisma.user.createMany` directly, which would catch this class of drift automatically in the future.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-024 — No end-to-end browser verification of the Export → download flow
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-045 (Export XLSX Buttons)
+- **Description:** All 8 new Export buttons were verified by unit test (`lib/export.test.ts`, workbook structure only) and, for 3 of the 8 page areas (Expenses, Reconciliation, Attendance), by fetching SSR HTML through a direct API-login + curl session to confirm the button actually renders in the DOM. Nobody has clicked Export in a live browser and confirmed a `.xlsx` file actually downloads and opens with the correct columns/values — the Claude-in-Chrome browser extension wasn't connected in the session this was built in, so the MCP Playwright/browser verification workflow AGENTS.md §6 calls for wasn't run.
+- **Why deferred:** Tooling unavailability in that session, not a scoping decision.
+- **Impact if unaddressed:** A runtime-only issue (e.g. `exceljs`'s browser build failing to resolve under this Next.js version, a Blob/anchor download quirk in a specific browser) would ship undetected.
+- **Trigger condition:** Next session where a browser (Claude-in-Chrome or manual) is available — do one click-through per page area (Reports, Expenses, Inventory, Reconciliation, Devices/Attendance) and confirm the file downloads and opens with correct data.
+- **Proposed resolution:** Run the standard `.agents/skills/e2e-playwright/SKILL.md` workflow against each Export button once, capture a screenshot/confirmation, and mark this entry Resolved.
+- **Priority:** Medium — doesn't touch money/stock correctness (Playbook §10), but it's a shipped user-facing feature with zero live verification.
+- **Status:** Open
+
+### DEBT-025 — Export filenames use the export-time date, not the report's selected date range
+
+- **Date logged:** 2026-08-20
+- **Found during:** TASK-045 (Export XLSX Buttons)
+- **Description:** The 5 Reports views (`ProfitLossView`, `DailyIncomeView`, `TopProductsView`, `ProductProfitView`, `IncomeByPaymentMethodView`) name their exported file `<report>_<today's date>.xlsx` rather than reflecting the `startDate`/`endDate` the user actually filtered by — e.g. exporting January 2026 data on 2026-08-20 downloads `laba-per-produk_2026-08-20.xlsx`, not something naming the January range.
+- **Why deferred:** `ReportsClient.tsx` owns the `startDate`/`endDate` state; the 5 leaf view components don't currently receive them as props. Threading them through purely to build a filename string felt like scope creep beyond the approved plan, which only committed to adding the buttons.
+- **Impact if unaddressed:** The exported filename is misleading about which period the data covers — a minor but real UX gap for a feature whose entire purpose is producing a file someone else (accountant, payroll) will open later without the on-screen context.
+- **Trigger condition:** Next time any of these 5 view components are touched for another reason, or if a user reports confusion about export filenames.
+- **Proposed resolution:** Add a `filters: ReportFilters` (or `startDate`/`endDate`) prop to the 5 view components, sourced from `ReportsClient`'s existing state, and interpolate it into `exportFilename` in place of `new Date().toISOString().slice(0, 10)`.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-026 — POS filter row buckets by availability, not menu category
+
+- **Date logged:** 2026-08-20
+- **Found during:** UI Revamp Phase 2 (POS Product Discovery & Filter Cards)
+- **Description:** DESIGN.md §22 illustrates the POS filter row with menu categories (Foods, Beverage). `Product` has no category column, so the row was implemented with availability buckets (Semua Produk / Siap Dibuat / Stok Habis / Tanpa Resep, computed by `lib/pos/product-filters.ts` from the cart-aware headroom in `availability.ts`, ADR-013) using the same bordered-card anatomy §22 specifies. Approved deviation, 2026-08-20.
+- **Why deferred:** Not deferred — a substitution, not an omission. See DEBT-018 for the prior state (row simply absent) and DEBT-004 for the standing rule against rendering UI that promises absent behaviour.
+- **Impact if unaddressed:** None currently — the row is fully functional against real data, just labeled by availability rather than by menu category.
+- **Trigger condition:** The owner asks for menu categories.
+- **Proposed resolution:** Add `Product.category` (or a `ProductCategory` table) through the schema-approval gate; `CategoryFilterRow` already takes `{ id, label, count }[]` and needs no change, only a different `countByBucket` source in `product-filters.ts`.
 - **Priority:** Low
 - **Status:** Open
 

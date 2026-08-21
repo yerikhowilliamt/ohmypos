@@ -3,17 +3,20 @@
 import * as React from 'react';
 import type { PaymentMethodResponse } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
-import { formatCurrency } from '@/lib/formatters';
+import { Send, ShoppingBag } from 'lucide-react';
 import { canSubmit, type CartState } from '@/lib/pos/cart.reducer';
 import { cartItemCount, cartTotal } from '@/lib/pos/cart-totals';
 import type { PaginatedSales } from '@/hooks/usePos';
 import { CartErrorBanner } from './CartErrorBanner';
 import { CartLineRow } from './CartLineRow';
+import { OrderSummary } from './OrderSummary';
 import { PaymentMethodPicker } from './PaymentMethodPicker';
 
 interface CartPanelProps {
   state: CartState;
   overCommittedLineIds: string[];
+  /** productId → photoUrl, resolved by PosScreen. CartLine carries no photo. */
+  productPhotos: Map<string, string | null>;
   paymentMethods: PaymentMethodResponse[];
   paymentMethodsLoading: boolean;
   paymentMethodsError: string | null;
@@ -31,13 +34,20 @@ interface CartPanelProps {
 }
 
 /**
- * The persistent order context — the right zone of DESIGN.md §20, and a
- * first-class component per §24. Stays mounted whether or not it has lines, so
- * the cashier never loses sight of the order.
+ * The persistent order context — zone three of DESIGN.md §20, structured per
+ * §24: panel header, order list, summary block, payment method, primary CTA.
+ * Stays mounted whether or not it has lines, so the cashier never loses sight
+ * of the order.
+ *
+ * Two things §24 describes are absent by decision, not oversight: the customer
+ * combobox (§18.1 — no `Customer` model exists) and the Service Tax row (§24.2 —
+ * `Sale.totalAmount` is Σ line totals and nothing else, ADR-015). See the
+ * Phase 3 plan and DEBT-004.
  */
 export function CartPanel({
   state,
   overCommittedLineIds,
+  productPhotos,
   paymentMethods,
   paymentMethodsLoading,
   paymentMethodsError,
@@ -80,11 +90,19 @@ export function CartPanel({
   return (
     <aside
       id="pos-cart-panel"
-      aria-label="Pesanan"
-      className="flex w-full shrink-0 flex-col gap-3 rounded-md border border-border-default bg-surface-muted p-4 shadow-1 lg:w-[380px]"
+      aria-label="Detail pesanan"
+      // shrink-0 only from md up: in the desktop/tablet row layout it must
+      // hold its fixed width against ProductGrid, but inside the mobile
+      // bottom sheet (a bounded-height column) it has to shrink to fit so its
+      // own order-list region (below) scrolls internally instead of the
+      // whole panel overflowing the sheet.
+      className="flex w-full min-h-0 shrink flex-col rounded-lg border border-border-default bg-surface-raised shadow-1 md:h-full md:w-[320px] md:shrink-0 lg:w-[360px] xl:w-[380px]"
     >
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text-primary">Pesanan</h2>
+      {/* §18.1: the panel has its own header, independent of the page header. */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border-default p-4">
+        <h2 className="text-base font-semibold text-text-primary">
+          Detail Pesanan
+        </h2>
         {state.lines.length > 0 && (
           <Button
             type="button"
@@ -92,85 +110,98 @@ export function CartPanel({
             size="xs"
             data-testid="cart-clear"
             onClick={onClearCart}
+            className="text-text-tertiary hover:text-status-danger"
           >
             Kosongkan
           </Button>
         )}
       </div>
 
-      {state.lines.length === 0 ? (
-        // DESIGN.md §27, near-verbatim copy, no decorative illustration.
-        <div className="flex flex-1 flex-col items-center justify-center gap-1 py-10 text-center">
-          <p className="text-sm font-medium text-text-primary">
-            Pesanan masih kosong
-          </p>
-          <p className="text-xs text-text-secondary">
-            Pilih produk untuk memulai transaksi.
-          </p>
-        </div>
-      ) : (
-        <ul className="flex flex-1 flex-col gap-2 overflow-y-auto">
-          {state.lines.map((line) => (
-            <CartLineRow
-              key={line.id}
-              line={line}
-              isOverCommitted={flaggedLineIds.has(line.id)}
-              onIncrement={onIncrement}
-              onDecrement={onDecrement}
-              onRemove={onRemove}
-              onPriceChange={onPriceChange}
-            />
-          ))}
-        </ul>
-      )}
-
-      {state.submit.error && (
-        <CartErrorBanner
-          error={state.submit.error}
-          recentSales={recentSales}
-          isCheckingRecent={isCheckingRecent}
-          onCheckRecent={onCheckRecent}
-          onDismiss={onDismissError}
-        />
-      )}
-
-      <PaymentMethodPicker
-        methods={paymentMethods}
-        selectedId={state.accountId}
-        isLoading={paymentMethodsLoading}
-        error={paymentMethodsError}
-        onSelect={onSelectAccount}
-      />
-
-      {/* DESIGN.md §26: the payable amount is highly visible and the payment
-          action is the strongest control on the screen. No tax or discount line —
-          totalAmount is exactly Σ lineTotal (ADR-015, DEBT-004). */}
-      <div className="flex items-center justify-between border-t border-border-default pt-3">
-        <span className="text-xs text-text-secondary">{count} item</span>
-        <span
-          data-testid="cart-total"
-          className="numeric font-mono text-xl font-semibold text-text-primary"
-        >
-          {formatCurrency(total)}
-        </span>
+      {/* Order list — the only part that scrolls, so the CTA stays pinned. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-3">
+        {state.lines.length === 0 ? (
+          // DESIGN.md §27, near-verbatim copy, no decorative illustration.
+          <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
+            <span
+              aria-hidden
+              className="flex size-10 items-center justify-center rounded-pill bg-surface-muted text-text-tertiary"
+            >
+              <ShoppingBag className="size-5" />
+            </span>
+            <p className="text-sm font-medium text-text-primary">
+              Pesanan masih kosong
+            </p>
+            <p className="text-xs text-text-secondary">
+              Pilih produk untuk memulai transaksi.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="pb-1 pt-3 text-xs font-medium text-text-tertiary">
+              Pesanan Anda:
+            </p>
+            <ul className="flex flex-col">
+              {state.lines.map((line) => (
+                <CartLineRow
+                  key={line.id}
+                  line={line}
+                  photoUrl={productPhotos.get(line.productId) ?? null}
+                  isOverCommitted={flaggedLineIds.has(line.id)}
+                  onIncrement={onIncrement}
+                  onDecrement={onDecrement}
+                  onRemove={onRemove}
+                  onPriceChange={onPriceChange}
+                />
+              ))}
+            </ul>
+          </>
+        )}
       </div>
 
-      <Button
-        type="button"
-        size="lg"
-        className="w-full"
-        data-testid="cart-submit"
-        disabled={!submittable}
-        onClick={onSubmit}
-      >
-        {isPending ? 'Menyimpan…' : 'Bayar'}
-      </Button>
+      {/* Pinned foot: summary → payment method → CTA (§24, §26).
+          min-w-0 is load-bearing: without it, a flex-column child's default
+          min-width:auto lets a long account/product name push its intrinsic
+          content width past the panel's fixed width instead of truncating. */}
+      <div className="flex min-w-0 shrink-0 flex-col gap-3 border-t border-border-default p-4">
+        {state.submit.error && (
+          <CartErrorBanner
+            error={state.submit.error}
+            recentSales={recentSales}
+            isCheckingRecent={isCheckingRecent}
+            onCheckRecent={onCheckRecent}
+            onDismiss={onDismissError}
+          />
+        )}
 
-      {state.lines.length > 0 && state.accountId === null && (
-        <p className="text-center text-xs text-text-tertiary">
-          Pilih metode pembayaran untuk melanjutkan.
-        </p>
-      )}
+        <OrderSummary itemCount={count} total={total} />
+
+        <PaymentMethodPicker
+          methods={paymentMethods}
+          selectedId={state.accountId}
+          isLoading={paymentMethodsLoading}
+          error={paymentMethodsError}
+          onSelect={onSelectAccount}
+        />
+
+        {/* §26: full-width, brand fill, an icon, always the lowest element. */}
+        <Button
+          type="button"
+          size="lg"
+          className="h-12 w-full gap-2"
+          data-testid="cart-submit"
+          disabled={!submittable}
+          onClick={onSubmit}
+        >
+          <Send className="size-4" aria-hidden />
+          {isPending ? 'Menyimpan…' : 'Bayar'}
+        </Button>
+
+        {state.lines.length > 0 && state.accountId === null && (
+          <p className="text-center text-xs text-text-tertiary">
+            Pilih metode pembayaran untuk melanjutkan.
+          </p>
+        )}
+      </div>
     </aside>
   );
 }

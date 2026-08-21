@@ -12,7 +12,8 @@ import { z } from 'zod';
  * quantity is `Decimal(18,4)`.
  */
 
-const DECIMAL_PATTERN = /^-?\d+(?:\.\d+)?$/;
+// Accepts standard decimals ("10", "10.5") and Indonesian/European comma format ("10,5")
+const DECIMAL_PATTERN = /^-?\d+(?:[.,]\d+)?$/;
 
 const MAX_PRECISION = 18;
 
@@ -35,6 +36,7 @@ export function decimalString(options: DecimalStringOptions) {
     .string()
     .trim()
     .regex(DECIMAL_PATTERN, 'must be a decimal number written as a string')
+    .transform((val) => val.replace(',', '.'))
     .refine(
       (value) => (value.split('.')[1]?.length ?? 0) <= scale,
       `must have at most ${scale} decimal place(s)`,

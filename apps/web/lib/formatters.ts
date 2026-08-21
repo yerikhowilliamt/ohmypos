@@ -136,3 +136,22 @@ export function unformatThousands(value: string | null | undefined): string {
   const normalized = withoutDots.replace(',', '.');
   return normalized.replace(/[^\d.-]/g, '');
 }
+
+const LONG_DATE_FORMATTER = new Intl.DateTimeFormat('id-ID', {
+  timeZone: 'Asia/Jakarta',
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+/**
+ * "Kamis, 20 Agustus 2026" — the operating day in WIB, not in the browser's
+ * local zone. The business day is Asia/Jakarta everywhere else in the product
+ * (report.schema.ts pins every range to it), so a POS header that says
+ * "yesterday" to a cashier on a device with a stale timezone would be wrong
+ * about which day their sales land on.
+ */
+export function formatLongDate(date: Date): string {
+  return LONG_DATE_FORMATTER.format(date);
+}

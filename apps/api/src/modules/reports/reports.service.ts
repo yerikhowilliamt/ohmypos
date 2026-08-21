@@ -36,7 +36,12 @@ import {
   todayWib,
   type ReportRange,
 } from '../../common/period';
-import { ledgerScope, saleScope, wibDayOfEntryDate } from './report-filters';
+import {
+  ledgerScope,
+  saleScope,
+  wibDayOfEntryDate,
+  wibDayOfSoldAt,
+} from './report-filters';
 import { fillDailyGaps } from './report-math';
 import {
   toCashBalanceResponse,
@@ -47,7 +52,9 @@ import {
   toReportPeriod,
   toTopProductsResponse,
   type CashBalanceRow,
+  type DailyCogsQueryRow,
   type DailyIncomeQueryRow,
+  type DailyOperatingExpenseQueryRow,
   type IncomeByAccountRow,
   type ProductAggregateRow,
   type ProfitLossCogsRow,
@@ -225,29 +232,67 @@ export class ReportsService {
    * the SQL result and are zero-filled in TypeScript so a trend chart gets a
    * continuous series (plan §6.7).
    */
+  /**
+   * Merges three independently-grouped day-bucketed aggregates (income from
+   * ledger INFLOW, COGS from sale_items/sales, operating expenses from ledger
+   * OUTFLOW) so the response can carry `netProfit` per day alongside `income`
+   * — the same `netProfit` definition as `profitLoss()`, just per-day instead
+   * of per-period.
+   */
   async dailyIncome(query: ReportRangeQueryDto): Promise<DailyIncomeResponse> {
     const { range, period } = await this.resolveContext(query);
     const ledgerWhere = ledgerScope(range, query.branchId);
+    const saleWhere = saleScope(range, query.branchId);
     const wibDay = wibDayOfEntryDate();
 
-    const rows = await this.prisma.$queryRaw<DailyIncomeQueryRow[]>`
-      SELECT
-        ${wibDay}                   AS day,
-        COALESCE(SUM(le.amount), 0) AS income,
-        COUNT(*)::int               AS entry_count
-      FROM ledger_entries le
-      WHERE le.type = 'INFLOW' AND ${ledgerWhere}
-      GROUP BY 1
-      ORDER BY 1`;
+    const [incomeRows, cogsRows, opexRows] = await Promise.all([
+      this.prisma.$queryRaw<DailyIncomeQueryRow[]>`
+        SELECT
+          ${wibDay}                   AS day,
+          COALESCE(SUM(le.amount), 0) AS income,
+          COUNT(*)::int               AS entry_count
+        FROM ledger_entries le
+        WHERE le.type = 'INFLOW' AND ${ledgerWhere}
+        GROUP BY 1`,
+      this.prisma.$queryRaw<DailyCogsQueryRow[]>`
+        SELECT
+          ${wibDayOfSoldAt()}                                       AS day,
+          COALESCE(ROUND(SUM(si.hpp_at_sale * si.quantity), 2), 0)  AS cogs
+        FROM sale_items si
+        JOIN sales s ON s.id = si.sale_id
+        WHERE ${saleWhere}
+        GROUP BY 1`,
+      this.prisma.$queryRaw<DailyOperatingExpenseQueryRow[]>`
+        SELECT
+          ${wibDay}                   AS day,
+          COALESCE(SUM(le.amount), 0) AS operating_expenses
+        FROM ledger_entries le
+        WHERE le.type = 'OUTFLOW' AND le.source_type = 'MANUAL' AND ${ledgerWhere}
+        GROUP BY 1`,
+    ]);
 
-    const buckets = fillDailyGaps(
-      eachWibDay(range),
-      rows.map((row) => ({
-        date: row.day,
-        income: row.income,
-        entryCount: row.entry_count,
-      })),
+    const incomeByDay = new Map(incomeRows.map((row) => [row.day, row]));
+    const cogsByDay = new Map(cogsRows.map((row) => [row.day, row.cogs]));
+    const opexByDay = new Map(
+      opexRows.map((row) => [row.day, row.operating_expenses]),
     );
+    // A day can have a MANUAL expense with zero sales — merging only over
+    // incomeRows' days would silently drop that expense from netProfit.
+    const allDays = new Set([
+      ...incomeByDay.keys(),
+      ...cogsByDay.keys(),
+      ...opexByDay.keys(),
+    ]);
+
+    const present = Array.from(allDays).map((day) => ({
+      date: day,
+      income: incomeByDay.get(day)?.income ?? new Prisma.Decimal(0),
+      entryCount: incomeByDay.get(day)?.entry_count ?? 0,
+      cogs: cogsByDay.get(day) ?? new Prisma.Decimal(0),
+      operatingExpenses: opexByDay.get(day) ?? new Prisma.Decimal(0),
+    }));
+
+    const buckets = fillDailyGaps(eachWibDay(range), present);
 
     return toDailyIncomeResponse(period, buckets);
   }

@@ -21,6 +21,7 @@ import {
   useCurrentUser,
   useDeactivateSelf,
   useUpdateProfile,
+  useUploadPhoto,
 } from '@/hooks/useProfile';
 import { DeleteMyAccountDialog } from './DeleteMyAccountDialog';
 
@@ -37,7 +38,7 @@ export function ProfileClient() {
           Profil Saya
         </h1>
         <p className="mt-1 text-sm text-text-secondary">
-          Kelola nama, kata sandi, dan akun Anda sendiri.
+          Perbarui informasi profil dan kata sandi akun Anda.
         </p>
       </div>
 
@@ -54,12 +55,89 @@ export function ProfileClient() {
             </CardHeader>
           </Card>
 
+          <PhotoForm currentPhotoUrl={user.photoUrl} />
           <NameForm currentName={user.name} onSaved={() => router.refresh()} />
           <PasswordForm />
           <DangerZone />
         </>
       )}
     </div>
+  );
+}
+
+function PhotoForm({ currentPhotoUrl }: { currentPhotoUrl: string | null }) {
+  const router = useRouter();
+  const uploadMutation = useUploadPhoto();
+  const [localPreview, setLocalPreview] = React.useState<string | null>(null);
+  const [serverError, setServerError] = React.useState<string | null>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const displayPhoto = localPreview ?? currentPhotoUrl;
+
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setServerError(null);
+    const objectUrl = URL.createObjectURL(file);
+    setLocalPreview(objectUrl);
+
+    try {
+      await uploadMutation.mutateAsync(file);
+      setLocalPreview(null);
+      router.refresh();
+    } catch (error) {
+      setLocalPreview(null);
+      setServerError(
+        error instanceof Error ? error.message : 'Gagal mengunggah foto.',
+      );
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Foto Profil</CardTitle>
+      </CardHeader>
+      <CardContent className="flex items-center gap-4">
+        <div className="size-16 shrink-0 overflow-hidden rounded-full bg-surface-muted">
+          {displayPhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={displayPhoto}
+              alt="Foto profil"
+              className="size-full object-cover"
+            />
+          ) : null}
+        </div>
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={uploadMutation.isPending}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploadMutation.isPending ? 'Mengunggah…' : 'Ganti Foto'}
+          </Button>
+          {serverError && (
+            <p role="alert" className="mt-1 text-xs text-status-danger">
+              {serverError}
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

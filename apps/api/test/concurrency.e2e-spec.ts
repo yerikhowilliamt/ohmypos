@@ -342,5 +342,29 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
       const summaryBody = summaryRes.body as { actualBankBalance: string };
       expect(summaryBody.actualBankBalance).toBe('800000.00');
     });
+
+    it('rejects a CSV sent to the PDF route, so it never reaches a PDF parser', async () => {
+      // Named and typed as a PDF, so only the file signature can catch it.
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/import/pdf/${accountId}?format=MANDIRI_PDF`)
+        .set('Cookie', ownerCookies)
+        .attach('file', Buffer.from('01/08/2026,X,0000,1.00,CR'), {
+          filename: 'x.pdf',
+          contentType: 'application/pdf',
+        })
+        .expect(400);
+
+      expect((res.body as { message: string }).message).toMatch(/PDF/i);
+    });
+
+    it('rejects a PDF sent to the CSV route rather than importing zero rows', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/import/csv/${accountId}?format=BCA`)
+        .set('Cookie', ownerCookies)
+        .attach('file', Buffer.from('%PDF-1.5\nrest of a pdf'), 'x.csv')
+        .expect(400);
+
+      expect((res.body as { message: string }).message).toMatch(/PDF/i);
+    });
   });
 });

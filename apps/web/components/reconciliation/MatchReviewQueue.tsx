@@ -182,11 +182,11 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle className="text-base">
-            Usulan Pencocokan Otomatis
+            Daftar Transaksi Perlu Dicocokkan
           </CardTitle>
           <CardDescription>
-            Mesin pencocokan membandingkan transaksi bank yang belum cocok
-            dengan catatan pembukuan.
+            Periksa transaksi yang disarankan sistem atau tentukan pencocokan
+            manual.
           </CardDescription>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
