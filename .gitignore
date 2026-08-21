@@ -49,3 +49,5 @@ docs/reports/
 # real bank e-statements used as parser reference — contain account numbers and
 # counterparty names. Test fixtures are generated synthetically instead (ADR: PDF import).
 docs/e-statement/
+
+.agents/

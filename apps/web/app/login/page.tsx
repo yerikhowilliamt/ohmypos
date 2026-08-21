@@ -58,9 +58,9 @@ export default function LoginPage() {
         noValidate
         className="w-full max-w-sm rounded-sm border border-border-default bg-surface-raised p-6 shadow-1"
       >
-        <div className="mb-2">
+        <div className="mb-2 flex items-center justify-center">
           <Image
-            src="/logo.png"
+            src="/logo-rm-bg.png"
             alt="OhMyPos"
             width={142}
             height={40}
