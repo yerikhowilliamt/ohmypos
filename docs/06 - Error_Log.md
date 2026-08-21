@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-019 — Missing `tsconfigRootDir` in `apps/web/eslint.config.mjs` caused IDE parser ambiguity
+
+- **Date found:** 2026-08-21
+- **Found during:** TASK-064 (Fix ESLint tsconfigRootDir in apps/web)
+- **Symptom:** Editor reported `Parsing error: No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present` when inspecting files in `apps/web`.
+- **Root cause:** `apps/web/eslint.config.mjs` relied on `eslint-config-next/typescript` without explicitly providing `tsconfigRootDir`, so typescript-eslint found multiple candidate root dirs across the monorepo (`apps/api`, `packages/ui`).
+- **Resolution:** Added `languageOptions: { parserOptions: { tsconfigRootDir: import.meta.dirname } }` to `apps/web/eslint.config.mjs`.
+- **Prevention:** When setting up flat ESLint configurations in a pnpm monorepo, always specify `tsconfigRootDir: import.meta.dirname` for workspace packages using TypeScript parser rules.
+- **Severity:** Low — IDE developer experience/linter error only.
+
 ### ERR-018 — Sidebar and shared layouts failed to inherit dark mode tokens
 
 - **Date found:** 2026-08-21

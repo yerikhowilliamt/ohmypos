@@ -41,6 +41,18 @@
 
 ## Log
 
+### TASK-064 — Set Explicit `tsconfigRootDir` for `apps/web` ESLint Parser Options
+
+- **Date:** 2026-08-21
+- **Module / Phase:** ESLint Configuration (`apps/web/eslint.config.mjs`)
+- **Objective:** Fix ESLint parsing error: "No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present" in `apps/web`.
+- **Relevant docs:** `packages/config/eslint/base.mjs`, `@typescript-eslint` documentation
+- **What was done:**
+  - `apps/web/eslint.config.mjs`: Explicitly defined `languageOptions.parserOptions.tsconfigRootDir = import.meta.dirname` in the flat config array.
+  - Ran `turbo run lint typecheck test` (all 13 tasks passed cleanly).
+- **Status:** Done.
+- **Handoff notes:** VS Code / IDE ESLint language server in `apps/web` now properly resolves TypeScript type checking without ambiguity across monorepo packages.
+
 ### TASK-063 — Fix Mobile Dark Mode Toggle in Topbar & Enable Dark Mode on Shared Routes
 
 - **Date:** 2026-08-21
