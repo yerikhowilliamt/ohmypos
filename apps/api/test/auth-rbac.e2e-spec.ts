@@ -503,6 +503,10 @@ describe('Auth & role-based access control (e2e)', () => {
         { method: 'get', url: '/api/v1/reconciliation/transactions' },
         { method: 'get', url: '/api/v1/reconciliation/summary' },
         { method: 'post', url: `/api/v1/import/csv/${accountId}?format=BCA` },
+        {
+          method: 'post',
+          url: `/api/v1/import/pdf/${accountId}?format=MANDIRI_PDF`,
+        },
       ];
 
       for (const ep of endpoints) {

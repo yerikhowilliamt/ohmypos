@@ -39,6 +39,54 @@
 
 ## Log
 
+### DEBT-033 — E2E `resetDatabase()` helpers omit `Device`, breaking two suites on `devices_branch_id_fkey`
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-056 (PDF import) — encountered while running the full e2e suite; **not caused by that task**, and left untouched to respect scope.
+- **Description:** `allocation-sum.e2e-spec.ts` and `reconciliation-addendum.e2e-spec.ts` call a local `resetDatabase()` that deletes `branch` rows without first deleting `devices`. `Device` has a required FK to `Branch` (ADR-021), so once any `Device` row exists both suites fail in `beforeAll` with `Foreign key constraint violated on the constraint: devices_branch_id_fkey`. No e2e spec anywhere deletes `Device` rows (`grep -l "device.deleteMany" apps/api/test/*.ts` returns nothing).
+- **Why deferred:** Out of scope for the task that found it, and the fix touches shared test fixtures that other in-flight branch work also edits — a conflict risk better taken deliberately than incidentally.
+- **Impact if unaddressed:** 14 e2e tests fail permanently, so the suite cannot gate a merge. Worse, the failure is in setup rather than assertions, so it masks any real regression those two suites would otherwise catch.
+- **Trigger condition:** Immediately — the suite is already red on this branch. Certainly before the Devices feature merges to `main`.
+- **Proposed resolution:** Add `await prisma.attendanceRecord.deleteMany({}); await prisma.device.deleteMany({});` before the `branch.deleteMany()` in both helpers. Better: extract the duplicated `resetDatabase()` into one shared `test/reset-database.ts` so a new FK only has to be handled once — several specs currently carry near-identical copies.
+- **Priority:** High
+- **Status:** Open
+
+### DEBT-032 — No end-to-end test parses a real PDF bank statement
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-056 (PDF import)
+- **Description:** `MandiriPdfParser` is unit-tested against extracted text geometry, and the HTTP route is e2e-tested for error paths (wrong container, non-PDF bytes, RBAC). Nothing exercises `pdf-parse` on a genuine PDF in CI. Real statements are the user's personal financial records and are git-ignored; an attempt to hand-generate a fixture PDF failed because the pdf.js bundled in `pdf-parse@1.1.4` rejects hand-written xref tables with "bad XRef entry" — including a spec-canonical minimal PDF — so the generator was removed rather than left as dead code.
+- **Why deferred:** Correctness was verified manually and thoroughly against the real 57-transaction statement (every row parsed; amounts reconcile exactly from opening to stated closing balance), and closing the gap properly needs a PDF-writing dependency, which is an approval gate.
+- **Impact if unaddressed:** A regression in `pdf-text.util.ts`'s renderer — the y-clustering tolerance or the x-gap join threshold — would not be caught by CI, only by a user's failed import. The unit tests feed synthetic items and would still pass.
+- **Trigger condition:** A second bank parser is added (the renderer stops being single-use), or any change to the clustering/gap constants in `pdf-text.util.ts`.
+- **Proposed resolution:** Add a dev-only PDF writer (`pdf-lib` generates spec-valid xref tables) and commit a small synthetic fixture with fake names and account numbers, laid out on the real column grid. Then assert the full `MandiriPdfParser.parse()` path and add a happy-path import + re-import dedup case to `concurrency.e2e-spec.ts`.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-034 — BCA PDF e-statement import is not implemented (no real sample available)
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-056 (PDF import)
+- **Description:** Only Mandiri PDF import exists (ADR-022). A genuine BCA PDF e-statement was never available to derive a parser from — `docs/e-statement/mutasi bca.pdf` turned out to be a **Bank Sultra** statement mislabeled by filename (tracked separately in DEBT-031), not an actual BCA export. BCA users are still CSV-only.
+- **Why deferred:** Building `bank-sultra-pdf.parser.ts` from the mislabeled sample would have shipped a parser keyed `BCA_PDF` that silently mis-parses real BCA statements, which is worse than not having the format at all — a reconciliation import that returns plausible-looking wrong numbers is more dangerous than one that's simply unavailable. No real BCA PDF sample was on hand to verify against.
+- **Impact if unaddressed:** BCA users must keep using CSV import (unaffected, still works); no regression, just a gap. If someone adds a `BCA_PDF` format key without a real sample to verify against, ADR-022's column-geometry approach (`mandiri-pdf.parser.ts`) makes it easy to accidentally ship on the Bank Sultra layout instead.
+- **Trigger condition:** A real BCA PDF e-statement becomes available (redacted or not) to derive and verify the column layout against — same verification bar as Mandiri (§ADR-022: parse every row, reconcile opening→closing balance exactly).
+- **Proposed resolution:** Once a genuine BCA sample exists: dump its geometry the same way `mandiri-pdf.parser.ts` was derived (extract positioned text runs, identify fixed column x-ranges, confirm balance reconciliation across all rows), add `BCA_PDF` to `BankImportFormatSchema`/`BANK_IMPORT_FORMATS`, and add a `bca-pdf.parser.ts` + spec. Do **not** reuse the Bank Sultra layout from DEBT-031 for this — they are different issuers with different table structures, confirmed by direct inspection.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-031 — Mandiri PDF parser is tuned to one issuer and one sample
+
+- **Date logged:** 2026-08-21
+- **Found during:** TASK-056 (PDF import), updated in TASK-057
+- **Description:** Two remaining limits from ADR-022. (a) The column x-ranges in `mandiri-pdf.parser.ts` were derived from a single real statement; a Mandiri layout change silently yields zero rows rather than an error. (b) `docs/e-statement/mutasi bca.pdf` is actually a **Bank Sultra** statement (`CR`/`DB` column, `Rp 5,044,800` amounts) and is unimplemented — its layout is recorded in ADR-022. Note: Password protection support was resolved in TASK-057 using `pdfjs-dist`.
+- **Why deferred:** (a) is inherent to parsing a format nobody publishes a spec for. (b) was explicitly scoped out by the user. (c) needs `pdfjs-dist`/`unpdf`, both ESM-only and incompatible with this repo's `module: commonjs` build without a `new Function("import(...)")` hack.
+- **Impact if unaddressed:** A layout change looks like an empty statement, not a failure — the most dangerous shape for a reconciliation feature, since a silently-missing transaction is invisible. Bank Sultra users have no import path. Every Mandiri import carries a manual unlock step.
+- **Trigger condition:** An import returns `total: 0` for a file that visibly contains transactions; or a second bank needs importing; or users start reporting the unlock step as friction.
+- **Proposed resolution:** For (a), treat `total: 0` on a valid PDF as a distinct warning in the UI rather than a bland success, and add a running-balance reconciliation check that warns when parsed amounts do not chain from opening to closing balance. For (b), add `BANK_SULTRA_PDF` using the layout in ADR-022. For (c), migrate the extractor to `unpdf` (its CJS build is compatible) and add an optional password field — deliberately kept out of the current UI.
+- **Priority:** Medium
+- **Status:** Open
+
 ### DEBT-030 — OWNER's POS branch selection is not persisted across visits
 
 - **Date logged:** 2026-08-20

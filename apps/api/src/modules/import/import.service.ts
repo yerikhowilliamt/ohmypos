@@ -18,10 +18,12 @@ export class ImportService {
     private readonly bankParserFactory: BankParserFactory,
   ) {}
 
-  async importCsv(
+  /** Parser-agnostic: the format key alone decides whether this is CSV or PDF. */
+  async importStatement(
     accountId: string,
     format: string,
     fileBuffer: Buffer,
+    options?: { password?: string },
   ): Promise<ImportResult> {
     const account = await this.prisma.account.findUnique({
       where: { id: accountId },
@@ -32,7 +34,7 @@ export class ImportService {
     }
 
     const parser = this.bankParserFactory.getParser(format);
-    const rows = await parser.parse(fileBuffer);
+    const rows = await parser.parse(fileBuffer, options);
 
     if (rows.length === 0) {
       return { imported: 0, skipped: 0, total: 0 };

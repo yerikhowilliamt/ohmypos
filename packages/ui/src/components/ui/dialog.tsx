@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { X } from 'lucide-react';
 import { cn } from '@ohmypos/ui/lib/utils';
+import { usePortalContainer } from '@ohmypos/ui/lib/portal-container';
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -48,8 +49,9 @@ function DialogContent({
   children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const container = usePortalContainer();
   return (
-    <DialogPortal>
+    <DialogPortal container={container}>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"

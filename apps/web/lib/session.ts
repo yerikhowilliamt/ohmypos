@@ -2,6 +2,7 @@ import type { UserResponse } from '@ohmypos/api-contracts';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { API_BASE_URL } from './api';
+import { isTheme, THEME_COOKIE_NAME, type Theme } from './theme';
 
 /**
  * Server-side session lookup. The proxy only sees whether a cookie exists;
@@ -46,4 +47,12 @@ export async function requireRole(
   }
 
   return user;
+}
+
+/** Server-side read of the persisted theme preference, used to render
+ * back-office pages in the right theme on the first paint (no flash). */
+export async function getInitialTheme(): Promise<Theme> {
+  const cookieStore = await cookies();
+  const raw = cookieStore.get(THEME_COOKIE_NAME)?.value;
+  return isTheme(raw) ? raw : 'light';
 }

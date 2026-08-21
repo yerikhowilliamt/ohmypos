@@ -159,7 +159,7 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
           row.original.isValid ? (
             <Badge
               variant="secondary"
-              className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800"
+              className="bg-status-success/10 text-status-success border-status-success/30"
             >
               Valid
             </Badge>
@@ -210,7 +210,7 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
                   {!record.isValid ? (
                     <DropdownMenuItem
                       onClick={() => handleSetValid(record.id)}
-                      className="text-xs text-emerald-700 dark:text-emerald-400 gap-2 cursor-pointer"
+                      className="text-xs text-status-success gap-2 cursor-pointer"
                     >
                       <ShieldCheck className="size-3.5" />
                       Tandai Sebagai Valid
@@ -221,7 +221,7 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
                         onClick={() =>
                           handleSetViolation(record.id, 'NO_DEVICE_COOKIE')
                         }
-                        className="text-xs text-rose-600 dark:text-rose-400 gap-2 cursor-pointer"
+                        className="text-xs text-status-danger gap-2 cursor-pointer"
                       >
                         <ShieldAlert className="size-3.5" />
                         Tandai: HP Pribadi
@@ -230,7 +230,7 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
                         onClick={() =>
                           handleSetViolation(record.id, 'DEVICE_WRONG_BRANCH')
                         }
-                        className="text-xs text-rose-600 dark:text-rose-400 gap-2 cursor-pointer"
+                        className="text-xs text-status-danger gap-2 cursor-pointer"
                       >
                         <ShieldAlert className="size-3.5" />
                         Tandai: Salah Cabang
@@ -239,7 +239,7 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
                         onClick={() =>
                           handleSetViolation(record.id, 'DEVICE_NOT_REGISTERED')
                         }
-                        className="text-xs text-rose-600 dark:text-rose-400 gap-2 cursor-pointer"
+                        className="text-xs text-status-danger gap-2 cursor-pointer"
                       >
                         <ShieldAlert className="size-3.5" />
                         Tandai: Tak Terdaftar

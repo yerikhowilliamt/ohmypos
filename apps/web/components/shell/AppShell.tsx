@@ -4,9 +4,13 @@ import * as React from 'react';
 import type { UserResponse } from '@ohmypos/api-contracts';
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
+import { SidebarProvider } from '@ohmypos/ui/components/sidebar';
 import { cn } from '@ohmypos/ui/lib/utils';
+import { PortalContainerContext } from '@ohmypos/ui/lib/portal-container';
+import { useIsMobile, useIsRail } from '@/hooks/useMediaQuery';
 import { getBreadcrumbSegments } from '@/lib/nav-config';
-import { MobileNavDrawer } from './MobileNavDrawer';
+import { persistThemeCookie } from '@/lib/theme-client';
+import type { Theme } from '@/lib/theme';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
@@ -26,43 +30,64 @@ export function AppShell({
   user,
   children,
   variant = 'default',
+  enableDarkMode = false,
+  initialTheme = 'light',
 }: {
   user: UserResponse;
   children: ReactNode;
   variant?: 'default' | 'pos';
+  /** Back-office-only opt-in (System Design §5) — POS and shared routes
+   * never pass this, so `data-theme` is never emitted there regardless of
+   * what the theme cookie holds. */
+  enableDarkMode?: boolean;
+  initialTheme?: Theme;
 }) {
-  const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  const [theme, setTheme] = React.useState<Theme>(initialTheme);
+  const [shellEl, setShellEl] = React.useState<HTMLDivElement | null>(null);
   const isPos = variant === 'pos';
   const pathname = usePathname();
   const breadcrumb = getBreadcrumbSegments(pathname, user.role);
+  const isMobile = useIsMobile();
+  const isRail = useIsRail();
+
+  const toggleTheme = React.useCallback(() => {
+    setTheme((prev) => {
+      const next: Theme = prev === 'dark' ? 'light' : 'dark';
+      persistThemeCookie(next);
+      return next;
+    });
+  }, []);
 
   return (
     <div
+      ref={setShellEl}
+      data-theme={enableDarkMode ? theme : undefined}
       className={cn(
         'flex bg-surface-base',
         isPos ? 'h-dvh overflow-hidden' : 'min-h-dvh',
       )}
     >
-      <Sidebar user={user} />
-      <MobileNavDrawer
-        user={user}
-        open={mobileNavOpen}
-        onClose={() => setMobileNavOpen(false)}
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
-          variant={variant}
-          breadcrumb={breadcrumb}
-          onOpenMobileNav={() => setMobileNavOpen(true)}
-        />
-        <main
-          className={cn(
-            'min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-5 xl:p-6',
-          )}
-        >
-          {children}
-        </main>
-      </div>
+      <PortalContainerContext.Provider value={enableDarkMode ? shellEl : null}>
+        <SidebarProvider isMobile={isMobile} open={!isRail}>
+          <Sidebar user={user} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Topbar
+              variant={variant}
+              breadcrumb={breadcrumb}
+              enableDarkMode={enableDarkMode}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+            />
+            <main
+              className={cn(
+                'min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-5 xl:p-6',
+              )}
+            >
+              {children}
+            </main>
+          </div>
+        </SidebarProvider>
+      </PortalContainerContext.Provider>
     </div>
   );
 }

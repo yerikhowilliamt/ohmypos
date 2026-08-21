@@ -12,5 +12,8 @@ export interface ParsedTransaction {
 }
 
 export interface BankParser {
-  parse(fileBuffer: Buffer): Promise<ParsedTransaction[]>;
+  parse(
+    fileBuffer: Buffer,
+    options?: { password?: string },
+  ): Promise<ParsedTransaction[]>;
 }

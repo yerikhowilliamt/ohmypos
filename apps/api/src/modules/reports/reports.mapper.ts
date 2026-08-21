@@ -70,6 +70,16 @@ export interface DailyIncomeQueryRow {
   entry_count: number;
 }
 
+export interface DailyCogsQueryRow {
+  day: string;
+  cogs: Prisma.Decimal;
+}
+
+export interface DailyOperatingExpenseQueryRow {
+  day: string;
+  operating_expenses: Prisma.Decimal;
+}
+
 /** One row per Account — a LEFT JOIN, so an account with zero ledger activity
  * still appears with total_inflow = total_outflow = 0. */
 export interface CashBalanceRow {
@@ -208,11 +218,16 @@ export function toDailyIncomeResponse(
 
   return {
     period,
-    rows: buckets.map((b) => ({
-      date: b.date,
-      income: b.income.toFixed(2),
-      entryCount: b.entryCount,
-    })),
+    rows: buckets.map((b) => {
+      const netProfit = b.income.minus(b.cogs).minus(b.operatingExpenses);
+      return {
+        date: b.date,
+        income: b.income.toFixed(2),
+        cogs: b.cogs.toFixed(2),
+        netProfit: netProfit.toFixed(2),
+        entryCount: b.entryCount,
+      };
+    }),
     total: total.toFixed(2),
     averagePerDay: averagePerDay(total, period.dayCount).toFixed(2),
   };

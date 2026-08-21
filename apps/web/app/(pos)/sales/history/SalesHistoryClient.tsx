@@ -70,9 +70,9 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3 rounded-md border border-border-default bg-surface-raised p-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-border-default bg-surface-raised p-3 w-full">
         {user.role === 'OWNER' && (
-          <div className="flex items-center gap-2 min-w-[200px]">
+          <div className="flex items-center gap-2 min-w-50">
             <Store className="size-4 text-text-tertiary" />
             <Select
               value={selectedBranchId}
@@ -93,22 +93,26 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-            <span>Dari:</span>
-            <DatePicker
-              value={startDate}
-              onChange={(date) => setStartDate(date ?? '')}
-              placeholder="Mulai"
-              className="h-6 text-xs w-[160px]"
-            />
-            <span>Sampai:</span>
-            <DatePicker
-              value={endDate}
-              onChange={(date) => setEndDate(date ?? '')}
-              placeholder="Selesai"
-              className="h-6 text-xs w-[160px]"
-            />
+        <div className="flex items-center gap-2 w-full">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-xs text-text-secondary w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 w-full sm:w-auto">
+              <span>Dari:</span>
+              <DatePicker
+                value={startDate}
+                onChange={(date) => setStartDate(date ?? '')}
+                placeholder="Mulai"
+                className="h-6 text-xs w-full sm:w-40"
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 w-full sm:w-auto">
+              <span>Sampai:</span>
+              <DatePicker
+                value={endDate}
+                onChange={(date) => setEndDate(date ?? '')}
+                placeholder="Selesai"
+                className="h-6 text-xs w-full sm:w-40"
+              />
+            </div>
           </div>
         </div>
 

@@ -893,10 +893,48 @@ describe('Reports — Dashboard 3 (e2e)', () => {
       // 2025-05-10T23:30+07:00 = 16:30Z on 05-10  -> WIB day 05-10
       // 2025-05-11T00:30+07:00 = 17:30Z on 05-10  -> WIB day 05-11
       // Under UTC bucketing BOTH would land on 05-10 and this fails.
+      // Each sale is 1× Snack (hpp 2000.00 per unit, see suite setup).
       expect(body.rows).toEqual([
-        { date: '2025-05-10', income: '5000.00', entryCount: 1 },
-        { date: '2025-05-11', income: '5000.00', entryCount: 1 },
+        {
+          date: '2025-05-10',
+          income: '5000.00',
+          cogs: '2000.00',
+          netProfit: '3000.00',
+          entryCount: 1,
+        },
+        {
+          date: '2025-05-11',
+          income: '5000.00',
+          cogs: '2000.00',
+          netProfit: '3000.00',
+          entryCount: 1,
+        },
       ]);
+    });
+
+    it("Case 22: netProfit per day subtracts that day's COGS and operating expenses", async () => {
+      const res = await getReport('daily-income', {
+        ...march,
+        branchId: branchAId,
+      }).expect(200);
+      const body = res.body as DailyIncomeResponse;
+
+      const byDate = new Map(body.rows.map((r) => [r.date, r]));
+      // 2025-03-15, branch A: 1×Kopi (hpp 5000.00) + 3×Teh (hpp 2000.00 each)
+      // = 11000.00 COGS for that day's sale alone (matches the period-level
+      // 11000.00 assertion elsewhere in this suite for the same sale) — this
+      // must come from that day's own sale_items, not the whole period's.
+      expect(byDate.get('2025-03-15')).toMatchObject({
+        income: '50000.00',
+        cogs: '11000.00',
+        netProfit: '39000.00',
+      });
+      // A day with zero income and zero activity nets to zero, not negative.
+      expect(byDate.get('2025-03-06')).toMatchObject({
+        income: '0.00',
+        cogs: '0.00',
+        netProfit: '0.00',
+      });
     });
   });
 

@@ -64,7 +64,7 @@ This was decided in the integration discussion (see PRD background): `Sale` crea
 | `BankTransaction`   | Ported (table, not a module) | Imported bank statement rows — written by `Import`, read by `Reconciliation` and `Allocation`; it has no controller/service of its own in Kasync |
 | `Allocation`        | Ported       | Split-matching between `BankTransaction` and `LedgerEntry`                               |
 | `MatchingEngine`    | Ported       | Suggests matches between bank transactions and ledger entries                            |
-| `Import`            | Ported       | Bank statement CSV import via the `BankParser` strategy pattern — owns all `BankTransaction` writes, including import de-duplication (PRD §5.7) |
+| `Import`            | Ported       | Bank statement import via the `BankParser` strategy pattern — CSV, plus the Mandiri Livin PDF e-statement (ADR-022). Owns all `BankTransaction` writes, including import de-duplication (PRD §5.7) |
 | `Reconciliation`    | Ported       | Read-side queries backing the reconciliation dashboard                                    |
 | `Auth` / `Users`    | Ported pattern, re-implemented | JWT auth (access + refresh, `tokenValidFrom` revocation), with three-role access control — `KASIR` (branch-scoped), `ADMIN` (all-branch, limited modules), `OWNER` (all-branch, unrestricted) — per ADR-011. Kasync's auth *pattern* is reused, but the module is rebuilt: its self-registration and self-deletion endpoints contradict ADR-011 §5 and are deliberately not ported (ERD v3 §7) |
 | `Product`           | New          | Menu items — name, sell price, computed HPP                                              |
@@ -119,7 +119,7 @@ A scheduled or manually-triggered action at the start of each month: for each ra
 
 ### 6.5 Reconciliation
 
-Unchanged from Kasync: import a bank statement CSV via the existing `BankParser` strategy pattern, run the `MatchingEngine` to suggest matches against `LedgerEntry` records (which now include sale-generated entries, not just manual ones), and let the user confirm or split-allocate via `Allocation` on the Reconciliation screen's two-pane layout (`DESIGN.md`). The invariant `sum(Allocation.amountPortion) <= BankTransaction.amount` is enforced the same way (application + database trigger with a row lock), unchanged. Per ADR-011, only `ADMIN` and `OWNER` can perform this matching action — `KASIR` has no access to this screen at all (Section 5).
+Import a bank statement via the existing `BankParser` strategy pattern — Kasync's CSV parsers unchanged, plus a Mandiri Livin PDF e-statement parser added in ADR-022 (`POST /import/pdf/:accountId`, separate from the CSV route so each validates its own file type) — then run the `MatchingEngine` to suggest matches against `LedgerEntry` records (which now include sale-generated entries, not just manual ones), and let the user confirm or split-allocate via `Allocation` on the Reconciliation screen's two-pane layout (`DESIGN.md`). The invariant `sum(Allocation.amountPortion) <= BankTransaction.amount` is enforced the same way (application + database trigger with a row lock), unchanged. Per ADR-011, only `ADMIN` and `OWNER` can perform this matching action — `KASIR` has no access to this screen at all (Section 5).
 
 ### 6.6 Reporting (Dashboard 3, Inventory Summary)
 

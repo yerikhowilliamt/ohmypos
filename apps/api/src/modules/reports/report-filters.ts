@@ -54,3 +54,9 @@ export function saleScope(range: ReportRange, branchId?: string): Prisma.Sql {
 export function wibDayOfEntryDate(): Prisma.Sql {
   return Prisma.sql`to_char(((le.entry_date AT TIME ZONE 'UTC') AT TIME ZONE ${REPORT_TIMEZONE})::date, 'YYYY-MM-DD')`;
 }
+
+/** The WIB calendar day of `s.sold_at`, as `YYYY-MM-DD` text. Same two-step
+ * timezone conversion as wibDayOfEntryDate() and for the same reason. */
+export function wibDayOfSoldAt(): Prisma.Sql {
+  return Prisma.sql`to_char(((s.sold_at AT TIME ZONE 'UTC') AT TIME ZONE ${REPORT_TIMEZONE})::date, 'YYYY-MM-DD')`;
+}

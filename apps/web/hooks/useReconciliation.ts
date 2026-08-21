@@ -1,8 +1,10 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { BANK_IMPORT_FORMATS } from '@ohmypos/api-contracts';
 import type {
   AllocationResponse,
+  BankImportFormat,
   BankTransactionResponse,
   CreateAllocation,
   ImportResult,
@@ -246,18 +248,28 @@ export function useImportBankStatement() {
       accountId,
       format,
       file,
+      password,
     }: {
       accountId: string;
-      format: 'BCA' | 'MANDIRI';
+      format: BankImportFormat;
       file: File;
+      password?: string;
     }) => {
       // Field name `file` and the multipart shape come from
-      // import.controller.ts:37 (FileInterceptor('file')); apiFetch omits the
+      // import.controller.ts (FileInterceptor('file')); apiFetch omits the
       // JSON Content-Type for a FormData body so the browser sets the boundary.
       const body = new FormData();
       body.append('file', file);
+      // CSV and PDF are separate routes so each can validate its own file type.
+      const container =
+        BANK_IMPORT_FORMATS.find((entry) => entry.value === format)
+          ?.container ?? 'csv';
+      const searchParams = new URLSearchParams({ format });
+      if (password && password.trim() !== '') {
+        searchParams.set('password', password.trim());
+      }
       return apiFetch<ImportResult>(
-        `/import/csv/${accountId}?format=${format}`,
+        `/import/${container}/${accountId}?${searchParams.toString()}`,
         { method: 'POST', body },
       );
     },

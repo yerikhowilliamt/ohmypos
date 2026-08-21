@@ -60,7 +60,7 @@ export default function LoginPage() {
       >
         <div className="mb-2">
           <Image
-            src="/logo.svg"
+            src="/logo.png"
             alt="OhMyPos"
             width={142}
             height={40}
