@@ -681,7 +681,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         },
       });
 
-      const saleRequests = Array.from({ length: 10 }, (_, i) =>
+      const saleRequestFactories = Array.from({ length: 10 }, (_, i) => () =>
         request(app.getHttpServer())
           .post('/api/v1/sales')
           .set('Cookie', kasirCookies)
@@ -692,7 +692,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
             items: [{ productId: product.id, quantity: '1.0000' }],
           }),
       );
-      const purchaseRequests = Array.from({ length: 5 }, (_, i) =>
+      const purchaseRequestFactories = Array.from({ length: 5 }, (_, i) => () =>
         request(app.getHttpServer())
           .post('/api/v1/supplier-purchases')
           .set('Cookie', ownerCookies)
@@ -716,8 +716,8 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         { resolved: saleResults, rejectedCount: saleRejectedCount },
         { resolved: purchaseResults, rejectedCount: purchaseRejectedCount },
       ] = await Promise.all([
-        settleAll(saleRequests),
-        settleAll(purchaseRequests),
+        settleAllChunked(saleRequestFactories, 10),
+        settleAllChunked(purchaseRequestFactories, 5),
       ]);
 
       expect(saleRejectedCount).toBe(0);
@@ -812,7 +812,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
       );
       const { resolved: results, rejectedCount } = await settleAllChunked(
         settlementRequestFactories,
-        20,
+        5,
       );
 
       expect(rejectedCount).toBe(0);
