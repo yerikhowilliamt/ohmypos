@@ -34,6 +34,12 @@ import { apiFetch } from '@/lib/api';
  */
 
 export interface ReconciliationFilters {
+  /**
+   * Transactions list ONLY. `summaryFilters` drops it on the way to the summary
+   * endpoint: it matches bank descriptions and nothing on the ledger side, so
+   * letting it through would skew `variance`.
+   */
+  search?: string;
   accountId?: string;
   status?: TransactionStatus;
   page: number;
@@ -85,13 +91,19 @@ function buildQuery(
     params.set('sortBy', filters.sortBy ?? 'txnDate');
     params.set('sortOrder', filters.sortOrder ?? 'desc');
   }
+  if (filters.search) params.set('search', filters.search);
   if (filters.accountId) params.set('accountId', filters.accountId);
   if (filters.status) params.set('status', filters.status);
   return params.toString();
 }
 
 /** The subset of the filters the summary actually varies on. Keeping the sort
- * out of its query key is what stops the pointless refetch described above. */
+ * out of its query key is what stops the pointless refetch described above.
+ *
+ * `search` is omitted for a harder reason than efficiency: it only matches bank
+ * descriptions, so passing it would shrink the bank side of `variance` while
+ * the ledger side stayed whole. Built by listing fields rather than by
+ * spreading + deleting, so a new filter has to be added here on purpose. */
 function summaryFilters(filters: ReconciliationFilters): ReconciliationFilters {
   return {
     accountId: filters.accountId,

@@ -24,12 +24,14 @@ function movement(
   };
 }
 
-/** Sorting and paging are server-driven, so the table takes them as controlled
- * props. These are the single-page defaults. */
+/** Sorting, paging and search are server-driven, so the table takes them as
+ * controlled props. These are the single-page defaults. */
 function singlePage(total = 1) {
   return {
     sorting: [{ id: 'movementDate', desc: true }],
     onSortingChange: vi.fn(),
+    search: '',
+    onSearchChange: vi.fn(),
     pagination: {
       meta: { total, page: 1, limit: 10, totalPages: 1 },
       onPageChange: vi.fn(),
@@ -118,6 +120,8 @@ describe('StockMovementsTable', () => {
         movements={rows}
         sorting={[{ id: 'movementDate', desc: true }]}
         onSortingChange={onSortingChange}
+        search=""
+        onSearchChange={vi.fn()}
         pagination={{
           meta: { total: 2, page: 1, limit: 10, totalPages: 1 },
           onPageChange: vi.fn(),
@@ -143,6 +147,8 @@ describe('StockMovementsTable', () => {
         movements={[movement()]}
         sorting={[{ id: 'movementDate', desc: true }]}
         onSortingChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
         pagination={{
           meta: { total: 594, page: 1, limit: 10, totalPages: 60 },
           onPageChange: vi.fn(),
@@ -155,13 +161,23 @@ describe('StockMovementsTable', () => {
     expect(screen.getByText(/60/)).toBeDefined();
   });
 
-  it('labels the search as page-scoped, since that is all it covers', () => {
-    // DEBT-047: the toolbar filter runs over the current page only. The
-    // placeholder must not imply a full-history search the backend has not got.
-    render(<StockMovementsTable movements={[movement()]} {...singlePage()} />);
+  it('hands typing to the server instead of filtering the page (TASK-072)', () => {
+    // DEBT-047: this box used to be a TanStack column filter over the rows on
+    // screen. It now reports upward and the server decides — so a keystroke
+    // must NOT remove a row that does not match it.
+    const onSearchChange = vi.fn();
+    render(
+      <StockMovementsTable
+        movements={[movement({ rawMaterialName: 'Kopi Arabika' })]}
+        {...singlePage()}
+        onSearchChange={onSearchChange}
+      />,
+    );
 
-    expect(
-      screen.getByPlaceholderText('Cari bahan di halaman ini...'),
-    ).toBeDefined();
+    const box = screen.getByPlaceholderText('Cari bahan baku atau cabang...');
+    fireEvent.change(box, { target: { value: 'teh' } });
+
+    expect(onSearchChange).toHaveBeenCalledWith('teh');
+    expect(screen.getByText('Kopi Arabika')).toBeDefined();
   });
 });

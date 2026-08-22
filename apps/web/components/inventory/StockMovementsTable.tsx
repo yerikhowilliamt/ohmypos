@@ -91,6 +91,12 @@ interface StockMovementsTableProps {
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
   pagination: DataTablePagination;
+  /**
+   * Raw (un-debounced) search text and its setter, owned by
+   * StockMovementsClient next to the page/filter state the query is built from.
+   */
+  search: string;
+  onSearchChange: (value: string) => void;
 }
 
 export function StockMovementsTable({
@@ -99,6 +105,8 @@ export function StockMovementsTable({
   sorting,
   onSortingChange,
   pagination,
+  search,
+  onSearchChange,
 }: StockMovementsTableProps) {
   const columns = React.useMemo<ColumnDef<StockMovementResponse>[]>(
     () => [
@@ -209,12 +217,9 @@ export function StockMovementsTable({
       sorting={sorting}
       onSortingChange={onSortingChange}
       pagination={pagination}
-      // Search stays client-side and therefore covers only the rows on screen.
-      // The placeholder says so rather than implying a full-history search the
-      // backend does not offer (DEBT-047).
-      searchColumns={['rawMaterialName', 'branchName']}
-      searchPlaceholder="Cari bahan di halaman ini..."
-      searchLabel="Cari bahan di halaman ini"
+      serverSearch={{ value: search, onChange: onSearchChange }}
+      searchPlaceholder="Cari bahan baku atau cabang..."
+      searchLabel="Cari pergerakan stok"
       emptyMessage="Belum ada pergerakan stok."
       emptyDescription="Setiap penjualan, pembelian, dan stok awal tercatat di sini."
       exportColumns={exportColumns}

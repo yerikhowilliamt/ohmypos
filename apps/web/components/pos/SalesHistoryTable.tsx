@@ -23,6 +23,13 @@ interface SalesHistoryTableProps {
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
   pagination: DataTablePagination;
+  /**
+   * Raw (un-debounced) search text and its setter. Both live in
+   * SalesHistoryClient, next to the page/filter state the query is built from —
+   * the fetch happens there, not here.
+   */
+  search: string;
+  onSearchChange: (value: string) => void;
 }
 
 export function SalesHistoryTable({
@@ -31,6 +38,8 @@ export function SalesHistoryTable({
   sorting,
   onSortingChange,
   pagination,
+  search,
+  onSearchChange,
 }: SalesHistoryTableProps) {
   const [selectedSale, setSelectedSale] = React.useState<SaleResponse | null>(
     null,
@@ -157,9 +166,6 @@ export function SalesHistoryTable({
 
   return (
     <>
-      {/* Search is still client-side and therefore only covers the rows on
-          screen. The placeholder says so rather than implying a full-history
-          search the backend does not offer yet (see Tech Debt Log). */}
       <DataTable
         columns={columns}
         data={sales}
@@ -167,9 +173,9 @@ export function SalesHistoryTable({
         sorting={sorting}
         onSortingChange={onSortingChange}
         pagination={pagination}
-        searchColumns={['id', 'branchName', 'cashierName', 'accountName']}
-        searchPlaceholder="Cari di halaman ini..."
-        searchLabel="Cari di halaman ini"
+        serverSearch={{ value: search, onChange: onSearchChange }}
+        searchPlaceholder="Cari id, cabang, kasir, atau akun..."
+        searchLabel="Cari riwayat penjualan"
         emptyMessage="Belum ada data transaksi penjualan."
         emptyDescription="Transaksi yang dibuat kasir akan muncul di riwayat ini."
       />

@@ -41,6 +41,34 @@
 
 ## Log
 
+### TASK-072 — Server-side search for the four tables whose search box only covered one page
+
+- **Date:** 2026-08-23
+- **Module / Phase:** `sales`, `reconciliation`, `stock-movements`, `devices` (attendance) — API and web; plus the shared `DataTable`
+- **Objective:** Close DEBT-047 and DEBT-052. Four server-paginated tables offered a search box that was a TanStack column filter over the rows already on screen: it searched 25 rows while looking like it searched the whole history.
+- **Relevant docs:** ADR-010 (contracts as source of truth), ADR-011 (RoleGuard — unchanged, no endpoint's access widened), Playbook §4, DESIGN.md §12.1/§12.4, `docs/plannings/2026-08-23-server-side-search.md` (Option A, approved)
+- **What was done:**
+  - `search: z.string().trim().optional()` added to `SaleQuerySchema`, `ReconciliationQuerySchema`, `StockMovementQuerySchema` and `AttendanceQuerySchema`, following `SupplierQuerySchema`'s existing pattern.
+  - Translated in the four services into `OR` + `contains` + `mode: 'insensitive'`: sales over id / branch / cashier / account; reconciliation over `description`; stock movements over raw material / branch; attendance over user name / **user email** / branch / device label.
+  - `DataTable` gained a `serverSearch: { value, onChange }` prop. `DataTableToolbar` renders one input for both modes; `serverSearch` takes precedence and `searchColumns` is then ignored entirely, so a page the server already filtered is never filtered again client-side.
+  - New `apps/web/hooks/useDebouncedValue.ts` (12 lines, no new dependency). The four call sites own the raw input value, debounce it at 300 ms, and reset to page 1 on the keystroke.
+  - The four tables dropped `searchColumns` and their "…di halaman ini" placeholders for honest ones ("Cari id, cabang, kasir, atau akun…", etc.).
+  - Tests: 7 new e2e cases in `stock-movements.e2e-spec.ts`, 10 in `attendance.e2e-spec.ts`, 7 in `reconciliation-addendum.e2e-spec.ts`, 8 in `sales.e2e-spec.ts`; 5 new `data-table.test.tsx` cases; three new web suites (`SalesHistoryClient.search`, `StockMovementsClient.search`, `AttendanceLogTable.search`) and a `server-side search` block in `ReconciliationClient.test.tsx`.
+- **The trap that mattered most:** `ReconciliationQueryDto` serves **both** `GET /reconciliation/transactions` and `GET /reconciliation/summary`, and both go through the same `buildWhereClause`. The summary computes `variance = actualBankBalance − recordedLedgerBalance`. A keyword can only match a bank transaction's `description`, so putting `search` in the shared builder would shrink the bank side while the ledger side stayed whole — turning `variance` into a wrong number that still looks official. `search` is therefore applied inside `getTransactions` only, after `buildWhereClause` returns, and `summaryFilters` in `useReconciliation.ts` drops it on the frontend. Pinned by an e2e case asserting `/summary?search=alpha` returns a `variance` **identical** to `/summary`; sabotage-verified — moving the clause into `buildWhereClause` fails exactly that one case and nothing else.
+- **Decisions made during this task:**
+  - **Four modules, not the two DEBT-047 names.** Stock Movements and the Attendance log had the identical defect and all four share the same `data-table.tsx` change; splitting them would mean a second visit to the same file, which DEBT-047's own "worth doing once for several modules" reasoning existed to avoid.
+  - **`serverSearch` supersedes `searchColumns` rather than being made type-exclusive.** The plan called them mutually exclusive; the implementation makes the precedence explicit and pins it with a test, which is cheaper than a discriminated-union prop and fails loudly if someone later makes the toolbar apply both.
+  - **Page 1 is claimed at keystroke time, not in an effect on the debounced value** — see ERR-024. The effect version worked but issued one discarded request per settled keyword and made the tests timing-dependent.
+  - **`pg_trgm` was not adopted.** `ILIKE '%x%'` cannot use an index, but the indexed version needs a migration (its own approval gate) and the API contract and frontend are byte-for-byte identical either way. Logged as **DEBT-054**, triggered by `EXPLAIN ANALYZE` on real volume rather than by a guess.
+  - **Attendance's two `OR` groups are wrapped in `AND`.** The branch filter already used a top-level `OR`; writing the search as a second `OR` key on the same object silently overwrites the first and drops the branch scoping. It is the only one of the four services with this clash. Pinned by an e2e case using a deliberately contradictory keyword + branch pair whose correct answer is zero — a clobbered clause answers 11 or 1, never 0.
+- **Status:** Done
+- **Handoff notes:**
+  - **No schema change, no migration, no new dependency** — nothing here needed a second approval gate after the option was chosen.
+  - Gates: `turbo run lint typecheck test` green (13/13 tasks — 54 web suites / 395 tests, 22 api unit suites / 166 tests); full e2e green (15 suites / 347 tests). Every new assertion was sabotage-checked before being trusted: dropping `mode: 'insensitive'` reddens the case-insensitivity cases; moving the reconciliation clause into `buildWhereClause` reddens only the variance case; writing attendance's clauses as two top-level `OR` keys reddens only the AND case; deleting the page reset reddens only the page-reset cases; making the toolbar apply both search modes reddens only the precedence case.
+  - **Browser verification was not performed** — the API dev server was not running in this session. The one manual check worth doing before this ships: on each of the four screens, type a keyword that is absent from page 1 but present later, and confirm the row appears. Everything else is covered by the e2e page-2 cases.
+  - **Deliberately left out of scope:** DEBT-048 (export still covers the current page only — `ExportButton` still reads `getFilteredRowModel()`, unchanged by this task); **DEBT-053** (new — `PayablesTab` is server-paginated with no search box at all, which is a feature rather than a defect fix); **DEBT-054** (new — the unindexed `ILIKE` scan above).
+  - The nine tables that load their whole result set and search client-side (`AccountsTable`, `UsersTable`, `ProductsTable`, `RawMaterialsTable`, `InventorySummaryTable`, `BranchesTable`, `DevicesClient`, `IncomeByPaymentMethodView`, `ProductProfitView`) were **not** touched. Client-side search is correct there and `searchColumns` remains the right prop for them.
+
 ### TASK-071 — Attendance: the month navigator that could not navigate, plus pagination for attendance and leave
 
 - **Date:** 2026-08-22

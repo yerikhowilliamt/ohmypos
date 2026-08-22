@@ -351,3 +351,101 @@ describe('DataTable server-driven sorting and pagination', () => {
     expect(wrapper?.className).toContain('max-w-xs');
   });
 });
+
+/**
+ * `serverSearch` exists because `searchColumns` is a TanStack column filter: it
+ * can only see the `data` array, which for a server-paginated table is one page.
+ * The box searched 25 rows while looking like it searched the whole history
+ * (DEBT-047). These cases pin the difference.
+ */
+describe('DataTable server-side search', () => {
+  it('renders a controlled input whose value the caller owns', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        serverSearch={{ value: 'latte', onChange: vi.fn() }}
+        searchPlaceholder="Cari produk…"
+        searchLabel="Cari produk"
+      />,
+    );
+
+    const box = screen.getByLabelText('Cari produk');
+    expect(box).toHaveValue('latte');
+  });
+
+  it('reports keystrokes upward and does NOT filter the rows itself', () => {
+    // The whole point: the server decides which rows come back, so a keystroke
+    // must leave the page exactly as the server sent it. A client-side filter
+    // here would drop rows that matched on a field with no column of its own.
+    const onChange = vi.fn();
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        serverSearch={{ value: '', onChange }}
+        searchPlaceholder="Cari produk…"
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Cari produk…'), {
+      target: { value: 'latte' },
+    });
+
+    expect(onChange).toHaveBeenCalledWith('latte');
+    expect(screen.getByText('Es Kopi Susu')).toBeDefined();
+    expect(screen.getByText('Latte')).toBeDefined();
+  });
+
+  it('renders the toolbar without any searchColumns at all', () => {
+    // A server-searched table declares no filterable columns; the old guard
+    // returned null in that case and the box disappeared.
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        serverSearch={{ value: '', onChange: vi.fn() }}
+        searchPlaceholder="Cari produk…"
+      />,
+    );
+
+    expect(screen.getByPlaceholderText('Cari produk…')).toBeDefined();
+  });
+
+  it('ignores searchColumns entirely when serverSearch is set', () => {
+    // Precedence, pinned. If a later change made the toolbar ALSO push the
+    // value into the column filter, this page would be filtered twice — and
+    // rows matched server-side on a field with no column (an attendance row
+    // matched by email) would arrive and then vanish.
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        searchColumns={['name']}
+        serverSearch={{ value: '', onChange: vi.fn() }}
+        searchPlaceholder="Cari produk…"
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Cari produk…'), {
+      target: { value: 'latte' },
+    });
+
+    expect(screen.getByText('Es Kopi Susu')).toBeDefined();
+    expect(screen.getByText('Latte')).toBeDefined();
+  });
+
+  it('says "no match" rather than "no data" when a search returned nothing', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={[]}
+        serverSearch={{ value: 'tidak ada', onChange: vi.fn() }}
+        emptyMessage="Belum ada produk."
+      />,
+    );
+
+    expect(screen.getByText(/tidak ditemukan data yang cocok/i)).toBeDefined();
+    expect(screen.queryByText('Belum ada produk.')).toBeNull();
+  });
+});

@@ -1064,4 +1064,117 @@ describe('Sales (e2e)', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // 8. Server-side search (TASK-072, DEBT-047)
+  //
+  // The toolbar search on the sales history table was a TanStack column filter
+  // over the rows already on screen: it searched one page while looking like it
+  // searched the whole history. Counts here are asserted RELATIVELY (against
+  // the unfiltered total) rather than absolutely, because the sales in this
+  // database are whatever the cases above created.
+  // ---------------------------------------------------------------------------
+  describe('Server-side search', () => {
+    interface SaleList {
+      data: SaleResponse[];
+      meta: { total: number; page: number; limit: number; totalPages: number };
+    }
+
+    async function list(query: string): Promise<SaleList> {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/sales?${query}`)
+        .set('Cookie', owner.cookies);
+      expect(res.status).toBe(200);
+      return res.body as SaleList;
+    }
+
+    it('Case 30: matches the branch name, case-insensitively', async () => {
+      // Lowercase keyword against 'SL Test Branch 1'. Removing
+      // `mode: 'insensitive'` from the service turns this red.
+      const all = await list('limit=100');
+      const body = await list('search=sl test branch 1&limit=100');
+
+      expect(body.meta.total).toBeGreaterThan(0);
+      expect(body.meta.total).toBeLessThan(all.meta.total);
+      expect(body.data.every((s) => s.branchName === 'SL Test Branch 1')).toBe(
+        true,
+      );
+    });
+
+    it('Case 31: matches the cashier name', async () => {
+      // The cashier is read off the data rather than hardcoded: which of this
+      // suite's users ends up owning a sale depends on the cases above.
+      const all = await list('limit=100');
+      const cashier = all.data[0].cashierName;
+
+      const body = await list(
+        `search=${encodeURIComponent(cashier.toLowerCase())}&limit=100`,
+      );
+      expect(body.meta.total).toBeGreaterThan(0);
+      expect(body.data.every((s) => s.cashierName === cashier)).toBe(true);
+    });
+
+    it('Case 32: matches the account name', async () => {
+      const body = await list('search=sl test account&limit=100');
+      expect(body.meta.total).toBeGreaterThan(0);
+      expect(body.data.every((s) => s.accountName === 'SL Test Account')).toBe(
+        true,
+      );
+    });
+
+    it('Case 33: finds a sale by its id, from beyond the first page', async () => {
+      // The whole point of the task. The target is deliberately taken from the
+      // END of the ordered list, so a client-side filter over page 1 could
+      // never have produced it.
+      const all = await list('limit=100&sortBy=soldAt&sortOrder=desc');
+      expect(all.data.length).toBeGreaterThan(1);
+      const target = all.data[all.data.length - 1];
+
+      const firstPage = await list(
+        'limit=1&page=1&sortBy=soldAt&sortOrder=desc',
+      );
+      expect(firstPage.data[0].id).not.toBe(target.id);
+
+      const body = await list(`search=${target.id}&limit=100`);
+      expect(body.meta.total).toBe(1);
+      expect(body.data[0].id).toBe(target.id);
+    });
+
+    it('Case 34: shrinks meta.total, not just the rows returned', async () => {
+      // `data.length` alone would pass on a service that filtered the page it
+      // had already fetched; `total` comes from a separate count(where).
+      const all = await list('limit=100');
+      const target = all.data[0];
+
+      const body = await list(`search=${target.id}&limit=100`);
+      expect(body.meta.total).toBe(1);
+      expect(body.meta.totalPages).toBe(1);
+    });
+
+    it('Case 35: treats an empty search as no filter at all', async () => {
+      const all = await list('limit=100');
+      const body = await list('search=&limit=100');
+      expect(body.meta.total).toBe(all.meta.total);
+    });
+
+    it('Case 36: ANDs with branchId instead of replacing it', async () => {
+      // 'SL Test Branch' matches BOTH branches; the branchId must still narrow
+      // the result to one of them.
+      const both = await list('search=sl test branch&limit=100');
+      const scoped = await list(
+        `search=sl test branch&branchId=${branch2Id}&limit=100`,
+      );
+
+      expect(scoped.meta.total).toBeGreaterThan(0);
+      expect(scoped.meta.total).toBeLessThan(both.meta.total);
+      expect(scoped.data.every((s) => s.branchId === branch2Id)).toBe(true);
+    });
+
+    it('Case 37: returns an empty page, not an error, for a keyword nothing matches', async () => {
+      const body = await list('search=tidak-ada-transaksi-ini&limit=100');
+      expect(body.data).toHaveLength(0);
+      expect(body.meta.total).toBe(0);
+      expect(body.meta.totalPages).toBe(1);
+    });
+  });
 });

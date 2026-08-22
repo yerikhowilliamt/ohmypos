@@ -39,6 +39,30 @@
 
 ## Log
 
+### DEBT-054 — Server-side search is an unindexed `ILIKE '%x%'` scan
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-072 (server-side search) — Option C, considered and deferred
+- **Description:** The `search` added to `/sales`, `/reconciliation/transactions`, `/stock-movements` and `/devices/attendance` compiles to Prisma `contains` + `mode: 'insensitive'`, i.e. `ILIKE '%keyword%'`. A leading wildcard cannot use a B-tree index, so each of those queries is a sequential scan of the table (and of the joined `Branch`/`User`/`RawMaterial` rows). The indexed version is a `pg_trgm` extension plus a GIN index on each searched column — or `to_tsvector` with `$queryRaw` if fuzzy matching is wanted too.
+- **Why deferred:** It needs a migration, which is its own approval gate (AGENTS.md §Governance item 1), and an extension that has to exist in the production and e2e databases as well as locally. Crucially the API contract and every line of frontend code are **identical** either way — this is a later optimisation of the same feature, not a different one, so nothing written in TASK-072 has to change when it is done.
+- **Impact if unaddressed:** Search latency grows linearly with table size. `StockMovement` is the one that matters: it grows with recipe lines per sale rather than with sales, so it is the first table where a seq scan per keystroke will be felt.
+- **Trigger condition:** `EXPLAIN ANALYZE` on a real-volume `StockMovement` (or `Sale`) search showing a seq scan whose cost is actually noticeable — not before. At v1 volumes (thousands of rows) it is not measurable.
+- **Proposed resolution:** Migration enabling `pg_trgm` and adding `gin (column gin_trgm_ops)` indexes on the searched columns. `contains` keeps working unchanged and starts using the index; no contract or frontend change.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-053 — `PayablesTab` is server-paginated but has no search box at all
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-072 (server-side search), while enumerating which paginated tables had the DEBT-047 defect
+- **Description:** `components/expenses/PayablesTab.tsx` pages server-side like the four tables TASK-072 fixed, but it never had a `searchColumns` toolbar in the first place — so unlike them it was never *misleading*, only missing. `PayableQuerySchema` has no `search` field, which DEBT-047's proposed resolution had suggested adding in the same pass. (`PurchaseEntryTab`, the supplier-purchase list, is a different case: it has neither search nor server pagination, so it is not comparable to this one.)
+- **Why deferred:** Adding a search box to a screen that has none is a new feature, not a defect fix, and TASK-072's scope was the boxes that lied about what they searched (AGENTS.md §Strict Scope). The plumbing it would need already exists and is proven: `search` on the query schema, an `OR` in the service, `serverSearch` on `DataTable`, `useDebouncedValue` in the client.
+- **Impact if unaddressed:** Someone chasing one supplier's unpaid invoice pages through the list or narrows by supplier dropdown first. Nothing is wrong on screen; the workflow is just slower than the four screens beside it.
+- **Trigger condition:** The first request to "find this invoice/supplier" from the Utang screen, or when that list routinely runs past a couple of pages.
+- **Proposed resolution:** Copy the TASK-072 pattern exactly — `search: z.string().trim().optional()` on `PayableQuerySchema`; an `OR` over supplier name and invoice reference in `PayablesService`; `serverSearch` + `useDebouncedValue` + reset-to-page-1 at the call site. Roughly the same size as one of TASK-072's four modules.
+- **Priority:** Low
+- **Status:** Open
+
 ### DEBT-052 — Attendance log cannot be searched by employee email
 
 - **Date logged:** 2026-08-22
@@ -49,7 +73,7 @@
 - **Trigger condition:** When DEBT-047 (server-side `search`) is implemented — email belongs in that server-side search term, which removes the need for a client-side column at all.
 - **Proposed resolution:** Fold `userEmail` into the server-side search added by DEBT-047 rather than reintroducing a client-side column.
 - **Priority:** Low
-- **Status:** Open
+- **Status:** Resolved (2026-08-23, TASK-072) — exactly as proposed: `user.email` is one clause of the `OR` in `AttendanceService.findRecords`, so an email fragment now finds the row without any column carrying it. No column id changed, so `sortBy=userName` is untouched. Covered by an e2e case that searches `att-kasir-b@` and asserts the single matching row comes back.
 
 ### DEBT-051 — Attendance calendar fetches raw logins instead of a server-reduced monthly matrix
 
@@ -68,6 +92,7 @@
 - **Date logged:** 2026-08-22
 - **Found during:** TASK-070 (Stock Movement read endpoint + screen)
 - **Description:** `/inventory/movements` lists every movement with quantity and direction, but not the resulting stock level after each one. Three related gaps were deferred with it: no drill-down link from `InventorySummaryTable` to the filtered movement list for that material; `referenceId` renders as a short opaque id rather than the order number or purchase invoice it points at; and the toolbar search is page-scoped (shared with DEBT-047) with export page-scoped (DEBT-048).
+- **Update 2026-08-23 (TASK-072):** the page-scoped search half of that last item is closed — this screen's box is now server-side (DEBT-047). The running balance, the drill-down and `referenceId` resolution are all still open, and export is still page-scoped (DEBT-048).
 - **Why deferred:** A running balance is only well-defined for **one material, ordered by movementDate ascending, over its whole history**. This screen pages, sorts five keys in two directions, and filters on six fields. Under any sort other than date-ascending, or on page 2 of anything, a per-row balance is arithmetically meaningless — and it would render as a confident number rather than as an error, which is worse than not showing it. The user agreed to omit it rather than ship a figure that is wrong in most reachable states. `referenceId` resolution needs three conditional lookups because the column is polymorphic across `Sale`/`SupplierPurchase`/`OpeningStock` with no FK, exactly like `LedgerEntry.sourceId` (ERD §2).
 - **Impact if unaddressed:** An operator auditing "why is Kopi at 4.2 kg" reads the movements but must add them up by hand. The summary screen and the movement screen stay two separate destinations rather than one drill-down. Tracing a specific movement back to its originating sale requires a manual id lookup.
 - **Trigger condition:** The first time someone asks "what was the stock after this movement?", or a stock discrepancy investigation requires manually summing more than one page of rows.
@@ -111,7 +136,7 @@
 - **Trigger condition:** The first request to "find a transaction by order number" or to find a bank transaction by its statement description, or when either list exceeds a few pages in normal use.
 - **Proposed resolution:** Add `search: z.string().trim().optional()` to `SaleQuerySchema`, following the existing pattern in `SupplierQuerySchema`, and translate it in `SalesService.findAll` into an `OR` over the fields the toolbar currently filters (`id`, branch name, cashier name, account name). The same field is worth adding to `ReconciliationQuerySchema` (over `description`), `PayableQuerySchema` and `SupplierPurchaseQuerySchema` in the same pass.
 - **Priority:** Medium
-- **Status:** Open
+- **Status:** Resolved (2026-08-23, TASK-072) — `search` added to `SaleQuerySchema`, `ReconciliationQuerySchema`, `StockMovementQuerySchema` and `AttendanceQuerySchema`, translated into `OR` + `contains` + `mode: 'insensitive'` in the four services. `DataTable` gained a `serverSearch` prop; the four affected call sites dropped `searchColumns` and their "di halaman ini" placeholders. Four tables, not the two this entry names — Stock Movements and the Attendance log had the identical defect and share the same `data-table.tsx` change, which is what this entry's own "worth doing once for several modules" reasoning asked for. `PayableQuerySchema` and `SupplierPurchaseQuerySchema` were deliberately **not** included: neither screen has a search box at all, so adding one is a feature rather than a defect fix — see **DEBT-053**. Nine client-searched tables that load their whole set were left alone; client-side search is correct there.
 
 ### DEBT-046 — `pnpm audit` in CI is advisory only (`continue-on-error: true`)
 

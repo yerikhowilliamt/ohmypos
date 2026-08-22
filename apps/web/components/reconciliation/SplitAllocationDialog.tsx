@@ -314,8 +314,8 @@ export function SplitAllocationDialog({
           </div>
 
           {/* Draft rows — DESIGN.md §12.3 Bank Reconciliation Split-Allocation's "allocation rows". */}
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between gap-2">
+          <div className="mt-4 flex flex-col gap-3 rounded-sm border border-border-default bg-surface-muted/60 p-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
                 Baris Alokasi Baru
               </h3>
@@ -325,7 +325,7 @@ export function SplitAllocationDialog({
                 onChange={(event) => setEntryFilter(event.target.value)}
                 placeholder="Cari catatan pembukuan…"
                 aria-label="Cari catatan pembukuan"
-                className="h-8 max-w-[220px] text-xs"
+                className="h-6 max-w-[220px] text-xs"
               />
             </div>
 
@@ -333,9 +333,9 @@ export function SplitAllocationDialog({
               const state = summary.lineStates[line.id];
               const message = state ? DRAFT_LINE_MESSAGES[state] : '';
               return (
-                <div key={line.id} className="space-y-1">
+                <div key={line.id} className="flex flex-col justify-between">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                    <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="min-w-0 flex-1 flex-col gap-1.5 sm:flex">
                       <Label htmlFor={`split-entry-${index}`}>
                         Catatan Pembukuan
                       </Label>
@@ -363,7 +363,7 @@ export function SplitAllocationDialog({
                       </Select>
                     </div>
 
-                    <div className="w-full space-y-1.5 sm:w-44">
+                    <div className="w-full flex flex-col gap-1.5 sm:w-44">
                       <Label htmlFor={`split-amount-${index}`}>Jumlah</Label>
                       <CurrencyInput
                         id={`split-amount-${index}`}
@@ -375,13 +375,13 @@ export function SplitAllocationDialog({
                         }
                       />
                     </div>
-
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="sm"
+                      variant="destructive"
+                      size="icon"
                       aria-label={`Hapus baris ${index + 1}`}
                       disabled={lines.length === 1}
+                      className="w-full sm:w-10"
                       onClick={() =>
                         setLines((previous) =>
                           previous.filter((item) => item.id !== line.id),

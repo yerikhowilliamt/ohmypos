@@ -419,6 +419,119 @@ describe('Attendance list (e2e)', () => {
     });
   });
 
+  /**
+   * TASK-072 / DEBT-047 / DEBT-052. The old box was a TanStack column filter
+   * over the rows on screen, and could not search email at all because no
+   * column carries it.
+   */
+  describe('server-side search', () => {
+    const WINDOW = `startDate=${MONTH_START}&endDate=${MONTH_END}`;
+
+    async function search(query: string): Promise<AttendanceListResponse> {
+      const res = await get(
+        `?${WINDOW}&${query}&limit=100`,
+        owner.cookies,
+      ).expect(200);
+      return res.body as AttendanceListResponse;
+    }
+
+    it('matches the employee name, case-insensitively', async () => {
+      // Lowercase keyword against 'Zulfa Attendance'. Removing
+      // `mode: 'insensitive'` turns this red.
+      const body = await search('search=zulfa');
+      expect(body.meta.total).toBe(11);
+      expect(body.data.every((r) => r.userName === 'Zulfa Attendance')).toBe(
+        true,
+      );
+    });
+
+    it('matches an email fragment, which no column can (DEBT-052)', async () => {
+      const body = await search('search=att-kasir-b@');
+      expect(body.meta.total).toBe(1);
+      expect(body.data[0].userName).toBe('Adi Attendance');
+      expect(body.data[0].userEmail).toBe('att-kasir-b@test.local');
+    });
+
+    it('matches the branch name', async () => {
+      const body = await search('search=branch b');
+      expect(body.meta.total).toBe(1);
+      expect(body.data[0].branchName).toBe('Attendance Branch B');
+    });
+
+    it('matches the device label', async () => {
+      const body = await search('search=terminal a');
+      expect(body.meta.total).toBe(11);
+      expect(
+        body.data.every((r) => r.deviceLabel === 'Attendance Terminal A'),
+      ).toBe(true);
+    });
+
+    it('finds a row the unfiltered FIRST PAGE does not contain', async () => {
+      // Oldest five first: 1–5 Apr, all of them Zulfa's. Adi's single login is
+      // on 15 Apr, so it is reachable only from a later page without a search —
+      // exactly what the client-side filter could never do.
+      const unfiltered = await get(
+        `?${WINDOW}&limit=5&page=1&sortBy=loginAt&sortOrder=asc`,
+        owner.cookies,
+      ).expect(200);
+      const firstPageIds = new Set(
+        (unfiltered.body as AttendanceListResponse).data.map((r) => r.id),
+      );
+
+      const body = await search('search=adi');
+      expect(body.meta.total).toBe(1);
+      expect(firstPageIds.has(body.data[0].id)).toBe(false);
+    });
+
+    it('shrinks meta.total, not just the rows returned', async () => {
+      const body = await search('search=adi');
+      expect(body.meta.total).toBe(1);
+      expect(body.meta.totalPages).toBe(1);
+    });
+
+    it('treats an empty search as no filter at all', async () => {
+      const body = await search('search=');
+      expect(body.meta.total).toBe(12);
+    });
+
+    it('ANDs with branchId instead of overwriting it', async () => {
+      // Both the search and the branch filter are OR groups. Written as two
+      // top-level `OR` keys on one object the second silently replaces the
+      // first, and one of the two filters vanishes.
+      //
+      // The keyword and the branch are deliberately DISJOINT: 'adi' matches
+      // only branch B's employee, so the correct answer for branch A is zero.
+      // A clobbered clause answers 11 (all of branch A) or 1 (all of 'adi')
+      // depending on which key won — never 0.
+      const contradiction = await search(`search=adi&branchId=${branchAId}`);
+      expect(contradiction.meta.total).toBe(0);
+
+      // And the same two filters, agreeing, still return the row.
+      const agreeing = await search(`search=adi&branchId=${branchBId}`);
+      expect(agreeing.meta.total).toBe(1);
+      expect(agreeing.data[0].userName).toBe('Adi Attendance');
+
+      // 'attendance' is in both employees' names, so it alone spans branches.
+      const unscoped = await search('search=attendance');
+      expect(unscoped.meta.total).toBe(12);
+      const scoped = await search(`search=attendance&branchId=${branchAId}`);
+      expect(scoped.meta.total).toBe(11);
+    });
+
+    it('ANDs with violationOnly instead of overwriting it', async () => {
+      const body = await search('search=zulfa&violationOnly=true');
+      expect(body.meta.total).toBe(1);
+      expect(body.data[0].id).toBe(violationId);
+    });
+
+    it('returns an empty page, not an error, for a keyword nothing matches', async () => {
+      const body = await search('search=tidak-ada-karyawan-ini');
+      expect(body.data).toHaveLength(0);
+      expect(body.meta.total).toBe(0);
+      expect(body.meta.totalPages).toBe(1);
+    });
+  });
+
   describe('contract', () => {
     it('rejects a limit above the ceiling', async () => {
       await get('?limit=501', owner.cookies).expect(400);

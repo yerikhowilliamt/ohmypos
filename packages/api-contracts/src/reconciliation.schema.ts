@@ -16,6 +16,13 @@ export type ReconciliationSortBy = z.infer<typeof ReconciliationSortBySchema>;
 
 /** Filters shared by the reconciliation dashboard's list and summary views. */
 export const ReconciliationQuerySchema = PaginationQuerySchema.extend({
+  /**
+   * Used by GET /reconciliation/transactions ONLY. The summary endpoint takes
+   * the same DTO and ignores this deliberately: the keyword can only match a
+   * bank transaction's description, so narrowing the bank side without the
+   * ledger side would make `variance` a wrong number that still looks official.
+   */
+  search: z.string().trim().optional(),
   accountId: UuidString.optional(),
   categoryId: UuidString.optional(),
   branchId: UuidString.optional(),

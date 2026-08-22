@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-024 — Resetting the page in an effect on the debounced keyword fired one request with the new search and the old page number
+
+- **Date found:** 2026-08-23
+- **Found during:** TASK-072 (server-side search), running the full `web` suite — the same two tests had passed in isolation moments earlier.
+- **Symptom:** `SalesHistoryClient.search.test.tsx` and `StockMovementsClient.search.test.tsx` both failed on `expect(lastParams().page).toBe(1)` with `Received: 2`, only under the whole-suite run. Passing when run alone and failing under load is the signature of a test reading an intermediate state, not of a wrong expectation.
+- **Root cause:** Two causes stacked, and only one of them was in the test. The implementation reset the page with `React.useEffect(() => setPage(1), [search])`, keyed on the **debounced** value. An effect runs after commit, so the sequence was: debounce fires → render with `{ search: 'tebet', page: 2 }` → the query hook is called with exactly that → effect runs → re-render with `page: 1`. The intermediate render is real, not a test artifact: with server pagination it is a genuine request for page 2 of a result set that mostly has one page, whose response is then discarded. The test then made it observable by asserting `search` inside `waitFor` and `page` immediately after it, so under load it could sample the transient render and see `page: 2`.
+- **Resolution:** Moved the reset out of the effect and into the search input's own `onChange` (`handleSearchChange` = `setSearchInput(value)` + `setPage(1)`) in all four call sites — Sales History, Reconciliation, Stock Movements, Attendance. Page 1 is now claimed at keystroke time, several hundred milliseconds before the debounced value is even sent, so no request can carry the new keyword with the old page. The tests were tightened in the same pass to assert both fields inside a single `waitFor` via `toMatchObject({ search, page: 1 })`, so they cannot pass or fail on which render they happen to sample.
+- **Prevention:** Concrete rule for review: **a page reset belongs on the event that changes the filter, not on an effect watching the debounced result of it.** The debounced value is by definition late, and everything derived from it has already rendered once by the time the effect runs. Checkable in tests by never asserting two pieces of the same derived state in separate steps — put them in one `waitFor`/`toMatchObject`, which is what turned this from a flake into a deterministic failure. Sabotage-verified: deleting the reset from `handleSearchChange` turns the "returns to page 1 when the keyword changes" case red in all four suites.
+- **Severity:** Low — the wasted request's response was discarded and the correct page-1 request followed immediately, so nothing wrong ever reached the screen. Logged because the flaky test was the only thing that surfaced it, and the same shape (effect on a debounced value) is easy to write again.
+
 ### ERR-023 — The attendance calendar's month navigator never changed months, and any month it could not reach rendered as "nobody came to work"
 
 - **Date found:** 2026-08-22

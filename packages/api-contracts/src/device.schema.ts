@@ -103,6 +103,12 @@ export type AttendanceSortBy = z.infer<typeof AttendanceSortBySchema>;
  * having logged in at all.
  */
 export const AttendanceQuerySchema = PaginationQuerySchema.extend({
+  /**
+   * Matches employee name, employee email, branch name or device label. Email
+   * is searchable without being a table column because the Karyawan cell
+   * already renders it underneath the name (DEBT-052).
+   */
+  search: z.string().trim().optional(),
   branchId: UuidString.optional(),
   violationOnly: z
     .enum(['true', 'false'])

@@ -38,6 +38,13 @@ interface BankTransactionsTableProps {
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
   pagination: DataTablePagination;
+  /**
+   * Raw (un-debounced) search text and its setter, owned by
+   * ReconciliationClient alongside the page/filter state — and deliberately
+   * never forwarded to the summary query.
+   */
+  search: string;
+  onSearchChange: (value: string) => void;
 }
 
 export function BankTransactionsTable({
@@ -47,6 +54,8 @@ export function BankTransactionsTable({
   sorting,
   onSortingChange,
   pagination,
+  search,
+  onSearchChange,
 }: BankTransactionsTableProps) {
   const columns = React.useMemo<ColumnDef<BankTransactionResponse>[]>(
     () => [
@@ -128,9 +137,6 @@ export function BankTransactionsTable({
     [onAllocate],
   );
 
-  // The search below is a client-side column filter and therefore only covers
-  // the rows on screen; the placeholder says so rather than implying a
-  // full-ledger search the backend does not offer (see DEBT-047).
   return (
     <DataTable
       columns={columns}
@@ -139,9 +145,9 @@ export function BankTransactionsTable({
       sorting={sorting}
       onSortingChange={onSortingChange}
       pagination={pagination}
-      searchColumns={['description']}
-      searchPlaceholder="Cari keterangan di halaman ini…"
-      searchLabel="Cari keterangan di halaman ini"
+      serverSearch={{ value: search, onChange: onSearchChange }}
+      searchPlaceholder="Cari keterangan transaksi…"
+      searchLabel="Cari transaksi bank"
       emptyMessage="Belum ada transaksi bank."
       emptyDescription="Impor rekening koran CSV untuk mulai merekonsiliasi."
       exportColumns={exportColumns}

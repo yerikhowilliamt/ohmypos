@@ -34,11 +34,14 @@ const mockSales: SaleResponse[] = [
   },
 ];
 
-/** Sorting and pagination are server-driven now, so the table takes them as
- * controlled props (TASK-067). These are the single-page defaults. */
+/** Sorting, pagination and search are server-driven now, so the table takes
+ * them as controlled props (TASK-067, TASK-072). These are the single-page
+ * defaults. */
 const singlePage = {
   sorting: [{ id: 'soldAt', desc: true }],
   onSortingChange: vi.fn(),
+  search: '',
+  onSearchChange: vi.fn(),
   pagination: {
     meta: { total: 1, page: 1, limit: 25, totalPages: 1 },
     onPageChange: vi.fn(),

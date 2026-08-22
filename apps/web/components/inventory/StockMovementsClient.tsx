@@ -8,6 +8,7 @@ import type {
 } from '@ohmypos/api-contracts';
 import type { OnChangeFn, SortingState } from '@tanstack/react-table';
 import { useStockMovements } from '@/hooks/useInventory';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useRawMaterials } from '@/hooks/useMasterData';
 import { useBranches } from '@/hooks/useBranches';
 import { StockMovementsTable } from './StockMovementsTable';
@@ -56,6 +57,8 @@ const REFERENCE_TYPE_LABEL: Record<StockReferenceType, string> = {
 };
 
 export function StockMovementsClient() {
+  const [searchInput, setSearchInput] = React.useState('');
+  const search = useDebouncedValue(searchInput, 300);
   const [rawMaterialId, setRawMaterialId] = React.useState<string>(ALL);
   const [branchId, setBranchId] = React.useState<string>(ALL);
   const [direction, setDirection] = React.useState<string>(ALL);
@@ -71,6 +74,16 @@ export function StockMovementsClient() {
   const rawMaterials = useRawMaterials();
   const branches = useBranches();
 
+  // Page 1 is claimed at KEYSTROKE time, not when the debounced value lands: a
+  // new keyword usually yields a shorter result set, and page 7 of the old one
+  // is past the end of the new one — an out-of-range page renders as "nothing
+  // found". Doing it here rather than in an effect on the debounced value also
+  // avoids one wasted request with the new keyword and the old page number.
+  const handleSearchChange = React.useCallback((value: string) => {
+    setSearchInput(value);
+    setPage(1);
+  }, []);
+
   // Any change to sort or filters invalidates the current page number — page 4
   // of the old ordering is not page 4 of the new one.
   const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
@@ -83,6 +96,7 @@ export function StockMovementsClient() {
   const queryParams = React.useMemo(() => {
     const activeSort = sorting[0];
     return {
+      search: search || undefined,
       rawMaterialId: rawMaterialId !== ALL ? rawMaterialId : undefined,
       branchId: branchId !== ALL ? branchId : undefined,
       direction: direction !== ALL ? (direction as StockDirection) : undefined,
@@ -103,6 +117,7 @@ export function StockMovementsClient() {
         'asc' | 'desc',
     };
   }, [
+    search,
     rawMaterialId,
     branchId,
     direction,
@@ -126,6 +141,7 @@ export function StockMovementsClient() {
   };
 
   const hasActiveFilter =
+    Boolean(searchInput) ||
     rawMaterialId !== ALL ||
     branchId !== ALL ||
     direction !== ALL ||
@@ -134,6 +150,7 @@ export function StockMovementsClient() {
     Boolean(endDate);
 
   const resetFilters = () => {
+    setSearchInput('');
     setRawMaterialId(ALL);
     setBranchId(ALL);
     setDirection(ALL);
@@ -288,6 +305,8 @@ export function StockMovementsClient() {
         isLoading={isLoading}
         sorting={sorting}
         onSortingChange={handleSortingChange}
+        search={searchInput}
+        onSearchChange={handleSearchChange}
         pagination={{
           meta: paginationMeta,
           onPageChange: setPage,

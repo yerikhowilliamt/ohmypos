@@ -85,6 +85,8 @@ export function useRecentSales() {
 }
 
 export interface SalesFilterParams {
+  /** Free-text search, matched server-side against id, branch, cashier and account. */
+  search?: string;
   branchId?: string;
   accountId?: string;
   startDate?: string;
@@ -97,6 +99,9 @@ export interface SalesFilterParams {
 
 export function useSales(params: SalesFilterParams = {}) {
   const searchParams = new URLSearchParams();
+  // Falsy guard, not `!== undefined`: an empty string means "no filter", and
+  // sending `search=` would make the query key differ for an identical result.
+  if (params.search) searchParams.set('search', params.search);
   if (params.branchId) searchParams.set('branchId', params.branchId);
   if (params.accountId) searchParams.set('accountId', params.accountId);
   if (params.startDate) searchParams.set('startDate', params.startDate);

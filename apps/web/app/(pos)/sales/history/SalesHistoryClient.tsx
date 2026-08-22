@@ -4,6 +4,7 @@ import * as React from 'react';
 import type { SaleSortBy, UserResponse } from '@ohmypos/api-contracts';
 import type { OnChangeFn, SortingState } from '@tanstack/react-table';
 import { useSales } from '@/hooks/usePos';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useBranches } from '@/hooks/useBranches';
 import { SalesHistoryTable } from '@/components/pos/SalesHistoryTable';
 import { Button } from '@ohmypos/ui/components/button';
@@ -42,6 +43,8 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
   );
   const [startDate, setStartDate] = React.useState<string>('');
   const [endDate, setEndDate] = React.useState<string>('');
+  const [searchInput, setSearchInput] = React.useState('');
+  const search = useDebouncedValue(searchInput, 300);
   const [page, setPage] = React.useState(1);
   const [limit, setLimit] = React.useState(DEFAULT_PAGE_SIZE);
   const [sorting, setSorting] = React.useState<SortingState>([
@@ -49,6 +52,16 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
   ]);
 
   const branches = useBranches();
+
+  // Page 1 is claimed at KEYSTROKE time, not when the debounced value lands: a
+  // new keyword usually yields a shorter result set, and page 7 of the old one
+  // is past the end of the new one — an out-of-range page renders as "nothing
+  // found". Doing it here rather than in an effect on the debounced value also
+  // avoids one wasted request with the new keyword and the old page number.
+  const handleSearchChange = React.useCallback((value: string) => {
+    setSearchInput(value);
+    setPage(1);
+  }, []);
 
   // Any change to sort or filters invalidates the current page number — page 4
   // of the old ordering is not page 4 of the new one.
@@ -62,6 +75,7 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
   const queryParams = React.useMemo(() => {
     const activeSort = sorting[0];
     return {
+      search: search || undefined,
       branchId:
         user.role === 'KASIR'
           ? (user.branchId ?? undefined)
@@ -80,7 +94,16 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
       sortOrder: (activeSort?.desc === false ? 'asc' : 'desc') as
         'asc' | 'desc',
     };
-  }, [user, selectedBranchId, startDate, endDate, page, limit, sorting]);
+  }, [
+    user,
+    search,
+    selectedBranchId,
+    startDate,
+    endDate,
+    page,
+    limit,
+    sorting,
+  ]);
 
   const { data: salesData, isLoading: isSalesLoading } = useSales(queryParams);
 
@@ -165,7 +188,8 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
           </div>
         </div>
 
-        {(startDate ||
+        {(searchInput ||
+          startDate ||
           endDate ||
           (user.role === 'OWNER' && selectedBranchId !== 'all')) && (
           <Button
@@ -175,6 +199,7 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
             onClick={() => {
               setStartDate('');
               setEndDate('');
+              setSearchInput('');
               if (user.role === 'OWNER') setSelectedBranchId('all');
               setPage(1);
             }}
@@ -191,6 +216,8 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
         isLoading={isSalesLoading}
         sorting={sorting}
         onSortingChange={handleSortingChange}
+        search={searchInput}
+        onSearchChange={handleSearchChange}
         pagination={{
           meta: paginationMeta,
           onPageChange: setPage,

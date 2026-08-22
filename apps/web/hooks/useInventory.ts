@@ -73,6 +73,8 @@ export function useUpsertOpeningStock() {
 }
 
 export interface StockMovementFilterParams {
+  /** Free-text search, matched server-side against raw material and branch name. */
+  search?: string;
   rawMaterialId?: string;
   branchId?: string;
   direction?: StockDirection;
@@ -93,6 +95,7 @@ export interface StockMovementFilterParams {
  */
 export function useStockMovements(params: StockMovementFilterParams = {}) {
   const searchParams = new URLSearchParams();
+  if (params.search) searchParams.set('search', params.search);
   if (params.rawMaterialId)
     searchParams.set('rawMaterialId', params.rawMaterialId);
   if (params.branchId) searchParams.set('branchId', params.branchId);

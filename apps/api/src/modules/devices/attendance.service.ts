@@ -88,6 +88,7 @@ export class AttendanceService {
     const {
       page = 1,
       limit = 50,
+      search,
       branchId,
       violationOnly,
       startDate,
@@ -97,13 +98,38 @@ export class AttendanceService {
     } = query;
     const skip = (page - 1) * limit;
 
+    // Both the search and the branch filter are OR groups, so they are collected
+    // into an AND array rather than written as two `OR` keys on one object —
+    // the second key would silently overwrite the first, and searching would
+    // quietly drop the branch scoping.
+    const andClauses: Prisma.AttendanceRecordWhereInput[] = [];
+
+    if (search) {
+      andClauses.push({
+        OR: [
+          { user: { name: { contains: search, mode: 'insensitive' } } },
+          // Email is searchable although no column renders it on its own: the
+          // Karyawan cell prints it under the name (DEBT-052).
+          { user: { email: { contains: search, mode: 'insensitive' } } },
+          {
+            user: {
+              branch: { name: { contains: search, mode: 'insensitive' } },
+            },
+          },
+          { device: { label: { contains: search, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    if (branchId) {
+      andClauses.push({
+        OR: [{ user: { branchId } }, { device: { branchId } }],
+      });
+    }
+
     const where: Prisma.AttendanceRecordWhereInput = {
       ...(violationOnly ? { isValid: false } : {}),
-      ...(branchId
-        ? {
-            OR: [{ user: { branchId } }, { device: { branchId } }],
-          }
-        : {}),
+      ...(andClauses.length ? { AND: andClauses } : {}),
       // `loginAt`, NOT `createdAt`: both default to now() and are equal in
       // practice, so filtering the wrong one would never fail a test written
       // against real data. loginAt is what the calendar matrix reads.
