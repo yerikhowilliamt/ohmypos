@@ -523,8 +523,10 @@ describe('Inventory (e2e)', () => {
 
       expect(row.openingQuantity).toBe('38.0000');
       expect(row.inQuantity).toBe('40.0000');
-      expect(row.outQuantity).toBe('11.0000');
-      expect(row.closingQuantity).toBe('67.0000');
+      // ADR-023: period boundaries are Asia/Jakarta. The 2026-05-31T23:59:59.999Z
+      // sale is 2026-06-01T06:59:59.999+07:00 WIB — it lands in June, not May.
+      expect(row.outQuantity).toBe('10.0000');
+      expect(row.closingQuantity).toBe('68.0000');
       expect(row.status).toBe('OK');
 
       const opening = new Prisma.Decimal(row.openingQuantity);
@@ -540,11 +542,13 @@ describe('Inventory (e2e)', () => {
       const summary = await getSummary(owner.cookies, '2026-05');
       const row = rowFor(summary.body as InventorySummaryResponse, mReconId);
 
+      // ADR-023: May's periodEnd is WIB midnight of June 1st, i.e.
+      // 2026-05-31T17:00:00.000Z in UTC — not the UTC calendar boundary.
       const oracle = await signedMovementSum(
         mReconId,
-        '2026-06-01T00:00:00.000Z',
+        '2026-05-31T17:00:00.000Z',
       );
-      expect(row.closingQuantity).toBe('67.0000');
+      expect(row.closingQuantity).toBe('68.0000');
       expect(row.closingQuantity).toBe(oracle.toFixed(4));
     });
 
@@ -602,7 +606,9 @@ describe('Inventory (e2e)', () => {
         summaryJune.body as InventorySummaryResponse,
         mReconId,
       );
-      expect(rowJune.openingQuantity).toBe('67.0000');
+      // 68.0000, not 67.0000 (ADR-023): the 2026-05-31T23:59:59.999Z sale is
+      // WIB June 1st and so is June's opening carry-forward, not May's out.
+      expect(rowJune.openingQuantity).toBe('68.0000');
       expect(rowJune.inQuantity).toBe('100.0000'); // June 1st purchase counted in June
     });
 
@@ -619,8 +625,8 @@ describe('Inventory (e2e)', () => {
       expect(rowMay.openingQuantity).toBe('38.0000');
       expect(rowApr.closingQuantity).not.toBe(rowMay.openingQuantity); // Corrected by stock-take
 
-      expect(rowMay.closingQuantity).toBe('67.0000');
-      expect(rowJun.openingQuantity).toBe('67.0000');
+      expect(rowMay.closingQuantity).toBe('68.0000');
+      expect(rowJun.openingQuantity).toBe('68.0000');
       expect(rowMay.closingQuantity).toBe(rowJun.openingQuantity); // Chained without declaration
     });
   });
@@ -744,8 +750,10 @@ describe('Inventory (e2e)', () => {
       expect(movements[0].direction).toBe('IN');
       expect(movements[0].quantity.toFixed(4)).toBe('50.0000');
       expect(movements[0].branchId).toBeNull();
+      // ADR-023: the OPENING movement is dated at the period's WIB start
+      // (May 1st 00:00 WIB = 2026-04-30T17:00:00.000Z in UTC), not UTC midnight.
       expect(movements[0].movementDate.toISOString()).toBe(
-        '2026-05-01T00:00:00.000Z',
+        '2026-04-30T17:00:00.000Z',
       );
       expect(movements[0].referenceId).toBe(body.data[0].id);
 

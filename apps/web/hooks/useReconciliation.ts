@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BANK_IMPORT_FORMATS } from '@ohmypos/api-contracts';
 import type {
   AllocationResponse,
+  AllocationWithLedgerEntry,
   BankImportFormat,
   BankTransactionResponse,
   CreateAllocation,
@@ -121,17 +122,6 @@ export function usePendingReviewTransactions(
     enabled,
   });
 }
-
-/**
- * The controller includes the related `ledgerEntry` on every row
- * (allocation.controller.ts:57 → allocation.service.ts:174). There is no Zod
- * schema for that composed shape, so it is expressed here as an intersection of
- * two inferred contract types rather than hand-written (AGENTS.md rule 9). A
- * proper `AllocationWithLedgerEntrySchema` is logged in the Tech Debt Log.
- */
-export type AllocationWithLedgerEntry = AllocationResponse & {
-  ledgerEntry: LedgerEntryResponse;
-};
 
 export function useTransactionAllocations(txnId: string | null) {
   return useQuery({

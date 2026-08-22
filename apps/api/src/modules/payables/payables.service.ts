@@ -135,7 +135,13 @@ export class PayablesService {
 
         return toPayableResponse(updated);
       },
-      { timeout: 15000 },
+      // maxWait: Phase 14 finding (B4, concurrency e2e) — 30-way settlement
+      // contention on one payable serializes entirely on the step-1 FOR UPDATE
+      // lock (by design), so later-queued transactions can wait longer than
+      // Prisma's short default before even starting, surfacing as a connection
+      // failure rather than the clean 409 assertSettlable would otherwise
+      // produce. Same reasoning as OpeningStockService.upsert's maxWait.
+      { maxWait: 10000, timeout: 15000 },
     );
   }
 

@@ -7,6 +7,7 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { resetDatabase } from './reset-database';
 
 /**
  * Backend addendum to the frontend Reconciliation screen
@@ -237,26 +238,3 @@ describe('Reconciliation backend addendum (e2e)', () => {
     });
   });
 });
-
-async function resetDatabase(prisma: PrismaService) {
-  await prisma.openingStock.deleteMany({});
-  await prisma.saleItem.deleteMany({});
-  await prisma.sale.deleteMany({});
-  await prisma.payableSettlement.deleteMany({});
-  await prisma.payable.deleteMany({});
-  await prisma.supplierPurchaseItem.deleteMany({});
-  await prisma.supplierPurchase.deleteMany({});
-  await prisma.stockMovement.deleteMany({});
-  await prisma.allocation.deleteMany({});
-  await prisma.bankTransaction.deleteMany({});
-  await prisma.ledgerEntry.deleteMany({});
-  await prisma.user.updateMany({ data: { branchId: null } });
-  await prisma.user.deleteMany({
-    where: {
-      email: { in: ['recon-admin@test.local', 'recon-kasir@test.local'] },
-    },
-  });
-  await prisma.account.deleteMany({});
-  await prisma.category.deleteMany({});
-  await prisma.branch.deleteMany({});
-}

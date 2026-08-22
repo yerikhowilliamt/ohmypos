@@ -29,12 +29,20 @@ async function doFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData =
     typeof FormData !== 'undefined' && init?.body instanceof FormData;
 
+  // Lets a user-reported error be traced back to the exact server log line
+  // (Phase 14 E-8) — the id itself is echoed back on the response (E-7).
+  const correlationId = crypto.randomUUID();
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: 'include',
     headers: isFormData
-      ? { ...init?.headers }
-      : { 'Content-Type': 'application/json', ...init?.headers },
+      ? { 'x-correlation-id': correlationId, ...init?.headers }
+      : {
+          'Content-Type': 'application/json',
+          'x-correlation-id': correlationId,
+          ...init?.headers,
+        },
   });
 
   if (!res.ok) {

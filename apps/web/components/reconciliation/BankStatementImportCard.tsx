@@ -149,6 +149,7 @@ export function BankStatementImportCard({
                 ref={fileInputRef}
                 type="file"
                 accept={selectedFormat.accept}
+                className="file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-muted-foreground placeholder:text-muted-foreground"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               />
             </div>

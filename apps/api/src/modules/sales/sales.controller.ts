@@ -16,12 +16,17 @@ import { BranchScoped } from '../../common/decorators/branch-scoped.decorator';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ReqUser } from '../../common/decorators/req-user.decorator';
+import { InsufficientStockException } from '../stock-movements/stock-movements.exceptions';
+import { MetricsService } from '../metrics/metrics.service';
 import { CreateSaleDto, SaleQueryDto } from './sales.dto';
 import { SalesService } from './sales.service';
 
 @Controller('sales')
 export class SalesController {
-  constructor(private readonly salesService: SalesService) {}
+  constructor(
+    private readonly salesService: SalesService,
+    private readonly metrics: MetricsService,
+  ) {}
 
   /**
    * `@Roles` lists all three roles explicitly (plan §1 decision 6) — the effect
@@ -37,8 +42,20 @@ export class SalesController {
   @UseGuards(BranchScopeGuard, RoleGuard)
   @BranchScoped('body.branchId')
   @Roles('KASIR', 'ADMIN', 'OWNER')
-  create(@Body() dto: CreateSaleDto, @ReqUser('sub') userId: string) {
-    return this.salesService.create(dto, userId);
+  async create(@Body() dto: CreateSaleDto, @ReqUser('sub') userId: string) {
+    const stopTimer = this.metrics.saleDurationSeconds.startTimer();
+    try {
+      const result = await this.salesService.create(dto, userId);
+      this.metrics.saleCreatedTotal.inc();
+      return result;
+    } catch (error) {
+      if (error instanceof InsufficientStockException) {
+        this.metrics.stockConflictTotal.inc();
+      }
+      throw error;
+    } finally {
+      stopTimer();
+    }
   }
 
   @Get()

@@ -148,7 +148,7 @@
 
 ## ADR-008: Reports computed at query time in v1; no materialized views yet
 
-**Status:** Accepted
+**Status:** Accepted. **Re-affirmed 2026-08-22** on measured volume (Phase 14 Workstream C, `DEBT-001`) — see below.
 
 **Context:** Dashboard 3 and Dashboard 5 need aggregated, near-real-time figures (P&L, top products, inventory summary). Kasync's own reconciliation dashboard already uses query-time aggregation successfully at its transaction volume.
 
@@ -162,6 +162,8 @@
 **Alternatives considered:**
 
 - _Materialized views or a read-model table from the start_: rejected for v1 — premature optimization for a data volume that isn't yet known, and adds real implementation and consistency-maintenance cost.
+
+**2026-08-22 re-affirmation (Phase 14 Workstream C):** The "if report query latency becomes a problem" condition above could finally be checked against measured data instead of guesswork. Two disposable volume tiers were seeded (`apps/api/prisma/seed-volume.ts`, 3 branches at realistic daily throughput): T1 (12 months, ~131K sales) and T2 (36 months, ~395K sales, ~986K `sale_items`, ~1.8M `stock_movements`). All five Dashboard-3 report endpoints, plus `cash-balance`, were measured at T2 over 20 warm HTTP requests each with `EXPLAIN (ANALYZE, BUFFERS)` on the underlying query. Applying System Design §11's literal trigger (any report >1s at a one-year range, or a Seq Scan on `sale_items`/`ledger_entries` at a one-month range): **no trigger fired for any of the six endpoints measured** — worst case was 720ms p95 (`daily-income` at one year), and every one-month query resolved via an index. This ADR's decision therefore **holds** at T2 volume, which is roughly 3x the business's actual current scale. Full measurement table and per-endpoint detail: `docs/08 - Tech_Debt_Log.md`, `DEBT-001`. `GET /inventory/summary` was measured separately (it has no comparable "range" dimension) and its own stricter p95 budget **did** fire at T2 — see `DEBT-013`, which stays Open with the new numbers; this does not affect the verdict above, since System Design §11's report trigger and DEBT-013's inventory-specific budget are different thresholds by design.
 
 ---
 
@@ -443,7 +445,7 @@ A second, quieter problem forced the same decision. Under ADR-014 every central 
 
 ## ADR-018: Report period boundaries and daily buckets are Asia/Jakarta; storage stays UTC
 
-**Status:** Accepted
+**Status:** Accepted. Extended by ADR-023 (2026-08-22) — inventory's month boundary now delegates to this ADR's `common/period.ts` instead of defining its own UTC boundary.
 
 **Context:** Dashboard 3's five reports are filtered by date range, and one of them buckets income by day. Every timestamp in this repository is stored as a UTC instant in a `TIMESTAMP(3)` column without time zone and serialized with `toISOString()`. Nothing had ever needed to convert a stored instant into a *calendar day*, so the repo had no convention for it.
 
@@ -601,3 +603,31 @@ Scope is deliberately one bank: the Mandiri Livin e-statement. A second sample i
 - *Lenient repair of malformed amounts*: rejected — malformed amounts came from a synthetic sample, not real output. Guessing a money value is worse than skipping the row, which surfaces as an unreconciled gap.
 - *Regexing flattened page text*: rejected — description, date, time and amount interleave unpredictably once the grid is flattened.
 
+## ADR-023: Calendar period boundaries are Asia/Jakarta everywhere, extending ADR-018 to Inventory
+
+**Status:** Accepted
+
+**Context:** `apps/api/src/common/period.ts` (ADR-018, backing every `/reports/*` endpoint) resolves a calendar month/range in **Asia/Jakarta (UTC+7)**. `apps/api/src/modules/inventory/period.ts` (backing `/inventory/summary` and `/inventory/opening-stock`, i.e. Dashboard 5) resolved the same kind of boundary in **UTC**. Each file's own header instructed the other to import from it; neither did, and Phase 6 (inventory) shipped before Phase 7 (reports) made its ADR-018 decision, so the contradiction was never reconciled.
+
+`StockMovement.movementDate` and `LedgerEntry.entryDate` are both set from `Sale.soldAt`, so the seven-hour gap between the two definitions was directly observable: a sale in the last WIB hour of a month (e.g. `2026-08-01 00:30 WIB`, stored as `2026-07-31T17:30:00.000Z`) was placed in **August** by every report but in **July** by the Inventory Summary — the same sale's revenue and COGS in one month, its stock consumption in the previous one. Phase 14's `monthly-cycle.e2e-spec.ts` (Stage 8) reproduced this empirically against a real July cycle before this ADR was written: pre-fix, July's Kopi `outQuantity` read `0.1600` where the WIB-consistent figure is `0.1400`, and August's `inQuantity` read `0.0000` where a WIB-dated purchase should have appeared.
+
+PRD §9's success criterion — "one full monthly cycle end-to-end without manual data correction" — cannot be met while two dashboards disagree about which month a sale belongs to.
+
+**Decision:**
+
+1. **`apps/api/src/modules/inventory/period.ts` delegates to `apps/api/src/common/period.ts`.** `parsePeriodMonth('2026-07')` computes the first and last calendar day of July, calls `resolveReportRange` (ADR-018) to get the WIB instant range, and returns that as `periodStart`/`periodEnd`. `common/period.ts` is now the **only** place a calendar-month or calendar-range boundary is computed in the repository.
+2. **`OpeningStock.periodMonth` (a `@db.Date` column) is decoupled from the WIB instant.** A `@db.Date` column stores whatever calendar date the driver derives from the JS `Date` it receives; the WIB `periodStart` for July is `2026-06-30T17:00:00.000Z`, which truncates to `2026-06-30` — one day earlier than every row written under the pre-ADR-023 UTC boundary (`2026-07-01T00:00:00.000Z` → `2026-07-01`). Using `periodStart` directly for this column would silently orphan every existing `OpeningStock` row's unique key `(rawMaterialId, periodMonth)`, causing the next declaration for an existing period to be inserted as a duplicate instead of updating the original. `Period` therefore carries a second field, `periodMonthDate` (UTC midnight of the 1st, computed independently of the WIB shift), used **only** for `OpeningStock.periodMonth` reads and writes in `opening-stock.service.ts`. Every `StockMovement` range query (`movementDate`) and the `OPENING` movement's own `movementDate` continue to use the WIB `periodStart`/`periodEnd` — only the `@db.Date` column's value is decoupled.
+3. **No data migration.** Verified empirically (not assumed): writing `periodMonthDate` for July 2026 stores `2026-07-01`, byte-identical to what the pre-ADR-023 code stored. Existing `OpeningStock` rows keep matching their unique key with no backfill.
+4. **`apps/api/test/inventory.e2e-spec.ts`'s Case R and Case D-1 were updated**, not left as regressions: they encoded the old UTC boundary as "correct" (e.g. a `2026-05-31T23:59:59.999Z` sale counted in May's `outQuantity`). Under WIB that instant is `2026-06-01T06:59:59.999+07:00` — June, not May — so May's `outQuantity`/`closingQuantity` and June's `openingQuantity` shift accordingly (`10.0000`/`68.0000`/`68.0000` in place of `11.0000`/`67.0000`/`67.0000`), and the OPENING `StockMovement`'s `movementDate` is now `2026-04-30T17:00:00.000Z` (WIB May 1st midnight) rather than the UTC calendar date. The full e2e suite (13 suites / 247 tests) is green after the update.
+
+**Consequences:**
+- (+) Dashboard 3 (reports) and Dashboard 5 (inventory) agree on which month a sale belongs to, by construction — the exact defect this ADR closes.
+- (+) One definition of a calendar-month/range boundary for the whole repository (`common/period.ts`), matching ADR-018's original intent.
+- (+) No data migration required for `OpeningStock` (verified, §Decision 3).
+- (−) `/inventory/summary` and `/inventory/opening-stock`'s numbers change for any period boundary within the last WIB day-vs-UTC-day of a month, for anyone comparing against a screenshot or exported report taken before this ADR.
+- (−) `Period.periodMonthDate` is a second date field on the same interface as `periodStart`/`periodEnd`, carrying real risk of the wrong one being used at a future call site — mitigated by the type's own doc comment explaining exactly when each applies, and by `opening-stock.service.ts` being the only file that reads `periodMonthDate`.
+
+**Alternatives considered:**
+- *Reports adopt UTC, superseding ADR-018* (Phase 14 plan §3.1 Option 2): rejected — reverses a deliberate, documented decision for a business that operates entirely in WIB; a "daily income" report whose day starts at 07:00 local is wrong for the user.
+- *Document the divergence, change nothing* (Phase 14 plan §3.1 Option 3): rejected — PRD §9's "no manual correction" criterion cannot be met while a single sale's COGS and stock-out disagree by construction.
+- *Use `periodStart` directly for `OpeningStock.periodMonth` and accept the one-day drift*: rejected once the truncation behavior was measured — it does not just look different, it breaks the unique-key lookup for every pre-existing row, which is a correctness bug, not a cosmetic one.

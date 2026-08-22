@@ -4,12 +4,15 @@ import { APP_PIPE, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { randomUUID } from 'crypto';
 import { LoggerModule } from 'nestjs-pino';
+import pino from 'pino';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RoleGuard } from './common/guards/role.guard';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
+import { HealthModule } from './modules/health/health.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AllocationModule } from './modules/allocation/allocation.module';
 import { BranchesModule } from './modules/branches/branches.module';
@@ -50,10 +53,38 @@ import { ReportsModule } from './modules/reports/reports.module';
         // Never log request/response bodies — they carry financial data (Playbook §9).
         autoLogging: true,
         redact: ['req.headers.authorization', 'req.headers.cookie'],
+        serializers: {
+          // Phase 14 E-5 audit finding: `password` on POST
+          // /import/pdf/:accountId?password=... (import.controller.ts) is a
+          // query-string field, not a header — pino's default `req`
+          // serializer logs the full URL including the query string, so
+          // `redact` above (which only reaches header paths) never touched
+          // it. A locked statement's unlock password was going to the log
+          // in plaintext on every import. Wraps the standard serializer
+          // (rather than replacing it) so headers/remoteAddress/etc. are
+          // still logged exactly as before — only `url` is touched.
+          req: pino.stdSerializers.wrapRequestSerializer((req) => {
+            const url = new URL(req.raw.url ?? '', 'http://internal');
+            if (url.searchParams.has('password')) {
+              url.searchParams.set('password', '[Redacted]');
+            }
+            req.url = url.pathname + url.search;
+            return req;
+          }),
+        },
       },
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    // `limit` is env-configurable, defaulting to the unchanged production
+    // value of 100. Phase 14's concurrency e2e suite (B1-B4) legitimately
+    // fires well over 100 requests from one IP inside a 60s window — the
+    // e2e-only .env.test raises THROTTLE_LIMIT so those tests measure lock
+    // contention and pool exhaustion, not this guard.
+    ThrottlerModule.forRoot([
+      { ttl: 60000, limit: Number(process.env.THROTTLE_LIMIT ?? 100) },
+    ]),
     PrismaModule,
+    HealthModule,
+    MetricsModule,
     AuthModule,
     UsersModule,
     AccountsModule,

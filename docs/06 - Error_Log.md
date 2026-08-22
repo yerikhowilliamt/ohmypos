@@ -37,6 +37,36 @@
 
 ## Log
 
+### ERR-021 — CORS `allowedHeaders` never updated for the new `x-correlation-id` request header, breaking login in every real browser
+
+- **Date found:** 2026-08-22
+- **Found during:** TASK-065 (Phase 14 Workstream E follow-up) — the user hit "Failed to fetch" on `/login` in their own browser after this session's ops-readiness work shipped.
+- **Symptom:** Every `apiFetch` call from `apps/web` (login included) failed in a real browser with a bare `TypeError: Failed to fetch` and no server-side log line for the request at all. `curl` against the identical URL/method/body succeeded instantly and consistently, which — before the real cause was found — led to an incorrect diagnosis that a browser-automation tool's own sandboxing was at fault (see `DEBT-024`'s superseded note) rather than the application.
+- **Root cause:** Earlier in this same Phase 14 session (E-8, for request tracing), `apps/web/lib/api.ts`'s `doFetch` was changed to send an `x-correlation-id` header on every request. `apps/api/src/main.ts`'s `app.enableCors({ allowedHeaders: [...] })` was never updated to match — it still listed only `['Content-Type', 'Authorization']`. Every real browser's CORS preflight (`OPTIONS`) correctly rejected the actual request because the header the client wanted to send wasn't in the server's allow-list, and a CORS-blocked request surfaces to `fetch()` as an opaque network failure with no distinguishing detail — not as an HTTP error status, and with nothing to log server-side because the browser never sends the real request past the failed preflight. `curl` has no CORS layer, so it never reproduced the failure, which is exactly why this went undetected through the rest of Phase 14's otherwise-thorough testing.
+- **Resolution:** Added `'x-correlation-id'` to `allowedHeaders` in `apps/api/src/main.ts`. Verified with a manual `curl -X OPTIONS` preflight simulation (`Access-Control-Request-Headers: content-type,x-correlation-id`) confirming the response's `Access-Control-Allow-Headers` now includes it.
+- **Prevention:** Any future request header added to `doFetch` (or any other frontend fetch wrapper) must be checked against `main.ts`'s CORS `allowedHeaders` in the same change — the two lists have no shared source of truth today, so nothing catches this class of drift automatically. Worth a follow-up: an e2e test that exercises a real preflight (most e2e suites use `supertest`, which — like `curl` — does not enforce CORS, so this class of bug needs either a browser-based check or an explicit assertion against the CORS middleware's configured header list, not a same-origin server-side test).
+- **Severity:** Critical — it broke every authenticated action in the entire frontend application (nothing could reach the API from a real browser) the moment a real user tried it, and none of this session's extensive automated testing (unit, e2e via `supertest`, `curl`) was capable of catching it by construction.
+
+### ERR-020 — Dashboard 3 and Dashboard 5 disagreed on which month a sale belonged to (WIB vs UTC boundary split)
+
+- **Date found:** 2026-08-22
+- **Found during:** TASK-065 (Phase 14 Workstream A, `monthly-cycle.e2e-spec.ts` Stage 8) — reproduced deliberately, as predicted by the plan's §2.1 research finding, before Gate 1 was even asked.
+- **Symptom:** A sale placed in the last WIB hour of a month (e.g. `2026-08-01 00:30 WIB`, stored as `2026-07-31T17:30:00.000Z`) landed in **August** on every Dashboard 3 report but in **July** on the Dashboard 5 Inventory Summary — the same sale's revenue and COGS counted in one month, its stock consumption in the previous one. Reproduced empirically against a real July cycle: pre-fix, July's Kopi `outQuantity` read `0.1600` where the WIB-consistent figure is `0.1400`, and August's `inQuantity` read `0.0000` where a WIB-dated purchase should have appeared.
+- **Root cause:** Two independent period-boundary implementations existed with no shared source of truth. `apps/api/src/common/period.ts` (backing every `/reports/*` endpoint, ADR-018) resolves calendar boundaries in **Asia/Jakarta (UTC+7)**. `apps/api/src/modules/inventory/period.ts` (backing `/inventory/summary` and `/inventory/opening-stock`) resolved the same kind of boundary in raw **UTC**. Each file's own header comment instructed the other to import from it; neither actually did, because Phase 6 (inventory) shipped before Phase 7 (reports) made its ADR-018 decision, and the contradiction was never reconciled afterward.
+- **Resolution:** ADR-023. `inventory/period.ts` now delegates to `common/period.ts` for the WIB instant range, so there is exactly one place a calendar-month boundary is computed in the repository. `OpeningStock.periodMonth` (a `@db.Date` column) needed a second, deliberately UTC-midnight-derived field (`periodMonthDate`) to avoid orphaning existing rows' unique key — see ADR-023 §Decision 2 for why a naive `periodStart` write would have silently broken lookups for every pre-existing `OpeningStock` row. Verified empirically (not assumed) that no data migration was needed. `apps/api/test/inventory.e2e-spec.ts`'s Case R and Case D-1 were updated to encode the WIB-correct expected values.
+- **Prevention:** `apps/api/test/monthly-cycle.e2e-spec.ts` Stage 8 exercises exactly this boundary (a sale in the last WIB hour of the cycle month) as a permanent regression guard — it was written to fail against the pre-ADR-023 code specifically to produce the reproduction evidence above, then re-run green after the fix. General lesson: when two modules independently implement "the same" calendar concept, a comment telling each to import from the other is not a substitute for actually doing it — the drift is invisible until a boundary instant is tested end-to-end across both.
+- **Severity:** High — this is a money/stock correctness defect (Playbook §10): it changes which month a sale's COGS and stock consumption are attributed to, silently, for any sale near a WIB month boundary.
+
+### ERR-019 — Missing `tsconfigRootDir` in `apps/web/eslint.config.mjs` caused IDE parser ambiguity
+
+- **Date found:** 2026-08-21
+- **Found during:** TASK-064 (Fix ESLint tsconfigRootDir in apps/web)
+- **Symptom:** Editor reported `Parsing error: No tsconfigRootDir was set, and multiple candidate TSConfigRootDirs are present` when inspecting files in `apps/web`.
+- **Root cause:** `apps/web/eslint.config.mjs` relied on `eslint-config-next/typescript` without explicitly providing `tsconfigRootDir`, so typescript-eslint found multiple candidate root dirs across the monorepo (`apps/api`, `packages/ui`).
+- **Resolution:** Added `languageOptions: { parserOptions: { tsconfigRootDir: import.meta.dirname } }` to `apps/web/eslint.config.mjs`.
+- **Prevention:** When setting up flat ESLint configurations in a pnpm monorepo, always specify `tsconfigRootDir: import.meta.dirname` for workspace packages using TypeScript parser rules.
+- **Severity:** Low — IDE developer experience/linter error only.
+
 ### ERR-018 — Sidebar and shared layouts failed to inherit dark mode tokens
 
 - **Date found:** 2026-08-21

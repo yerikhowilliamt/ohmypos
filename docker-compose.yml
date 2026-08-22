@@ -40,11 +40,11 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      PORT: 4013
+      PORT: 4015
       DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/ohmypos_db?schema=public'
       CORS_ORIGIN: 'http://localhost:3001'
     ports:
-      - '4013:4013'
+      - '4015:4015'
     volumes:
       - .:/repo
       # Every node_modules directory is a volume, never the bind mount: the host's
@@ -58,6 +58,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', "node -e \"fetch('http://127.0.0.1:4015/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
   web:
     build:
@@ -68,7 +74,7 @@ services:
     environment:
       NODE_ENV: development
       # Browser-side calls resolve on the host, not the compose network.
-      NEXT_PUBLIC_API_BASE_URL: 'http://localhost:4013/api/v1'
+      NEXT_PUBLIC_API_BASE_URL: 'http://localhost:4015/api/v1'
     ports:
       - '3001:3001'
     volumes:
@@ -80,7 +86,8 @@ services:
       - web_pkg_ui:/repo/packages/ui/node_modules
       - web_next_cache:/repo/apps/web/.next
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:
