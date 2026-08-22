@@ -93,7 +93,7 @@ export interface StockMovementFilterParams {
  * is the highest-volume table in the system — it grows with recipe lines per
  * sale, not with sales — so an unbounded fetch was never an option here.
  */
-export function useStockMovements(params: StockMovementFilterParams = {}) {
+function buildStockMovementQuery(params: StockMovementFilterParams): string {
   const searchParams = new URLSearchParams();
   if (params.search) searchParams.set('search', params.search);
   if (params.rawMaterialId)
@@ -108,17 +108,29 @@ export function useStockMovements(params: StockMovementFilterParams = {}) {
   if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
   if (params.page) searchParams.set('page', String(params.page));
   if (params.limit) searchParams.set('limit', String(params.limit));
+  return searchParams.toString();
+}
 
-  const qs = searchParams.toString();
+/**
+ * One page, outside React Query — the Export button's `fetchAllPages` loop needs
+ * it (DEBT-048). Shares `buildStockMovementQuery` with the hook so the exported
+ * set can never drift from the one on screen.
+ */
+export function fetchStockMovementsPage(
+  params: StockMovementFilterParams = {},
+) {
+  const qs = buildStockMovementQuery(params);
+  return apiFetch<StockMovementListResponse>(
+    qs ? `/stock-movements?${qs}` : '/stock-movements',
+  );
+}
 
+export function useStockMovements(params: StockMovementFilterParams = {}) {
   return useQuery({
     queryKey: INVENTORY_QUERY_KEYS.stockMovements(
       params as Record<string, unknown>,
     ),
-    queryFn: () =>
-      apiFetch<StockMovementListResponse>(
-        qs ? `/stock-movements?${qs}` : '/stock-movements',
-      ),
+    queryFn: () => fetchStockMovementsPage(params),
     // Paging replaces the whole result set; without this the table flashes its
     // loading skeleton on every page click.
     placeholderData: keepPreviousData,

@@ -52,7 +52,13 @@ const empty: DailyIncomeResponse = {
 
 describe('DailyIncomeView component', () => {
   it('renders zero-filled daily rows and the trend chart (gap-fill, ADR-018)', () => {
-    render(<DailyIncomeView data={withRows} isLoading={false} />);
+    render(
+      <DailyIncomeView
+        data={withRows}
+        isLoading={false}
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
 
     expect(screen.getByText('2026-08-01')).toBeInTheDocument();
     expect(screen.getByText('2026-08-02')).toBeInTheDocument();
@@ -60,7 +66,13 @@ describe('DailyIncomeView component', () => {
   });
 
   it('shows the chart empty state when there is no income in range', () => {
-    render(<DailyIncomeView data={empty} isLoading={false} />);
+    render(
+      <DailyIncomeView
+        data={empty}
+        isLoading={false}
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
     expect(
       screen.getByText('Tidak ada pendapatan pada rentang ini.'),
     ).toBeInTheDocument();

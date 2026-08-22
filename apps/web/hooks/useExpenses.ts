@@ -66,13 +66,22 @@ export function useBranches() {
 
 // --- General Expenses (manual LedgerEntry, type=OUTFLOW, sourceType=MANUAL) ---
 
+/**
+ * One page of manual outflow entries. `page`/`limit` are parameters rather than
+ * a hardcoded `limit=50` so the Export button can loop the whole set
+ * (DEBT-048) — the screen itself still shows only the first 50, which is a
+ * separate defect logged as DEBT-055.
+ */
+export function fetchLedgerEntriesPage(page = 1, limit = 50) {
+  return apiFetch<{ data: LedgerEntryResponse[]; meta: PaginationMeta }>(
+    `/ledger-entries?type=OUTFLOW&sortBy=entryDate&page=${page}&limit=${limit}`,
+  );
+}
+
 export function useLedgerEntries() {
   return useQuery({
     queryKey: EXPENSES_QUERY_KEYS.ledgerEntries,
-    queryFn: () =>
-      apiFetch<{ data: LedgerEntryResponse[]; meta: PaginationMeta }>(
-        '/ledger-entries?type=OUTFLOW&sortBy=entryDate&limit=50',
-      ),
+    queryFn: () => fetchLedgerEntriesPage(),
   });
 }
 
@@ -122,13 +131,17 @@ export function useCreateSupplier() {
 
 // --- Supplier Purchases ---
 
+/** See `fetchLedgerEntriesPage` — same reasoning, same DEBT-048/DEBT-055 split. */
+export function fetchSupplierPurchasesPage(page = 1, limit = 50) {
+  return apiFetch<{ data: SupplierPurchaseResponse[]; meta: PaginationMeta }>(
+    `/supplier-purchases?sortBy=purchaseDate&page=${page}&limit=${limit}`,
+  );
+}
+
 export function useSupplierPurchases() {
   return useQuery({
     queryKey: EXPENSES_QUERY_KEYS.supplierPurchases,
-    queryFn: () =>
-      apiFetch<{ data: SupplierPurchaseResponse[]; meta: PaginationMeta }>(
-        '/supplier-purchases?sortBy=purchaseDate&limit=50',
-      ),
+    queryFn: () => fetchSupplierPurchasesPage(),
   });
 }
 
@@ -169,7 +182,7 @@ export interface PayableFilterParams {
  * `invalidateQueries({ queryKey: EXPENSES_QUERY_KEYS.payables })` still matches
  * every filtered/paged variant — TanStack invalidates by key prefix.
  */
-export function usePayables(params: PayableFilterParams = {}) {
+function buildPayableQuery(params: PayableFilterParams): string {
   const searchParams = new URLSearchParams();
   if (params.supplierId) searchParams.set('supplierId', params.supplierId);
   if (params.status) searchParams.set('status', params.status);
@@ -177,13 +190,24 @@ export function usePayables(params: PayableFilterParams = {}) {
   if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
   searchParams.set('page', String(params.page ?? 1));
   searchParams.set('limit', String(params.limit ?? 10));
+  return searchParams.toString();
+}
 
+/**
+ * One page, outside React Query — the Export button's `fetchAllPages` loop needs
+ * it (DEBT-048). It shares `buildPayableQuery` with the hook so the exported set
+ * can never drift from the one on screen.
+ */
+export function fetchPayablesPage(params: PayableFilterParams) {
+  return apiFetch<{ data: PayableResponse[]; meta: PaginationMeta }>(
+    `/payables?${buildPayableQuery(params)}`,
+  );
+}
+
+export function usePayables(params: PayableFilterParams = {}) {
   return useQuery({
     queryKey: [...EXPENSES_QUERY_KEYS.payables, params] as const,
-    queryFn: () =>
-      apiFetch<{ data: PayableResponse[]; meta: PaginationMeta }>(
-        `/payables?${searchParams.toString()}`,
-      ),
+    queryFn: () => fetchPayablesPage(params),
     placeholderData: keepPreviousData,
   });
 }

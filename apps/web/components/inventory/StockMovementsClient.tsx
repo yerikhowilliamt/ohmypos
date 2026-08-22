@@ -7,7 +7,12 @@ import type {
   StockReferenceType,
 } from '@ohmypos/api-contracts';
 import type { OnChangeFn, SortingState } from '@tanstack/react-table';
-import { useStockMovements } from '@/hooks/useInventory';
+import {
+  fetchStockMovementsPage,
+  useStockMovements,
+} from '@/hooks/useInventory';
+import { fetchAllPages } from '@/lib/fetchAllPages';
+import { rangeSuffix } from '@/lib/export';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useRawMaterials } from '@/hooks/useMasterData';
 import { useBranches } from '@/hooks/useBranches';
@@ -130,6 +135,17 @@ export function StockMovementsClient() {
   ]);
 
   const { data, isLoading } = useStockMovements(queryParams);
+
+  // Closes over the SAME `queryParams` the table is showing — only page/limit
+  // are overridden. Rebuilding the filters here is how the file quietly ends up
+  // holding a different set from the screen (DEBT-048).
+  const exportAll = React.useCallback(
+    () =>
+      fetchAllPages((page, limit) =>
+        fetchStockMovementsPage({ ...queryParams, page, limit }),
+      ),
+    [queryParams],
+  );
 
   const movements = React.useMemo(() => data?.data ?? [], [data?.data]);
 
@@ -316,6 +332,8 @@ export function StockMovementsClient() {
           },
           itemNoun: 'pergerakan',
         }}
+        exportAll={exportAll}
+        exportFilename={`pergerakan-stok_${rangeSuffix(startDate, endDate)}.xlsx`}
       />
     </div>
   );

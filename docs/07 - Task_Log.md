@@ -41,6 +41,33 @@
 
 ## Log
 
+### TASK-073 — Export that covers the whole filtered set, not the page that happened to be on screen
+
+- **Date:** 2026-08-23
+- **Module / Phase:** `DataTable`/`ExportButton`, `lib/export.ts`, six export call sites, five Reports views — web only
+- **Objective:** Close DEBT-048, DEBT-025 and DEBT-024. The Export button built its workbook from `table.getFilteredRowModel().rows` — one page under server pagination — so "Export" on Utang Pemasok produced 25 rows for an accountant with nothing in the file marking it partial.
+- **Relevant docs:** `docs/plannings/2026-08-23-full-export.md` (Option A, approved), DEBT-048/025/024, ADR-010, DESIGN.md §12.1/§12.4
+- **What was done:**
+  - New `apps/web/lib/fetchAllPages.ts`: walks a list endpoint 100 rows per request (`PaginationQuerySchema` caps `limit` at 100) until the set is complete. `EXPORT_ROW_CAP = 5000` — 50 requests, half the throttler's 100-per-60s budget (`app.module.ts`).
+  - `DataTable` gained optional `exportAll` (row supplier) and `exportTotal` (real count). `ExportButton` now labels itself `Export (1.234)` and shows a `role="alert"` on failure instead of failing silently.
+  - Six call sites wired: `PayablesTab`, `StockMovementsTable`/`Client`, `BankTransactionsTable`/`ReconciliationClient`, `AttendanceLogTable`, plus the two Kelas B tabs below. Each hook grew a `fetch*Page` function that **shares its query builder with the hook**, so the exported set cannot drift from the screen.
+  - DEBT-025: shared `rangeSuffix(startDate, endDate)` in `lib/export.ts`; `ReportsClient` threads `filters` into all five views. `PayablesTab`/`BankTransactionsTable` deliberately keep the export-time date — neither screen has a date-range filter.
+  - Tests: 3 new suites (`fetchAllPages.test.ts`, `StockMovementsClient.export.test.tsx`, `ReportExportFilename.test.tsx`) plus cases added to `data-table.test.tsx`, `export.test.ts`, `TopProductsView.test.tsx`. 57 suites / 419 tests, up from 54 / 395.
+- **The trap that mattered most:** `exportAll` must close over the **same** filter object the on-screen query uses, overriding only `page`/`limit`. Rebuilding the filters independently is how the file quietly ends up holding a different set from the screen — with nothing in the file to say so, which is the same failure mode as the original bug. Pinned by a test that asserts the exported params equal the on-screen params after `page`/`limit` are stripped; sabotage-verified by making the export send bare `{page, limit}`, which reddens exactly that one case.
+- **Decisions made during this task:**
+  - **Past the cap it refuses, it does not truncate.** Truncating at 5,000 would be the identical defect with a bigger number. The button disables with "Terlalu banyak baris — persempit filter dulu."
+  - **The seven client-side tables were deliberately NOT given `exportAll`.** They already hold their whole result set. `TopProductsView` is the sharp case: its `limit: 10` is the report's *definition*, so an `exportAll` there would silently change the file's meaning from "top 10" to "whole catalogue". Pinned by a test asserting exactly 10 rows.
+  - **Two previously-unlogged defects found while inventorying the call sites** (now DEBT-055): `GeneralExpenseTab` and `PurchaseEntryTab` hardcode `limit=50` with **no pagination footer at all** — worse than DEBT-048, since nothing on screen marks the truncation. Approved scope: fix their **export** only. Consequence to expect: their files can now be longer than the table above them.
+  - **`rangeSuffix` falls back to the LOCAL date, not `toISOString()`'s UTC one.** Found during the browser verification, which ran at 04:00 WIB and produced `..._2026-08-22.xlsx` on 2026-08-23. Every export between 00:00 and 07:00 was being named with yesterday's date. The pre-existing expression had this bug too; centralising it made it visible.
+  - **`ProfitLossView`'s export callback was missing the range from its `useCallback` deps** — changing the range and exporting wrote the *previous* range into the filename. Caught by an eslint warning, not by a test.
+- **Status:** Done (DEBT-024 substantially, see below)
+- **Handoff notes:**
+  - **No API, contract, or schema change** — `git status` touches `apps/web` only. Gates: `turbo run lint typecheck test` green (13/13, 0 errors), 57 web suites / 419 tests; API e2e 15 suites / 347 tests green.
+  - **Nine sabotage checks were run before trusting any green**, each reverted after: stopping the page walk, truncating instead of throwing, ignoring `exportTotal`, ignoring `exportAll`, reverting `rangeSuffix`, `PAGE_LIMIT` 100→500, removing the cap guard, rebuilding export filters independently, and wrongly giving `TopProductsView` an `exportAll`. Each reddened only its intended cases.
+  - **An e2e flake was isolated, not chased** (now DEBT-057): running `test:e2e` twice inside 60s inherits the previous run's throttler budget and fails assorted assertions. Confirmed by `git stash` that the committed baseline behaves identically — it is not a regression from this work.
+  - **Browser verification (DEBT-024) reached the workbook but not the Downloads folder.** Valid 26 KB `.xlsx` (`PK` magic), 594 data rows for a 594-row set, 6 requests at `page` 1–6 / `limit` 100. The `<a download>` hand-off is suppressed in the automated tab — proven to be the environment, not the code, by a bare `Blob`+anchor probe containing no app code that also produced no file. **One human click in a normal Chrome window is all that remains.**
+  - **Left out of scope, logged:** DEBT-055 (pagination footers for the two expenses tabs — the natural next task, and their hooks are already half-converted), DEBT-056 (server-side export endpoints, Option B, if the 5,000 cap is ever hit), DEBT-057 (the e2e throttler flake).
+
 ### TASK-072 — Server-side search for the four tables whose search box only covered one page
 
 - **Date:** 2026-08-23

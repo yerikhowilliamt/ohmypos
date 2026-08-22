@@ -7,7 +7,8 @@ import { Badge } from '@ohmypos/ui/components/badge';
 import { Plus } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { formatLedgerSourceType } from '@/lib/vocabulary';
-import { useLedgerEntries } from '@/hooks/useExpenses';
+import { fetchLedgerEntriesPage, useLedgerEntries } from '@/hooks/useExpenses';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import type { ExportColumn } from '@/lib/export';
 import type { LedgerEntryResponse } from '@ohmypos/api-contracts';
@@ -76,6 +77,16 @@ export function GeneralExpenseTab() {
   const { data, isLoading } = useLedgerEntries();
   const entries = data?.data ?? [];
 
+  // The screen still shows the first 50 (`useLedgerEntries`'s default) — the
+  // export deliberately does NOT stop there. The resulting file can hold more
+  // rows than the table above it; that mismatch is the screen's defect
+  // (DEBT-055), not the export's, and a short spreadsheet is the worse of the
+  // two failures (DEBT-048).
+  const exportAll = React.useCallback(
+    () => fetchAllPages((page, limit) => fetchLedgerEntriesPage(page, limit)),
+    [],
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-3">
@@ -104,6 +115,8 @@ export function GeneralExpenseTab() {
         emptyMessage="Belum ada pengeluaran tercatat."
         exportColumns={exportColumns}
         exportFilename={`pengeluaran-umum_${new Date().toISOString().slice(0, 10)}.xlsx`}
+        exportAll={exportAll}
+        exportTotal={data?.meta.total}
       />
 
       <GeneralExpenseFormDialog

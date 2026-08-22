@@ -37,6 +37,8 @@ function singlePage(total = 1) {
       onPageChange: vi.fn(),
       itemNoun: 'pergerakan',
     },
+    exportAll: vi.fn(async () => []),
+    exportFilename: 'pergerakan-stok_2026-08-01_sd_2026-08-31.xlsx',
   };
 }
 
@@ -127,6 +129,8 @@ describe('StockMovementsTable', () => {
           onPageChange: vi.fn(),
           itemNoun: 'pergerakan',
         }}
+        exportAll={vi.fn(async () => [])}
+        exportFilename="pergerakan-stok_2026-08-01_sd_2026-08-31.xlsx"
       />,
     );
 
@@ -154,11 +158,23 @@ describe('StockMovementsTable', () => {
           onPageChange: vi.fn(),
           itemNoun: 'pergerakan',
         }}
+        exportAll={vi.fn(async () => [])}
+        exportFilename="pergerakan-stok_2026-08-01_sd_2026-08-31.xlsx"
       />,
     );
 
-    expect(screen.getByText(/594/)).toBeDefined();
-    expect(screen.getByText(/60/)).toBeDefined();
+    // Scoped to the footer: since TASK-073 the Export button also carries the
+    // server total ("Export (594)"), so an unscoped /594/ matches twice.
+    const footer = screen.getByTestId('data-table-pagination');
+    expect(within(footer).getByText('594')).toBeDefined();
+    expect(
+      screen.getByTestId('data-table-page-indicator').textContent,
+    ).toContain('60');
+    // The button states the whole set, not the single row on screen — that is
+    // what makes a partial export impossible to ship silently (DEBT-048).
+    expect(
+      screen.getByRole('button', { name: /export \(594\)/i }),
+    ).toBeDefined();
   });
 
   it('hands typing to the server instead of filtering the page (TASK-072)', () => {

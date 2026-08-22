@@ -10,8 +10,13 @@ const useAttendanceRecords = vi.fn();
 vi.mock('@/hooks/useDevices', () => ({
   useAttendanceRecords: (params: unknown) => useAttendanceRecords(params),
   useUpdateAttendanceStatus: () => ({ mutate: vi.fn() }),
+  fetchAttendanceRecordsPage: vi.fn(async () => ({
+    data: [],
+    meta: { total: 0, page: 1, limit: 100, totalPages: 1 },
+  })),
 }));
-vi.mock('@/lib/export', () => ({
+vi.mock('@/lib/export', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/export')>()),
   exportRowsToXlsx: vi.fn(),
 }));
 

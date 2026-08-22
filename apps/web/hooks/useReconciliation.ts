@@ -161,13 +161,23 @@ export function useReconciliationSummary(filters: ReconciliationFilters) {
   });
 }
 
+/**
+ * One page, outside React Query — the Export button's `fetchAllPages` loop needs
+ * it (DEBT-048). Shares `buildQuery` with the hook so the exported set can never
+ * drift from the one on screen.
+ */
+export function fetchReconciliationTransactionsPage(
+  filters: ReconciliationFilters,
+) {
+  return apiFetch<{ data: BankTransactionResponse[]; meta: PaginationMeta }>(
+    `/reconciliation/transactions?${buildQuery(filters)}`,
+  );
+}
+
 export function useReconciliationTransactions(filters: ReconciliationFilters) {
   return useQuery({
     queryKey: RECONCILIATION_QUERY_KEYS.transactions(filters),
-    queryFn: () =>
-      apiFetch<{ data: BankTransactionResponse[]; meta: PaginationMeta }>(
-        `/reconciliation/transactions?${buildQuery(filters)}`,
-      ),
+    queryFn: () => fetchReconciliationTransactionsPage(filters),
     placeholderData: keepPreviousData,
   });
 }

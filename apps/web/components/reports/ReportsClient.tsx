@@ -166,6 +166,7 @@ export function ReportsClient({ forcedTab }: ReportsClientProps) {
         <ProfitLossView
           data={profitLoss.data}
           isLoading={profitLoss.isLoading}
+          filters={filters}
         />
       )}
 
@@ -173,6 +174,7 @@ export function ReportsClient({ forcedTab }: ReportsClientProps) {
         <ProductProfitView
           data={productProfit.data}
           isLoading={productProfit.isLoading}
+          filters={filters}
         />
       )}
 
@@ -180,6 +182,7 @@ export function ReportsClient({ forcedTab }: ReportsClientProps) {
         <IncomeByPaymentMethodView
           data={incomeByPaymentMethod.data}
           isLoading={incomeByPaymentMethod.isLoading}
+          filters={filters}
         />
       )}
 
@@ -194,6 +197,7 @@ export function ReportsClient({ forcedTab }: ReportsClientProps) {
         <DailyIncomeView
           data={dailyIncome.data}
           isLoading={dailyIncome.isLoading}
+          filters={filters}
         />
       )}
     </div>

@@ -43,6 +43,8 @@ import {
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { cn } from '@ohmypos/ui/lib/utils';
 import { exportRowsToXlsx, type ExportColumn } from '@/lib/export';
+import { EXPORT_ROW_CAP, ExportTooLargeError } from '@/lib/fetchAllPages';
+import { formatThousands } from '@/lib/formatters';
 
 /**
  * OhMyPos data table (shadcn pattern over @tanstack/react-table + @ohmypos/ui
@@ -146,6 +148,25 @@ interface DataTableProps<TData, TValue> {
   exportColumns?: ExportColumn<TData>[];
   exportFilename?: string;
   /**
+   * Pemasok baris untuk Export ketika `data` hanya memuat satu halaman.
+   *
+   * WAJIB bila `pagination` dipasang bersama `exportColumns`: tanpanya tombol
+   * membangun workbook dari halaman yang sedang tampil sambil terlihat
+   * mengekspor seluruh hasil terfilter (DEBT-048).
+   *
+   * Tabel yang sudah memegang himpunan penuh (laporan, ringkasan stok, matriks
+   * absensi) justru TIDAK boleh memasangnya — di sana `getFilteredRowModel()`
+   * sudah benar, dan `exportAll` hanya akan memperlambatnya. `TopProductsView`
+   * khususnya: `limit: 10` di sana adalah definisi laporannya, bukan pemotongan.
+   */
+  exportAll?: () => Promise<TData[]>;
+  /**
+   * Jumlah baris sesungguhnya di balik filter saat ini, untuk label tombol —
+   * ambil dari `pagination.meta.total`. Tanpa ini tombol memakai jumlah baris
+   * yang dipegang tabel, yang benar hanya untuk tabel tak berpaginasi.
+   */
+  exportTotal?: number;
+  /**
    * DESIGN.md §13.3 Backoffice Behaviour by Breakpoint: the identifying column stays pinned while the table
    * scrolls horizontally. On by default — it is a general backoffice rule, not
    * a per-table choice. Pass `false` for a table whose first column is not the
@@ -176,36 +197,69 @@ function ExportButton<TData>({
   table,
   exportColumns,
   exportFilename,
+  exportAll,
+  exportTotal,
 }: {
   table: ReturnType<typeof useReactTable<TData>>;
   exportColumns: ExportColumn<TData>[];
   exportFilename: string;
+  exportAll?: () => Promise<TData[]>;
+  exportTotal?: number;
 }) {
   const [isExporting, setIsExporting] = React.useState(false);
-  const rowCount = table.getFilteredRowModel().rows.length;
+  const [error, setError] = React.useState<string | null>(null);
+
+  // `getFilteredRowModel()` is one page under server pagination. `exportTotal`
+  // is the real count behind the filter; the fallback is only correct for
+  // tables that hold their whole result set.
+  const rowCount = exportTotal ?? table.getFilteredRowModel().rows.length;
+  const isTooLarge = rowCount > EXPORT_ROW_CAP;
 
   const handleExport = React.useCallback(async () => {
     setIsExporting(true);
+    setError(null);
     try {
-      const rows = table.getFilteredRowModel().rows.map((row) => row.original);
+      const rows = exportAll
+        ? await exportAll()
+        : table.getFilteredRowModel().rows.map((row) => row.original);
       await exportRowsToXlsx(exportFilename, exportColumns, rows);
+    } catch (err) {
+      // A failed export must be visible. Staying silent here leaves the
+      // operator believing the file is in their Downloads folder.
+      setError(
+        err instanceof ExportTooLargeError
+          ? 'Terlalu banyak baris — persempit filter dulu.'
+          : 'Export gagal. Coba lagi.',
+      );
     } finally {
       setIsExporting(false);
     }
-  }, [table, exportColumns, exportFilename]);
+  }, [table, exportColumns, exportFilename, exportAll]);
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="default"
-      onClick={handleExport}
-      disabled={rowCount === 0 || isExporting}
-      className="h-6"
-    >
-      <Download className="size-4" />
-      Export
-    </Button>
+    <div className="flex items-center gap-2">
+      {error && (
+        <span role="alert" className="text-xs text-status-danger">
+          {error}
+        </span>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="default"
+        onClick={handleExport}
+        disabled={rowCount === 0 || isExporting || isTooLarge}
+        title={
+          isTooLarge
+            ? `Export dibatasi ${formatThousands(EXPORT_ROW_CAP)} baris. Persempit filter dulu.`
+            : undefined
+        }
+        className="h-6"
+      >
+        <Download className="size-4" />
+        {isExporting ? 'Menyiapkan…' : `Export (${formatThousands(rowCount)})`}
+      </Button>
+    </div>
   );
 }
 
@@ -435,6 +489,8 @@ export function DataTable<TData, TValue>({
   emptyDescription,
   exportColumns,
   exportFilename,
+  exportAll,
+  exportTotal,
   stickyFirstColumn = true,
   sorting,
   onSortingChange,
@@ -504,6 +560,8 @@ export function DataTable<TData, TValue>({
                 table={table}
                 exportColumns={exportColumns}
                 exportFilename={exportFilename}
+                exportAll={exportAll}
+                exportTotal={exportTotal}
               />
             )}
           </div>

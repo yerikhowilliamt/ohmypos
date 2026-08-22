@@ -39,6 +39,44 @@
 
 ## Log
 
+### DEBT-057 — Running `pnpm --filter api test:e2e` twice inside 60s produces spurious failures
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-073 (verification gate) — observed, then isolated
+- **Description:** The e2e suite passed 347/347 on a clean run, failed 1 test on an immediate second run, and failed a *different* 12 on a third. Isolated by `git stash`: the committed baseline showed the same pattern, so it is not caused by any change. The throttler is `{ ttl: 60000, limit: THROTTLE_LIMIT ?? 100 }` (`app.module.ts`), and `.env.test` raises the limit but does not reset the counter between processes — a second run starting inside the same 60s window inherits the first run's consumed budget. Failures then surface as assertion mismatches on whichever suite happens to exhaust it, not as an obvious 429, which is what makes it read as a real regression.
+- **Why deferred:** It is a test-harness artefact, not product behaviour. No production path runs the suite twice in a minute.
+- **Impact if unaddressed:** Real time lost chasing a phantom regression — it cost one stash-and-compare cycle in TASK-073, and would cost more to someone who did not think to compare against baseline. It could also mask a genuine failure by making red runs look routine.
+- **Trigger condition:** The next time someone reports an e2e failure that does not reproduce on a clean run, or if CI ever runs the suite twice in one job.
+- **Proposed resolution:** Reset the throttler storage in `test/setup-e2e.ts`'s `resetDatabase()`, or give the e2e app module a no-op throttler guard. Either is a test-only change.
+- **Priority:** Low
+- **Status:** Open
+- **Confirmed 2026-08-23:** the diagnosis was tested rather than assumed. A run immediately following another failed 3 tests; **waiting 75 seconds** (past the throttler's 60s `ttl`) and running again gave 347/347 with no code change in between. The window, not the code, decides the result.
+
+### DEBT-056 — No server-side export endpoint; the button pages the API instead
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-073 (full export) — Option B, considered and deferred
+- **Description:** `fetchAllPages` (`apps/web/lib/fetchAllPages.ts`) walks the list endpoint 100 rows at a time until the filtered set is complete, then builds the workbook in the browser. `PaginationQuerySchema` caps `limit` at 100 and the throttler allows 100 requests per 60s per IP, so the loop is capped at `EXPORT_ROW_CAP = 5000` rows (50 requests, half the minute's budget). Past that the button disables itself and says so rather than exporting a partial file.
+- **Why deferred:** Option B needs six new routes (`/payables/export`, `/stock-movements/export`, …), each with its own `RoleGuard`/`BranchScopeGuard`, Zod contract and e2e coverage, plus `exceljs` as a new `apps/api` dependency — two extra approval gates (AGENTS.md §Governance items 2 and 3) for a volume tier that does not need it yet. It would also duplicate the `exportColumns` definitions, which today live only in the web components, giving them somewhere to silently diverge.
+- **Impact if unaddressed:** An operator whose filtered set exceeds 5,000 rows cannot export it at all — they are told to narrow the filter, which is honest but is a refusal, not a feature. A 4,000-row export also costs 40 sequential requests and several seconds.
+- **Trigger condition:** The first time `ExportTooLargeError` is actually seen by an operator, or a single export takes longer than 15 seconds.
+- **Proposed resolution:** Streaming export endpoints per Option B in `docs/plannings/2026-08-23-full-export.md` §4, with the column definitions moved into `packages/api-contracts` so web and api cannot drift.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-055 — `GeneralExpenseTab` and `PurchaseEntryTab` show 50 rows with no pagination footer
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-073 — not previously logged; found while inventorying every export call site
+- **Description:** `useLedgerEntries` and `useSupplierPurchases` (`apps/web/hooks/useExpenses.ts`) request `limit=50`, and neither table passes a `pagination` prop. So both screens display at most the first 50 rows and render **nothing** to say the list is truncated. This is worse than the class of defect DEBT-048 described: a server-paginated table at least carries a footer reading "Menampilkan 1–25 dari 340", which makes the truncation visible.
+- **Update 2026-08-23 (TASK-073):** the **export** on both tabs now covers the whole set (`exportAll` walks every page). The screens were deliberately left alone, per the approved scope. One consequence to expect: the exported file can now contain more rows than the table above it — honest, but confusing until this entry is paid off.
+- **Why deferred:** Explicit scope decision when TASK-073 was approved. The export defect (a short spreadsheet handed to an accountant with nothing marking it partial) is the worse of the two failures and was the one in scope; adding server pagination to two more tables is a separate task, and TASK-067's own reasoning was that pagination work is worth doing deliberately rather than sneaked into an adjacent change.
+- **Impact if unaddressed:** Someone reviewing expenses believes they are looking at the whole list when they are looking at the newest 50. Since TASK-073, they also get a spreadsheet longer than the screen with no explanation.
+- **Trigger condition:** Either tab exceeding 50 rows in normal use — which for `Pengeluaran Umum` (every OUTFLOW, manual and generated) will happen early — or the first user question about why the export is longer than the table.
+- **Proposed resolution:** Give both hooks the `page`/`limit`/`sortBy`/`sortOrder` parameter object the other five paginated hooks already take, and pass `pagination` to both `DataTable`s, following `PayablesTab` as the reference implementation. The `fetch*Page` functions TASK-073 extracted already take `page` and `limit`, so the hook side is half done.
+- **Priority:** Medium
+- **Status:** Open
+
 ### DEBT-054 — Server-side search is an unindexed `ILIKE '%x%'` scan
 
 - **Date logged:** 2026-08-23
@@ -123,7 +161,7 @@
 - **Trigger condition:** The first time an export is used for anything downstream of the screen — accounting, a report, a hand-off to a bookkeeper — or the first user report of a short spreadsheet.
 - **Proposed resolution:** Either have the export button page the API to completion before building the workbook (simple, fine at v1 volumes), or add a server-side export endpoint that streams the full filtered set. Whichever is chosen, the button should state the row count it is about to export.
 - **Priority:** Medium
-- **Status:** Open
+- **Status:** **Resolved 2026-08-23 (TASK-073)** — the paging-loop option, per `docs/plannings/2026-08-23-full-export.md` (Option A, approved). `DataTable` gained an optional `exportAll` supplier and an `exportTotal`; six call sites (`PayablesTab`, `StockMovementsTable`, `BankTransactionsTable`, `AttendanceLogTable`, and the two `limit=50` expenses tabs from DEBT-055) now pass `fetchAllPages`, which walks the endpoint 100 rows at a time. The button label carries the real count (`Export (1.234)`), which is what makes a short spreadsheet impossible to ship silently. Past `EXPORT_ROW_CAP = 5000` it **refuses with a message rather than truncating** — truncating would have been the same defect with a bigger number. The seven tables that already hold their whole result set were deliberately not given `exportAll`; `TopProductsView` in particular, where `limit: 10` is the report's definition, is pinned by a test. Server-side export endpoints remain available as **DEBT-056** if the cap is ever hit.
 
 ### DEBT-047 — Sales History search only covers the visible page
 
@@ -702,6 +740,10 @@
 - **Proposed resolution:** Run the standard `.agents/skills/e2e-playwright/SKILL.md` workflow against each Export button once, capture a screenshot/confirmation, and mark this entry Resolved.
 - **Priority:** Medium — doesn't touch money/stock correctness (Playbook §10), but it's a shipped user-facing feature with zero live verification.
 - **Status:** Re-flagged, still Open (2026-08-22, Phase 14 Workstream D). A Claude-in-Chrome session **was** connected this time, and login was attempted repeatedly against both the Turbopack dev server and a `next build && node .next/standalone/apps/web/server.js` production build; every attempt failed with "Failed to fetch." At the time, this was **incorrectly** attributed to the browser automation tool's own sandboxing (the reasoning: `curl` to the same endpoint succeeded instantly and consistently, so the app must be fine). That theory was wrong — the user hit the exact same "Failed to fetch" independently in their own normal browser shortly after, which `curl` could never have caught because `curl` doesn't run CORS preflight at all. **Real root cause found:** `apps/api/src/main.ts`'s `enableCors({ allowedHeaders: [...] })` listed only `Content-Type` and `Authorization` — it never included `x-correlation-id`, the header `apps/web/lib/api.ts`'s `doFetch` has sent on every request since this same Phase 14 session's E-8 change. Every real browser (and, it turns out, the Claude-in-Chrome tab too — not a sandboxing artifact) correctly blocked the request at the CORS preflight stage. Fixed by adding `'x-correlation-id'` to `allowedHeaders`; see `ERR-021`. This entry stays Open (not Resolved) — the CORS fix unblocks login, but the actual Export→download click-through this entry asks for has still not been run.
+- **Status 2026-08-23 (TASK-073): Resolved in substance, with one honest caveat.** A Claude-in-Chrome session was connected, login succeeded (the ERR-021 CORS fix holds), and Export was clicked in a live browser on three screens. The runtime risks this entry was opened for are now **disproven**: `exceljs` resolves and runs in the browser under this Next.js version, and the workbook it produces is a real, valid file — captured at the `Blob` boundary, **26,344 bytes, magic bytes `PK`** (a `.xlsx` is a ZIP container), correct spreadsheetml MIME type.
+  - **Evidence is stronger than "it opened in Excel":** the sheet XML was inflated in-page via `DecompressionStream` and its rows counted. `pergerakan-stok` produced **595 `<row>` elements = 1 header + 594 data rows**, matching `meta.total` = 594 exactly, against a screen showing 10. `utang-pemasok` produced **31 data rows** against 10 on screen — literally the scenario this entry's sibling DEBT-048 described. `laba-rugi` came out named `laba-rugi_2026-01-01_sd_2026-01-31.xlsx`, closing DEBT-025 in a real browser.
+  - **The caveat, stated plainly: no file ever reached the Downloads folder.** The `<a download>` click is suppressed in the automated tab. This was *not* assumed — the 2026-08-22 mistake on this very entry was blaming the tool for what turned out to be a real CORS bug, so the opposite error was actively guarded against: a **bare `Blob` + `<a download>` probe containing no application code at all** was dispatched and likewise produced no file. The block is therefore in the automation environment, not in `lib/export.ts`. Everything up to and including the valid workbook in memory is proven; the final OS-level hand-off is the one link still unwitnessed.
+  - **What is left, and it is small:** one human click of Export in an ordinary (non-automated) Chrome window, confirming the file lands and opens. Everything that could plausibly have been broken in code has been shown to work.
 
 ### DEBT-025 — Export filenames use the export-time date, not the report's selected date range
 
@@ -713,8 +755,8 @@
 - **Trigger condition:** Next time any of these 5 view components are touched for another reason, or if a user reports confusion about export filenames.
 - **Proposed resolution:** Add a `filters: ReportFilters` (or `startDate`/`endDate`) prop to the 5 view components, sourced from `ReportsClient`'s existing state, and interpolate it into `exportFilename` in place of `new Date().toISOString().slice(0, 10)`.
 - **Priority:** Low
-- **Status:** Open
 - **Re-flagged 2026-08-22 (Phase 14 gate):** Feature polish, out of scope for verification (AGENTS.md strict scope).
+- **Status:** **Resolved 2026-08-23 (TASK-073)** — exactly as proposed. A shared `rangeSuffix(startDate, endDate)` in `apps/web/lib/export.ts` returns `2026-01-01_sd_2026-01-31`, collapses a single-day range to one date, and falls back to today when there is no range. `ReportsClient` now threads `filters` into all five views (`TopProductsView` already had it), and `StockMovementsClient` and `AttendanceLogTable` use their own date filters the same way. `PayablesTab` and `BankTransactionsTable` deliberately keep the export-time date: neither screen has a date-range filter, and a payable is a state of today rather than a range. `AttendanceCalendarMatrix` was already correct and was not touched. One further defect was found and fixed while doing this: `ProfitLossView`'s export callback omitted the range from its `useCallback` deps, so changing the range and exporting wrote the *previous* range into the filename.
 
 ### DEBT-026 — POS filter row buckets by availability, not menu category
 

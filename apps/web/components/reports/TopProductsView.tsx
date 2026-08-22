@@ -16,7 +16,7 @@ import {
 } from '@ohmypos/ui/components/select';
 import { Label } from '@ohmypos/ui/components/label';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
-import type { ExportColumn } from '@/lib/export';
+import { rangeSuffix, type ExportColumn } from '@/lib/export';
 import {
   formatCurrency,
   formatPercent,
@@ -221,7 +221,7 @@ export function TopProductsView({ filters, enabled }: TopProductsViewProps) {
             emptyMessage="Tidak ada data produk terlaris"
             emptyDescription="Belum ada penjualan pada rentang tanggal ini."
             exportColumns={exportColumns}
-            exportFilename={`produk-terlaris_${new Date().toISOString().slice(0, 10)}.xlsx`}
+            exportFilename={`produk-terlaris_${rangeSuffix(filters.startDate, filters.endDate)}.xlsx`}
           />
         </>
       )}

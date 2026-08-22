@@ -53,7 +53,13 @@ const empty: ProductProfitResponse = {
 
 describe('ProductProfitView component', () => {
   it('renders product rows with revenue, margin, and signed gross profit coloring', () => {
-    render(<ProductProfitView data={withRows} isLoading={false} />);
+    render(
+      <ProductProfitView
+        data={withRows}
+        isLoading={false}
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
 
     expect(screen.getByText('Es Kopi Susu')).toBeInTheDocument();
     expect(screen.getByText('54,55%')).toBeInTheDocument();
@@ -63,7 +69,13 @@ describe('ProductProfitView component', () => {
   });
 
   it('shows the empty state and no chart when the range has no product sales', () => {
-    render(<ProductProfitView data={empty} isLoading={false} />);
+    render(
+      <ProductProfitView
+        data={empty}
+        isLoading={false}
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
 
     expect(
       screen.getByText('Tidak ada penjualan produk pada rentang ini.'),

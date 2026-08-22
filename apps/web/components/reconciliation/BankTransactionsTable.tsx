@@ -45,6 +45,8 @@ interface BankTransactionsTableProps {
    */
   search: string;
   onSearchChange: (value: string) => void;
+  /** Whole filtered set for Export — `transactions` is one page (DEBT-048). */
+  exportAll: () => Promise<BankTransactionResponse[]>;
 }
 
 export function BankTransactionsTable({
@@ -56,6 +58,7 @@ export function BankTransactionsTable({
   pagination,
   search,
   onSearchChange,
+  exportAll,
 }: BankTransactionsTableProps) {
   const columns = React.useMemo<ColumnDef<BankTransactionResponse>[]>(
     () => [
@@ -151,7 +154,11 @@ export function BankTransactionsTable({
       emptyMessage="Belum ada transaksi bank."
       emptyDescription="Impor rekening koran CSV untuk mulai merekonsiliasi."
       exportColumns={exportColumns}
+      // No date-range filter on this screen, so the export-time date is the
+      // right label here (DEBT-025 applies to the date-ranged views).
       exportFilename={`transaksi-bank_${new Date().toISOString().slice(0, 10)}.xlsx`}
+      exportAll={exportAll}
+      exportTotal={pagination.meta.total}
     />
   );
 }

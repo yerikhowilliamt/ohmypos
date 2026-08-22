@@ -49,7 +49,13 @@ const empty: IncomeByPaymentMethodResponse = {
 
 describe('IncomeByPaymentMethodView component', () => {
   it('renders one row per account with its share of total income', () => {
-    render(<IncomeByPaymentMethodView data={withRows} isLoading={false} />);
+    render(
+      <IncomeByPaymentMethodView
+        data={withRows}
+        isLoading={false}
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
 
     expect(screen.getByText('Kas Toko')).toBeInTheDocument();
     expect(screen.getByText('BCA')).toBeInTheDocument();
@@ -57,7 +63,13 @@ describe('IncomeByPaymentMethodView component', () => {
   });
 
   it('shows the empty state when there is no income in range', () => {
-    render(<IncomeByPaymentMethodView data={empty} isLoading={false} />);
+    render(
+      <IncomeByPaymentMethodView
+        data={empty}
+        isLoading={false}
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
     expect(
       screen.getByText('Tidak ada pendapatan pada rentang ini.'),
     ).toBeInTheDocument();

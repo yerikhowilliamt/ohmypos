@@ -9,7 +9,8 @@ import type {
 import { Card, CardContent } from '@ohmypos/ui/components/card';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
-import type { ExportColumn } from '@/lib/export';
+import { rangeSuffix, type ExportColumn } from '@/lib/export';
+import type { ReportFilters } from '@/hooks/useReports';
 import {
   formatCurrency,
   formatPercent,
@@ -21,6 +22,14 @@ import { ChartEmptyState, ReportBarChart } from './ReportChart';
 interface ProductProfitViewProps {
   data: ProductProfitResponse | undefined;
   isLoading: boolean;
+  /**
+   * The report's own date range, for the export filename (DEBT-025). Without
+   * it the file is named for the day it was exported, so two exports of
+   * different ranges on the same day overwrite each other in Downloads — and
+   * whoever opens the file later has no on-screen context to tell them which
+   * period it covers.
+   */
+  filters: ReportFilters;
 }
 
 /** Chart stays legible with many SKUs in the table — top 10 by revenue only. */
@@ -116,7 +125,11 @@ const exportColumns: ExportColumn<ProductProfitRow>[] = [
 ];
 
 /** Dashboard 3 — Sales-per-Product Profit (PRD §5.4). */
-export function ProductProfitView({ data, isLoading }: ProductProfitViewProps) {
+export function ProductProfitView({
+  data,
+  isLoading,
+  filters,
+}: ProductProfitViewProps) {
   const chartData = React.useMemo(() => {
     if (!data) return [];
     return [...data.rows]
@@ -197,7 +210,7 @@ export function ProductProfitView({ data, isLoading }: ProductProfitViewProps) {
         emptyMessage="Tidak ada data laba produk"
         emptyDescription="Belum ada penjualan pada rentang tanggal ini."
         exportColumns={exportColumns}
-        exportFilename={`laba-per-produk_${new Date().toISOString().slice(0, 10)}.xlsx`}
+        exportFilename={`laba-per-produk_${rangeSuffix(filters.startDate, filters.endDate)}.xlsx`}
       />
     </div>
   );
