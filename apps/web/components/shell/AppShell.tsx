@@ -16,7 +16,7 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
 /**
- * DESIGN.md §15. Two shapes of the same shell:
+ * DESIGN.md §10 Application Shell & Navigation. Two shapes of the same shell:
  *
  * - `default` (Backoffice + shared routes): 52px topbar, page scrolls normally.
  * - `pos`: no desktop topbar strip, and the shell is exactly one viewport tall

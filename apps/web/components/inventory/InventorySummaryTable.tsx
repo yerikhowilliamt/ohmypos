@@ -139,8 +139,8 @@ const exportColumns: ExportColumn<InventorySummaryRow>[] = [
  * Every number comes from the server (GET /inventory/summary) — nothing is
  * recomputed client-side. Search and sort are provided by the shared DataTable
  * (shadcn pattern); in/out columns carry the Flow Indicator motif
- * (DESIGN.md §37) and the status column uses the shared stock-status badge
- * (DESIGN.md §40, vocabulary.ts).
+ * (DESIGN.md §12.2 Signature Flow Indicator) and the status column uses the shared stock-status badge
+ * (DESIGN.md §16 Status Badges, vocabulary.ts).
  */
 export function InventorySummaryTable({
   rows,

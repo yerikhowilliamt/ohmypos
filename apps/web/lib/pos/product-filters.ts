@@ -1,9 +1,9 @@
 /**
- * OhMyPos — POS product discovery filters (DESIGN.md §22, §23).
+ * OhMyPos — POS product discovery filters (DESIGN.md §11.3 Category Filter Row, §11.2 Product Grid & Cards).
  *
  * Pure: no React, no network, no dates.
  *
- * DESIGN.md §22 illustrates the filter row with menu categories (Foods,
+ * DESIGN.md §11.3 Category Filter Row illustrates the filter row with menu categories (Foods,
  * Beverage). `Product` has no category column (schema.prisma:354, DEBT-018), so
  * this module buckets by the one product-level fact POS already computes: the
  * cart-aware makeable quantity from `availability.ts` (ADR-013). Same card
@@ -95,7 +95,7 @@ export interface FilterProductsInput {
 
 /**
  * `GET /products` is unpaginated master data (products.service.ts), so both the
- * filter and the search run client-side and are instant — DESIGN.md §23 asks
+ * filter and the search run client-side and are instant — DESIGN.md §11.2 Product Grid & Cards asks
  * for a fast search, and a round trip per keystroke would not be.
  */
 export function filterProducts({

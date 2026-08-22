@@ -313,4 +313,86 @@ describe('SplitAllocationDialog', () => {
       /exceeds transaction amount/i,
     );
   });
+
+  /**
+   * Regression guard (TASK-068). `useLedgerEntryCandidates` fetched
+   * `limit=100&page=1` while `/ledger-entries` orders by entryDate DESC, so a
+   * window holding more than 100 entries silently dropped its OLDEST ones —
+   * exactly where the nearest-date match sits when the anchor transaction is
+   * early in its own ±30-day window. The dialog's nearest-date sort and its
+   * text filter both run over whatever this hook returns, so a short list makes
+   * the operator conclude the entry does not exist.
+   */
+  describe('ledger-entry candidates span every page', () => {
+    const ENTRY_C = 'cccccccc-9999-4999-8999-999999999999';
+
+    it('offers an entry that only exists on the second page', async () => {
+      vi.mocked(apiModule.apiFetch).mockImplementation((path: string) => {
+        if (path.startsWith('/ledger-entries')) {
+          const page = new URLSearchParams(path.split('?')[1] ?? '').get(
+            'page',
+          );
+          return Promise.resolve({
+            data:
+              page === '2'
+                ? [entry(ENTRY_C, '500000.00', 'Penjualan tunai lama')]
+                : entries,
+            meta: {
+              total: 3,
+              page: Number(page ?? 1),
+              limit: 100,
+              totalPages: 2,
+            },
+          });
+        }
+        if (path === `/allocations/transaction/${TXN_ID}`) {
+          return Promise.resolve([]);
+        }
+        return Promise.reject(new Error(`Unexpected apiFetch call: ${path}`));
+      });
+
+      renderDialog();
+      await screen.findByTestId('split-entry-0');
+
+      fireEvent.click(screen.getByTestId('split-entry-0'));
+      expect(
+        await screen.findByRole('option', { name: /penjualan tunai lama/i }),
+      ).toBeDefined();
+    });
+
+    it('stops paging at totalPages rather than looping', async () => {
+      vi.mocked(apiModule.apiFetch).mockImplementation((path: string) => {
+        if (path.startsWith('/ledger-entries')) {
+          const page = new URLSearchParams(path.split('?')[1] ?? '').get(
+            'page',
+          );
+          return Promise.resolve({
+            data: entries,
+            meta: {
+              total: 4,
+              page: Number(page ?? 1),
+              limit: 100,
+              totalPages: 2,
+            },
+          });
+        }
+        if (path === `/allocations/transaction/${TXN_ID}`) {
+          return Promise.resolve([]);
+        }
+        return Promise.reject(new Error(`Unexpected apiFetch call: ${path}`));
+      });
+
+      renderDialog();
+      await screen.findByTestId('split-entry-0');
+
+      await waitFor(() => {
+        const calls = vi
+          .mocked(apiModule.apiFetch)
+          .mock.calls.filter(([path]) =>
+            String(path).startsWith('/ledger-entries'),
+          );
+        expect(calls).toHaveLength(2);
+      });
+    });
+  });
 });

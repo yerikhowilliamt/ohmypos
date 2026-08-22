@@ -1,6 +1,11 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { BANK_IMPORT_FORMATS } from '@ohmypos/api-contracts';
 import type {
   AllocationResponse,
@@ -13,7 +18,9 @@ import type {
   MatchCandidate,
   PaginationMeta,
   ProposeMatches,
+  ReconciliationSortBy,
   ReconciliationSummary,
+  SortOrder,
   TransactionStatus,
   TransactionType,
 } from '@ohmypos/api-contracts';
@@ -31,6 +38,8 @@ export interface ReconciliationFilters {
   status?: TransactionStatus;
   page: number;
   limit: number;
+  sortBy?: ReconciliationSortBy;
+  sortOrder?: SortOrder;
 }
 
 export const RECONCILIATION_QUERY_KEYS = {
@@ -58,25 +67,84 @@ export const RECONCILIATION_QUERY_KEYS = {
     ] as const,
 };
 
-function buildQuery(filters: ReconciliationFilters): string {
+/**
+ * `includeSort` is false for the summary endpoint: it takes the same DTO but
+ * ignores ordering entirely (it only calls buildWhereClause), so sending the
+ * sort would make the summary refetch on every sort-header click for an
+ * identical response.
+ */
+function buildQuery(
+  filters: ReconciliationFilters,
+  includeSort = true,
+): string {
   const params = new URLSearchParams({
     page: String(filters.page),
     limit: String(filters.limit),
-    sortBy: 'txnDate',
   });
+  if (includeSort) {
+    params.set('sortBy', filters.sortBy ?? 'txnDate');
+    params.set('sortOrder', filters.sortOrder ?? 'desc');
+  }
   if (filters.accountId) params.set('accountId', filters.accountId);
   if (filters.status) params.set('status', filters.status);
   return params.toString();
 }
 
+/** The subset of the filters the summary actually varies on. Keeping the sort
+ * out of its query key is what stops the pointless refetch described above. */
+function summaryFilters(filters: ReconciliationFilters): ReconciliationFilters {
+  return {
+    accountId: filters.accountId,
+    status: filters.status,
+    page: filters.page,
+    limit: filters.limit,
+  };
+}
+
+/**
+ * Upper bound on the paging loop below: 20 pages x limit 100 = 2000 rows. This
+ * is a guard against a runaway loop if `meta.totalPages` were ever wrong, not a
+ * real ceiling — both call sites are narrowly filtered and nowhere near it.
+ */
+const MAX_LOOKUP_PAGES = 20;
+const LOOKUP_PAGE_SIZE = 100;
+
+/**
+ * Fetches EVERY page of a paginated endpoint, not just the first.
+ *
+ * Both call sites below are lookups, not display lists — truncating them does
+ * not show the operator less, it makes the screen wrong (TASK-068). At v1
+ * volumes this issues exactly one request, the same request as before; it only
+ * costs more when correctness requires it.
+ */
+async function fetchAllPages<T>(
+  buildPath: (page: number) => string,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await apiFetch<{ data: T[]; meta: PaginationMeta }>(
+      buildPath(page),
+    );
+    rows.push(...response.data);
+    totalPages = response.meta.totalPages;
+    page += 1;
+  } while (page <= totalPages && page <= MAX_LOOKUP_PAGES);
+
+  return rows;
+}
+
 // --- Read side (reconciliation module) ---
 
 export function useReconciliationSummary(filters: ReconciliationFilters) {
+  const scoped = summaryFilters(filters);
   return useQuery({
-    queryKey: RECONCILIATION_QUERY_KEYS.summary(filters),
+    queryKey: RECONCILIATION_QUERY_KEYS.summary(scoped),
     queryFn: () =>
       apiFetch<ReconciliationSummary>(
-        `/reconciliation/summary?${buildQuery(filters)}`,
+        `/reconciliation/summary?${buildQuery(scoped, false)}`,
       ),
   });
 }
@@ -88,6 +156,7 @@ export function useReconciliationTransactions(filters: ReconciliationFilters) {
       apiFetch<{ data: BankTransactionResponse[]; meta: PaginationMeta }>(
         `/reconciliation/transactions?${buildQuery(filters)}`,
       ),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -100,25 +169,36 @@ export function useReconciliationTransactions(filters: ReconciliationFilters) {
  * `enabled` is off until the operator has actually run propose — this must not
  * fire on mount.
  */
+/**
+ * Returns a plain array, not `{ data, meta }`, because after TASK-068 there is
+ * no page to report — the shape change is deliberate, so no caller can mistake
+ * one page for the whole set.
+ *
+ * Completeness is not a nicety here. `MatchReviewQueue` resolves every
+ * candidate's amounts through this list; a transaction missing from it produces
+ * "Data transaksi bank untuk usulan ini belum termuat. Jalankan ulang
+ * pencocokan otomatis." — advice that cannot work, because propose() only
+ * selects UNRESOLVED (matching.service.ts:19) and these are already
+ * PENDING_REVIEW. Truncating this list dead-ends the operator.
+ */
 export function usePendingReviewTransactions(
   accountId: string | undefined,
   enabled: boolean,
 ) {
   return useQuery({
     queryKey: RECONCILIATION_QUERY_KEYS.pendingReview(accountId),
-    queryFn: () => {
-      const params = new URLSearchParams({
-        status: 'PENDING_REVIEW',
-        limit: '100',
-        page: '1',
-        sortBy: 'txnDate',
-      });
-      if (accountId) params.set('accountId', accountId);
-      return apiFetch<{
-        data: BankTransactionResponse[];
-        meta: PaginationMeta;
-      }>(`/reconciliation/transactions?${params.toString()}`);
-    },
+    queryFn: () =>
+      fetchAllPages<BankTransactionResponse>((page) => {
+        const params = new URLSearchParams({
+          status: 'PENDING_REVIEW',
+          limit: String(LOOKUP_PAGE_SIZE),
+          page: String(page),
+          sortBy: 'txnDate',
+          sortOrder: 'desc',
+        });
+        if (accountId) params.set('accountId', accountId);
+        return `/reconciliation/transactions?${params.toString()}`;
+      }),
     enabled,
   });
 }
@@ -172,9 +252,9 @@ function ledgerCandidateWindow(txnDate: string | Date): {
  * because a direction mismatch is a guaranteed 400
  * (allocation.service.ts:123). `accountId` narrows sensibly, and
  * `startDate`/`endDate` window the search to ±30 days around the anchor
- * transaction's date server-side (ADR-019) — the dialog still applies a
- * client-side nearest-date-first sort within that window as a secondary
- * refinement.
+ * transaction's date server-side (ADR-019) — every page of that window is
+ * fetched, and the dialog then applies a client-side nearest-date-first sort as
+ * a secondary refinement.
  */
 export function useLedgerEntryCandidates(
   type: TransactionType | null,
@@ -191,22 +271,27 @@ export function useLedgerEntryCandidates(
       window?.startDate ?? '',
       window?.endDate ?? '',
     ),
-    queryFn: () => {
-      const params = new URLSearchParams({
-        limit: '100',
-        page: '1',
-        sortBy: 'entryDate',
-      });
-      if (type) params.set('type', type);
-      if (accountId) params.set('accountId', accountId);
-      if (window) {
-        params.set('startDate', window.startDate);
-        params.set('endDate', window.endDate);
-      }
-      return apiFetch<{ data: LedgerEntryResponse[]; meta: PaginationMeta }>(
-        `/ledger-entries?${params.toString()}`,
-      );
-    },
+    queryFn: () =>
+      // Every page, not the first 100. `/ledger-entries` orders by entryDate
+      // DESC, so a truncated window drops its OLDEST entries — which is exactly
+      // where the nearest-date match sits when the anchor transaction is early
+      // in its own ±30-day window. The dialog's client-side nearest-date sort
+      // and its text filter both operate on whatever this returns, so a short
+      // list makes the operator conclude an entry does not exist.
+      fetchAllPages<LedgerEntryResponse>((page) => {
+        const params = new URLSearchParams({
+          limit: String(LOOKUP_PAGE_SIZE),
+          page: String(page),
+          sortBy: 'entryDate',
+        });
+        if (type) params.set('type', type);
+        if (accountId) params.set('accountId', accountId);
+        if (window) {
+          params.set('startDate', window.startDate);
+          params.set('endDate', window.endDate);
+        }
+        return `/ledger-entries?${params.toString()}`;
+      }),
     enabled: Boolean(type) && Boolean(accountId) && Boolean(txnDate),
   });
 }

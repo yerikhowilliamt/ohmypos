@@ -8,7 +8,7 @@ interface OrderSummaryProps {
 }
 
 /**
- * DESIGN.md §24.2, minus the Service Tax row: `Sale.totalAmount` is Σ line
+ * DESIGN.md §11.4 Order Panel, minus the Service Tax row: `Sale.totalAmount` is Σ line
  * totals and nothing else (schema.prisma, ADR-015 decision 1), so subtotal and
  * total are the same number by construction. Both are still shown, because
  * §24.2 asks the count to be visible next to the money and because a single

@@ -24,7 +24,7 @@ interface CartLineRowProps {
 }
 
 /**
- * DESIGN.md §24.1 / §25. The unit price is not a static figure here — it is the
+ * DESIGN.md §11.4 Order Panel. The unit price is not a static figure here — it is the
  * PRD §5.2 price override, and per ADR-015 the only discount mechanism v1 has.
  * Rendering it as an editable field rather than as text plus a separate editor
  * keeps §24.1's "unit price" and the override the same control.
@@ -40,7 +40,7 @@ export function CartLineRow({
 }: CartLineRowProps) {
   const isOverridden = line.overridePrice !== null;
   // Starts collapsed unless the line already carries an override, so a fresh
-  // cart line reads as compact text (DESIGN.md §24.1) rather than a full form
+  // cart line reads as compact text (DESIGN.md §11.4 Order Panel) rather than a full form
   // row — the CurrencyInput only reappears once the cashier asks to edit it.
   const [isEditingPrice, setIsEditingPrice] = React.useState(isOverridden);
 

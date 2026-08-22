@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { SaleResponse } from '@ohmypos/api-contracts';
 import { SalesHistoryTable } from './SalesHistoryTable';
@@ -34,9 +34,21 @@ const mockSales: SaleResponse[] = [
   },
 ];
 
+/** Sorting and pagination are server-driven now, so the table takes them as
+ * controlled props (TASK-067). These are the single-page defaults. */
+const singlePage = {
+  sorting: [{ id: 'soldAt', desc: true }],
+  onSortingChange: vi.fn(),
+  pagination: {
+    meta: { total: 1, page: 1, limit: 25, totalPages: 1 },
+    onPageChange: vi.fn(),
+    itemNoun: 'transaksi',
+  },
+};
+
 describe('SalesHistoryTable', () => {
   it('renders sales history data and opens receipt dialog on click', () => {
-    render(<SalesHistoryTable sales={mockSales} />);
+    render(<SalesHistoryTable sales={mockSales} {...singlePage} />);
 
     expect(screen.getByText('Cabang Tebet')).toBeDefined();
     expect(screen.getByText('Budi Kasir')).toBeDefined();

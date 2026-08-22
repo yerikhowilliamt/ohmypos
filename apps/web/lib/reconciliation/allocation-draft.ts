@@ -1,5 +1,5 @@
 /**
- * OhMyPos — split-allocation draft arithmetic (PRD §5.7, DESIGN.md §34/§35).
+ * OhMyPos — split-allocation draft arithmetic (PRD §5.7, DESIGN.md §12.3 Bank Reconciliation Split-Allocation).
  *
  * The invariant this file guards is `sum(Allocation.amountPortion) <=
  * BankTransaction.amount` over ACTIVE rows only (ERD §2). It is enforced for
@@ -75,7 +75,7 @@ export interface DraftSummary {
   committed: Fixed;
   /** Σ of READY draft lines. */
   draft: Fixed;
-  /** committed + draft — the "Allocated" figure of DESIGN.md §34. */
+  /** committed + draft — the "Allocated" figure of DESIGN.md §12.3 Bank Reconciliation Split-Allocation. */
   allocated: Fixed;
   /** transactionAmount − allocated. Negative when over-allocated. */
   remaining: Fixed;

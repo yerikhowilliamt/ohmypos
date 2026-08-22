@@ -134,7 +134,7 @@ function PosScreenInner({
 
   const [query, setQuery] = React.useState('');
   const [bucket, setBucket] = React.useState<ProductBucket>('ALL');
-  /** DESIGN.md §21's active state — the most recently added product. */
+  /** DESIGN.md §11.2 Product Grid & Cards's active state — the most recently added product. */
   const [highlightedProductId, setHighlightedProductId] = React.useState<
     string | null
   >(null);

@@ -7,7 +7,7 @@ interface CentralBranchTagProps {
 }
 
 /**
- * DESIGN.md §31 — CENTRAL/BRANCH must stay distinguishable without relying on
+ * DESIGN.md §19 Domain-Specific Components — CENTRAL/BRANCH must stay distinguishable without relying on
  * color alone, so each state carries its own icon and label in addition to
  * the badge tint (ADR-004's central-purchase marker is `branchId === null`).
  */

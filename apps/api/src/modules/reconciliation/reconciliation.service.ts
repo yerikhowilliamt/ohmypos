@@ -16,7 +16,7 @@ export class ReconciliationService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getTransactions(query: ReconciliationQuery) {
-    const { page, limit } = query;
+    const { page, limit, sortOrder = 'desc' } = query;
     const [bankTxnWhere] = this.buildWhereClause(query);
 
     const [data, total] = await Promise.all([
@@ -24,14 +24,22 @@ export class ReconciliationService {
         where: bankTxnWhere,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { [query.sortBy ?? 'txnDate']: 'desc' },
+        orderBy: { [query.sortBy ?? 'txnDate']: sortOrder },
       }),
       this.prisma.bankTransaction.count({ where: bankTxnWhere }),
     ]);
 
     return {
       data,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      meta: {
+        total,
+        page,
+        limit,
+        // `|| 1` matches every other paginated service (sales, payables,
+        // supplier-purchases, ledger-entries). Without it an empty result
+        // reports totalPages: 0, which reads as "page 1 of 0".
+        totalPages: Math.ceil(total / limit) || 1,
+      },
     };
   }
 

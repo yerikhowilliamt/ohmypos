@@ -73,7 +73,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
 
   const transactionsById = React.useMemo(() => {
     const map: Record<string, BankTransactionResponse> = {};
-    for (const transaction of pending?.data ?? []) {
+    for (const transaction of pending ?? []) {
       map[transaction.id] = transaction;
     }
     return map;

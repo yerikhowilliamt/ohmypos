@@ -26,13 +26,13 @@ export type NavItem = {
   label: string;
   /**
    * Required, not optional: at tablet width the sidebar is a 64px icon-only
-   * rail (DESIGN.md §41.2) where the icon is the *only* thing rendered. An
+   * rail (DESIGN.md §13.1 Sidebar Behaviour by Breakpoint) where the icon is the *only* thing rendered. An
    * item without one would be an unlabelled blank row.
    */
   icon: LucideIcon;
   children?: NavChildItem[];
   /**
-   * DESIGN.md §16: "a group that is not yet available should carry a small
+   * DESIGN.md §10.2 Sidebar Specifications: "a group that is not yet available should carry a small
    * 'Coming soon' tag instead of being hidden". No item sets this today — it
    * exists so the next unfinished module is tagged rather than omitted, which
    * is what §16 asks for.
@@ -141,7 +141,7 @@ export function getNavItems(role: UserRole): NavItem[] {
 }
 
 /**
- * Backoffice topbar breadcrumb (DESIGN.md §17 "current page/context"). Reuses
+ * Backoffice topbar breadcrumb (DESIGN.md §10.3 Topbar Specifications "current page/context"). Reuses
  * the same role-aware label map as the sidebar instead of a second one, so the
  * two never drift. Returns `["Data Master", "Bahan Baku"]` for a child route,
  * `["Dashboard"]` for a flat one, or `[]` if the route isn't in the nav (e.g. a
@@ -189,7 +189,7 @@ export function isNavItemActive(pathname: string, href: string): boolean {
 }
 
 /**
- * DESIGN.md §16's sidebar search: filters the nav list itself, not the app's
+ * DESIGN.md §10.2 Sidebar Specifications's sidebar search: filters the nav list itself, not the app's
  * data. A parent that matches keeps all its children; a parent that does not
  * match survives only through the children that do, so searching "utang"
  * surfaces `Pengeluaran → Utang` rather than nothing.

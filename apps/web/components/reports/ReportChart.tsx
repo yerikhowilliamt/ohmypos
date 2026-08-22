@@ -21,7 +21,7 @@ import {
 } from '@ohmypos/ui/components/chart';
 
 /**
- * OhMyPos — shared Recharts theme for Dashboard 3 (DESIGN.md §36/§37: "Charts
+ * OhMyPos — shared Recharts theme for Dashboard 3 (DESIGN.md §4 Information Density by Screen, §12.2 Signature Flow Indicator: "Charts
  * should be analytical, not decorative" and the Flow Indicator's "visual
  * treatment must remain consistent across screens"). One wrapper per chart
  * shape (bar / line) so every report view themes identically instead of each

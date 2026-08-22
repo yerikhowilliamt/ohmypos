@@ -2,8 +2,16 @@
 
 import * as React from 'react';
 import type { SaleResponse } from '@ohmypos/api-contracts';
-import { type ColumnDef } from '@tanstack/react-table';
-import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import type {
+  ColumnDef,
+  OnChangeFn,
+  SortingState,
+} from '@tanstack/react-table';
+import {
+  DataTable,
+  SortableHeader,
+  type DataTablePagination,
+} from '@/components/ui/data-table';
 import { Button } from '@ohmypos/ui/components/button';
 import { formatCurrency, formatQuantity } from '@/lib/formatters';
 import { ReceiptText } from 'lucide-react';
@@ -12,11 +20,17 @@ import { SaleReceiptDialog } from './SaleReceiptDialog';
 interface SalesHistoryTableProps {
   sales: SaleResponse[];
   isLoading?: boolean;
+  sorting: SortingState;
+  onSortingChange: OnChangeFn<SortingState>;
+  pagination: DataTablePagination;
 }
 
 export function SalesHistoryTable({
   sales,
   isLoading = false,
+  sorting,
+  onSortingChange,
+  pagination,
 }: SalesHistoryTableProps) {
   const [selectedSale, setSelectedSale] = React.useState<SaleResponse | null>(
     null,
@@ -143,12 +157,19 @@ export function SalesHistoryTable({
 
   return (
     <>
+      {/* Search is still client-side and therefore only covers the rows on
+          screen. The placeholder says so rather than implying a full-history
+          search the backend does not offer yet (see Tech Debt Log). */}
       <DataTable
         columns={columns}
         data={sales}
         isLoading={isLoading}
+        sorting={sorting}
+        onSortingChange={onSortingChange}
+        pagination={pagination}
         searchColumns={['id', 'branchName', 'cashierName', 'accountName']}
-        searchPlaceholder="Cari ID, kasir, cabang..."
+        searchPlaceholder="Cari di halaman ini..."
+        searchLabel="Cari di halaman ini"
         emptyMessage="Belum ada data transaksi penjualan."
         emptyDescription="Transaksi yang dibuat kasir akan muncul di riwayat ini."
       />

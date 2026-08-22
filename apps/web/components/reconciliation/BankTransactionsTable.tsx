@@ -1,11 +1,19 @@
 'use client';
 
 import * as React from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
+import type {
+  ColumnDef,
+  OnChangeFn,
+  SortingState,
+} from '@tanstack/react-table';
 import type { BankTransactionResponse } from '@ohmypos/api-contracts';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Button } from '@ohmypos/ui/components/button';
-import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import {
+  DataTable,
+  SortableHeader,
+  type DataTablePagination,
+} from '@/components/ui/data-table';
 import type { ExportColumn } from '@/lib/export';
 import { formatCurrency } from '@/lib/formatters';
 import {
@@ -27,12 +35,18 @@ interface BankTransactionsTableProps {
   transactions: BankTransactionResponse[];
   isLoading: boolean;
   onAllocate: (transaction: BankTransactionResponse) => void;
+  sorting: SortingState;
+  onSortingChange: OnChangeFn<SortingState>;
+  pagination: DataTablePagination;
 }
 
 export function BankTransactionsTable({
   transactions,
   isLoading,
   onAllocate,
+  sorting,
+  onSortingChange,
+  pagination,
 }: BankTransactionsTableProps) {
   const columns = React.useMemo<ColumnDef<BankTransactionResponse>[]>(
     () => [
@@ -114,13 +128,20 @@ export function BankTransactionsTable({
     [onAllocate],
   );
 
+  // The search below is a client-side column filter and therefore only covers
+  // the rows on screen; the placeholder says so rather than implying a
+  // full-ledger search the backend does not offer (see DEBT-047).
   return (
     <DataTable
       columns={columns}
       data={transactions}
       isLoading={isLoading}
+      sorting={sorting}
+      onSortingChange={onSortingChange}
+      pagination={pagination}
       searchColumns={['description']}
-      searchPlaceholder="Cari keterangan…"
+      searchPlaceholder="Cari keterangan di halaman ini…"
+      searchLabel="Cari keterangan di halaman ini"
       emptyMessage="Belum ada transaksi bank."
       emptyDescription="Impor rekening koran CSV untuk mulai merekonsiliasi."
       exportColumns={exportColumns}

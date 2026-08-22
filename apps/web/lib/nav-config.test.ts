@@ -98,7 +98,7 @@ describe('getNavItems', () => {
 
 describe('nav item icons', () => {
   it('gives every top-level item an icon, for the tablet rail', () => {
-    // DESIGN.md §41.2: at 768–1023px the icon is the only thing rendered.
+    // DESIGN.md §13.1 Sidebar Behaviour by Breakpoint: at 768–1023px the icon is the only thing rendered.
     for (const role of ['KASIR', 'ADMIN', 'OWNER'] as const) {
       for (const item of getNavItems(role)) {
         expect(item.icon, `${role} → ${item.href} has no icon`).toBeDefined();

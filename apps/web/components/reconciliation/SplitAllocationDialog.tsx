@@ -64,7 +64,7 @@ interface SplitAllocationDialogProps {
 }
 
 /**
- * Manual split allocation (PRD §5.7, DESIGN.md §34/§35).
+ * Manual split allocation (PRD §5.7, DESIGN.md §12.3 Bank Reconciliation Split-Allocation).
  *
  * The running total is DECISION 1 Option A: the committed part is owned by the
  * server (GET /allocations/transaction/:id, ACTIVE rows only) and the draft part
@@ -89,7 +89,7 @@ export function SplitAllocationDialog({
 
   const { data: allocations = [], isLoading: allocationsLoading } =
     useTransactionAllocations(open && transaction ? transaction.id : null);
-  const { data: entriesPage } = useLedgerEntryCandidates(
+  const { data: entries } = useLedgerEntryCandidates(
     open && transaction ? transaction.type : null,
     open && transaction ? transaction.accountId : null,
     open && transaction ? transaction.txnDate : null,
@@ -122,15 +122,17 @@ export function SplitAllocationDialog({
   );
 
   /**
-   * Nearest-date-first, because LedgerEntryQuerySchema has no date range and the
-   * likely match is the one closest to the bank transaction's date.
+   * Nearest-date-first within the ±30-day window the hook already filtered
+   * server-side (ADR-019): the likely match is the one closest to the bank
+   * transaction's date. The hook fetches every page of that window, so this
+   * sort and the text filter below both see the complete candidate set.
    */
   const entryOptions = React.useMemo(() => {
-    const entries = entriesPage?.data ?? [];
+    const candidates = entries ?? [];
     const anchor = transaction ? new Date(transaction.txnDate).getTime() : 0;
     const needle = entryFilter.trim().toLowerCase();
 
-    return entries
+    return candidates
       .filter((entry) =>
         needle.length === 0
           ? true
@@ -142,7 +144,7 @@ export function SplitAllocationDialog({
           Math.abs(new Date(a.entryDate).getTime() - anchor) -
           Math.abs(new Date(b.entryDate).getTime() - anchor),
       );
-  }, [entriesPage, entryFilter, transaction]);
+  }, [entries, entryFilter, transaction]);
 
   const summary = React.useMemo(
     () =>
@@ -214,7 +216,7 @@ export function SplitAllocationDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* DESIGN.md §34: Bank Transaction / Allocated / Remaining, font-mono. */}
+          {/* DESIGN.md §12.3 Bank Reconciliation Split-Allocation: Bank Transaction / Allocated / Remaining, font-mono. */}
           <div className="mt-4 grid grid-cols-3 gap-2 rounded-sm border border-border-default bg-surface-muted/60 p-3 text-xs">
             <div>
               <span className="block text-[11px] text-text-tertiary">
@@ -311,7 +313,7 @@ export function SplitAllocationDialog({
             )}
           </div>
 
-          {/* Draft rows — DESIGN.md §35's "allocation rows". */}
+          {/* Draft rows — DESIGN.md §12.3 Bank Reconciliation Split-Allocation's "allocation rows". */}
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">

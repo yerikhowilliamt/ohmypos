@@ -1145,4 +1145,138 @@ describe('Purchasing & Payables (e2e)', () => {
       expect(leaked).toBe(0);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Payables listing — filter, sort, paginate (TASK-067)
+  //
+  // `sortOrder` and the `supplierName` / `status` sort keys were added when the
+  // Payables tab moved to server-side sorting. `supplierName` is the only key
+  // that is not a Payable column, so it is the only one that can fail inside
+  // Prisma rather than at the Zod boundary — hence its own case.
+  // ---------------------------------------------------------------------------
+  describe('Payables listing — filter, sort, paginate', () => {
+    it('Case 29: sortBy=remainingBalance honours sortOrder in both directions', async () => {
+      const asc = await request(app.getHttpServer())
+        .get('/api/v1/payables?sortBy=remainingBalance&sortOrder=asc&limit=50')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const ascRows = (asc.body as { data: PayableResponse[] }).data;
+      expect(ascRows.length).toBeGreaterThan(1);
+
+      const ascValues = ascRows.map((p) => Number(p.remainingBalance));
+      for (let i = 1; i < ascValues.length; i += 1) {
+        expect(ascValues[i]).toBeGreaterThanOrEqual(ascValues[i - 1]);
+      }
+
+      const desc = await request(app.getHttpServer())
+        .get('/api/v1/payables?sortBy=remainingBalance&sortOrder=desc&limit=50')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const descValues = (desc.body as { data: PayableResponse[] }).data.map(
+        (p) => Number(p.remainingBalance),
+      );
+      for (let i = 1; i < descValues.length; i += 1) {
+        expect(descValues[i]).toBeLessThanOrEqual(descValues[i - 1]);
+      }
+    });
+
+    it('Case 30: sortBy=supplierName resolves through the Supplier relation', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/payables?sortBy=supplierName&sortOrder=asc&limit=50')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const names = (res.body as { data: PayableResponse[] }).data.map(
+        (p) => p.supplierName,
+      );
+      expect(names.length).toBeGreaterThan(1);
+      for (let i = 1; i < names.length; i += 1) {
+        expect(names[i].localeCompare(names[i - 1])).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('Case 31: sortBy=status is accepted and ordered', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/payables?sortBy=status&sortOrder=asc&limit=50')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      expect(
+        (res.body as { data: PayableResponse[] }).data.length,
+      ).toBeGreaterThan(0);
+    });
+
+    it('Case 32: supplierId narrows the list to that supplier only', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/payables?supplierId=${supplierAId}&limit=50`)
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const rows = (res.body as { data: PayableResponse[] }).data;
+      expect(rows.length).toBeGreaterThan(0);
+      for (const p of rows) {
+        expect(p.supplierId).toBe(supplierAId);
+      }
+    });
+
+    it('Case 33: status filters the list and meta.total follows the filter', async () => {
+      const all = await request(app.getHttpServer())
+        .get('/api/v1/payables?limit=50')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const open = await request(app.getHttpServer())
+        .get('/api/v1/payables?status=OPEN&limit=50')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const openBody = open.body as {
+        data: PayableResponse[];
+        meta: { total: number };
+      };
+      for (const p of openBody.data) {
+        expect(p.status).toBe('OPEN');
+      }
+      expect(openBody.meta.total).toBeLessThanOrEqual(
+        (all.body as { meta: { total: number } }).meta.total,
+      );
+    });
+
+    it('Case 34: consecutive pages are disjoint under an explicit sort', async () => {
+      const page1 = await request(app.getHttpServer())
+        .get('/api/v1/payables?page=1&limit=1&sortBy=createdAt&sortOrder=desc')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+      const page2 = await request(app.getHttpServer())
+        .get('/api/v1/payables?page=2&limit=1&sortBy=createdAt&sortOrder=desc')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const b1 = page1.body as {
+        data: PayableResponse[];
+        meta: { total: number; totalPages: number };
+      };
+      const b2 = page2.body as { data: PayableResponse[] };
+
+      expect(b1.data).toHaveLength(1);
+      expect(b1.meta.totalPages).toBe(b1.meta.total);
+      expect(b2.data[0]?.id).not.toBe(b1.data[0]?.id);
+    });
+
+    it('Case 35: an unknown sortBy is rejected, not passed to Prisma', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/payables?sortBy=supplier')
+        .set('Cookie', owner.cookies)
+        .expect(400);
+    });
+
+    it('Case 36: the new parameters do not widen access — KASIR still gets 403', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/payables?sortBy=supplierName&sortOrder=asc')
+        .set('Cookie', kasir1.cookies)
+        .expect(403);
+    });
+  });
 });

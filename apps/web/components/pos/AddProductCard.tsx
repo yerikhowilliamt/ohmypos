@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 import Link from 'next/link';
 
 /**
- * DESIGN.md §21.1 — the grid's first cell, same footprint as a product card so
+ * DESIGN.md §11.2 Product Grid & Cards — the grid's first cell, same footprint as a product card so
  * the grid rhythm is unbroken. It navigates to Data Master rather than opening
  * a create-product modal: product creation needs a recipe to be sellable
  * (ADR-015), and that flow already exists there in full.

@@ -5,7 +5,7 @@ import {
   QuantityString,
   UuidString,
 } from './primitives';
-import { PaginationQuerySchema } from './pagination.schema';
+import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
 
 /**
  * OhMyPos — Sale contracts (ERD §3, System Design §6.1, PRD §5.2, ADR-005, ADR-015).
@@ -137,5 +137,6 @@ export const SaleQuerySchema = PaginationQuerySchema.extend({
   startDate: DateTimeString.optional(),
   endDate: DateTimeString.optional(),
   sortBy: SaleSortBySchema.optional(),
+  sortOrder: SortOrderSchema.optional(),
 });
 export type SaleQuery = z.infer<typeof SaleQuerySchema>;

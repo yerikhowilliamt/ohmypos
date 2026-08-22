@@ -3,7 +3,7 @@ import { PosScreen } from '@/components/pos/PosScreen';
 import { getSession } from '@/lib/session';
 
 /**
- * POS / Sales Entry (PRD §5.2, DESIGN.md §20).
+ * POS / Sales Entry (PRD §5.2, DESIGN.md §11.1 Three-Zone POS Layout).
  * Accessible by KASIR and OWNER. For KASIR, user.branchId is required — it is
  * their only branch. OWNER has no fixed branch (ADR-011: unscoped, all-branch
  * access); PosScreen renders a branch picker for them instead.

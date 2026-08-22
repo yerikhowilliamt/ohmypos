@@ -145,7 +145,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
     case 'DECREMENT': {
       const target = state.lines.find((line) => line.id === action.lineId);
       if (!target) return state;
-      // Decrementing the last unit removes the line — DESIGN.md §25 lists
+      // Decrementing the last unit removes the line — DESIGN.md §11.4 Order Panel lists
       // "remove item" as a quantity control, not a separate destructive action.
       if (target.quantity <= 1) {
         return afterEdit(
