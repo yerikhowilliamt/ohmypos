@@ -8,7 +8,7 @@ import * as apiModule from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
   apiFetch: vi.fn(),
-  API_BASE_URL: 'http://localhost:4013/api/v1',
+  API_BASE_URL: 'http://localhost:4015/api/v1',
 }));
 
 const mockSupplier: SupplierResponse = {

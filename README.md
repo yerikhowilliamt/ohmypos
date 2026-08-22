@@ -53,7 +53,7 @@ Core principle to keep in mind while working in this repo: **any operation that 
 
 | Service    | Host port | Notes                                                                                        |
 | ---------- | --------- | -------------------------------------------------------------------------------------------- |
-| `api`      | 4013      | Routes are served under `/api/v1` (PRD §6)                                                    |
+| `api`      | 4015      | Routes are served under `/api/v1` (PRD §6)                                                    |
 | `web`      | 3001      | Next.js dev server                                                                             |
 | `postgres` | **5433**  | Mapped off 5432 because a native PostgreSQL commonly already holds that port on the dev machine |
 

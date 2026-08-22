@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AllocationStatus } from './enums';
+import { LedgerEntryResponseSchema } from './ledger-entry.schema';
 import { MoneyString, UuidString } from './primitives';
 
 /**
@@ -51,3 +52,16 @@ export const AllocationResponseSchema = z.object({
   createdAt: z.date().or(z.string()),
 });
 export type AllocationResponse = z.infer<typeof AllocationResponseSchema>;
+
+/**
+ * `GET /allocations/transaction/:txnId` includes the related `ledgerEntry`
+ * on every row (allocation.service.ts's `findByTransaction`) — this is that
+ * composed shape, so both sides of the API boundary describe it the same
+ * way instead of the frontend hand-composing an intersection type (DEBT-022).
+ */
+export const AllocationWithLedgerEntrySchema = AllocationResponseSchema.extend({
+  ledgerEntry: LedgerEntryResponseSchema,
+});
+export type AllocationWithLedgerEntry = z.infer<
+  typeof AllocationWithLedgerEntrySchema
+>;

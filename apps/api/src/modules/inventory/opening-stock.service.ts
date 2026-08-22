@@ -201,7 +201,7 @@ export class OpeningStockService {
             where: {
               rawMaterialId_periodMonth: {
                 rawMaterialId: delta.rawMaterialId,
-                periodMonth: period.periodStart,
+                periodMonth: period.periodMonthDate,
               },
             },
             update: {
@@ -210,7 +210,7 @@ export class OpeningStockService {
             },
             create: {
               rawMaterialId: delta.rawMaterialId,
-              periodMonth: period.periodStart,
+              periodMonth: period.periodMonthDate,
               quantity: toDecimal(entry.quantity),
               unitPrice,
             },
@@ -273,7 +273,7 @@ export class OpeningStockService {
             _sum: { quantity: true },
           }),
           tx.openingStock.findMany({
-            where: { periodMonth: period.periodStart },
+            where: { periodMonth: period.periodMonthDate },
           }),
           tx.stockMovement.findMany({
             where: {

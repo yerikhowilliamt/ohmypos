@@ -126,18 +126,20 @@ export class SupplierPurchasesService {
         },
       });
 
-      // 7. Create purchase line item rows
-      await tx.supplierPurchaseItem.createMany({
-        data: lines.map((l) => ({
-          supplierPurchaseId: purchase.id,
-          rawMaterialId: l.rawMaterialId,
-          quantity: l.quantity,
-          unitCost: l.unitCost,
-          lineTotal: l.lineTotal,
-        })),
-      });
-
-      // 8. Apply inbound stock movements (always, regardless of payment status, ADR-006)
+      // 7. Apply inbound stock movements (always, regardless of payment status,
+      // ADR-006) — BEFORE creating the line items (step 8), not after.
+      //
+      // Phase 14 finding (B3, concurrency e2e): `SupplierPurchaseItem.rawMaterialId`
+      // has an FK to RawMaterial, and Postgres takes an implicit FOR KEY SHARE
+      // lock on the referenced row for every FK-checked INSERT. Writing the line
+      // items before `applyInbound`'s explicit `FOR UPDATE` (ADR-016) let two
+      // concurrent purchases of the same material each acquire the (mutually
+      // compatible) FOR KEY SHARE first, then both block trying to upgrade to
+      // FOR UPDATE — a classic lock-upgrade deadlock (Postgres 40P01), even
+      // though the ascending-id lock ORDER was never violated. Locking first,
+      // exactly as ADR-016 and this file's step comments already claimed, closes
+      // it: the FOR UPDATE is acquired before any row anywhere references this
+      // material, so there is no weaker lock left to upgrade from under contention.
       await this.stockMovementsService.applyInbound(tx, {
         branchId: purchase.branchId,
         referenceType: 'PURCHASE',
@@ -147,6 +149,17 @@ export class SupplierPurchasesService {
           rawMaterialId: l.rawMaterialId,
           quantity: l.quantity,
           unitCost: l.unitCost,
+        })),
+      });
+
+      // 8. Create purchase line item rows
+      await tx.supplierPurchaseItem.createMany({
+        data: lines.map((l) => ({
+          supplierPurchaseId: purchase.id,
+          rawMaterialId: l.rawMaterialId,
+          quantity: l.quantity,
+          unitCost: l.unitCost,
+          lineTotal: l.lineTotal,
         })),
       });
 

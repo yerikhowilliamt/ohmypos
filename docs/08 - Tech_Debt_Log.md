@@ -39,6 +39,30 @@
 
 ## Log
 
+### DEBT-046 — `pnpm audit` in CI is advisory only (`continue-on-error: true`)
+
+- **Date logged:** 2026-08-22
+- **Found during:** Phase 14 Workstream E (ops readiness checklist, E-12)
+- **Description:** `.github/workflows/ci.yml`'s `pnpm audit` step (line 75-76) has `continue-on-error: true`, so a discovered advisory never fails the build — it only appears in the job log for a human to notice.
+- **Why deferred:** Deliberate and already documented in the workflow itself, not an oversight found this phase. Re-flagged rather than changed: flipping it to fail the build is a CI-behavior change with its own blast radius (a transitive-only advisory with no available fix would then block every PR) and wasn't the subject of this verification pass.
+- **Impact if unaddressed:** A direct dependency with a real, fixable advisory can sit unnoticed in CI output indefinitely — nothing forces anyone to look.
+- **Trigger condition:** Before any external security claim is made about this project, or when a *direct* (not transitive) advisory appears with no available fix, whichever comes first.
+- **Proposed resolution:** Either fail the build on advisories at or above a chosen severity (e.g. `pnpm audit --audit-level=high`) once the team is ready to treat that as a merge blocker, or add a scheduled (non-blocking) job that posts a summary instead of relying on someone reading PR CI logs.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-045 — Inventory Summary and reports resolved calendar-month boundaries differently (UTC vs WIB), a 7-hour disagreement
+
+- **Date logged:** 2026-08-22
+- **Found during:** Phase 14 (Verification & Hardening) Step 4 — `monthly-cycle.e2e-spec.ts` Stage 8 reproduced it empirically against a real July 2026 cycle before this entry was even written.
+- **Description:** `apps/api/src/common/period.ts` (ADR-018, backing all `/reports/*`) resolved calendar ranges in Asia/Jakarta (UTC+7); `apps/api/src/modules/inventory/period.ts` (backing `/inventory/summary` and `/inventory/opening-stock`) resolved them in UTC. A sale in the last WIB hour of a month (e.g. `2026-08-01 00:30 WIB`, stored as `2026-07-31T17:30:00.000Z`) landed in *August* on every report but in *July* on the Inventory Summary — the same sale's revenue/COGS in one month, its stock consumption in the previous one.
+- **Why deferred:** Not deferred — this was never previously logged at all, despite both files' own header comments instructing the other to defer to it. Logged here only because the Tech Debt Log triage found it undocumented, then resolved in the same pass.
+- **Impact if unaddressed:** PRD §9's "one full monthly cycle end-to-end without manual data correction" criterion cannot be met while a single sale's COGS and stock-out disagree by construction — this is exactly the failure that success criterion exists to catch.
+- **Trigger condition:** N/A — resolved in the same phase this was logged.
+- **Proposed resolution:** See ADR-023.
+- **Priority:** High
+- **Status:** Resolved (2026-08-22, Phase 14 Gate 1) — ADR-023 written and approved: `inventory/period.ts` now delegates to `common/period.ts` for WIB boundaries, the single place a calendar-month boundary is computed. A follow-on bug this fix would otherwise have introduced was found and fixed in the same pass: writing the WIB-shifted instant into `OpeningStock.periodMonth` (`@db.Date`) would have stored one calendar day earlier than every existing row, orphaning the `(rawMaterialId, periodMonth)` unique key. Fixed via a decoupled `periodMonthDate` field, verified empirically (not assumed) to reproduce the pre-fix stored date exactly — no data migration needed. `apps/api/test/inventory.e2e-spec.ts`'s Case R and Case D-1 were updated to the new (correct) WIB-based expected values. Full e2e suite (13 suites / 247 tests at the time) verified green.
+
 ### DEBT-035 — Hybrid dark-mode theme triggering across `[data-theme='dark']` and `.dark` selectors
 
 - **Date logged:** 2026-08-21
@@ -50,6 +74,7 @@
 - **Proposed resolution:** Standardize on either pure `.dark` class or standard `next-themes` ThemeProvider across all layouts and modals.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Cosmetic; trigger is a `next-themes` migration, which has not started.
 
 ### DEBT-033 — E2E `resetDatabase()` helpers omit `Device`, breaking two suites on `devices_branch_id_fkey`
 
@@ -61,7 +86,7 @@
 - **Trigger condition:** Immediately — the suite is already red on this branch. Certainly before the Devices feature merges to `main`.
 - **Proposed resolution:** Add `await prisma.attendanceRecord.deleteMany({}); await prisma.device.deleteMany({});` before the `branch.deleteMany()` in both helpers. Better: extract the duplicated `resetDatabase()` into one shared `test/reset-database.ts` so a new FK only has to be handled once — several specs currently carry near-identical copies.
 - **Priority:** High
-- **Status:** Open
+- **Status:** Resolved (2026-08-22, Phase 14 Step 1) — Extracted the shared, FK-safe `apps/api/test/reset-database.ts` (verified against the actual FK graph, not copied blind) and re-pointed `allocation-sum.e2e-spec.ts` and `reconciliation-addendum.e2e-spec.ts` at it, deleting their private copies. The other suites' own `resetDatabase()`/`cleanup()` helpers were deliberately left untouched (AGENTS.md strict scope) since they were not broken. Full e2e suite verified green (13 suites / 247 tests at the time) in both `db:seed → test:e2e` and `test:e2e → test:e2e` order.
 
 ### DEBT-032 — No end-to-end test parses a real PDF bank statement
 
@@ -74,6 +99,7 @@
 - **Proposed resolution:** Add a dev-only PDF writer (`pdf-lib` generates spec-valid xref tables) and commit a small synthetic fixture with fake names and account numbers, laid out on the real column grid. Then assert the full `MandiriPdfParser.parse()` path and add a happy-path import + re-import dedup case to `concurrency.e2e-spec.ts`.
 - **Priority:** Medium
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Blocked on obtaining real sample statements (a hand-generated fixture PDF was already ruled out — see Description). No new information this phase.
 
 ### DEBT-034 — BCA PDF e-statement import is not implemented (no real sample available)
 
@@ -86,6 +112,7 @@
 - **Proposed resolution:** Once a genuine BCA sample exists: dump its geometry the same way `mandiri-pdf.parser.ts` was derived (extract positioned text runs, identify fixed column x-ranges, confirm balance reconciliation across all rows), add `BCA_PDF` to `BankImportFormatSchema`/`BANK_IMPORT_FORMATS`, and add a `bca-pdf.parser.ts` + spec. Do **not** reuse the Bank Sultra layout from DEBT-031 for this — they are different issuers with different table structures, confirmed by direct inspection.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Blocked on obtaining a real BCA PDF sample. No new information this phase.
 
 ### DEBT-031 — Mandiri PDF parser is tuned to one issuer and one sample
 
@@ -98,6 +125,7 @@
 - **Proposed resolution:** For (a), treat `total: 0` on a valid PDF as a distinct warning in the UI rather than a bland success, and add a running-balance reconciliation check that warns when parsed amounts do not chain from opening to closing balance. For (b), add `BANK_SULTRA_PDF` using the layout in ADR-022. For (c), migrate the extractor to `unpdf` (its CJS build is compatible) and add an optional password field — deliberately kept out of the current UI.
 - **Priority:** Medium
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Blocked on obtaining real sample statements. No new information this phase.
 
 ### DEBT-030 — OWNER's POS branch selection is not persisted across visits
 
@@ -110,6 +138,7 @@
 - **Proposed resolution:** Persist the last-picked branch in `localStorage` (or a small pill in the header showing the active branch, editable — closer to the DEBT-005 pattern), read on mount with the same SSR-safe guard `useMediaQuery.ts` already establishes for client-only state.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** No report of recurring annoyance; POS still not a regular OWNER workflow. Trigger has not fired.
 
 ### DEBT-029 — Duplicate `useBranches` hook (`hooks/useBranches.ts` vs. inside `hooks/useExpenses.ts`)
 
@@ -122,6 +151,7 @@
 - **Proposed resolution:** Delete the `useBranches` defined in `useExpenses.ts`, re-point `ReportsClient.tsx` at `hooks/useBranches.ts`, confirm the query key change doesn't break any test asserting on `EXPENSES_QUERY_KEYS.branches`.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** An unrelated refactor; explicitly forbidden by AGENTS.md strict scope for this phase.
 
 ### DEBT-028 — `brand.primary` fill with white text fails WCAG 2.2 AA
 
@@ -146,10 +176,13 @@
 - **Proposed resolution:** (1)/(2) require a schema-approval gate (new `Customer` model / tax column) before any frontend work. (3) would mean swapping `PaymentMethodPicker`'s tiles for a Radix `Select` and rewriting the ~15 dependent test assertions to open the select before clicking an item.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** POS/UI gaps blocked on schema decisions or explicitly-approved deviations. No new information this phase.
 
 **Addendum (unrelated to the three deviations above, logged in the same task):** `cart.reducer.ts`'s `DECREMENT` action still removes a line at `quantity <= 1`, citing an earlier reading of §25 in its own comment. The new `QuantityStepper` disables the decrement button at quantity 1 instead of touching that tested reducer, so the remove-at-1 branch is now unreachable from the UI (removal happens only via the row's trash icon) and the reducer's comment cites a superseded reading of §25. Left as-is deliberately — `cart.reducer.test.ts` still exercises that branch directly. Trigger to clean up: the next time `cart.reducer.ts` is touched for an unrelated reason, delete the dead branch and correct the comment.
 
-### DEBT-026 — Cashier branch context absent from the topbar
+### DEBT-043 — Cashier branch context absent from the topbar
+
+> **ID note:** logged as DEBT-026, renumbered 2026-08-22 to resolve a collision with the Phase 2 entry of the same number (POS filter row buckets).
 
 - **Date logged:** 2026-08-20
 - **Found during:** TASK-047 (UI Revamp Phase 1: App Shell & Modern Sidebar Navigation)
@@ -160,8 +193,11 @@
 - **Proposed resolution:** Add `branchName: string | null` to `UserResponseSchema`, populate it in the users/auth mapper (a simple join on `Branch.name`), and render it in `Topbar.tsx` for `variant="default"` when `user.role === 'KASIR'`.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Still cosmetic-only; no QA/user report has flagged the missing label.
 
-### DEBT-014 — Unpaginated Leave Requests List in All-Employees View
+### DEBT-042 — Unpaginated Leave Requests List in All-Employees View
+
+> **ID note:** logged as DEBT-014, renumbered 2026-08-22 to resolve a collision with the Phase 6 entry of the same number (OpeningStock unitPrice immutability).
 
 - **Date logged:** 2026-08-20
 - **Found during:** TASK-046 (All Employees Leave History View in Leave Requests Page)
@@ -172,8 +208,11 @@
 - **Proposed resolution:** Introduce cursor or offset pagination in `LeaveRequestListQuerySchema` and `LeaveRequestsService.findAll`, utilizing TanStack Table / React Query infinite query pagination on the frontend.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Well under 500 historical requests; trigger has not fired.
 
-### DEBT-013 — Accordion animation keyframes omitted and static TypeScript help content
+### DEBT-041 — Accordion animation keyframes omitted and static TypeScript help content
+
+> **ID note:** logged as DEBT-013, renumbered 2026-08-22 to resolve a collision with the Phase 6 entry of the same number (no closing-stock snapshots).
 
 - **Date logged:** 2026-08-20
 - **Found during:** TASK-044 (Phase 13: Help / Documentation Page)
@@ -193,10 +232,13 @@
   - Introduce MDX rendering if help guides scale into a full knowledge base.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Neither trigger has fired.
 
 ---
 
-### DEBT-012 — Attendance & Leave calendar matrix client-side cross-referencing
+### DEBT-040 — Attendance & Leave calendar matrix client-side cross-referencing
+
+> **ID note:** logged as DEBT-012, renumbered 2026-08-22 to resolve a collision with the Phase 8a entry of the same number (packages/ui undefined color tokens, already Resolved).
 
 - **Date logged:** 2026-08-20
 - **Found during:** TASK-043 (Attendance Monthly Calendar & Leave Matrix)
@@ -207,10 +249,13 @@
 - **Proposed resolution:** Create a dedicated backend aggregation endpoint (e.g. `GET /devices/attendance/matrix?year=2026&month=8`) returning the pre-calculated daily matrix status per user directly from a single SQL query.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Cashier count still small; trigger (>50 users) has not fired.
 
 ---
 
-### DEBT-011 — Dashboard branch profitability queries fan-out client-side via `useQueries`
+### DEBT-039 — Dashboard branch profitability queries fan-out client-side via `useQueries`
+
+> **ID note:** logged as DEBT-011, renumbered 2026-08-22 to resolve a collision with the Phase 8a entry of the same number (topbar static branch label).
 
 - **Date logged:** 2026-08-20
 - **Found during:** TASK-041 (Branch Profitability Card)
@@ -221,10 +266,13 @@
 - **Proposed resolution:** Introduce an aggregated multi-branch endpoint (e.g. `GET /reports/profit-loss/branches`) in `apps/api/src/modules/reports` returning all branch P&L summaries in a single SQL query.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Still 3 branches; trigger (>5 branches) has not fired.
 
 ---
 
-### DEBT-010 — Physical Device Cookie Extraction / DevTools Cloning
+### DEBT-038 — Physical Device Cookie Extraction / DevTools Cloning
+
+> **ID note:** logged as DEBT-010, renumbered 2026-08-22 to resolve a collision with the Phase 5 entry of the same number (no void/refund path for a Sale).
 
 - **Date logged:** 2026-08-19
 - **Found during:** Phase 11 (TASK-035: Attendance & Device Tracking, ADR-021)
@@ -235,10 +283,13 @@
 - **Proposed resolution:** Implement WebAuthn / hardware-backed device keys (FIDO2 / passkey enrollment) or a dedicated installed wrapper app with secure enclave binding.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** No evidence of employee spoofing reported; trigger has not fired.
 
 ---
 
-### DEBT-009 — Cloudinary direct upload vs server-side proxy
+### DEBT-037 — Cloudinary direct upload vs server-side proxy
+
+> **ID note:** logged as DEBT-009, renumbered 2026-08-22 to resolve a collision with the Phase 5 entry of the same number (sale price override has no role restriction).
 
 - **Date logged:** 2026-08-19
 - **Found during:** Phase 10b (TASK-034: Profile Photo Upload)
@@ -252,7 +303,9 @@
 
 ---
 
-### DEBT-008 — Thermal printer ESC/POS command integration for receipts
+### DEBT-036 — Thermal printer ESC/POS command integration for receipts
+
+> **ID note:** logged as DEBT-008, renumbered 2026-08-22 to resolve a collision with the Phase 5 entry of the same number (raw-material lock batching).
 
 - **Date logged:** 2026-08-19
 - **Found during:** TASK-027 (Sales History & Receipt Printing)
@@ -274,10 +327,23 @@
 - **Why deferred:** Simplest possible implementation for v1, and correct by construction (no cache-invalidation logic needed). Appropriate at the transaction volume of a single small multi-branch business.
 - **Impact if unaddressed:** Report queries slow down as historical data accumulates, especially once several months/years of `LedgerEntry` and `StockMovement` rows exist.
 - **Trigger condition:** Any report route consistently exceeds ~500ms at real production data volume, or the business's transaction volume grows meaningfully beyond current expectations.
-- **Measured (2026-08-17, Phase 7):** on synthetic volume across 3 branches spanning 12 months — profit-loss 2 ms, product-profit 2 ms, income-by-payment-method 3 ms, top-products 1 ms, daily-income 1 ms at a one-month range; 1 ms at a one-year range. Trigger for reopening ADR-008: >1 s at a one-year range, or a sequential scan on `sale_items`/`ledger_entries` at a one-month range.
-- **Proposed resolution:** Introduce materialized views or a dedicated read-model table for the report queries, refreshed on a schedule or on write.
+- **Measured (2026-08-22, Phase 14 Workstream C — replaces the Phase 7 fixture-scale numbers above):** Two disposable volume tiers, seeded via `apps/api/prisma/seed-volume.ts` into a throwaway `ohmypos_volume` database (3 branches, ~120 sales/day/branch): **T1** = 12 months / 131,836 sales / 329,408 `sale_items` / 603,692 `stock_movements`; **T2** = 36 months / 395,022 sales / 986,384 `sale_items` / 1,808,816 `stock_movements`. All five Dashboard-3 endpoints measured at T2 over 20 warm HTTP requests each (first request discarded as cold-cache), plus `EXPLAIN (ANALYZE, BUFFERS)` on the underlying query:
+
+  | Endpoint | 1-day p50/p95 | 1-month p50/p95 | 1-year p50/p95 | 1-month plan | 1-year plan |
+  |---|---|---|---|---|---|
+  | profit-loss | 8/13 ms | 42/61 ms | 312/400 ms | Index Scan (`sales_sold_at_idx`) → Index Scan (`sale_items_sale_id_idx`) | switches to Parallel Seq Scan on `sale_items` + Hash Join (planner's correct choice once the range covers ~⅓ of the table) |
+  | product-profit / top-products (shared query) | 7/18 ms | 33/40 ms | 122–320/132–2746 ms* | same Index Scan pair, plus `Seq Scan on products` (6-row table, irrelevant) | same Seq-Scan-+-Hash-Join switch on `sale_items`, 170 ms execution |
+  | income-by-payment-method | 5/6 ms | 10/23 ms | 34/63 ms | Index Scan (`ledger_entries_entry_date_idx`) | Index Scan |
+  | daily-income | 7/10 ms | 40/42 ms | 288/720 ms | Index Scan | Index Scan |
+
+  *top-products' one 2.75 s sample was a single non-reproducible outlier (5 immediate re-runs: 122–321 ms) — almost certainly GC/scheduler jitter, not a query-plan issue; the plan for that exact request was never re-captured, so it's noted rather than discarded.
+
+  **Verdict — HOLD for all five Dashboard-3 endpoints.** Applying System Design §11's rule literally: no report exceeds 1 s at a one-year range (worst case 720 ms, daily-income), and at the one-month range every query resolves via an index (`sales_sold_at_idx`, `sale_items_sale_id_idx`, `ledger_entries_entry_date_idx`) — the "Seq Scan on `sale_items`/`ledger_entries` at one-month" trigger does not fire. The Parallel Seq Scan Postgres switches to on `sale_items` at the one-year range is the planner correctly preferring a scan + hash join over ~131K individual index probes once the range covers a large fraction of the table — expected behavior, not a defect, and still well under the 1 s budget. See ADR-008's 2026-08-22 reaffirmation note.
+
+  `cash-balance` (unbounded lower date bound by design — PRD requires balance-as-of-a-date) and `GET /inventory/summary` (DEBT-013) were measured separately since neither has a meaningful "range" dimension; see DEBT-013 below for the inventory number. `cash-balance` at T2: 128/342 ms, `EXPLAIN` confirms a `Parallel Seq Scan on ledger_entries` (expected — it must sum every entry before the as-of date) but stays well under 1 s at the current ~400K-row table size.
+- **Proposed resolution:** Introduce materialized views or a dedicated read-model table for the report queries, refreshed on a schedule or on write. **Not proposed for action now** — the verdict above is HOLD, so this stays a documented option for a future re-measurement, not a change to make today.
 - **Priority:** Medium
-- **Status:** Open
+- **Status:** Open — re-affirmed HOLD 2026-08-22 on measured T1/T2 volume (see ADR-008). Re-open this entry (and re-run the Workstream C measurement) once real production volume approaches T2 (~36 months of 3-branch history) or any single report is observed exceeding 1 s in practice.
 
 ### DEBT-002 — Pessimistic row-lock on `RawMaterial` for stock concurrency
 
@@ -301,7 +367,19 @@
 - **Trigger condition:** The business owner asks for any one of them, or Phase 3's `Sale` flow is specified — whichever comes first.
 - **Proposed resolution:** Take them one at a time through the normal schema-approval gate. Tax and discount should be decided together, before `Sale` is built, because both change the total's definition.
 - **Priority:** Medium
-- **Status:** Partially resolved (2026-08-16) — Tax, discount, and order type decided per ADR-015 (Phase 5 planning): none get schema support in v1. `Sale.totalAmount = Σ SaleItem.lineTotal`; discounts are expressed through the existing per-line price override (`unitPriceAtSale` + `isPriceOverridden`). SKU/barcode scanning, the expense approval state, and the cashier shift remain **Open** — none of the three is touched by Phase 5 and each still needs its own approval pass. (2026-08-20, UI Revamp Phase 2) DESIGN.md §21.2's discount tag on the product card was likewise left unbuilt for the same reason — `Product` has no discount/original-price field, so a strikethrough that can never trigger would repeat the mistake this entry already rejected.
+- **Status:** Resolved (2026-08-22, Phase 14 Workstream D) — Closing permanently on the tax/discount/order-type portion, which was fully and finally decided by ADR-015 (Phase 5 planning) and confirmed unbuilt-by-design again at UI Revamp Phase 2 (DESIGN.md §21.2's discount tag): none get schema support in v1, `Sale.totalAmount = Σ SaleItem.lineTotal`, and discounts are expressed entirely through the existing per-line price override (`unitPriceAtSale` + `isPriceOverridden`). This portion of the entry was aging as "Partially resolved" alongside three unrelated items that were never touched by ADR-015 at all — those are split out to **DEBT-044** below so a genuinely-closed decision stops being tracked next to genuinely-open ones.
+
+### DEBT-044 — SKU/barcode scanning, expense approval state, and cashier shift remain unbuilt (split from DEBT-004)
+
+- **Date logged:** 2026-08-22
+- **Found during:** Phase 14 Workstream D triage — split out of DEBT-004, whose tax/discount/order-type portion closed permanently (ADR-015) while these three items were never addressed by that ADR or any later phase.
+- **Description:** The approved mockup (`OhMyPos App.dc.html`) still renders three things ERD v3 has no field for: SKU and barcode scanning on products, an expense/purchase approval state ("menunggu persetujuan · perlu ditinjau" — distinct from `SupplierPurchase.paymentStatus`'s `PAID`/`UNPAID`/`PARTIALLY_PAID`, which has no review step), and a cashier shift ("Shift #4192 · dibuka 08:12"). Shift management is an explicit PRD §3 non-goal.
+- **Why deferred:** Each needs its own schema-approval gate and none has been requested by the business owner. Rendering them as static UI would promise behaviour the system does not have (the same standing judgement DEBT-004 already made for tax/discount).
+- **Impact if unaddressed:** Three silent expectation gaps against the approved mockup. No correctness impact — nothing currently promises this behaviour in the shipped UI.
+- **Trigger condition:** The business owner asks for barcode scanning, a purchase-approval workflow, or shift tracking — independently, since the three are unrelated and there is no reason to bundle them.
+- **Proposed resolution:** Take each through its own schema-approval gate when requested: (1) `Product.sku`/`Product.barcode` plus a scan-to-add POS flow; (2) a `SupplierPurchase` or `Payable` review-state field distinct from `paymentStatus`; (3) a `Shift` model plus open/close UI, which PRD §3 would need to un-deprecate first.
+- **Priority:** Low
+- **Status:** Open
 
 ### DEBT-006 — RawMaterial.unitCost not updated by purchases
 
@@ -326,6 +404,7 @@
 - **Proposed resolution:** Add `trg_check_payable_settlement_sum` trigger in a migration, modeled on `trg_check_allocation_sum`.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Still no second write path to `PayableSettlement`. Workstream B's B4 (30-way concurrent settlement against one payable) now provides direct evidence the service-layer `FOR UPDATE` lock alone holds under real contention: exactly 15 succeeded, 15 returned 409, `remainingBalance` reached exactly `0.00`, and zero 5xx occurred across repeated runs. Trigger unchanged — reopen only if a second write path is added.
 
 ### DEBT-008 — Raw-material locks acquired one statement per row, not one batched `ANY($1) ORDER BY id`
 
@@ -338,6 +417,7 @@
 - **Proposed resolution:** Switch to the batched `ANY($1) ORDER BY id` statement, and add an `EXPLAIN`-based test (or a Postgres version pin) that asserts `LockRows` sits above `Sort` in the plan, so a planner change fails CI instead of failing silently in production.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Now has a measured number, which this entry previously lacked entirely. Workstream B's B2 (50-way oversubscription on one material) captured per-request latency under real lock contention: p50=75ms, p95=173ms, max=183ms for 50 concurrent sale requests. The lock-acquisition phase is not separated from total request time in this measurement, so it is an upper bound, not an isolated figure — but at this magnitude it is nowhere near "a meaningful share of sale latency" at the trigger's stated bar. Trigger unchanged.
 
 ### DEBT-009 — Per-line sale price override has no role restriction
 
@@ -350,6 +430,7 @@
 - **Proposed resolution:** Decide the policy (a percentage ceiling, an `ADMIN`/`OWNER`-only override, or a post-hoc report of overridden lines) and encode it as a Zod refinement or a role check, raising `PriceOverrideNotPermittedException`.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Blocked on a business-policy answer from the owner, not on engineering. No new information this phase.
 
 ### DEBT-010 — No void/refund path for a `Sale`
 
@@ -374,6 +455,7 @@
 - **Proposed resolution:** Once branch-scoped data exists, wire the topbar label into a real selector that filters the current view's query params/state.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Trigger ("branch-scoped views for Owner/Admin exist") has not fired.
 
 ### DEBT-016 — Report rows are unpaginated
 
@@ -383,6 +465,7 @@
 - **Trigger to fix:** the product catalogue exceeding ~500 active products, or a product-profit response exceeding ~1 MB.
 - **Fix when triggered:** additive query parameters (`page`, `limit`) on the product-profit endpoint reusing `PaginationQuerySchema` — not a redesign.
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Catalogue is still tens of products; trigger (~500) has not fired.
 
 ### DEBT-013 — No closing-stock snapshots — query-time calculation scale boundary
 
@@ -392,9 +475,10 @@
 - **Why deferred:** Query-time computation is correct by construction (no cache invalidation or out-of-sync snapshot anomalies). At v1 transaction volume for a single small multi-branch business (~5,000 movements/month), indexed aggregation runs well under 20ms.
 - **Impact if unaddressed:** At higher volume (e.g. multi-year history, >50,000 movements), multi-period report queries will scan larger index ranges.
 - **Trigger condition:** `GET /inventory/summary` p95 response time exceeds 250ms under production volume.
-- **Proposed resolution:** Introduce a monthly closing snapshot table populated on period close or asynchronously computed read-model.
-- **Priority:** Low
-- **Status:** Open
+- **Measured (2026-08-22, Phase 14 Workstream C):** Against the same T2 volume tier as DEBT-001 (36 months, 1,808,816 `stock_movements`), `GET /inventory/summary?period=2026-08` (the latest month — the worst case, since the "opening balance" sub-query has no lower date bound and must scan every movement before the period): HTTP p50 = 222 ms, p95 = 768 ms over 20 warm requests. `EXPLAIN (ANALYZE, BUFFERS)` on the opening-balance sub-query alone (`SELECT raw_material_id, direction, SUM(quantity) FROM stock_movements WHERE movement_date < ... GROUP BY raw_material_id, direction`) shows a **`Parallel Seq Scan` on `stock_movements`**, 391 ms execution — expected, since the query is unbounded by design (ADR-008), not a missing index. **This entry's own trigger (p95 > 250 ms) has fired** at T2 volume, though System Design §11's global report trigger (>1 s at a one-year-equivalent range) has not — the two thresholds disagree on purpose (this entry was written with a stricter, inventory-specific budget). Growth is linear in total historical `stock_movements` row count with no upper bound (unlike the Dashboard-3 reports, which are bounded by the selected date range), so this will keep growing release over release even if nothing else changes — re-measure whenever the seeded volume grows past T2, not just once.
+- **Proposed resolution:** Introduce a monthly closing snapshot table populated on period close or asynchronously computed read-model. **Not proposed for action now** — 768 ms p95 is tolerable for a back-office report and still under System Design §11's 1 s global budget; flagging for awareness given the entry's own tighter 250 ms threshold has technically fired, not requesting a schema change.
+- **Priority:** Low → **Medium** (raised 2026-08-22: the entry's own trigger has now measurably fired, even though the global report budget has not)
+- **Status:** Open — re-flagged 2026-08-22 (Phase 14 Workstream C) with measured T2 numbers, superseding the "~5,000 movements/month, well under 20ms" estimate in this entry's own "Why deferred" line above (now stale — see the 391 ms/768 ms measurement instead).
 
 ### DEBT-014 — OpeningStock unitPrice historical immutability vs master data PATCH
 
@@ -407,6 +491,7 @@
 - **Proposed resolution:** Maintain a formal `RawMaterialCostHistory` table if retrospective inventory valuation is ever required.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Blocked on whether retrospective valuation is ever wanted. No new information this phase.
 
 ### DEBT-015 — OpeningStock has no branchId; multi-branch inventory requires new model
 
@@ -419,6 +504,7 @@
 - **Proposed resolution:** Add optional `branchId` to `OpeningStock` and transition `RawMaterial` to per-branch balances.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Requires an ADR revisiting ADR-004; no business driver has emerged.
 
 ### DEBT-017 — `POST /sales` has no idempotency key, so a lost response is unresolvable
 
@@ -441,6 +527,7 @@
 - **Impact if unaddressed:** (1)–(3) are expectation gaps against the approved mockup only. (4) is a real operational annoyance: a cashier who refreshes mid-order retypes it.
 - **Trigger condition:** The business owner asks for menu categories or product photos; or a cashier reports losing an order to a refresh.
 - **Proposed resolution:** Categories and images are additive schema work through the normal approval gate. Cart persistence is frontend-only — persist the reducer state to `sessionStorage`, keyed by branch, and rehydrate on mount.
+- **Re-flagged 2026-08-22 (Phase 14 gate):** POS/UI gaps blocked on schema decisions or explicitly-approved deviations. No new information this phase.
 - **Priority:** Low
 - **Status:** Partially resolved (2026-08-20, UI Revamp Phase 2) — (1) the §22 filter row now exists, bound to availability buckets rather than menu categories; see **DEBT-026**. (2), (3) (pre-existing — `Product.photoUrl` already rendered before this phase, unaffected by DEBT-018's original wording), and (4) remain **Open**.
 
@@ -454,7 +541,7 @@
 - **Trigger condition:** Anyone setting up the repo without copying `.env.example`, or CI running the web app without the env var.
 - **Proposed resolution:** Change the fallback in `lib/api.ts` to 4015 and update the three test mocks that assert 4013. One-line change plus test fixture updates.
 - **Priority:** Low
-- **Status:** Open
+- **Status:** Resolved (2026-08-22, Phase 14 Workstream D) — Standardized on 4015 everywhere; the actual scope was larger than this entry's original wording (`lib/api.ts` had already been fixed to 4015 by the time this was picked up). Fixed: `apps/api/src/main.ts`'s fallback, `docker-compose.yml` (`PORT`, `ports`, `NEXT_PUBLIC_API_BASE_URL`), `apps/api/Dockerfile` and `Dockerfile.dev` `EXPOSE`, `.github/workflows/ci.yml`'s e2e job `PORT`, `README.md`'s port table, and all 16 frontend test mocks hardcoding `http://localhost:4013/api/v1`. Verified with the full frontend suite (49 files / 328 tests, all passing).
 
 ### DEBT-020 — The e2e suite and `pnpm dev` share one database, and `db:seed` cannot restore it
 
@@ -466,7 +553,7 @@
 - **Trigger condition:** Any developer running the e2e suite while relying on local dev data — i.e. routinely.
 - **Proposed resolution:** Point the e2e suite at a separate database via a `DATABASE_URL` override in `test/setup-e2e.ts` or a dedicated `.env.test`. Separately, correct AGENTS.md's claim about `db:seed`, or make the seed genuinely idempotent-restoring for the fixture fields.
 - **Priority:** Medium
-- **Status:** Open
+- **Status:** Resolved (2026-08-22, Phase 14 Gate 2) — `apps/api/test/setup-e2e.ts` now loads a dedicated `.env.test` (git-ignored, `.env.test.example` checked in) pointing at a separate `ohmypos_e2e` database, created and migrated once via the one-time `createdb` step documented in `.env.test.example`'s header. `pnpm dev`'s database is no longer touched by `test:e2e` at all, which was the actual harm this entry described — the `db:seed`-cannot-fully-restore-drift observation stands but is now a minor, unrelated note rather than a routine data-loss trap. AGENTS.md §8 left as-is; it already only claims `db:seed` "reset[s] synthetic data," which is accurate for the common case (missing/deleted rows) even though it doesn't repair a drifted `currentStock` on an existing row.
 
 ### DEBT-021 — Supplier master data has no edit/delete UI in back-office
 
@@ -479,6 +566,7 @@
 - **Proposed resolution:** Add a "Pemasok" tab to `(back-office)/master-data` with a table, edit dialog, and delete/deactivate confirmation modal wired to existing `PATCH /suppliers/:id` and `DELETE /suppliers/:id` endpoints.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Real gap, but it is feature work, not verification — out of scope for this phase (AGENTS.md strict scope).
 
 ### DEBT-022 — No Zod schema for the `Allocation`-with-`ledgerEntry` composed response
 
@@ -490,7 +578,7 @@
 - **Trigger condition:** Any other screen needs the same `Allocation`-with-`ledgerEntry` shape (duplicating the intersection type), or the `allocation.controller.ts` response shape changes.
 - **Proposed resolution:** Add `AllocationWithLedgerEntrySchema` to `packages/api-contracts/src/allocation.schema.ts` (composing `AllocationResponseSchema` and `LedgerEntryResponseSchema`) and use the inferred type on both `apps/api`'s controller return type and `apps/web/hooks/useReconciliation.ts`.
 - **Priority:** Low
-- **Status:** Open
+- **Status:** Resolved (2026-08-22, Phase 14 Workstream D) — Added `AllocationWithLedgerEntrySchema` (`AllocationResponseSchema.extend({ ledgerEntry: LedgerEntryResponseSchema })`) to `packages/api-contracts/src/allocation.schema.ts`. `apps/web/hooks/useReconciliation.ts` now imports the inferred `AllocationWithLedgerEntry` type instead of hand-composing the intersection. The backend side (`allocation.service.ts`'s `findByTransaction`) was deliberately left returning the raw Prisma object unchanged — every other method in that service (and the equivalent pattern across the rest of `apps/api`) already relies on NestJS's default Decimal→string JSON serialization rather than an explicit per-endpoint mapper; adding one only here would be inconsistent with that established pattern for a Low-priority, non-functional gap. Verified with `tsc --noEmit` on both packages and the full frontend suite (49 files / 328 tests).
 
 ### DEBT-023 — Seed script writes KASIR rows with `branchId: null`, bypassing the role/branch invariant
 
@@ -502,9 +590,9 @@
 - **Trigger condition:** Next time `seed.ts` is touched for any reason, or before any task that relies on seeded KASIR accounts already having a valid branch assignment.
 - **Proposed resolution:** Have `seed.ts` create (or look up) a branch before creating its KASIR rows and assign `branchId` to it, so the seed itself satisfies the same invariant the service layer enforces — or route seed user-creation through `UsersService` instead of `prisma.user.createMany` directly, which would catch this class of drift automatically in the future.
 - **Priority:** Low
-- **Status:** Open
+- **Status:** Resolved (2026-08-22, Phase 14 Workstream D triage) — Verified against current `apps/api/prisma/seed.ts`: KASIR rows are created via `prisma.user.upsert` (not `createMany`) with `branchId: branches[0].id` set in both the `create` and `update` branches, and `qa.kasir@ohmypos.local` no longer exists in the seed at all. The fix landed in an untracked prior task; this entry is closed on verification, not on new work.
 
-### DEBT-024 — No end-to-end browser verification of the Export → download flow
+### DEBT-024 — Export → download never verified in a browser
 
 - **Date logged:** 2026-08-20
 - **Found during:** TASK-045 (Export XLSX Buttons)
@@ -514,7 +602,7 @@
 - **Trigger condition:** Next session where a browser (Claude-in-Chrome or manual) is available — do one click-through per page area (Reports, Expenses, Inventory, Reconciliation, Devices/Attendance) and confirm the file downloads and opens with correct data.
 - **Proposed resolution:** Run the standard `.agents/skills/e2e-playwright/SKILL.md` workflow against each Export button once, capture a screenshot/confirmation, and mark this entry Resolved.
 - **Priority:** Medium — doesn't touch money/stock correctness (Playbook §10), but it's a shipped user-facing feature with zero live verification.
-- **Status:** Open
+- **Status:** Re-flagged, still Open (2026-08-22, Phase 14 Workstream D). A Claude-in-Chrome session **was** connected this time, and login was attempted repeatedly against both the Turbopack dev server and a `next build && node .next/standalone/apps/web/server.js` production build; every attempt failed with "Failed to fetch." At the time, this was **incorrectly** attributed to the browser automation tool's own sandboxing (the reasoning: `curl` to the same endpoint succeeded instantly and consistently, so the app must be fine). That theory was wrong — the user hit the exact same "Failed to fetch" independently in their own normal browser shortly after, which `curl` could never have caught because `curl` doesn't run CORS preflight at all. **Real root cause found:** `apps/api/src/main.ts`'s `enableCors({ allowedHeaders: [...] })` listed only `Content-Type` and `Authorization` — it never included `x-correlation-id`, the header `apps/web/lib/api.ts`'s `doFetch` has sent on every request since this same Phase 14 session's E-8 change. Every real browser (and, it turns out, the Claude-in-Chrome tab too — not a sandboxing artifact) correctly blocked the request at the CORS preflight stage. Fixed by adding `'x-correlation-id'` to `allowedHeaders`; see `ERR-021`. This entry stays Open (not Resolved) — the CORS fix unblocks login, but the actual Export→download click-through this entry asks for has still not been run.
 
 ### DEBT-025 — Export filenames use the export-time date, not the report's selected date range
 
@@ -527,6 +615,7 @@
 - **Proposed resolution:** Add a `filters: ReportFilters` (or `startDate`/`endDate`) prop to the 5 view components, sourced from `ReportsClient`'s existing state, and interpolate it into `exportFilename` in place of `new Date().toISOString().slice(0, 10)`.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Feature polish, out of scope for verification (AGENTS.md strict scope).
 
 ### DEBT-026 — POS filter row buckets by availability, not menu category
 
@@ -539,6 +628,7 @@
 - **Proposed resolution:** Add `Product.category` (or a `ProductCategory` table) through the schema-approval gate; `CategoryFilterRow` already takes `{ id, label, count }[]` and needs no change, only a different `countByBucket` source in `product-filters.ts`.
 - **Priority:** Low
 - **Status:** Open
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Trigger ("the owner asks for menu categories") has not fired.
 
 ---
 

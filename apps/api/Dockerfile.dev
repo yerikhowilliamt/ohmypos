@@ -36,6 +36,6 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 
 COPY . .
 
-EXPOSE 4013
+EXPOSE 4015
 
 CMD ["pnpm", "--filter", "api", "dev"]

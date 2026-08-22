@@ -9,17 +9,19 @@ import {
 } from './period';
 
 describe('Period (period.ts)', () => {
-  it('resolves a month to a UTC half-open interval', () => {
+  it('resolves a month to a WIB (Asia/Jakarta, UTC+7) half-open interval', () => {
     const period = parsePeriodMonth('2026-08');
     expect(period.month).toBe('2026-08');
-    expect(period.periodStart.toISOString()).toBe('2026-08-01T00:00:00.000Z');
-    // EXCLUSIVE — the first instant of September is NOT part of August.
-    expect(period.periodEnd.toISOString()).toBe('2026-09-01T00:00:00.000Z');
+    // 2026-08-01 00:00 WIB = 2026-07-31 17:00 UTC (ADR-023 — delegates to common/period.ts).
+    expect(period.periodStart.toISOString()).toBe('2026-07-31T17:00:00.000Z');
+    // EXCLUSIVE — the first instant of September (WIB) is NOT part of August.
+    expect(period.periodEnd.toISOString()).toBe('2026-08-31T17:00:00.000Z');
   });
 
   it('rolls December over to the following January', () => {
     const period = parsePeriodMonth('2026-12');
-    expect(period.periodEnd.toISOString()).toBe('2027-01-01T00:00:00.000Z');
+    // 2027-01-01 00:00 WIB = 2026-12-31 17:00 UTC.
+    expect(period.periodEnd.toISOString()).toBe('2026-12-31T17:00:00.000Z');
   });
 
   it.each([
