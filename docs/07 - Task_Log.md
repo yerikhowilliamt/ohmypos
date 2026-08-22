@@ -41,6 +41,22 @@
 
 ## Log
 
+### TASK-067 — Investigate Flaky `npm run test:e2e` Full-Suite Failure
+
+- **Date:** 2026-08-22
+- **Module / Phase:** e2e test infrastructure, cross-cutting (`apps/api/test/*.e2e-spec.ts`).
+- **Objective:** The user ran `npm run test:e2e` and hit 1 failed / 250 passed. Determine whether this is a real regression or environment flakiness, and root-cause it if feasible.
+- **Relevant docs:** `concurrency.e2e-spec.ts`'s own header comment (prior Phase 14 finding on this machine's connection-burst ceiling), `DEBT-047` (new, this task's finding).
+- **What was done:**
+  - Reproduced the failure directly: 5/5 clean when the reported failing file (`monthly-cycle.e2e-spec.ts`) ran alone; failed again within a handful of full-suite reruns, in a **different file with a different failure mode each time** — 6 distinct captures total across `monthly-cycle`, `allocation-sum`, `reports`, `concurrency` (B2), `sales`, and `auth-rbac`.
+  - Added temporary debug instrumentation (`RoleGuard`, `JwtAuthGuard`, a global `DebugErrorInterceptor`, and inline logging in `concurrency.e2e-spec.ts`'s B2 test) to capture the true state behind each failure — confirmed the JWT/cookie/role used was always correct in every case; the guard/pipe layer rejected a request that should have succeeded.
+  - Tested and **ruled out** the leading hypothesis (Postgres connection-pool exhaustion: `connection_limit=60` × 13 sequential test files vs. `max_connections=100`) by polling `pg_stat_activity` every second through a full clean run — peak was 20 connections, nowhere near the ceiling.
+  - All instrumentation reverted; confirmed via `git diff` on every touched file (clean) and a final full-suite sanity run (green).
+  - Logged the confirmed-but-unresolved finding as `DEBT-047`, extending the scope of a limitation `concurrency.e2e-spec.ts` already partially documented (40-50-way burst ECONNRESET) to include ordinary sequential requests under full-suite load.
+- **Decisions made during this task:** Stopped short of the remaining candidates (event-loop-lag instrumentation, OS socket-backlog investigation) at the user's explicit choice — the next diagnostic step would be materially heavier with no guaranteed payoff, since the six captures span at least three structurally different code paths.
+- **Status:** Done — investigated, one theory disproven with direct measurement, remaining root cause not pinned down; logged as open tech debt rather than left undocumented.
+- **Handoff notes:** No code changes shipped from this task (all debug instrumentation was reverted). If this resurfaces — especially in CI, which has different resource characteristics than this local machine — see `DEBT-047`'s Proposed resolution for the next concrete step (`perf_hooks.monitorEventLoopDelay` correlated against request timestamps).
+
 ### TASK-066 — Synthetic Mandiri e-Statement PDF Fixtures for Manual Import Testing
 
 - **Date:** 2026-08-22
