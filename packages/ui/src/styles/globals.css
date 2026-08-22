@@ -178,7 +178,7 @@
   /* ============================================================
    * Shadcn Sidebar (ui.shadcn.com/docs/components/sidebar)
    *
-   * Pure aliases onto existing semantic tokens (DESIGN.md §8.2) — no new
+   * Pure aliases onto existing semantic tokens (DESIGN.md §5 Typography) — no new
    * colors. Because these are var() references, dark mode's
    * [data-theme='dark'] block re-resolves them automatically once it
    * overrides the tokens they point to; no separate dark entries needed.

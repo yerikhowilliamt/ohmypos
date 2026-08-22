@@ -237,4 +237,133 @@ describe('Reconciliation backend addendum (e2e)', () => {
       expect(ids).toEqual([kept.id]);
     });
   });
+
+  /**
+   * TASK-068. `sortOrder` never existed on this endpoint and the web client
+   * hardcoded `sortBy: 'txnDate'` in `buildQuery`, so the table's three sort
+   * headers reordered the visible page and never reached the API at all. These
+   * cases pin the server side of that fix.
+   */
+  describe('GET /reconciliation/transactions — sorting', () => {
+    async function makeTxn(date: string, amount: string, description: string) {
+      return prisma.bankTransaction.create({
+        data: {
+          accountId,
+          txnDate: new Date(date),
+          amount,
+          type: 'INFLOW',
+          description,
+        },
+      });
+    }
+
+    async function seedThree() {
+      await makeTxn('2026-03-03', '300.00', 'Charlie setoran');
+      await makeTxn('2026-03-01', '100.00', 'Alpha setoran');
+      await makeTxn('2026-03-02', '200.00', 'Bravo setoran');
+    }
+
+    it('honours sortOrder in both directions', async () => {
+      await seedThree();
+
+      const asc = await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query({ sortBy: 'txnDate', sortOrder: 'asc' })
+        .set('Cookie', adminCookies)
+        .expect(200);
+
+      const ascDates = (
+        asc.body as { data: Array<{ txnDate: string }> }
+      ).data.map((row) => new Date(row.txnDate).getTime());
+      expect(ascDates).toHaveLength(3);
+      for (let i = 1; i < ascDates.length; i += 1) {
+        expect(ascDates[i]).toBeGreaterThanOrEqual(ascDates[i - 1]);
+      }
+
+      const desc = await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query({ sortBy: 'txnDate', sortOrder: 'desc' })
+        .set('Cookie', adminCookies)
+        .expect(200);
+
+      const descFirst = (desc.body as { data: Array<{ description: string }> })
+        .data[0]?.description;
+      const ascFirst = (asc.body as { data: Array<{ description: string }> })
+        .data[0]?.description;
+      expect(descFirst).not.toBe(ascFirst);
+    });
+
+    it('sorts by amount as money, not as text', async () => {
+      await seedThree();
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query({ sortBy: 'amount', sortOrder: 'asc' })
+        .set('Cookie', adminCookies)
+        .expect(200);
+
+      const amounts = (
+        res.body as { data: Array<{ amount: string }> }
+      ).data.map((row) => Number(row.amount));
+      for (let i = 1; i < amounts.length; i += 1) {
+        expect(amounts[i]).toBeGreaterThanOrEqual(amounts[i - 1]);
+      }
+    });
+
+    it('accepts description as a sort key', async () => {
+      await seedThree();
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query({ sortBy: 'description', sortOrder: 'asc' })
+        .set('Cookie', adminCookies)
+        .expect(200);
+
+      const names = (
+        res.body as { data: Array<{ description: string }> }
+      ).data.map((row) => row.description);
+      expect(names).toEqual([
+        'Alpha setoran',
+        'Bravo setoran',
+        'Charlie setoran',
+      ]);
+    });
+
+    it('rejects a sortBy that is a filter, not a sort key', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query({ sortBy: 'type' })
+        .set('Cookie', adminCookies)
+        .expect(400);
+    });
+
+    it('rejects an unknown sortOrder rather than coercing it', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query({ sortOrder: 'sideways' })
+        .set('Cookie', adminCookies)
+        .expect(400);
+    });
+
+    it('reports totalPages 1 for an empty result, not 0', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query({ status: 'MATCHED' })
+        .set('Cookie', adminCookies)
+        .expect(200);
+
+      const meta = (res.body as { meta: { total: number; totalPages: number } })
+        .meta;
+      expect(meta.total).toBe(0);
+      expect(meta.totalPages).toBe(1);
+    });
+
+    it('does not widen access — a KASIR still gets 403 (ADR-011 §6)', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query({ sortBy: 'description', sortOrder: 'asc' })
+        .set('Cookie', kasirCookies)
+        .expect(403);
+    });
+  });
 });

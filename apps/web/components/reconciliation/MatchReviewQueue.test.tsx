@@ -258,4 +258,104 @@ describe('MatchReviewQueue', () => {
       expect.anything(),
     );
   });
+
+  /**
+   * Regression guard for the dead end this queue used to have (TASK-068).
+   *
+   * `usePendingReviewTransactions` fetched `limit=100&page=1` only. It is a
+   * LOOKUP, not a display list: handleAccept resolves each candidate's amounts
+   * through it. A transaction past the first page therefore produced "Data
+   * transaksi bank untuk usulan ini belum termuat. Jalankan ulang pencocokan
+   * otomatis." — advice that can never work, because propose() only selects
+   * UNRESOLVED (matching.service.ts:19) and these are already PENDING_REVIEW.
+   */
+  describe('pending-review lookup spans every page', () => {
+    function mockPagedApi() {
+      vi.mocked(apiModule.apiFetch).mockImplementation(
+        (path: string, init?: RequestInit) => {
+          if (path === '/matching/propose' && init?.method === 'POST') {
+            return Promise.resolve([candidate]);
+          }
+          if (path.startsWith('/reconciliation/transactions')) {
+            const page = new URLSearchParams(path.split('?')[1] ?? '').get(
+              'page',
+            );
+            // T2 deliberately sits on page 2 — unreachable before this fix.
+            return Promise.resolve({
+              data:
+                page === '2' ? [txn(T2, '50000.00')] : [txn(T1, '100000.00')],
+              meta: {
+                total: 2,
+                page: Number(page ?? 1),
+                limit: 100,
+                totalPages: 2,
+              },
+            });
+          }
+          if (path === '/allocations' && init?.method === 'POST') {
+            return Promise.resolve([
+              { id: 'a1', bankTransactionId: T1 },
+              { id: 'a2', bankTransactionId: T2 },
+            ]);
+          }
+          return Promise.reject(new Error(`Unexpected apiFetch call: ${path}`));
+        },
+      );
+    }
+
+    it('resolves a candidate whose transaction is on the second page', async () => {
+      mockPagedApi();
+      renderWithClient(<MatchReviewQueue />);
+
+      fireEvent.click(
+        screen.getByRole('button', { name: /jalankan pencocokan otomatis/i }),
+      );
+      await screen.findByRole('button', { name: /terima/i });
+
+      await waitFor(() => {
+        fireEvent.click(screen.getByRole('button', { name: /terima/i }));
+        expect(apiModule.apiFetch).toHaveBeenCalledWith(
+          '/allocations',
+          expect.objectContaining({ method: 'POST' }),
+        );
+      });
+
+      // The dead-end message must never appear.
+      expect(screen.queryByTestId('match-error')).toBeNull();
+
+      const call = vi
+        .mocked(apiModule.apiFetch)
+        .mock.calls.find(([path]) => path === '/allocations');
+      const payload = JSON.parse(String(call?.[1]?.body)) as {
+        allocations: Array<{
+          bankTransactionId: string;
+          amountPortion: string;
+        }>;
+      };
+      expect(payload.allocations).toHaveLength(2);
+      expect(payload.allocations[1]).toMatchObject({
+        bankTransactionId: T2,
+        amountPortion: '50000.00',
+      });
+    });
+
+    it('stops paging at totalPages rather than looping', async () => {
+      mockPagedApi();
+      renderWithClient(<MatchReviewQueue />);
+
+      fireEvent.click(
+        screen.getByRole('button', { name: /jalankan pencocokan otomatis/i }),
+      );
+      await screen.findByRole('button', { name: /terima/i });
+
+      await waitFor(() => {
+        const lookups = vi
+          .mocked(apiModule.apiFetch)
+          .mock.calls.filter(([path]) =>
+            String(path).startsWith('/reconciliation/transactions'),
+          );
+        expect(lookups).toHaveLength(2);
+      });
+    });
+  });
 });

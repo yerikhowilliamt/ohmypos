@@ -1,7 +1,7 @@
 /**
  * OhMyPos — Formatting Helpers
  *
- * Centralizes currency, quantity, and percentage formatting across frontend screens (DESIGN.md §8, §9).
+ * Centralizes currency, quantity, and percentage formatting across frontend screens (DESIGN.md §5 Typography, §12.2 Signature Flow Indicator, §20 Data Formatting & Locale).
  */
 
 const IDR_FORMATTER = new Intl.NumberFormat('id-ID', {

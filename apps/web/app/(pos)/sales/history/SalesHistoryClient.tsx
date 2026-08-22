@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import type { UserResponse } from '@ohmypos/api-contracts';
+import type { SaleSortBy, UserResponse } from '@ohmypos/api-contracts';
+import type { OnChangeFn, SortingState } from '@tanstack/react-table';
 import { useSales } from '@/hooks/usePos';
 import { useBranches } from '@/hooks/useBranches';
 import { SalesHistoryTable } from '@/components/pos/SalesHistoryTable';
@@ -16,6 +17,21 @@ import {
 } from '@ohmypos/ui/components/select';
 import { Store } from 'lucide-react';
 
+const DEFAULT_PAGE_SIZE = 10;
+
+/** Only these column ids exist as backend sort keys (`SaleSortBySchema`). */
+const SORTABLE_COLUMN_IDS: SaleSortBy[] = [
+  'soldAt',
+  'totalAmount',
+  'createdAt',
+];
+
+function toSaleSortBy(columnId: string | undefined): SaleSortBy {
+  return SORTABLE_COLUMN_IDS.includes(columnId as SaleSortBy)
+    ? (columnId as SaleSortBy)
+    : 'soldAt';
+}
+
 interface SalesHistoryClientProps {
   user: UserResponse;
 }
@@ -26,10 +42,25 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
   );
   const [startDate, setStartDate] = React.useState<string>('');
   const [endDate, setEndDate] = React.useState<string>('');
+  const [page, setPage] = React.useState(1);
+  const [limit, setLimit] = React.useState(DEFAULT_PAGE_SIZE);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    { id: 'soldAt', desc: true },
+  ]);
 
   const branches = useBranches();
 
+  // Any change to sort or filters invalidates the current page number — page 4
+  // of the old ordering is not page 4 of the new one.
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    setSorting((current) =>
+      typeof updater === 'function' ? updater(current) : updater,
+    );
+    setPage(1);
+  };
+
   const queryParams = React.useMemo(() => {
+    const activeSort = sorting[0];
     return {
       branchId:
         user.role === 'KASIR'
@@ -43,11 +74,13 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
       endDate: endDate
         ? new Date(`${endDate}T23:59:59.999`).toISOString()
         : undefined,
-      limit: 100,
-      sortBy: 'soldAt' as const,
-      sortOrder: 'desc' as const,
+      page,
+      limit,
+      sortBy: toSaleSortBy(activeSort?.id),
+      sortOrder: (activeSort?.desc === false ? 'asc' : 'desc') as
+        'asc' | 'desc',
     };
-  }, [user, selectedBranchId, startDate, endDate]);
+  }, [user, selectedBranchId, startDate, endDate, page, limit, sorting]);
 
   const { data: salesData, isLoading: isSalesLoading } = useSales(queryParams);
 
@@ -55,6 +88,13 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
     () => salesData?.data ?? [],
     [salesData?.data],
   );
+
+  const paginationMeta = salesData?.meta ?? {
+    total: 0,
+    page,
+    limit,
+    totalPages: 1,
+  };
 
   return (
     <div className="space-y-6">
@@ -76,7 +116,10 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
             <Store className="size-4 text-text-tertiary" />
             <Select
               value={selectedBranchId}
-              onValueChange={setSelectedBranchId}
+              onValueChange={(value) => {
+                setSelectedBranchId(value);
+                setPage(1);
+              }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Pilih Cabang" />
@@ -99,7 +142,10 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
               <span>Dari:</span>
               <DatePicker
                 value={startDate}
-                onChange={(date) => setStartDate(date ?? '')}
+                onChange={(date) => {
+                  setStartDate(date ?? '');
+                  setPage(1);
+                }}
                 placeholder="Mulai"
                 className="h-6 text-xs w-full sm:w-40"
               />
@@ -108,7 +154,10 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
               <span>Sampai:</span>
               <DatePicker
                 value={endDate}
-                onChange={(date) => setEndDate(date ?? '')}
+                onChange={(date) => {
+                  setEndDate(date ?? '');
+                  setPage(1);
+                }}
                 placeholder="Selesai"
                 className="h-6 text-xs w-full sm:w-40"
               />
@@ -127,6 +176,7 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
               setStartDate('');
               setEndDate('');
               if (user.role === 'OWNER') setSelectedBranchId('all');
+              setPage(1);
             }}
             className="text-xs font-medium text-brand-primary hover:underline ml-auto h-8 px-2"
           >
@@ -136,7 +186,21 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
       </div>
 
       {/* Transactions Table */}
-      <SalesHistoryTable sales={salesList} isLoading={isSalesLoading} />
+      <SalesHistoryTable
+        sales={salesList}
+        isLoading={isSalesLoading}
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
+        pagination={{
+          meta: paginationMeta,
+          onPageChange: setPage,
+          onLimitChange: (next) => {
+            setLimit(next);
+            setPage(1);
+          },
+          itemNoun: 'transaksi',
+        }}
+      />
     </div>
   );
 }

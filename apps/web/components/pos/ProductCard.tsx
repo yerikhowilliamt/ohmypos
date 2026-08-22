@@ -14,13 +14,13 @@ interface ProductCardProps {
   /** Cart-aware makeable quantity — how many MORE can be added (ADR-013). */
   headroom: number | null | undefined;
   inCartQuantity: number;
-  /** DESIGN.md §21: the most recently added product carries a brand border. */
+  /** DESIGN.md §11.2 Product Grid & Cards: the most recently added product carries a brand border. */
   isHighlighted: boolean;
   onAdd: (product: ProductWithHppResponse) => void;
 }
 
 /**
- * DESIGN.md §21: image edge-to-edge at the top, name below, price below that,
+ * DESIGN.md §11.2 Product Grid & Cards: image edge-to-edge at the top, name below, price below that,
  * a large touch area, and no secondary clutter. The one piece of supporting
  * information is the advisory makeable quantity — see §33 ("POS may display
  * derived advisory makeable quantity"), never a per-product stock count, which

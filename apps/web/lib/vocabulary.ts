@@ -65,7 +65,7 @@ export {
 };
 
 /**
- * Returns Tailwind classes for Flow Indicator badge or text motif (DESIGN.md §9).
+ * Returns Tailwind classes for Flow Indicator badge or text motif (DESIGN.md §6.2 Status Tokens).
  */
 export function getFlowIndicatorClasses(
   direction: TransactionType | StockDirection,
@@ -77,7 +77,7 @@ export function getFlowIndicatorClasses(
 }
 
 /**
- * Sign-based Flow Indicator (DESIGN.md §37) for report figures that are
+ * Sign-based Flow Indicator (DESIGN.md §12.2 Signature Flow Indicator) for report figures that are
  * legitimately negative — grossProfit, netProfit, netCashFlow (ADR-017 §2) —
  * where there is no INFLOW/OUTFLOW literal to key off of, only a signed
  * amount. Same tokens as `getFlowIndicatorClasses`; a separate function so
@@ -92,7 +92,7 @@ export function getFlowIndicatorClassesForAmount(
 }
 
 /**
- * Returns badge variant styling classes for stock status (DESIGN.md §9).
+ * Returns badge variant styling classes for stock status (DESIGN.md §6.2 Status Tokens).
  */
 export function getStockStatusBadgeClasses(status: StockStatus): string {
   switch (status) {

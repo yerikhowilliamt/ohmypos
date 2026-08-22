@@ -19,7 +19,7 @@ interface PosPageHeaderProps {
 }
 
 /**
- * DESIGN.md §18 (POS variant) + §23: page title, the current operating day
+ * DESIGN.md §10.4 Page Header (POS variant), §11.2 Product Grid & Cards: page title, the current operating day
  * beneath it as tertiary text, and a first-class search control right-aligned
  * in the same row, above the category row and product grid.
  */

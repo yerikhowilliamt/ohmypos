@@ -15,10 +15,10 @@ interface QuantityStepperProps {
 }
 
 /**
- * DESIGN.md §25: one bordered container holding [−][qty][+] so it reads as a
+ * DESIGN.md §11.4 Order Panel: one bordered container holding [−][qty][+] so it reads as a
  * single control rather than three buttons.
  *
- * `disabled={quantity <= 1}` is deliberate. DESIGN.md §25 now says removal
+ * `disabled={quantity <= 1}` is deliberate. DESIGN.md §11.4 Order Panel now says removal
  * happens "via the row's dedicated delete icon, not by decrementing to zero",
  * but `cartReducer`'s DECREMENT still removes the line at quantity 1 (its
  * comment cites an earlier reading of §25). Disabling the button here makes the

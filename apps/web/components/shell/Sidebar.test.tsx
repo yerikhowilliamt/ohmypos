@@ -67,7 +67,7 @@ describe('Sidebar — expanded (>=1024px)', () => {
     renderSidebar(owner);
     const active = screen.getByRole('link', { name: 'Dashboard' });
     expect(active).toHaveAttribute('aria-current', 'page');
-    // DESIGN.md §16 forbids a fully saturated active background.
+    // DESIGN.md §10.2 Sidebar Specifications forbids a fully saturated active background.
     expect(active.className).toContain('bg-sidebar-accent');
     expect(active.className).not.toContain('bg-brand-primary');
   });

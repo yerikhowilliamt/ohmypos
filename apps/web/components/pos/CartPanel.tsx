@@ -34,7 +34,7 @@ interface CartPanelProps {
 }
 
 /**
- * The persistent order context — zone three of DESIGN.md §20, structured per
+ * The persistent order context — zone three of DESIGN.md §11.1 Three-Zone POS Layout, structured per
  * §24: panel header, order list, summary block, payment method, primary CTA.
  * Stays mounted whether or not it has lines, so the cashier never loses sight
  * of the order.
@@ -120,7 +120,7 @@ export function CartPanel({
       {/* Order list — the only part that scrolls, so the CTA stays pinned. */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3">
         {state.lines.length === 0 ? (
-          // DESIGN.md §27, near-verbatim copy, no decorative illustration.
+          // DESIGN.md §17 Empty, Loading & Error States, near-verbatim copy, no decorative illustration.
           <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
             <span
               aria-hidden

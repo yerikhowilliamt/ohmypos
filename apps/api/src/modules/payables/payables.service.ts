@@ -146,7 +146,14 @@ export class PayablesService {
   }
 
   async findAll(query: PayableQueryDto) {
-    const { page = 1, limit = 50, sortBy, supplierId, status } = query;
+    const {
+      page = 1,
+      limit = 50,
+      sortBy,
+      sortOrder = 'desc',
+      supplierId,
+      status,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.PayableWhereInput = {
@@ -154,12 +161,20 @@ export class PayablesService {
       ...(status && { status }),
     };
 
+    // `supplierName` is the one sort key that is not a Payable column — it lives
+    // on the related Supplier, so it needs a nested orderBy rather than the flat
+    // `[sortBy]: sortOrder` every other key uses.
+    const orderBy: Prisma.PayableOrderByWithRelationInput =
+      sortBy === 'supplierName'
+        ? { supplier: { name: sortOrder } }
+        : { [sortBy ?? 'createdAt']: sortOrder };
+
     const [data, total] = await Promise.all([
       this.prisma.payable.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { [sortBy ?? 'createdAt']: 'desc' },
+        orderBy,
         include: {
           supplier: true,
           settlements: true,

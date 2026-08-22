@@ -18,7 +18,7 @@ interface PosOrderSheetProps {
 }
 
 /**
- * DESIGN.md §41.3, mobile (<768px): the Order Panel becomes a bottom sheet,
+ * DESIGN.md §13.2 POS Behaviour by Breakpoint, mobile (<768px): the Order Panel becomes a bottom sheet,
  * collapsed by default to a slim bar showing item count and Total payment plus
  * a "View Order" affordance. Tapping the bar expands the full panel content,
  * scrollable inside the sheet.

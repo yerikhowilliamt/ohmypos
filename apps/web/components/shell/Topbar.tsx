@@ -9,7 +9,7 @@ import type { Theme } from '@/lib/theme';
 
 interface TopbarProps {
   /**
-   * `'default'` renders the 52px Backoffice strip from DESIGN.md §15/§17.
+   * `'default'` renders the 52px Backoffice strip from DESIGN.md §10 Application Shell & Navigation, §10.3 Topbar Specifications.
    * `'pos'` renders only the mobile hamburger row — §15 is explicit that POS
    * has no separate horizontal topbar.
    */

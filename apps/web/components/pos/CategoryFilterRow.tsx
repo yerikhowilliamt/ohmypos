@@ -11,7 +11,7 @@ interface CategoryFilterRowProps {
 }
 
 /**
- * DESIGN.md §22. The cards are bordered, radius.md, surface.raised, and carry a
+ * DESIGN.md §11.3 Category Filter Row. The cards are bordered, radius.md, surface.raised, and carry a
  * count in tertiary text — not pill tabs, which §11/§22 reserve for badges and
  * tags. §41.3 keeps this a single row that scrolls horizontally on mobile
  * rather than wrapping.

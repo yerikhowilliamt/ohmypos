@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DateTimeString, MoneyString, UuidString } from './primitives';
 import { PayableStatus } from './enums';
-import { PaginationQuerySchema } from './pagination.schema';
+import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
 
 /**
  * OhMyPos — Payable and PayableSettlement contracts (ERD §3, ADR-006, PRD §5.3).
@@ -55,11 +55,17 @@ export type PayableSupplierSummary = z.infer<
   typeof PayableSupplierSummarySchema
 >;
 
+// `supplierName` and `status` were added when the Payables tab moved to
+// server-side sorting: both columns already offered a sort header, and dropping
+// the affordance would have been a UX regression. `supplierName` is not a
+// Payable column — see PayablesService.findAll for its nested orderBy.
 export const PayableSortBySchema = z.enum([
   'createdAt',
   'dueDate',
   'originalAmount',
   'remainingBalance',
+  'supplierName',
+  'status',
 ]);
 export type PayableSortBy = z.infer<typeof PayableSortBySchema>;
 
@@ -67,5 +73,6 @@ export const PayableQuerySchema = PaginationQuerySchema.extend({
   supplierId: UuidString.optional(),
   status: PayableStatus.optional(),
   sortBy: PayableSortBySchema.optional(),
+  sortOrder: SortOrderSchema.optional(),
 });
 export type PayableQuery = z.infer<typeof PayableQuerySchema>;

@@ -1,6 +1,11 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type {
   AccountResponse,
   BranchResponse,
@@ -13,7 +18,10 @@ import type {
   PaginationMeta,
   PayableResponse,
   PayableSettlementResponse,
+  PayableSortBy,
+  PayableStatus,
   PayableSupplierSummary,
+  SortOrder,
   SupplierPurchaseResponse,
   SupplierResponse,
 } from '@ohmypos/api-contracts';
@@ -147,13 +155,36 @@ export function useCreateSupplierPurchase() {
 
 // --- Payables / Settlements ---
 
-export function usePayables() {
+export interface PayableFilterParams {
+  supplierId?: string;
+  status?: PayableStatus;
+  page?: number;
+  limit?: number;
+  sortBy?: PayableSortBy;
+  sortOrder?: SortOrder;
+}
+
+/**
+ * The query key keeps `['payables']` as its prefix so the settlement mutation's
+ * `invalidateQueries({ queryKey: EXPENSES_QUERY_KEYS.payables })` still matches
+ * every filtered/paged variant — TanStack invalidates by key prefix.
+ */
+export function usePayables(params: PayableFilterParams = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.supplierId) searchParams.set('supplierId', params.supplierId);
+  if (params.status) searchParams.set('status', params.status);
+  if (params.sortBy) searchParams.set('sortBy', params.sortBy);
+  if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
+  searchParams.set('page', String(params.page ?? 1));
+  searchParams.set('limit', String(params.limit ?? 10));
+
   return useQuery({
-    queryKey: EXPENSES_QUERY_KEYS.payables,
+    queryKey: [...EXPENSES_QUERY_KEYS.payables, params] as const,
     queryFn: () =>
       apiFetch<{ data: PayableResponse[]; meta: PaginationMeta }>(
-        '/payables?sortBy=createdAt&limit=50',
+        `/payables?${searchParams.toString()}`,
       ),
+    placeholderData: keepPreviousData,
   });
 }
 

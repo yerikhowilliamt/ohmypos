@@ -971,4 +971,97 @@ describe('Sales (e2e)', () => {
       expect(stillExists).not.toBeNull();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // 7. Pagination & sorting (TASK-067)
+  //
+  // `sortOrder` existed on the frontend for months while SaleQuerySchema had no
+  // such field: Zod stripped it and the service hardcoded 'desc'. These cases
+  // exist so that regression cannot come back silently.
+  // ---------------------------------------------------------------------------
+  describe('Pagination & Sorting', () => {
+    it('Case 25: sortOrder=asc actually reverses the ordering', async () => {
+      const asc = await request(app.getHttpServer())
+        .get('/api/v1/sales?sortBy=soldAt&sortOrder=asc&limit=10&page=1')
+        .set('Cookie', owner.cookies);
+      expect(asc.status).toBe(200);
+
+      const ascBody = asc.body as { data: SaleResponse[] };
+      expect(ascBody.data.length).toBeGreaterThan(1);
+
+      const times = ascBody.data.map((s) => new Date(s.soldAt).getTime());
+      for (let i = 1; i < times.length; i += 1) {
+        expect(times[i]).toBeGreaterThanOrEqual(times[i - 1]);
+      }
+
+      const desc = await request(app.getHttpServer())
+        .get('/api/v1/sales?sortBy=soldAt&sortOrder=desc&limit=10&page=1')
+        .set('Cookie', owner.cookies);
+      expect(desc.status).toBe(200);
+
+      const descBody = desc.body as { data: SaleResponse[] };
+      expect(descBody.data[0]?.id).not.toBe(ascBody.data[0]?.id);
+    });
+
+    it('Case 26: sortBy=totalAmount orders by money, not by date', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/sales?sortBy=totalAmount&sortOrder=asc&limit=10&page=1')
+        .set('Cookie', owner.cookies);
+      expect(res.status).toBe(200);
+
+      const amounts = (res.body as { data: SaleResponse[] }).data.map((s) =>
+        Number(s.totalAmount),
+      );
+      for (let i = 1; i < amounts.length; i += 1) {
+        expect(amounts[i]).toBeGreaterThanOrEqual(amounts[i - 1]);
+      }
+    });
+
+    it('Case 27: consecutive pages are disjoint and meta.totalPages is consistent', async () => {
+      const page1 = await request(app.getHttpServer())
+        .get('/api/v1/sales?page=1&limit=2&sortBy=soldAt&sortOrder=desc')
+        .set('Cookie', owner.cookies);
+      const page2 = await request(app.getHttpServer())
+        .get('/api/v1/sales?page=2&limit=2&sortBy=soldAt&sortOrder=desc')
+        .set('Cookie', owner.cookies);
+
+      expect(page1.status).toBe(200);
+      expect(page2.status).toBe(200);
+
+      const b1 = page1.body as {
+        data: SaleResponse[];
+        meta: {
+          total: number;
+          page: number;
+          limit: number;
+          totalPages: number;
+        };
+      };
+      const b2 = page2.body as { data: SaleResponse[] };
+
+      expect(b1.data).toHaveLength(2);
+      expect(b1.meta.page).toBe(1);
+      expect(b1.meta.limit).toBe(2);
+      expect(b1.meta.totalPages).toBe(Math.ceil(b1.meta.total / 2));
+
+      const ids1 = new Set(b1.data.map((s) => s.id));
+      for (const sale of b2.data) {
+        expect(ids1.has(sale.id)).toBe(false);
+      }
+    });
+
+    it('Case 28: an unknown sortOrder is rejected, not coerced', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/sales?sortOrder=sideways')
+        .set('Cookie', owner.cookies);
+      expect(res.status).toBe(400);
+    });
+
+    it('Case 29: an unknown sortBy is rejected, not passed to Prisma', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/sales?sortBy=totalHpp')
+        .set('Cookie', owner.cookies);
+      expect(res.status).toBe(400);
+    });
+  });
 });

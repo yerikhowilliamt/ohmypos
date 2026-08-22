@@ -1,12 +1,16 @@
 import { z } from 'zod';
 import { TransactionStatus, TransactionType } from './enums';
 import { DateTimeString, MoneyString, UuidString } from './primitives';
-import { PaginationQuerySchema } from './pagination.schema';
+import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
 
+// `description` was added when the reconciliation table moved to server-side
+// sorting (TASK-068): the column already had a sort header whose clicks never
+// reached the API. It is a plain String column on BankTransaction.
 export const ReconciliationSortBySchema = z.enum([
   'txnDate',
   'amount',
   'createdAt',
+  'description',
 ]);
 export type ReconciliationSortBy = z.infer<typeof ReconciliationSortBySchema>;
 
@@ -20,6 +24,7 @@ export const ReconciliationQuerySchema = PaginationQuerySchema.extend({
   startDate: DateTimeString.optional(),
   endDate: DateTimeString.optional(),
   sortBy: ReconciliationSortBySchema.optional(),
+  sortOrder: SortOrderSchema.optional(),
 });
 export type ReconciliationQuery = z.infer<typeof ReconciliationQuerySchema>;
 

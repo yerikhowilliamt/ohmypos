@@ -20,7 +20,7 @@ interface ProductGridProps {
 }
 
 /**
- * DESIGN.md §21: a fixed-column grid — 4 columns at desktop, 3 at tablet, 2 at
+ * DESIGN.md §11.2 Product Grid & Cards: a fixed-column grid — 4 columns at desktop, 3 at tablet, 2 at
  * mobile (§41.3) — whose first cell is the Add New Product affordance (§21.1).
  * Filtering and search live in `PosScreen`, which owns the state the §22 filter
  * row and this grid share.
@@ -58,7 +58,7 @@ export function ProductGrid({
   return (
     <div className="flex flex-col gap-3">
       {products.length === 0 && (
-        // DESIGN.md §23: a distinct no-result state, distinct from empty data.
+        // DESIGN.md §11.2 Product Grid & Cards: a distinct no-result state, distinct from empty data.
         <p className="py-8 text-center text-sm text-text-secondary">
           {isFiltered
             ? 'Tidak ada produk yang cocok dengan pencarian atau filter ini.'

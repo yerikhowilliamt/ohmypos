@@ -1,6 +1,11 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type {
   CreateSale,
   PaymentMethodResponse,
@@ -107,5 +112,8 @@ export function useSales(params: SalesFilterParams = {}) {
   return useQuery({
     queryKey: POS_QUERY_KEYS.salesList(params as Record<string, unknown>),
     queryFn: () => apiFetch<PaginatedSales>(path),
+    // Paging replaces the whole result set; without this the table flashes its
+    // loading skeleton on every page click.
+    placeholderData: keepPreviousData,
   });
 }
