@@ -120,6 +120,7 @@ export class StockMovementsService {
       limit = 50,
       sortBy,
       sortOrder = 'desc',
+      search,
       rawMaterialId,
       branchId,
       direction,
@@ -130,6 +131,14 @@ export class StockMovementsService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.StockMovementWhereInput = {
+      // A central movement (branchId null) cannot match the `branch` clause and
+      // that is correct — there is no branch name on it to match against.
+      ...(search && {
+        OR: [
+          { rawMaterial: { name: { contains: search, mode: 'insensitive' } } },
+          { branch: { name: { contains: search, mode: 'insensitive' } } },
+        ],
+      }),
       ...(rawMaterialId && { rawMaterialId }),
       ...(branchId && { branchId }),
       ...(direction && { direction }),

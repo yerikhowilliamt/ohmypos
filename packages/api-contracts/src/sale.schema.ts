@@ -131,6 +131,12 @@ export const SaleSortBySchema = z.enum(['soldAt', 'totalAmount', 'createdAt']);
 export type SaleSortBy = z.infer<typeof SaleSortBySchema>;
 
 export const SaleQuerySchema = PaginationQuerySchema.extend({
+  /**
+   * Free-text search over transaction id, branch name, cashier name and account
+   * name — exactly the columns the toolbar used to filter client-side, which
+   * only ever saw the page on screen (DEBT-047).
+   */
+  search: z.string().trim().optional(),
   branchId: UuidString.optional(),
   accountId: UuidString.optional(),
   userId: UuidString.optional(),

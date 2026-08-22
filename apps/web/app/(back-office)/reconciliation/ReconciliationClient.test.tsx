@@ -266,5 +266,103 @@ describe('ReconciliationClient', () => {
         '1 / 3',
       );
     });
+
+    /**
+     * The search box used to be a client-side column filter over the page on
+     * screen (DEBT-047). These cases pin the two things that make the
+     * server-side version correct rather than merely different.
+     */
+    describe('server-side search', () => {
+      it('sends the keyword to the transactions endpoint once typing settles', async () => {
+        mockApi();
+        renderWithClient(<ReconciliationClient />);
+        await screen.findByText('Setoran tunai');
+
+        fireEvent.change(screen.getByLabelText('Cari transaksi bank'), {
+          target: { value: 'setoran' },
+        });
+
+        await waitFor(() => {
+          expect(lastPath('/reconciliation/transactions')).toContain(
+            'search=setoran',
+          );
+        });
+      });
+
+      it('NEVER sends the keyword to the summary endpoint', async () => {
+        // The summary derives `variance = bank - ledger`. The keyword only
+        // matches a bank transaction's description, so filtering the bank side
+        // while the ledger side stays whole produces a wrong number that still
+        // looks official. This is the regression this test exists to block.
+        mockApi();
+        renderWithClient(<ReconciliationClient />);
+        await screen.findByText('Setoran tunai');
+
+        fireEvent.change(screen.getByLabelText('Cari transaksi bank'), {
+          target: { value: 'setoran' },
+        });
+
+        await waitFor(() => {
+          expect(lastPath('/reconciliation/transactions')).toContain(
+            'search=setoran',
+          );
+        });
+
+        const summaryPaths = vi
+          .mocked(apiModule.apiFetch)
+          .mock.calls.map((c) => c[0] as string)
+          .filter((path) => path.startsWith('/reconciliation/summary'));
+        expect(summaryPaths.length).toBeGreaterThan(0);
+        for (const path of summaryPaths) {
+          expect(path).not.toContain('search=');
+        }
+      });
+
+      it('returns to page 1 when the keyword changes', async () => {
+        // Page 7 of the old result set is past the end of the new one, and an
+        // out-of-range page renders as "nothing found".
+        mockApi({ total: 120, totalPages: 3 });
+        renderWithClient(<ReconciliationClient />);
+        await screen.findByText('Setoran tunai');
+
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Halaman berikutnya' }),
+        );
+        await waitFor(() => {
+          expect(lastPath('/reconciliation/transactions')).toContain('page=2');
+        });
+
+        fireEvent.change(screen.getByLabelText('Cari transaksi bank'), {
+          target: { value: 'setoran' },
+        });
+
+        // Both in one waitFor: asserting the page separately could read an
+        // intermediate render and pass on timing rather than on behaviour.
+        await waitFor(() => {
+          const path = lastPath('/reconciliation/transactions');
+          expect(path).toContain('search=setoran');
+          expect(path).toContain('page=1');
+        });
+      });
+
+      it('omits the parameter entirely when the box is cleared', async () => {
+        mockApi();
+        renderWithClient(<ReconciliationClient />);
+        await screen.findByText('Setoran tunai');
+
+        const box = screen.getByLabelText('Cari transaksi bank');
+        fireEvent.change(box, { target: { value: 'setoran' } });
+        await waitFor(() => {
+          expect(lastPath('/reconciliation/transactions')).toContain('search=');
+        });
+
+        fireEvent.change(box, { target: { value: '' } });
+        await waitFor(() => {
+          expect(lastPath('/reconciliation/transactions')).not.toContain(
+            'search=',
+          );
+        });
+      });
+    });
   });
 });

@@ -366,4 +366,147 @@ describe('Reconciliation backend addendum (e2e)', () => {
         .expect(403);
     });
   });
+
+  /**
+   * TASK-072 / DEBT-047. The search box on this table was a TanStack column
+   * filter over the page on screen; it searched 50 rows while looking like it
+   * searched the whole statement.
+   *
+   * The last case here is the important one. `ReconciliationQueryDto` serves
+   * both this endpoint and /summary, and /summary derives
+   * `variance = bank - ledger` from the same where-clause builder. A keyword
+   * only matches a bank transaction's description, so if `search` reached the
+   * shared builder the bank side would shrink while the ledger side stayed
+   * whole — and `variance` would become a wrong number that still looks
+   * official.
+   */
+  describe('GET /reconciliation/transactions — server-side search', () => {
+    async function seedStatement() {
+      await prisma.bankTransaction.create({
+        data: {
+          accountId,
+          txnDate: new Date('2026-04-01'),
+          amount: '100.00',
+          type: 'INFLOW',
+          description: 'Alpha setoran tunai',
+        },
+      });
+      await prisma.bankTransaction.create({
+        data: {
+          accountId,
+          txnDate: new Date('2026-04-02'),
+          amount: '200.00',
+          type: 'INFLOW',
+          description: 'Bravo transfer masuk',
+        },
+      });
+      await prisma.bankTransaction.create({
+        data: {
+          accountId,
+          txnDate: new Date('2026-04-03'),
+          amount: '300.00',
+          type: 'INFLOW',
+          description: 'Charlie transfer masuk',
+        },
+      });
+      // The ledger side of the variance. Nothing about it is searchable.
+      await prisma.ledgerEntry.create({
+        data: {
+          accountId,
+          categoryId,
+          branchId,
+          entryDate: new Date('2026-04-02'),
+          amount: '250.00',
+          type: 'INFLOW',
+        },
+      });
+    }
+
+    async function search(query: Record<string, string>) {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/reconciliation/transactions')
+        .query(query)
+        .set('Cookie', adminCookies)
+        .expect(200);
+      return res.body as {
+        data: Array<{ id: string; description: string }>;
+        meta: { total: number; totalPages: number };
+      };
+    }
+
+    it('matches the description, case-insensitively', async () => {
+      await seedStatement();
+      // Lowercase keyword against 'Alpha setoran tunai'. Removing
+      // `mode: 'insensitive'` turns this red.
+      const body = await search({ search: 'alpha' });
+      expect(body.meta.total).toBe(1);
+      expect(body.data[0].description).toBe('Alpha setoran tunai');
+    });
+
+    it('matches a substring in the middle, not just a prefix', async () => {
+      await seedStatement();
+      const body = await search({ search: 'transfer' });
+      expect(body.meta.total).toBe(2);
+    });
+
+    it('finds a row the unfiltered FIRST PAGE does not contain', async () => {
+      await seedStatement();
+      // Default sort is txnDate desc, so a one-row page holds Charlie (3 Apr).
+      const firstPage = await search({ limit: '1', page: '1' });
+      expect(firstPage.data).toHaveLength(1);
+      const firstPageIds = new Set(firstPage.data.map((row) => row.id));
+
+      const searched = await search({ search: 'alpha', limit: '1', page: '1' });
+      expect(searched.data).toHaveLength(1);
+      expect(firstPageIds.has(searched.data[0].id)).toBe(false);
+    });
+
+    it('shrinks meta.total, not just the rows returned', async () => {
+      await seedStatement();
+      const body = await search({ search: 'alpha', limit: '50' });
+      expect(body.meta.total).toBe(1);
+      expect(body.meta.totalPages).toBe(1);
+    });
+
+    it('treats an empty search as no filter at all', async () => {
+      await seedStatement();
+      const body = await search({ search: '', limit: '50' });
+      expect(body.meta.total).toBe(3);
+    });
+
+    it('ANDs with the status filter instead of replacing it', async () => {
+      await seedStatement();
+      const body = await search({ search: 'transfer', status: 'MATCHED' });
+      expect(body.meta.total).toBe(0);
+    });
+
+    it('leaves the SUMMARY untouched — variance must not move', async () => {
+      await seedStatement();
+
+      async function summary(query: Record<string, string>) {
+        const res = await request(app.getHttpServer())
+          .get('/api/v1/reconciliation/summary')
+          .query(query)
+          .set('Cookie', adminCookies)
+          .expect(200);
+        return res.body as {
+          actualBankBalance: string;
+          recordedLedgerBalance: string;
+          variance: string;
+        };
+      }
+
+      const plain = await summary({ accountId });
+      // 600 bank inflow − 250 ledger inflow.
+      expect(plain.actualBankBalance).toBe('600.00');
+      expect(plain.recordedLedgerBalance).toBe('250.00');
+      expect(plain.variance).toBe('350.00');
+
+      // Same request, with a keyword that matches exactly one of the three
+      // bank rows. If `search` reached buildWhereClause the bank side would
+      // fall to 100.00 and variance to −150.00 — a confident, wrong number.
+      const searched = await summary({ accountId, search: 'alpha' });
+      expect(searched).toEqual(plain);
+    });
+  });
 });

@@ -35,6 +35,7 @@ import {
   useAttendanceRecords,
   useUpdateAttendanceStatus,
 } from '@/hooks/useDevices';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const VIOLATION_LABELS: Record<AttendanceViolationReason, string> = {
   NO_DEVICE_COOKIE: 'Tanpa Cookie Toko (HP Pribadi)',
@@ -92,6 +93,8 @@ const exportColumns: ExportColumn<AttendanceRecordResponse>[] = [
 
 export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>('ALL');
+  const [searchInput, setSearchInput] = React.useState('');
+  const search = useDebouncedValue(searchInput, 300);
   const [violationOnly, setViolationOnly] = React.useState<boolean>(false);
   const [startDate, setStartDate] = React.useState<string>('');
   const [endDate, setEndDate] = React.useState<string>('');
@@ -104,6 +107,7 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
   const activeSort = sorting[0];
 
   const { data, isLoading } = useAttendanceRecords({
+    search: search || undefined,
     branchId: selectedBranchId === 'ALL' ? undefined : selectedBranchId,
     violationOnly,
     startDate: startDate
@@ -129,7 +133,14 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
   };
 
   // Every filter and sort change resets to page 1: staying on page 7 of a
-  // result set that just shrank to two pages shows an empty table.
+  // result set that just shrank to two pages shows an empty table. The search
+  // box claims page 1 at KEYSTROKE time rather than when the debounced value
+  // lands, so no request ever goes out with the new keyword and the old page.
+  const handleSearchChange = React.useCallback((value: string) => {
+    setSearchInput(value);
+    setPage(1);
+  }, []);
+
   const handleSortingChange = React.useCallback(
     (updater: React.SetStateAction<SortingState>) => {
       setSorting(updater);
@@ -139,9 +150,14 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
   );
 
   const hasActiveFilter =
-    selectedBranchId !== 'ALL' || violationOnly || !!startDate || !!endDate;
+    !!searchInput ||
+    selectedBranchId !== 'ALL' ||
+    violationOnly ||
+    !!startDate ||
+    !!endDate;
 
   const handleResetFilters = React.useCallback(() => {
+    setSearchInput('');
     setSelectedBranchId('ALL');
     setViolationOnly(false);
     setStartDate('');
@@ -430,13 +446,13 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
         columns={columns}
         data={records}
         isLoading={isLoading}
-        searchPlaceholder="Cari absensi di halaman ini…"
-        // 'userEmail' is NOT listed: no column has that id — the email is
-        // rendered inside the Karyawan cell — so TanStack threw
-        // "[Table] Column with id 'userEmail' does not exist" on every render
-        // while contributing nothing to the search. Email search is logged as
-        // debt rather than faked here.
-        searchColumns={['userName', 'branchName', 'deviceLabel']}
+        // Email is searchable here even though no column carries it: the
+        // server matches `user.email`, so the row that only matches on email
+        // still comes back. That is what the old client-side filter could not
+        // do (DEBT-052) — a column filter needs a column.
+        serverSearch={{ value: searchInput, onChange: handleSearchChange }}
+        searchPlaceholder="Cari karyawan, email, cabang, atau perangkat…"
+        searchLabel="Cari log absensi"
         emptyMessage="Belum ada riwayat absensi login kasir."
         exportColumns={exportColumns}
         exportFilename={`log-absensi_${new Date().toISOString().slice(0, 10)}.xlsx`}

@@ -250,6 +250,7 @@ export class SalesService {
       limit = 50,
       sortBy,
       sortOrder = 'desc',
+      search,
       branchId,
       accountId,
       userId,
@@ -259,6 +260,16 @@ export class SalesService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.SaleWhereInput = {
+      // `mode: 'insensitive'` on every clause — without it "budi" never finds
+      // "Budi", and the omission reads as working code.
+      ...(search && {
+        OR: [
+          { id: { contains: search, mode: 'insensitive' } },
+          { branch: { name: { contains: search, mode: 'insensitive' } } },
+          { user: { name: { contains: search, mode: 'insensitive' } } },
+          { account: { name: { contains: search, mode: 'insensitive' } } },
+        ],
+      }),
       ...(branchId && { branchId }),
       ...(accountId && { accountId }),
       ...(userId && { userId }),

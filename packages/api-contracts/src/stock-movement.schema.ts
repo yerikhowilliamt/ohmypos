@@ -62,6 +62,8 @@ export const StockMovementSortBySchema = z.enum([
 export type StockMovementSortBy = z.infer<typeof StockMovementSortBySchema>;
 
 export const StockMovementQuerySchema = PaginationQuerySchema.extend({
+  /** Matches the raw material's name or the branch's name. */
+  search: z.string().trim().optional(),
   rawMaterialId: UuidString.optional(),
   /** ATTRIBUTION filter only — stock itself is one central pool (ADR-004). */
   branchId: UuidString.optional(),

@@ -19,6 +19,18 @@ export class ReconciliationService {
     const { page, limit, sortOrder = 'desc' } = query;
     const [bankTxnWhere] = this.buildWhereClause(query);
 
+    // Deliberately applied here and NOT inside buildWhereClause:
+    // getDashboardSummary derives both sides of `variance` from that same
+    // clause, and the keyword can only match a bank transaction's description.
+    // Narrowing the bank side while the ledger side stays whole would turn
+    // `variance` into a wrong number that still looks official.
+    if (query.search) {
+      bankTxnWhere.description = {
+        contains: query.search,
+        mode: 'insensitive',
+      };
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.bankTransaction.findMany({
         where: bankTxnWhere,

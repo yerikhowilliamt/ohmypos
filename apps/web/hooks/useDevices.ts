@@ -17,6 +17,11 @@ import type {
 import { apiFetch } from '@/lib/api';
 
 export type AttendanceFilterParams = {
+  /**
+   * Free-text search, matched server-side against employee name, employee
+   * email, branch name and device label. The calendar matrix never sends it.
+   */
+  search?: string;
   branchId?: string;
   violationOnly?: boolean;
   /**
@@ -48,6 +53,7 @@ export function useDevices() {
 
 export function useAttendanceRecords(params?: AttendanceFilterParams) {
   const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
   if (params?.branchId) query.set('branchId', params.branchId);
   if (params?.violationOnly) query.set('violationOnly', 'true');
   if (params?.startDate) query.set('startDate', params.startDate);

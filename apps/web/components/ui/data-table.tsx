@@ -60,9 +60,28 @@ import { exportRowsToXlsx, type ExportColumn } from '@/lib/export';
  * - `filterFn: 'includesString'` / `'equalsString'` — opt a column into the
  *   toolbar search or a filter dropdown.
  */
+/**
+ * Server-side search. When supplied, the toolbar renders a controlled input
+ * whose value the call site owns and forwards to the API — no TanStack column
+ * filter is involved, so the box searches the whole result set instead of the
+ * page on screen.
+ *
+ * Takes precedence over `searchColumns`, which is then ignored entirely — the
+ * toolbar never calls `setFilterValue`, so no client-side filter runs over the
+ * page the server already filtered. That precedence is deliberate rather than
+ * incidental: a second, page-scoped filter would drop rows that matched on a
+ * field with no column of its own (an attendance row matched by email).
+ * Passing both is still pointless; pass only this one.
+ */
+export interface DataTableServerSearch {
+  value: string;
+  onChange: (value: string) => void;
+}
+
 interface DataTableToolbarProps<TData> {
   table: ReturnType<typeof useReactTable<TData>>;
   searchColumns?: string[];
+  serverSearch?: DataTableServerSearch;
   searchPlaceholder?: string;
   searchLabel?: string;
 }
@@ -70,17 +89,19 @@ interface DataTableToolbarProps<TData> {
 function DataTableToolbar<TData>({
   table,
   searchColumns,
+  serverSearch,
   searchPlaceholder = 'Cari...',
   searchLabel = 'Cari',
 }: DataTableToolbarProps<TData>) {
-  if (!searchColumns || searchColumns.length === 0) return null;
-
-  const columns = searchColumns
+  const columns = (searchColumns ?? [])
     .map((id) => table.getColumn(id))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
-  if (columns.length === 0) return null;
 
-  const value = (columns[0]?.getFilterValue() as string) ?? '';
+  if (!serverSearch && columns.length === 0) return null;
+
+  const value = serverSearch
+    ? serverSearch.value
+    : ((columns[0]?.getFilterValue() as string) ?? '');
 
   return (
     // `w-full` so the wrapper actually claims its max-w-xs budget: as a bare
@@ -94,6 +115,10 @@ function DataTableToolbar<TData>({
         value={value}
         onChange={(event) => {
           const next = event.target.value;
+          if (serverSearch) {
+            serverSearch.onChange(next);
+            return;
+          }
           columns.forEach((column) => column.setFilterValue(next));
         }}
         placeholder={searchPlaceholder}
@@ -109,6 +134,8 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   isLoading?: boolean;
   searchColumns?: string[];
+  /** See `DataTableServerSearch`. Supersedes `searchColumns` when both are set. */
+  serverSearch?: DataTableServerSearch;
   searchPlaceholder?: string;
   searchLabel?: string;
   emptyMessage?: string;
@@ -138,8 +165,9 @@ interface DataTableProps<TData, TValue> {
   /**
    * Server-driven pagination. When supplied, `data` is expected to hold exactly
    * one page and the footer renders page controls — always, even for a single
-   * page. Note that `searchColumns` filtering stays client-side and therefore
-   * only searches the current page — label it accordingly at the call site.
+   * page. A paginated table that also wants a search box must use
+   * `serverSearch`: `searchColumns` filters client-side and would only ever
+   * search the page currently on screen.
    */
   pagination?: DataTablePagination;
 }
@@ -400,6 +428,7 @@ export function DataTable<TData, TValue>({
   data,
   isLoading = false,
   searchColumns,
+  serverSearch,
   searchPlaceholder,
   searchLabel,
   emptyMessage = 'Tidak ada data',
@@ -440,11 +469,12 @@ export function DataTable<TData, TValue>({
   });
 
   const rows = table.getRowModel().rows;
-  const hasActiveFilters = columnFilters.some(
-    (f) => f.value !== '' && f.value !== undefined,
-  );
+  const hasActiveFilters =
+    Boolean(serverSearch?.value) ||
+    columnFilters.some((f) => f.value !== '' && f.value !== undefined);
   const canExport = Boolean(exportColumns && exportFilename);
-  const hasSearch = Boolean(searchColumns && searchColumns.length > 0);
+  const hasSearch =
+    Boolean(serverSearch) || Boolean(searchColumns && searchColumns.length > 0);
   const hasPageSize = Boolean(pagination?.onLimitChange);
 
   return (
@@ -455,6 +485,7 @@ export function DataTable<TData, TValue>({
             <DataTableToolbar
               table={table}
               searchColumns={searchColumns}
+              serverSearch={serverSearch}
               searchPlaceholder={searchPlaceholder}
               searchLabel={searchLabel}
             />

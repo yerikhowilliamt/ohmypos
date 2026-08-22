@@ -28,6 +28,7 @@ import {
   useReconciliationTransactions,
   type ReconciliationFilters,
 } from '@/hooks/useReconciliation';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { BankStatementImportCard } from '@/components/reconciliation/BankStatementImportCard';
 import { BankTransactionsTable } from '@/components/reconciliation/BankTransactionsTable';
 import { MatchReviewQueue } from '@/components/reconciliation/MatchReviewQueue';
@@ -75,6 +76,8 @@ function isForbidden(error: unknown): boolean {
 }
 
 export function ReconciliationClient() {
+  const [searchInput, setSearchInput] = React.useState('');
+  const search = useDebouncedValue(searchInput, 300);
   const [accountId, setAccountId] = React.useState('');
   const [status, setStatus] = React.useState<TransactionStatus | ''>('');
   const [page, setPage] = React.useState(1);
@@ -85,6 +88,16 @@ export function ReconciliationClient() {
   const [selected, setSelected] =
     React.useState<BankTransactionResponse | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
+
+  // Page 1 is claimed at KEYSTROKE time, not when the debounced value lands: a
+  // new keyword usually yields a shorter result set, and page 7 of the old one
+  // is past the end of the new one — an out-of-range page renders as "nothing
+  // found". Doing it here rather than in an effect on the debounced value also
+  // avoids one wasted request with the new keyword and the old page number.
+  const handleSearchChange = React.useCallback((value: string) => {
+    setSearchInput(value);
+    setPage(1);
+  }, []);
 
   // A sort change invalidates the page number — page 3 of the old ordering is
   // not page 3 of the new one.
@@ -98,6 +111,8 @@ export function ReconciliationClient() {
   const filters: ReconciliationFilters = React.useMemo(() => {
     const activeSort = sorting[0];
     return {
+      // `useReconciliationSummary` strips this back out — see `summaryFilters`.
+      search: search || undefined,
       accountId: accountId || undefined,
       status: status || undefined,
       page,
@@ -106,7 +121,7 @@ export function ReconciliationClient() {
       sortOrder:
         activeSort?.desc === false ? ('asc' as const) : ('desc' as const),
     };
-  }, [accountId, status, page, limit, sorting]);
+  }, [search, accountId, status, page, limit, sorting]);
 
   const accountsQuery = useAccounts();
   const summaryQuery = useReconciliationSummary(filters);
@@ -217,6 +232,8 @@ export function ReconciliationClient() {
           onAllocate={handleAllocate}
           sorting={sorting}
           onSortingChange={handleSortingChange}
+          search={searchInput}
+          onSearchChange={handleSearchChange}
           pagination={{
             meta: meta ?? {
               total: 0,

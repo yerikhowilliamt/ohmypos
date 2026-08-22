@@ -458,6 +458,73 @@ describe('StockMovements read endpoint (e2e)', () => {
     });
   });
 
+  // ── 5b. Server-side search (TASK-072, DEBT-047) ─────────────────────────
+  describe('server-side search', () => {
+    it('matches the raw material name, case-insensitively', async () => {
+      // Lowercase keyword against 'SMV A-Kopi'. Drop `mode: 'insensitive'` from
+      // the service and this is the assertion that goes red.
+      const body = await get('search=a-kopi&limit=50');
+      expect(body.meta.total).toBe(4);
+      expect(body.data.every((m) => m.rawMaterialName === 'SMV A-Kopi')).toBe(
+        true,
+      );
+    });
+
+    it('finds a row the unfiltered FIRST PAGE does not contain', async () => {
+      // The point of the whole task. A client-side filter over page 1 could
+      // never return this row, so this is what separates server-side search
+      // from the box that used to be here.
+      const unfiltered = await get('limit=5&page=1');
+      const firstPageIds = new Set(unfiltered.data.map((m) => m.id));
+      expect(unfiltered.data).toHaveLength(5);
+
+      const searched = await get('search=a-kopi&limit=5&page=1');
+      const beyondFirstPage = searched.data.filter(
+        (m) => !firstPageIds.has(m.id),
+      );
+      expect(beyondFirstPage.length).toBeGreaterThan(0);
+    });
+
+    it('shrinks meta.total, not just the rows returned', async () => {
+      // `data.length` alone would pass on a service that filtered the page it
+      // had already fetched. `total` comes from a separate count(where).
+      const body = await get('search=a-kopi&limit=50');
+      expect(body.meta.total).toBe(4);
+      expect(body.meta.totalPages).toBe(1);
+    });
+
+    it('matches the branch name, and central rows correctly do not match', async () => {
+      // Eight of the twelve fixtures carry a branch; the four central ones
+      // (OPENING x3 + the central purchase) have no branch name to match.
+      const body = await get('search=test branch&limit=50');
+      expect(body.meta.total).toBe(8);
+      expect(body.data.every((m) => m.branchId !== null)).toBe(true);
+    });
+
+    it('treats an empty search as no filter at all', async () => {
+      const body = await get('search=&limit=50');
+      expect(body.meta.total).toBe(TOTAL);
+    });
+
+    it('ANDs with the other filters instead of replacing them', async () => {
+      // 'SMV A-Kopi' has four movements, two of them OUT. A service that let
+      // the search overwrite `direction` would answer 4 here.
+      const body = await get('search=a-kopi&direction=OUT&limit=50');
+      expect(body.meta.total).toBe(2);
+      expect(body.data.every((m) => m.direction === 'OUT')).toBe(true);
+      expect(body.data.every((m) => m.rawMaterialName === 'SMV A-Kopi')).toBe(
+        true,
+      );
+    });
+
+    it('returns an empty page, not an error, for a keyword nothing matches', async () => {
+      const body = await get('search=tidak-ada-bahan-ini&limit=50');
+      expect(body.data).toHaveLength(0);
+      expect(body.meta.total).toBe(0);
+      expect(body.meta.totalPages).toBe(1);
+    });
+  });
+
   // ── 6. No write surface ─────────────────────────────────────────────────
   it('exposes no POST — movements are written only inside a transaction', async () => {
     const res = await request(app.getHttpServer())
