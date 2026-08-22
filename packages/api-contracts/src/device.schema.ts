@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { UuidString } from './primitives';
+import { DateTimeString, UuidString } from './primitives';
+import {
+  PaginationMetaSchema,
+  PaginationQuerySchema,
+  SortOrderSchema,
+} from './pagination.schema';
 
 export const CreateDeviceSchema = z.object({
   branchId: UuidString,
@@ -70,12 +75,58 @@ export type AttendanceRecordResponse = z.infer<
   typeof AttendanceRecordResponseSchema
 >;
 
-export const AttendanceQuerySchema = z.object({
+/**
+ * Every column AttendanceLogTable renders a SortableHeader for must appear
+ * here. A sortable-looking header the API cannot order by is a control that
+ * lies: the arrow moves, the rows do not.
+ */
+export const AttendanceSortBySchema = z.enum([
+  'loginAt',
+  'userName',
+  'branchName',
+  'deviceLabel',
+  'isValid',
+  'createdAt',
+]);
+export type AttendanceSortBy = z.infer<typeof AttendanceSortBySchema>;
+
+/**
+ * `startDate`/`endDate` filter `loginAt`, never `createdAt`. Both columns
+ * default to now() and are therefore equal in production, so a filter on the
+ * wrong one would pass every test written against real data — `loginAt` is the
+ * column the calendar reads and the one that carries meaning.
+ *
+ * Before these bounds existed the endpoint could only answer "the N most recent
+ * logins", while AttendanceCalendarMatrix filtered client-side to the month on
+ * screen. The month never reached the server, so navigating to an earlier month
+ * matched nothing and rendered every cell blank — indistinguishable from nobody
+ * having logged in at all.
+ */
+export const AttendanceQuerySchema = PaginationQuerySchema.extend({
   branchId: UuidString.optional(),
   violationOnly: z
     .enum(['true', 'false'])
     .optional()
     .transform((val) => val === 'true'),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  startDate: DateTimeString.optional(),
+  endDate: DateTimeString.optional(),
+  sortBy: AttendanceSortBySchema.optional(),
+  sortOrder: SortOrderSchema.optional(),
+  /**
+   * Overrides PaginationQuerySchema's max of 100. The calendar matrix asks for
+   * one whole month in a single page: 8 kasir x 2 logins x 31 days = 496 rows.
+   * A month past this cap is not silently truncated — the matrix compares
+   * `meta.total` against the rows it received and says so on screen, because a
+   * missing attendance cell reads as "absent", not as "not loaded".
+   */
+  limit: z.coerce.number().int().min(1).max(500).default(50),
 });
 export type AttendanceQuery = z.infer<typeof AttendanceQuerySchema>;
+
+export const AttendanceListResponseSchema = z.object({
+  data: z.array(AttendanceRecordResponseSchema),
+  meta: PaginationMetaSchema,
+});
+export type AttendanceListResponse = z.infer<
+  typeof AttendanceListResponseSchema
+>;

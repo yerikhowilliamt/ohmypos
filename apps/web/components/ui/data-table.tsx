@@ -305,7 +305,7 @@ function DataTablePaginationFooter({
 
   return (
     <div
-      className="flex items-center justify-between gap-3 border-t border-border-default p-4"
+      className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border-default p-4"
       data-testid="data-table-pagination"
     >
       <span className="text-xs text-text-secondary">
@@ -450,7 +450,7 @@ export function DataTable<TData, TValue>({
   return (
     <div className="rounded-md border border-border-default bg-surface-raised overflow-hidden">
       {(hasSearch || canExport || hasPageSize) && (
-        <div className="p-4 border-b border-border-default flex items-center justify-between gap-3">
+        <div className="p-4 border-b border-border-default flex flex-wrap items-center justify-between gap-3">
           {hasSearch ? (
             <DataTableToolbar
               table={table}

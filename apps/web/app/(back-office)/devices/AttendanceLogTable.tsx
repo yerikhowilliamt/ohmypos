@@ -1,10 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, SortingState } from '@tanstack/react-table';
 import { MoreHorizontal, ShieldCheck, ShieldAlert } from 'lucide-react';
 import type {
   AttendanceRecordResponse,
+  AttendanceSortBy,
   AttendanceViolationReason,
   BranchResponse,
 } from '@ohmypos/api-contracts';
@@ -20,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@ohmypos/ui/components/dropdown-menu';
 import { Label } from '@ohmypos/ui/components/label';
+import { DatePicker } from '@ohmypos/ui/components/date-picker';
 import {
   Select,
   SelectContent,
@@ -45,6 +47,29 @@ interface AttendanceLogTableProps {
   branches: BranchResponse[];
 }
 
+const DEFAULT_PAGE_SIZE = 25;
+
+/**
+ * Only these four are sortable server-side. Any other column id falls back to
+ * `loginAt` rather than being forwarded — a column the API cannot order by
+ * would otherwise be accepted and quietly ignored, which is the failure this
+ * whole series of tasks exists to remove.
+ */
+const SORTABLE_COLUMN_IDS: AttendanceSortBy[] = [
+  'loginAt',
+  'userName',
+  'branchName',
+  'deviceLabel',
+  'isValid',
+  'createdAt',
+];
+
+function toAttendanceSortBy(columnId: string | undefined): AttendanceSortBy {
+  return SORTABLE_COLUMN_IDS.includes(columnId as AttendanceSortBy)
+    ? (columnId as AttendanceSortBy)
+    : 'loginAt';
+}
+
 const exportColumns: ExportColumn<AttendanceRecordResponse>[] = [
   { header: 'Waktu Login', accessor: (row) => new Date(row.loginAt) },
   { header: 'Karyawan', accessor: (row) => row.userName },
@@ -68,11 +93,62 @@ const exportColumns: ExportColumn<AttendanceRecordResponse>[] = [
 export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>('ALL');
   const [violationOnly, setViolationOnly] = React.useState<boolean>(false);
+  const [startDate, setStartDate] = React.useState<string>('');
+  const [endDate, setEndDate] = React.useState<string>('');
+  const [page, setPage] = React.useState(1);
+  const [limit, setLimit] = React.useState(DEFAULT_PAGE_SIZE);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    { id: 'loginAt', desc: true },
+  ]);
 
-  const { data: records = [], isLoading } = useAttendanceRecords({
+  const activeSort = sorting[0];
+
+  const { data, isLoading } = useAttendanceRecords({
     branchId: selectedBranchId === 'ALL' ? undefined : selectedBranchId,
     violationOnly,
+    startDate: startDate
+      ? new Date(`${startDate}T00:00:00`).toISOString()
+      : undefined,
+    // Inclusive of the whole final day — a midnight bound would silently drop
+    // every login made after 00:00 on the day the reader picked.
+    endDate: endDate
+      ? new Date(`${endDate}T23:59:59.999`).toISOString()
+      : undefined,
+    page,
+    limit,
+    sortBy: toAttendanceSortBy(activeSort?.id),
+    sortOrder: activeSort?.desc === false ? 'asc' : 'desc',
   });
+
+  const records = React.useMemo(() => data?.data ?? [], [data?.data]);
+  const paginationMeta = data?.meta ?? {
+    total: 0,
+    page,
+    limit,
+    totalPages: 1,
+  };
+
+  // Every filter and sort change resets to page 1: staying on page 7 of a
+  // result set that just shrank to two pages shows an empty table.
+  const handleSortingChange = React.useCallback(
+    (updater: React.SetStateAction<SortingState>) => {
+      setSorting(updater);
+      setPage(1);
+    },
+    [],
+  );
+
+  const hasActiveFilter =
+    selectedBranchId !== 'ALL' || violationOnly || !!startDate || !!endDate;
+
+  const handleResetFilters = React.useCallback(() => {
+    setSelectedBranchId('ALL');
+    setViolationOnly(false);
+    setStartDate('');
+    setEndDate('');
+    setPage(1);
+  }, []);
+
   const updateStatusMutation = useUpdateAttendanceStatus();
 
   const handleSetValid = React.useCallback(
@@ -269,7 +345,10 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
           <div className="w-[200px]">
             <Select
               value={selectedBranchId}
-              onValueChange={setSelectedBranchId}
+              onValueChange={(next) => {
+                setSelectedBranchId(next);
+                setPage(1);
+              }}
             >
               <SelectTrigger
                 id="attendance-branch-filter"
@@ -289,18 +368,61 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="violation-only"
-            checked={violationOnly}
-            onChange={(e) => setViolationOnly(e.target.checked)}
-          />
-          <Label
-            htmlFor="violation-only"
-            className="cursor-pointer text-xs font-normal text-text-secondary"
-          >
-            Hanya tampilkan pelanggaran
-          </Label>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+          <div className="flex items-center gap-1">
+            <span className="whitespace-nowrap">Dari:</span>
+            <DatePicker
+              value={startDate}
+              onChange={(date) => {
+                setStartDate(date ?? '');
+                setPage(1);
+              }}
+              placeholder="Mulai"
+              className="h-6 text-xs w-36"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="whitespace-nowrap">Sampai:</span>
+            <DatePicker
+              value={endDate}
+              onChange={(date) => {
+                setEndDate(date ?? '');
+                setPage(1);
+              }}
+              placeholder="Selesai"
+              className="h-6 text-xs w-36"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="violation-only"
+              checked={violationOnly}
+              onChange={(e) => {
+                setViolationOnly(e.target.checked);
+                setPage(1);
+              }}
+            />
+            <Label
+              htmlFor="violation-only"
+              className="cursor-pointer text-xs font-normal text-text-secondary"
+            >
+              Hanya tampilkan pelanggaran
+            </Label>
+          </div>
+          {hasActiveFilter && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs"
+              onClick={handleResetFilters}
+            >
+              Reset Filter
+            </Button>
+          )}
         </div>
       </div>
 
@@ -308,11 +430,27 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
         columns={columns}
         data={records}
         isLoading={isLoading}
-        searchPlaceholder="Cari riwayat absensi…"
-        searchColumns={['userName', 'userEmail', 'branchName', 'deviceLabel']}
+        searchPlaceholder="Cari absensi di halaman ini…"
+        // 'userEmail' is NOT listed: no column has that id — the email is
+        // rendered inside the Karyawan cell — so TanStack threw
+        // "[Table] Column with id 'userEmail' does not exist" on every render
+        // while contributing nothing to the search. Email search is logged as
+        // debt rather than faked here.
+        searchColumns={['userName', 'branchName', 'deviceLabel']}
         emptyMessage="Belum ada riwayat absensi login kasir."
         exportColumns={exportColumns}
         exportFilename={`log-absensi_${new Date().toISOString().slice(0, 10)}.xlsx`}
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
+        pagination={{
+          meta: paginationMeta,
+          onPageChange: setPage,
+          onLimitChange: (next) => {
+            setLimit(next);
+            setPage(1);
+          },
+          itemNoun: 'log absensi',
+        }}
       />
     </div>
   );

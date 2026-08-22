@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../../generated/prisma/client';
 import type {
+  AttendanceListResponse,
   AttendanceQuery,
   AttendanceRecordResponse,
   AttendanceStatus,
@@ -82,63 +84,108 @@ export class AttendanceService {
     };
   }
 
-  async findRecords(
-    query: AttendanceQuery,
-  ): Promise<AttendanceRecordResponse[]> {
-    const records = await this.prisma.attendanceRecord.findMany({
-      where: {
-        ...(query.violationOnly ? { isValid: false } : {}),
-        ...(query.branchId
-          ? {
-              OR: [
-                { user: { branchId: query.branchId } },
-                { device: { branchId: query.branchId } },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            branchId: true,
-            branch: {
-              select: {
-                id: true,
-                name: true,
+  async findRecords(query: AttendanceQuery): Promise<AttendanceListResponse> {
+    const {
+      page = 1,
+      limit = 50,
+      branchId,
+      violationOnly,
+      startDate,
+      endDate,
+      sortBy,
+      sortOrder,
+    } = query;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.AttendanceRecordWhereInput = {
+      ...(violationOnly ? { isValid: false } : {}),
+      ...(branchId
+        ? {
+            OR: [{ user: { branchId } }, { device: { branchId } }],
+          }
+        : {}),
+      // `loginAt`, NOT `createdAt`: both default to now() and are equal in
+      // practice, so filtering the wrong one would never fail a test written
+      // against real data. loginAt is what the calendar matrix reads.
+      ...(startDate || endDate
+        ? {
+            loginAt: {
+              ...(startDate ? { gte: new Date(startDate) } : {}),
+              ...(endDate ? { lte: new Date(endDate) } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const direction = sortOrder ?? 'desc';
+    const orderBy: Prisma.AttendanceRecordOrderByWithRelationInput =
+      sortBy === 'userName'
+        ? { user: { name: direction } }
+        : sortBy === 'branchName'
+          ? // Sorts by the *user's* branch, matching the column the table
+            // renders (`record.user.branch.name`). The device's branch is a
+            // different thing and is only used by the branchId filter's OR.
+            { user: { branch: { name: direction } } }
+          : sortBy === 'deviceLabel'
+            ? { device: { label: direction } }
+            : { [sortBy ?? 'loginAt']: direction };
+
+    const [records, total] = await Promise.all([
+      this.prisma.attendanceRecord.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              branchId: true,
+              branch: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
-        },
-        device: {
-          select: {
-            id: true,
-            label: true,
+          device: {
+            select: {
+              id: true,
+              label: true,
+            },
           },
         },
-      },
-      orderBy: { loginAt: 'desc' },
-      take: query.limit,
-    });
+      }),
+      this.prisma.attendanceRecord.count({ where }),
+    ]);
 
-    return records.map((record) => ({
-      id: record.id,
-      userId: record.userId,
-      userName: record.user.name,
-      userEmail: record.user.email,
-      branchId: record.user.branchId,
-      branchName: record.user.branch?.name ?? null,
-      deviceId: record.deviceId,
-      deviceLabel: record.device?.label ?? null,
-      loginAt: record.loginAt,
-      isValid: record.isValid,
-      violationReason: record.violationReason,
-      ipAddress: record.ipAddress,
-      userAgent: record.userAgent,
-      createdAt: record.createdAt,
-    }));
+    return {
+      data: records.map((record) => ({
+        id: record.id,
+        userId: record.userId,
+        userName: record.user.name,
+        userEmail: record.user.email,
+        branchId: record.user.branchId,
+        branchName: record.user.branch?.name ?? null,
+        deviceId: record.deviceId,
+        deviceLabel: record.device?.label ?? null,
+        loginAt: record.loginAt,
+        isValid: record.isValid,
+        violationReason: record.violationReason,
+        ipAddress: record.ipAddress,
+        userAgent: record.userAgent,
+        createdAt: record.createdAt,
+      })),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
   }
 
   async checkAndRecord(

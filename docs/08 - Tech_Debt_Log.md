@@ -220,8 +220,8 @@
 - **Trigger condition:** When total historical leave requests exceed 500 records or table loading latency exceeds 300ms.
 - **Proposed resolution:** Introduce cursor or offset pagination in `LeaveRequestListQuerySchema` and `LeaveRequestsService.findAll`, utilizing TanStack Table / React Query infinite query pagination on the frontend.
 - **Priority:** Low
-- **Status:** Open
-- **Re-flagged 2026-08-22 (Phase 14 gate):** Well under 500 historical requests; trigger has not fired.
+- **Status:** Resolved (2026-08-22, TASK-071) — `LeaveRequestListQuerySchema` gained `page`/`limit`/`sortBy`/`sortOrder` plus an `overlapsFrom`/`overlapsTo` window; `findAll` pages and counts server-side and returns `{ data, meta }`. `OwnerReviewQueue` pages both of its tables, and its pending badge now reads `meta.total` rather than the current page's length. Offset paging, not the cursor/infinite-query option this entry proposed — offset matches the shared `PaginationMetaSchema` every other paged list in the app already uses, and the footer needs a page count.
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Well under 500 historical requests; trigger has not fired. Paid off later the same day anyway: the same contract change was needed to bound the attendance calendar's leave query, which was fetching every approved request in company history to shade one month.
 
 ### DEBT-041 — Accordion animation keyframes omitted and static TypeScript help content
 

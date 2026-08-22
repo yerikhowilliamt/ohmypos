@@ -1,7 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '../../generated/prisma/client';
 import type {
   CreateLeaveRequest,
   LeaveRequestListQuery,
+  LeaveRequestListResponse,
   LeaveRequestResponse,
 } from '@ohmypos/api-contracts';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -44,20 +46,60 @@ export class LeaveRequestsService {
     return requests.map((r) => this.toResponse(r));
   }
 
-  async findAll(query: LeaveRequestListQuery): Promise<LeaveRequestResponse[]> {
-    const requests = await this.prisma.leaveRequest.findMany({
-      where: {
-        status: query.status,
-        userId: query.userId,
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, email: true },
+  async findAll(
+    query: LeaveRequestListQuery,
+  ): Promise<LeaveRequestListResponse> {
+    const {
+      page = 1,
+      limit = 50,
+      status,
+      userId,
+      overlapsFrom,
+      overlapsTo,
+      sortBy,
+      sortOrder,
+    } = query;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.LeaveRequestWhereInput = {
+      ...(status ? { status } : {}),
+      ...(userId ? { userId } : {}),
+      // Overlap, not containment: a request is "in" the window when it starts
+      // on or before the window ends AND ends on or after the window begins.
+      // Leave running 28 Feb -> 3 Mar therefore appears in both months, which a
+      // gte/lte on startDate alone would silently drop from March.
+      ...(overlapsTo ? { startDate: { lte: new Date(overlapsTo) } } : {}),
+      ...(overlapsFrom ? { endDate: { gte: new Date(overlapsFrom) } } : {}),
+    };
+
+    const orderBy: Prisma.LeaveRequestOrderByWithRelationInput = {
+      [sortBy ?? 'createdAt']: sortOrder ?? 'desc',
+    };
+
+    const [requests, total] = await Promise.all([
+      this.prisma.leaveRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
         },
+      }),
+      this.prisma.leaveRequest.count({ where }),
+    ]);
+
+    return {
+      data: requests.map((r) => this.toResponse(r)),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
       },
-      orderBy: { createdAt: 'desc' },
-    });
-    return requests.map((r) => this.toResponse(r));
+    };
   }
 
   async approve(id: string, reviewerId: string): Promise<LeaveRequestResponse> {

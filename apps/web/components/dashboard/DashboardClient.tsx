@@ -448,7 +448,7 @@ export function DashboardClient() {
                 )}
 
                 {suppliersWithUtang.length > 0 && (
-                  <div className="p-2.5 rounded-md border border-status-danger/30 bg-rose-50/50 flex items-start gap-2.5">
+                  <div className="p-2.5 rounded-md border border-status-danger/30 bg-status-warning/5 flex items-start gap-2.5">
                     <Wallet className="size-4 text-status-danger shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="font-semibold text-text-primary">
