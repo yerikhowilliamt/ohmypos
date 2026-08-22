@@ -39,104 +39,18 @@
 
 ## Log
 
-### DEBT-054 — Server-side search is an unindexed `ILIKE '%x%'` scan
-
-- **Date logged:** 2026-08-23
-- **Found during:** TASK-072 (server-side search) — Option C, considered and deferred
-- **Description:** The `search` added to `/sales`, `/reconciliation/transactions`, `/stock-movements` and `/devices/attendance` compiles to Prisma `contains` + `mode: 'insensitive'`, i.e. `ILIKE '%keyword%'`. A leading wildcard cannot use a B-tree index, so each of those queries is a sequential scan of the table (and of the joined `Branch`/`User`/`RawMaterial` rows). The indexed version is a `pg_trgm` extension plus a GIN index on each searched column — or `to_tsvector` with `$queryRaw` if fuzzy matching is wanted too.
-- **Why deferred:** It needs a migration, which is its own approval gate (AGENTS.md §Governance item 1), and an extension that has to exist in the production and e2e databases as well as locally. Crucially the API contract and every line of frontend code are **identical** either way — this is a later optimisation of the same feature, not a different one, so nothing written in TASK-072 has to change when it is done.
-- **Impact if unaddressed:** Search latency grows linearly with table size. `StockMovement` is the one that matters: it grows with recipe lines per sale rather than with sales, so it is the first table where a seq scan per keystroke will be felt.
-- **Trigger condition:** `EXPLAIN ANALYZE` on a real-volume `StockMovement` (or `Sale`) search showing a seq scan whose cost is actually noticeable — not before. At v1 volumes (thousands of rows) it is not measurable.
-- **Proposed resolution:** Migration enabling `pg_trgm` and adding `gin (column gin_trgm_ops)` indexes on the searched columns. `contains` keeps working unchanged and starts using the index; no contract or frontend change.
-- **Priority:** Low
-- **Status:** Open
-
-### DEBT-053 — `PayablesTab` is server-paginated but has no search box at all
-
-- **Date logged:** 2026-08-23
-- **Found during:** TASK-072 (server-side search), while enumerating which paginated tables had the DEBT-047 defect
-- **Description:** `components/expenses/PayablesTab.tsx` pages server-side like the four tables TASK-072 fixed, but it never had a `searchColumns` toolbar in the first place — so unlike them it was never *misleading*, only missing. `PayableQuerySchema` has no `search` field, which DEBT-047's proposed resolution had suggested adding in the same pass. (`PurchaseEntryTab`, the supplier-purchase list, is a different case: it has neither search nor server pagination, so it is not comparable to this one.)
-- **Why deferred:** Adding a search box to a screen that has none is a new feature, not a defect fix, and TASK-072's scope was the boxes that lied about what they searched (AGENTS.md §Strict Scope). The plumbing it would need already exists and is proven: `search` on the query schema, an `OR` in the service, `serverSearch` on `DataTable`, `useDebouncedValue` in the client.
-- **Impact if unaddressed:** Someone chasing one supplier's unpaid invoice pages through the list or narrows by supplier dropdown first. Nothing is wrong on screen; the workflow is just slower than the four screens beside it.
-- **Trigger condition:** The first request to "find this invoice/supplier" from the Utang screen, or when that list routinely runs past a couple of pages.
-- **Proposed resolution:** Copy the TASK-072 pattern exactly — `search: z.string().trim().optional()` on `PayableQuerySchema`; an `OR` over supplier name and invoice reference in `PayablesService`; `serverSearch` + `useDebouncedValue` + reset-to-page-1 at the call site. Roughly the same size as one of TASK-072's four modules.
-- **Priority:** Low
-- **Status:** Open
-
-### DEBT-052 — Attendance log cannot be searched by employee email
+### DEBT-047 — `npm run test:e2e` (full 13-file suite) is flaky under back-to-back load, beyond the already-known concurrency-burst ceiling
 
 - **Date logged:** 2026-08-22
-- **Found during:** TASK-071 (Attendance date range + pagination)
-- **Description:** `AttendanceLogTable` listed `'userEmail'` in `searchColumns`, but no column has that id — the email is rendered inside the Karyawan cell alongside the name. TanStack therefore threw `[Table] Column with id 'userEmail' does not exist` on every render and the id contributed nothing to filtering. The dead id was removed; email is now genuinely unsearchable rather than apparently-searchable-but-broken.
-- **Why deferred:** Making it work means either a hidden `accessorKey: 'userEmail'` column or converting the Karyawan column to an `accessorFn` that concatenates name and email. The latter changes the column's id, which is now load-bearing for server-side sorting (`sortBy=userName`), so it was not worth the risk inside a task that had just wired that path.
-- **Impact if unaddressed:** An OWNER searching the attendance log by an employee's email address gets no results and no explanation.
-- **Trigger condition:** When DEBT-047 (server-side `search`) is implemented — email belongs in that server-side search term, which removes the need for a client-side column at all.
-- **Proposed resolution:** Fold `userEmail` into the server-side search added by DEBT-047 rather than reintroducing a client-side column.
-- **Priority:** Low
-- **Status:** Resolved (2026-08-23, TASK-072) — exactly as proposed: `user.email` is one clause of the `OR` in `AttendanceService.findRecords`, so an email fragment now finds the row without any column carrying it. No column id changed, so `sortBy=userName` is untouched. Covered by an e2e case that searches `att-kasir-b@` and asserts the single matching row comes back.
-
-### DEBT-051 — Attendance calendar fetches raw logins instead of a server-reduced monthly matrix
-
-- **Date logged:** 2026-08-22
-- **Found during:** TASK-071 (Attendance date range + pagination) — Option C, considered and deferred
-- **Description:** `AttendanceCalendarMatrix` renders one cell per kasir per day, but fetches the month's raw `AttendanceRecord` rows and reduces them client-side in `getDayStatus` (leave beats attendance; any valid login beats a violation). The alternative is a purpose-built `GET /devices/attendance/matrix?month=YYYY-MM` returning the already-reduced cells with leave folded in, making the payload `cashiers × days` regardless of login volume.
-- **Why deferred:** The raw-row payload is bounded by a month and the 500-row page cap, and a month past that cap is now reported on screen rather than silently truncated. The aggregate endpoint would also move presentation precedence into the API, which this repo has kept client-side everywhere else — a real architectural shift to make for a table whose worst case is a few hundred rows.
-- **Impact if unaddressed:** Once a month routinely exceeds 500 logins (roughly 8+ kasir logging in twice a day), the matrix stops showing a complete month and falls back to the warning band. The band is honest, but it is a degraded view, not a working one.
-- **Trigger condition:** When the truncation band starts firing in normal use — i.e. a typical month's `meta.total` exceeds the page cap — or when the matrix is extended past a single month.
-- **Proposed resolution:** Add the aggregate endpoint described above, move the `getDayStatus` precedence rules into it with their own e2e coverage, and drop the matrix's second `useAllLeaveRequests` call.
-- **Priority:** Low
+- **Found during:** User ran `npm run test:e2e` locally and hit 1 failed / 250 passed — reported it, and a deep investigation followed at the user's request.
+- **Description:** Running the full e2e suite (`jest --runInBand`, 13 files, 251 tests) back-to-back occasionally fails exactly one test, in a **different file with a different failure mode every time** — never the same test twice. Six full-suite runs were captured failing during this investigation: `monthly-cycle.e2e-spec.ts` (expected `400`, got `403`), `allocation-sum.e2e-spec.ts` (expected `400`, got `401`), `reports.e2e-spec.ts` (expected `200`, got `400`), `concurrency.e2e-spec.ts` B2 (expected exactly 18 successes/32 conflicts on a 50-way stock-oversubscription race, got a different split once), `sales.e2e-spec.ts` (expected `200`, got `403` for a valid ADMIN cookie), `auth-rbac.e2e-spec.ts` (expected `400`, got `404`). Every one of these six files, run alone in isolation (5 repeated runs each for the first three), passed 100% of the time — the failure only appears under the combined load of the full 13-file run, and the failure rate is roughly 1-in-6 to 1-in-13 full runs.
+- **Investigation performed (and ruled out):** Temporary debug instrumentation was added to `RoleGuard`, `JwtAuthGuard` (logging role/token/revocation state on every rejection), a global `DebugErrorInterceptor` (logging every 400/401/403 body), and `concurrency.e2e-spec.ts`'s B2 test (logging the true success/conflict split before asserting) — all confirmed reverted afterward (`git diff` clean). Findings: the JWT/cookie/role used in every captured failure was always correct (right user, right role, valid unexpired token) — the guard or validation layer rejected a request that should have been valid, not a test-logic bug in how cookies are tracked. The leading hypothesis — Postgres connection-pool exhaustion from 13 sequential `pg.Pool(max: 60)` instances (`connection_limit=60` in `.env.test`) against Postgres's own `max_connections=100` — was directly measured by polling `pg_stat_activity` every second through a full run: peak observed was **20 concurrent connections**, nowhere near the 100 cap. That theory is ruled out; reducing `connection_limit` would not help.
+- **Why deferred:** The remaining candidates (Node event-loop stalls from ts-jest's per-file TypeScript compilation shifting request timing, or OS-level socket/backlog limits on rapid new-connection acceptance — the same class of issue `concurrency.e2e-spec.ts`'s own header comment already documents for 40-50-way bursts specifically: "this local environment... reliably handles ~20 truly-simultaneous new connections... producing intermittent client-side ECONNRESET... a transport-layer limitation of this test harness, not [an application defect]") require materially heavier instrumentation (event-loop lag tracking, precise per-stage timestamps correlated across guard/pipe/handler) with no guaranteed payoff, since the six captured failures span at least three structurally different code paths (auth guard, validation pipe, a plain count assertion) rather than one shared mechanism. The user explicitly chose to stop here rather than continue.
+- **Impact if unaddressed:** No production risk — every affected suite is 100% reliable in isolation, and every observed "wrong" response was a correct fail-closed default (401/403/400/404), never a security hole or silent data corruption. The impact is purely on developer trust in CI/local `test:e2e` runs: an unrelated, correct PR could show a red full-suite run roughly 1-in-6 to 1-in-13 times, prompting an unnecessary re-run.
+- **Trigger condition:** If the flake rate increases materially, or CI (not just local `pnpm dev` machines) starts showing it — CI runners have different resource ceilings than this local machine and may not reproduce this class of issue at all, or may reproduce it worse.
+- **Proposed resolution:** Re-run automatically once on e2e failure before treating a CI run as red (cheap, immediate mitigation). If it recurs often enough to matter, the next investigation step is event-loop-lag instrumentation (`perf_hooks.monitorEventLoopDelay`) correlated against request timestamps during a full run, to determine whether ts-jest's per-file compile pause is the shared trigger across all six observed failure modes.
+- **Priority:** Low — test-infrastructure reliability, not a product defect.
 - **Status:** Open
-
-### DEBT-050 — Stock movement history has no running-balance column, and no drill-down from the summary
-
-- **Date logged:** 2026-08-22
-- **Found during:** TASK-070 (Stock Movement read endpoint + screen)
-- **Description:** `/inventory/movements` lists every movement with quantity and direction, but not the resulting stock level after each one. Three related gaps were deferred with it: no drill-down link from `InventorySummaryTable` to the filtered movement list for that material; `referenceId` renders as a short opaque id rather than the order number or purchase invoice it points at; and the toolbar search is page-scoped (shared with DEBT-047) with export page-scoped (DEBT-048).
-- **Update 2026-08-23 (TASK-072):** the page-scoped search half of that last item is closed — this screen's box is now server-side (DEBT-047). The running balance, the drill-down and `referenceId` resolution are all still open, and export is still page-scoped (DEBT-048).
-- **Why deferred:** A running balance is only well-defined for **one material, ordered by movementDate ascending, over its whole history**. This screen pages, sorts five keys in two directions, and filters on six fields. Under any sort other than date-ascending, or on page 2 of anything, a per-row balance is arithmetically meaningless — and it would render as a confident number rather than as an error, which is worse than not showing it. The user agreed to omit it rather than ship a figure that is wrong in most reachable states. `referenceId` resolution needs three conditional lookups because the column is polymorphic across `Sale`/`SupplierPurchase`/`OpeningStock` with no FK, exactly like `LedgerEntry.sourceId` (ERD §2).
-- **Impact if unaddressed:** An operator auditing "why is Kopi at 4.2 kg" reads the movements but must add them up by hand. The summary screen and the movement screen stay two separate destinations rather than one drill-down. Tracing a specific movement back to its originating sale requires a manual id lookup.
-- **Trigger condition:** The first time someone asks "what was the stock after this movement?", or a stock discrepancy investigation requires manually summing more than one page of rows.
-- **Proposed resolution:** A single-material drill-down view — reached from the summary row — with sort locked to `movementDate asc` and the running balance computed server-side over the full history for that material, not over the page. That is the only shape in which the number is correct. Add `referenceId` resolution there, where the row count is bounded, rather than on the general list.
-- **Priority:** Medium
-- **Status:** Open
-
-### DEBT-049 — Four list endpoints still hardcode their sort direction
-
-- **Date logged:** 2026-08-22
-- **Found during:** TASK-067 (Tier 1 server-side pagination, Sales + Payables)
-- **Description:** `sortOrder` was added as a standalone `SortOrderSchema` and wired into `GET /sales` and `GET /payables` only. `GET /supplier-purchases`, `GET /ledger-entries` and `GET /suppliers` still hardcode their direction (`orderBy: { [sortBy ?? 'x']: 'desc' }`), so those three accept a `sortBy` but can never be reversed.
-- **Update 2026-08-22 (TASK-068):** `GET /reconciliation/transactions` has been removed from this list — it now honours `sortOrder` and also gained `description` as a sort key. Three endpoints remain.
-- **Why deferred:** Deliberate. Putting `sortOrder` on `PaginationQuerySchema` would have made all six endpoints advertise a parameter only two of them honour — which is precisely the silent-drop bug TASK-067 existed to fix (apps/web sent `sortOrder` for months while Zod stripped it). Opting in per module keeps "advertises it" and "respects it" the same set.
-- **Impact if unaddressed:** Nothing breaks; those screens simply cannot offer ascending sort. The risk is a future contributor adding `sortOrder` to the base schema for convenience and reintroducing the silent drop on four routes.
-- **Trigger condition:** When any of those three screens is wired to the shared `DataTable` pagination props — the same change that makes its sort headers server-driven.
-- **Proposed resolution:** Per module: one `sortOrder: SortOrderSchema.optional()` line in the query schema, `sortOrder = 'desc'` in the service's destructure, and `sortOrder` in place of the literal in `orderBy`. Roughly three lines each; see `payables.service.ts` for the variant needed when a sort key lives on a relation.
-- **Priority:** Low
-- **Status:** Open
-
-### DEBT-048 — Export button exports the current page, not the full result set
-
-- **Date logged:** 2026-08-22
-- **Found during:** TASK-067 (Tier 1 server-side pagination, Sales + Payables)
-- **Description:** `DataTable`'s `ExportButton` builds its spreadsheet from `table.getFilteredRowModel().rows` — the rows the component currently holds. Under server pagination that is one page: the Payables export now covers 25 rows where it previously covered up to 50.
-- **Why deferred:** Not a new correctness problem — the export was never the full set, it was whatever the hardcoded `limit` happened to fetch. Server pagination makes the limitation visible rather than creating it, and a correct fix needs a decision (client-side paging loop vs. a dedicated server export endpoint) that was out of scope.
-- **Impact if unaddressed:** Someone exports "Utang Pemasok" for accounting and silently gets one page of it. The file gives no indication it is partial.
-- **Trigger condition:** The first time an export is used for anything downstream of the screen — accounting, a report, a hand-off to a bookkeeper — or the first user report of a short spreadsheet.
-- **Proposed resolution:** Either have the export button page the API to completion before building the workbook (simple, fine at v1 volumes), or add a server-side export endpoint that streams the full filtered set. Whichever is chosen, the button should state the row count it is about to export.
-- **Priority:** Medium
-- **Status:** Open
-
-### DEBT-047 — Sales History search only covers the visible page
-
-- **Date logged:** 2026-08-22
-- **Found during:** TASK-067 (Tier 1 server-side pagination, Sales + Payables)
-- **Description:** `DataTable`'s toolbar search is a client-side column filter. Once Sales History moved to 25 rows per page, that search stopped being a history search and became a page search. The placeholder and aria-label were changed to "Cari di halaman ini..." so the UI does not overstate what it does, but the underlying capability is missing: there is no `search` field on `SaleQuerySchema`.
-- **Update 2026-08-22 (TASK-068):** the same applies to `BankTransactionsTable`'s `searchColumns={['description']}` on the Reconciliation screen, which has been paginated server-side all along. Its placeholder was relabelled "Cari keterangan di halaman ini…" for the same reason. `ReconciliationQuerySchema` likewise has no `search` field.
-- **Why deferred:** Explicit scope decision when TASK-067 was planned — filter scope was limited to backend filters that already existed. Adding server-side search is a new contract field plus a Prisma `OR`/`contains` clause, and it is worth doing once for several modules rather than piecemeal.
-- **Impact if unaddressed:** A cashier looking for a specific order id has to page through history manually, or narrow by date first. The relabelled placeholder prevents the worse failure (believing an empty result means the sale does not exist), but the workflow is still poor.
-- **Trigger condition:** The first request to "find a transaction by order number" or to find a bank transaction by its statement description, or when either list exceeds a few pages in normal use.
-- **Proposed resolution:** Add `search: z.string().trim().optional()` to `SaleQuerySchema`, following the existing pattern in `SupplierQuerySchema`, and translate it in `SalesService.findAll` into an `OR` over the fields the toolbar currently filters (`id`, branch name, cashier name, account name). The same field is worth adding to `ReconciliationQuerySchema` (over `description`), `PayableQuerySchema` and `SupplierPurchaseQuerySchema` in the same pass.
-- **Priority:** Medium
-- **Status:** Resolved (2026-08-23, TASK-072) — `search` added to `SaleQuerySchema`, `ReconciliationQuerySchema`, `StockMovementQuerySchema` and `AttendanceQuerySchema`, translated into `OR` + `contains` + `mode: 'insensitive'` in the four services. `DataTable` gained a `serverSearch` prop; the four affected call sites dropped `searchColumns` and their "di halaman ini" placeholders. Four tables, not the two this entry names — Stock Movements and the Attendance log had the identical defect and share the same `data-table.tsx` change, which is what this entry's own "worth doing once for several modules" reasoning asked for. `PayableQuerySchema` and `SupplierPurchaseQuerySchema` were deliberately **not** included: neither screen has a search box at all, so adding one is a feature rather than a defect fix — see **DEBT-053**. Nine client-searched tables that load their whole set were left alone; client-side search is correct there.
 
 ### DEBT-046 — `pnpm audit` in CI is advisory only (`continue-on-error: true`)
 
