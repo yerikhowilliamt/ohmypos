@@ -39,42 +39,17 @@
 
 ## Log
 
-### DEBT-049 — Four list endpoints still hardcode their sort direction
+### DEBT-047 — `npm run test:e2e` (full 13-file suite) is flaky under back-to-back load, beyond the already-known concurrency-burst ceiling
 
 - **Date logged:** 2026-08-22
-- **Found during:** TASK-067 (Tier 1 server-side pagination, Sales + Payables)
-- **Description:** `sortOrder` was added as a standalone `SortOrderSchema` and wired into `GET /sales` and `GET /payables` only. `GET /supplier-purchases`, `GET /ledger-entries` and `GET /suppliers` still hardcode their direction (`orderBy: { [sortBy ?? 'x']: 'desc' }`), so those three accept a `sortBy` but can never be reversed.
-- **Update 2026-08-22 (TASK-068):** `GET /reconciliation/transactions` has been removed from this list — it now honours `sortOrder` and also gained `description` as a sort key. Three endpoints remain.
-- **Why deferred:** Deliberate. Putting `sortOrder` on `PaginationQuerySchema` would have made all six endpoints advertise a parameter only two of them honour — which is precisely the silent-drop bug TASK-067 existed to fix (apps/web sent `sortOrder` for months while Zod stripped it). Opting in per module keeps "advertises it" and "respects it" the same set.
-- **Impact if unaddressed:** Nothing breaks; those screens simply cannot offer ascending sort. The risk is a future contributor adding `sortOrder` to the base schema for convenience and reintroducing the silent drop on four routes.
-- **Trigger condition:** When any of those three screens is wired to the shared `DataTable` pagination props — the same change that makes its sort headers server-driven.
-- **Proposed resolution:** Per module: one `sortOrder: SortOrderSchema.optional()` line in the query schema, `sortOrder = 'desc'` in the service's destructure, and `sortOrder` in place of the literal in `orderBy`. Roughly three lines each; see `payables.service.ts` for the variant needed when a sort key lives on a relation.
-- **Priority:** Low
-- **Status:** Open
-
-### DEBT-048 — Export button exports the current page, not the full result set
-
-- **Date logged:** 2026-08-22
-- **Found during:** TASK-067 (Tier 1 server-side pagination, Sales + Payables)
-- **Description:** `DataTable`'s `ExportButton` builds its spreadsheet from `table.getFilteredRowModel().rows` — the rows the component currently holds. Under server pagination that is one page: the Payables export now covers 25 rows where it previously covered up to 50.
-- **Why deferred:** Not a new correctness problem — the export was never the full set, it was whatever the hardcoded `limit` happened to fetch. Server pagination makes the limitation visible rather than creating it, and a correct fix needs a decision (client-side paging loop vs. a dedicated server export endpoint) that was out of scope.
-- **Impact if unaddressed:** Someone exports "Utang Pemasok" for accounting and silently gets one page of it. The file gives no indication it is partial.
-- **Trigger condition:** The first time an export is used for anything downstream of the screen — accounting, a report, a hand-off to a bookkeeper — or the first user report of a short spreadsheet.
-- **Proposed resolution:** Either have the export button page the API to completion before building the workbook (simple, fine at v1 volumes), or add a server-side export endpoint that streams the full filtered set. Whichever is chosen, the button should state the row count it is about to export.
-- **Priority:** Medium
-- **Status:** Open
-
-### DEBT-047 — Sales History search only covers the visible page
-
-- **Date logged:** 2026-08-22
-- **Found during:** TASK-067 (Tier 1 server-side pagination, Sales + Payables)
-- **Description:** `DataTable`'s toolbar search is a client-side column filter. Once Sales History moved to 25 rows per page, that search stopped being a history search and became a page search. The placeholder and aria-label were changed to "Cari di halaman ini..." so the UI does not overstate what it does, but the underlying capability is missing: there is no `search` field on `SaleQuerySchema`.
-- **Update 2026-08-22 (TASK-068):** the same applies to `BankTransactionsTable`'s `searchColumns={['description']}` on the Reconciliation screen, which has been paginated server-side all along. Its placeholder was relabelled "Cari keterangan di halaman ini…" for the same reason. `ReconciliationQuerySchema` likewise has no `search` field.
-- **Why deferred:** Explicit scope decision when TASK-067 was planned — filter scope was limited to backend filters that already existed. Adding server-side search is a new contract field plus a Prisma `OR`/`contains` clause, and it is worth doing once for several modules rather than piecemeal.
-- **Impact if unaddressed:** A cashier looking for a specific order id has to page through history manually, or narrow by date first. The relabelled placeholder prevents the worse failure (believing an empty result means the sale does not exist), but the workflow is still poor.
-- **Trigger condition:** The first request to "find a transaction by order number" or to find a bank transaction by its statement description, or when either list exceeds a few pages in normal use.
-- **Proposed resolution:** Add `search: z.string().trim().optional()` to `SaleQuerySchema`, following the existing pattern in `SupplierQuerySchema`, and translate it in `SalesService.findAll` into an `OR` over the fields the toolbar currently filters (`id`, branch name, cashier name, account name). The same field is worth adding to `ReconciliationQuerySchema` (over `description`), `PayableQuerySchema` and `SupplierPurchaseQuerySchema` in the same pass.
-- **Priority:** Medium
+- **Found during:** User ran `npm run test:e2e` locally and hit 1 failed / 250 passed — reported it, and a deep investigation followed at the user's request.
+- **Description:** Running the full e2e suite (`jest --runInBand`, 13 files, 251 tests) back-to-back occasionally fails exactly one test, in a **different file with a different failure mode every time** — never the same test twice. Six full-suite runs were captured failing during this investigation: `monthly-cycle.e2e-spec.ts` (expected `400`, got `403`), `allocation-sum.e2e-spec.ts` (expected `400`, got `401`), `reports.e2e-spec.ts` (expected `200`, got `400`), `concurrency.e2e-spec.ts` B2 (expected exactly 18 successes/32 conflicts on a 50-way stock-oversubscription race, got a different split once), `sales.e2e-spec.ts` (expected `200`, got `403` for a valid ADMIN cookie), `auth-rbac.e2e-spec.ts` (expected `400`, got `404`). Every one of these six files, run alone in isolation (5 repeated runs each for the first three), passed 100% of the time — the failure only appears under the combined load of the full 13-file run, and the failure rate is roughly 1-in-6 to 1-in-13 full runs.
+- **Investigation performed (and ruled out):** Temporary debug instrumentation was added to `RoleGuard`, `JwtAuthGuard` (logging role/token/revocation state on every rejection), a global `DebugErrorInterceptor` (logging every 400/401/403 body), and `concurrency.e2e-spec.ts`'s B2 test (logging the true success/conflict split before asserting) — all confirmed reverted afterward (`git diff` clean). Findings: the JWT/cookie/role used in every captured failure was always correct (right user, right role, valid unexpired token) — the guard or validation layer rejected a request that should have been valid, not a test-logic bug in how cookies are tracked. The leading hypothesis — Postgres connection-pool exhaustion from 13 sequential `pg.Pool(max: 60)` instances (`connection_limit=60` in `.env.test`) against Postgres's own `max_connections=100` — was directly measured by polling `pg_stat_activity` every second through a full run: peak observed was **20 concurrent connections**, nowhere near the 100 cap. That theory is ruled out; reducing `connection_limit` would not help.
+- **Why deferred:** The remaining candidates (Node event-loop stalls from ts-jest's per-file TypeScript compilation shifting request timing, or OS-level socket/backlog limits on rapid new-connection acceptance — the same class of issue `concurrency.e2e-spec.ts`'s own header comment already documents for 40-50-way bursts specifically: "this local environment... reliably handles ~20 truly-simultaneous new connections... producing intermittent client-side ECONNRESET... a transport-layer limitation of this test harness, not [an application defect]") require materially heavier instrumentation (event-loop lag tracking, precise per-stage timestamps correlated across guard/pipe/handler) with no guaranteed payoff, since the six captured failures span at least three structurally different code paths (auth guard, validation pipe, a plain count assertion) rather than one shared mechanism. The user explicitly chose to stop here rather than continue.
+- **Impact if unaddressed:** No production risk — every affected suite is 100% reliable in isolation, and every observed "wrong" response was a correct fail-closed default (401/403/400/404), never a security hole or silent data corruption. The impact is purely on developer trust in CI/local `test:e2e` runs: an unrelated, correct PR could show a red full-suite run roughly 1-in-6 to 1-in-13 times, prompting an unnecessary re-run.
+- **Trigger condition:** If the flake rate increases materially, or CI (not just local `pnpm dev` machines) starts showing it — CI runners have different resource ceilings than this local machine and may not reproduce this class of issue at all, or may reproduce it worse.
+- **Proposed resolution:** Re-run automatically once on e2e failure before treating a CI run as red (cheap, immediate mitigation). If it recurs often enough to matter, the next investigation step is event-loop-lag instrumentation (`perf_hooks.monitorEventLoopDelay`) correlated against request timestamps during a full run, to determine whether ts-jest's per-file compile pause is the shared trigger across all six observed failure modes.
+- **Priority:** Low — test-infrastructure reliability, not a product defect.
 - **Status:** Open
 
 ### DEBT-046 — `pnpm audit` in CI is advisory only (`continue-on-error: true`)
