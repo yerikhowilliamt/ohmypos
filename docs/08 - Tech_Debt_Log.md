@@ -39,6 +39,18 @@
 
 ## Log
 
+### DEBT-050 — Stock movement history has no running-balance column, and no drill-down from the summary
+
+- **Date logged:** 2026-08-22
+- **Found during:** TASK-070 (Stock Movement read endpoint + screen)
+- **Description:** `/inventory/movements` lists every movement with quantity and direction, but not the resulting stock level after each one. Three related gaps were deferred with it: no drill-down link from `InventorySummaryTable` to the filtered movement list for that material; `referenceId` renders as a short opaque id rather than the order number or purchase invoice it points at; and the toolbar search is page-scoped (shared with DEBT-047) with export page-scoped (DEBT-048).
+- **Why deferred:** A running balance is only well-defined for **one material, ordered by movementDate ascending, over its whole history**. This screen pages, sorts five keys in two directions, and filters on six fields. Under any sort other than date-ascending, or on page 2 of anything, a per-row balance is arithmetically meaningless — and it would render as a confident number rather than as an error, which is worse than not showing it. The user agreed to omit it rather than ship a figure that is wrong in most reachable states. `referenceId` resolution needs three conditional lookups because the column is polymorphic across `Sale`/`SupplierPurchase`/`OpeningStock` with no FK, exactly like `LedgerEntry.sourceId` (ERD §2).
+- **Impact if unaddressed:** An operator auditing "why is Kopi at 4.2 kg" reads the movements but must add them up by hand. The summary screen and the movement screen stay two separate destinations rather than one drill-down. Tracing a specific movement back to its originating sale requires a manual id lookup.
+- **Trigger condition:** The first time someone asks "what was the stock after this movement?", or a stock discrepancy investigation requires manually summing more than one page of rows.
+- **Proposed resolution:** A single-material drill-down view — reached from the summary row — with sort locked to `movementDate asc` and the running balance computed server-side over the full history for that material, not over the page. That is the only shape in which the number is correct. Add `referenceId` resolution there, where the row count is bounded, rather than on the general list.
+- **Priority:** Medium
+- **Status:** Open
+
 ### DEBT-049 — Four list endpoints still hardcode their sort direction
 
 - **Date logged:** 2026-08-22
