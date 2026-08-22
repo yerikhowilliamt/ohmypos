@@ -9,7 +9,8 @@ import type {
 import { Card, CardContent } from '@ohmypos/ui/components/card';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
-import type { ExportColumn } from '@/lib/export';
+import { rangeSuffix, type ExportColumn } from '@/lib/export';
+import type { ReportFilters } from '@/hooks/useReports';
 import { formatCurrency } from '@/lib/formatters';
 import { getFlowIndicatorClasses } from '@/lib/vocabulary';
 import { ChartEmptyState, ReportLineChart } from './ReportChart';
@@ -17,6 +18,14 @@ import { ChartEmptyState, ReportLineChart } from './ReportChart';
 interface DailyIncomeViewProps {
   data: DailyIncomeResponse | undefined;
   isLoading: boolean;
+  /**
+   * The report's own date range, for the export filename (DEBT-025). Without
+   * it the file is named for the day it was exported, so two exports of
+   * different ranges on the same day overwrite each other in Downloads — and
+   * whoever opens the file later has no on-screen context to tell them which
+   * period it covers.
+   */
+  filters: ReportFilters;
 }
 
 const columns: ColumnDef<DailyIncomeRow>[] = [
@@ -66,7 +75,11 @@ const exportColumns: ExportColumn<DailyIncomeRow>[] = [
 /** Dashboard 3 — Total Daily Income (PRD §5.4). The one report with a real
  * per-day series, so it's the only view carrying the literal "trend line"
  * chart the PRD asks for; the other reports are period aggregates. */
-export function DailyIncomeView({ data, isLoading }: DailyIncomeViewProps) {
+export function DailyIncomeView({
+  data,
+  isLoading,
+  filters,
+}: DailyIncomeViewProps) {
   const chartData = React.useMemo(
     () =>
       (data?.rows ?? []).map((row) => ({
@@ -130,7 +143,7 @@ export function DailyIncomeView({ data, isLoading }: DailyIncomeViewProps) {
         emptyMessage="Tidak ada data pendapatan harian"
         emptyDescription="Belum ada transaksi pada rentang tanggal ini."
         exportColumns={exportColumns}
-        exportFilename={`pendapatan-harian_${new Date().toISOString().slice(0, 10)}.xlsx`}
+        exportFilename={`pendapatan-harian_${rangeSuffix(filters.startDate, filters.endDate)}.xlsx`}
       />
     </div>
   );

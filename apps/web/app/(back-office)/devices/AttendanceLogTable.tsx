@@ -8,6 +8,7 @@ import type {
   AttendanceSortBy,
   AttendanceViolationReason,
   BranchResponse,
+  SortOrder,
 } from '@ohmypos/api-contracts';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Button } from '@ohmypos/ui/components/button';
@@ -30,11 +31,13 @@ import {
   SelectValue,
 } from '@ohmypos/ui/components/select';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
-import type { ExportColumn } from '@/lib/export';
+import { rangeSuffix, type ExportColumn } from '@/lib/export';
 import {
+  fetchAttendanceRecordsPage,
   useAttendanceRecords,
   useUpdateAttendanceStatus,
 } from '@/hooks/useDevices';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const VIOLATION_LABELS: Record<AttendanceViolationReason, string> = {
@@ -106,23 +109,53 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
 
   const activeSort = sorting[0];
 
-  const { data, isLoading } = useAttendanceRecords({
-    search: search || undefined,
-    branchId: selectedBranchId === 'ALL' ? undefined : selectedBranchId,
-    violationOnly,
-    startDate: startDate
-      ? new Date(`${startDate}T00:00:00`).toISOString()
-      : undefined,
-    // Inclusive of the whole final day — a midnight bound would silently drop
-    // every login made after 00:00 on the day the reader picked.
-    endDate: endDate
-      ? new Date(`${endDate}T23:59:59.999`).toISOString()
-      : undefined,
-    page,
-    limit,
-    sortBy: toAttendanceSortBy(activeSort?.id),
-    sortOrder: activeSort?.desc === false ? 'asc' : 'desc',
-  });
+  // One object for both the on-screen query and the Export loop. Rebuilding the
+  // filters separately for the export is how the file quietly ends up holding a
+  // different set from the one the operator is looking at (DEBT-048).
+  const queryParams = React.useMemo(
+    () => ({
+      search: search || undefined,
+      branchId: selectedBranchId === 'ALL' ? undefined : selectedBranchId,
+      violationOnly,
+      startDate: startDate
+        ? new Date(`${startDate}T00:00:00`).toISOString()
+        : undefined,
+      // Inclusive of the whole final day — a midnight bound would silently drop
+      // every login made after 00:00 on the day the reader picked.
+      endDate: endDate
+        ? new Date(`${endDate}T23:59:59.999`).toISOString()
+        : undefined,
+      page,
+      limit,
+      sortBy: toAttendanceSortBy(activeSort?.id),
+      sortOrder: (activeSort?.desc === false ? 'asc' : 'desc') as SortOrder,
+    }),
+    [
+      search,
+      selectedBranchId,
+      violationOnly,
+      startDate,
+      endDate,
+      page,
+      limit,
+      activeSort?.id,
+      activeSort?.desc,
+    ],
+  );
+
+  const { data, isLoading } = useAttendanceRecords(queryParams);
+
+  const exportAll = React.useCallback(
+    () =>
+      fetchAllPages((exportPage, exportLimit) =>
+        fetchAttendanceRecordsPage({
+          ...queryParams,
+          page: exportPage,
+          limit: exportLimit,
+        }),
+      ),
+    [queryParams],
+  );
 
   const records = React.useMemo(() => data?.data ?? [], [data?.data]);
   const paginationMeta = data?.meta ?? {
@@ -455,7 +488,9 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
         searchLabel="Cari log absensi"
         emptyMessage="Belum ada riwayat absensi login kasir."
         exportColumns={exportColumns}
-        exportFilename={`log-absensi_${new Date().toISOString().slice(0, 10)}.xlsx`}
+        exportFilename={`log-absensi_${rangeSuffix(startDate, endDate)}.xlsx`}
+        exportAll={exportAll}
+        exportTotal={paginationMeta.total}
         sorting={sorting}
         onSortingChange={handleSortingChange}
         pagination={{

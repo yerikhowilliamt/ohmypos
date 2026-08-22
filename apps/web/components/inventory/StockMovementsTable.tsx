@@ -97,6 +97,10 @@ interface StockMovementsTableProps {
    */
   search: string;
   onSearchChange: (value: string) => void;
+  /** Whole filtered set for Export — `movements` is one page (DEBT-048). */
+  exportAll: () => Promise<StockMovementResponse[]>;
+  /** Filename built from the client's date-range filter (DEBT-025). */
+  exportFilename: string;
 }
 
 export function StockMovementsTable({
@@ -107,6 +111,8 @@ export function StockMovementsTable({
   pagination,
   search,
   onSearchChange,
+  exportAll,
+  exportFilename,
 }: StockMovementsTableProps) {
   const columns = React.useMemo<ColumnDef<StockMovementResponse>[]>(
     () => [
@@ -223,7 +229,9 @@ export function StockMovementsTable({
       emptyMessage="Belum ada pergerakan stok."
       emptyDescription="Setiap penjualan, pembelian, dan stok awal tercatat di sini."
       exportColumns={exportColumns}
-      exportFilename={`pergerakan-stok_${new Date().toISOString().slice(0, 10)}.xlsx`}
+      exportFilename={exportFilename}
+      exportAll={exportAll}
+      exportTotal={pagination.meta.total}
     />
   );
 }

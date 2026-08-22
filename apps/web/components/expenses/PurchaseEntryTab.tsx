@@ -10,7 +10,11 @@ import {
   getPaymentStatusBadgeClasses,
 } from '@/lib/vocabulary';
 import { Badge } from '@ohmypos/ui/components/badge';
-import { useSupplierPurchases } from '@/hooks/useExpenses';
+import {
+  fetchSupplierPurchasesPage,
+  useSupplierPurchases,
+} from '@/hooks/useExpenses';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import type { ExportColumn } from '@/lib/export';
 import type { SupplierPurchaseResponse } from '@ohmypos/api-contracts';
@@ -92,6 +96,14 @@ export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
   const { data, isLoading } = useSupplierPurchases();
   const purchases = data?.data ?? [];
 
+  // See GeneralExpenseTab: the export covers the whole set even though the
+  // table above it still stops at 50 rows (DEBT-055).
+  const exportAll = React.useCallback(
+    () =>
+      fetchAllPages((page, limit) => fetchSupplierPurchasesPage(page, limit)),
+    [],
+  );
+
   const handleUnpaidPurchaseCreated = (supplierName: string) => {
     setUnpaidBanner(supplierName);
   };
@@ -146,6 +158,8 @@ export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
         emptyMessage="Belum ada pembelian tercatat."
         exportColumns={exportColumns}
         exportFilename={`pembelian-bahan-baku_${new Date().toISOString().slice(0, 10)}.xlsx`}
+        exportAll={exportAll}
+        exportTotal={data?.meta.total}
       />
 
       <PurchaseEntryFormDialog

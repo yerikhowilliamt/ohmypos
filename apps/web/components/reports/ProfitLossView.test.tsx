@@ -51,12 +51,24 @@ const lossPeriod: ProfitLossResponse = {
 
 describe('ProfitLossView component', () => {
   it('renders a loading skeleton without crashing', () => {
-    render(<ProfitLossView data={undefined} isLoading />);
+    render(
+      <ProfitLossView
+        data={undefined}
+        isLoading
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
     expect(screen.queryByText('Pendapatan')).not.toBeInTheDocument();
   });
 
   it('renders the margin-view KPI cards and the cash block for a profitable period', () => {
-    render(<ProfitLossView data={profitablePeriod} isLoading={false} />);
+    render(
+      <ProfitLossView
+        data={profitablePeriod}
+        isLoading={false}
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
 
     expect(screen.getByText('Pendapatan')).toBeInTheDocument();
     expect(screen.getAllByText(/Rp\s*412\.860\.000/)[0]).toBeInTheDocument();
@@ -65,7 +77,13 @@ describe('ProfitLossView component', () => {
   });
 
   it('colors netProfit and netCashFlow as outflow when the period is a loss (ADR-017 §2)', () => {
-    render(<ProfitLossView data={lossPeriod} isLoading={false} />);
+    render(
+      <ProfitLossView
+        data={lossPeriod}
+        isLoading={false}
+        filters={{ startDate: '2026-01-01', endDate: '2026-01-31' }}
+      />,
+    );
 
     const netProfitValue = screen.getAllByText(/-Rp\s*50\.000\.000/)[0];
     expect(netProfitValue).toHaveClass('text-accent-outflow');

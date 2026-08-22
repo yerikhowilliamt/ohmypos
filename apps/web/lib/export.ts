@@ -7,6 +7,29 @@
  * stays unit-testable without a DOM.
  */
 
+/**
+ * Sufiks nama berkas untuk rentang tanggal laporan (DEBT-025).
+ *
+ * Nama berkas harus menyebut periode DATANYA, bukan tanggal saat tombol ditekan.
+ * Dua ekspor rentang berbeda di hari yang sama akan saling menimpa di folder
+ * Unduhan, dan penerimanya (akuntan, payroll) membuka berkas itu tanpa konteks
+ * layar — nama berkas adalah satu-satunya keterangan periode yang ia punya.
+ *
+ * Tanpa rentang, jatuh kembali ke tanggal hari ini: itu benar untuk data yang
+ * memang berupa keadaan saat ini (mis. utang pemasok), bukan rentang.
+ *
+ * Tanggal fallback-nya LOKAL, bukan UTC. `toISOString()` memberi tanggal UTC,
+ * dan di WIB (UTC+7) itu berarti setiap ekspor antara 00:00 dan 07:00 diberi
+ * nama tanggal KEMARIN — terlihat saat verifikasi browser TASK-073 pukul 04:00.
+ * `startDate`/`endDate` sendiri datang dari date picker sebagai tanggal lokal,
+ * jadi mencampur keduanya membuat dua penamaan yang tidak sebanding.
+ */
+export function rangeSuffix(startDate?: string, endDate?: string): string {
+  // 'sv-SE' memberi format YYYY-MM-DD di zona waktu lokal.
+  if (!startDate || !endDate) return new Date().toLocaleDateString('sv-SE');
+  return startDate === endDate ? startDate : `${startDate}_sd_${endDate}`;
+}
+
 export interface ExportColumn<T> {
   header: string;
   accessor: (row: T) => string | number | Date | null;

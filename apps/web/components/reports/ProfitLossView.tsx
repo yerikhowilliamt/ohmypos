@@ -6,7 +6,8 @@ import type { ProfitLossResponse } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
 import { Card, CardContent } from '@ohmypos/ui/components/card';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
-import { exportRowsToXlsx, type ExportColumn } from '@/lib/export';
+import { exportRowsToXlsx, rangeSuffix, type ExportColumn } from '@/lib/export';
+import type { ReportFilters } from '@/hooks/useReports';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { getFlowIndicatorClassesForAmount } from '@/lib/vocabulary';
 import { ReportBarChart } from './ReportChart';
@@ -44,6 +45,14 @@ const exportColumns: ExportColumn<ProfitLossResponse>[] = [
 interface ProfitLossViewProps {
   data: ProfitLossResponse | undefined;
   isLoading: boolean;
+  /**
+   * The report's own date range, for the export filename (DEBT-025). Without
+   * it the file is named for the day it was exported, so two exports of
+   * different ranges on the same day overwrite each other in Downloads — and
+   * whoever opens the file later has no on-screen context to tell them which
+   * period it covers.
+   */
+  filters: ReportFilters;
 }
 
 function KpiCard({
@@ -83,7 +92,11 @@ function KpiCard({
  * separately, so an owner never has to guess which figure answers which
  * question.
  */
-export function ProfitLossView({ data, isLoading }: ProfitLossViewProps) {
+export function ProfitLossView({
+  data,
+  isLoading,
+  filters,
+}: ProfitLossViewProps) {
   const [isExporting, setIsExporting] = React.useState(false);
 
   const handleExport = React.useCallback(async () => {
@@ -91,14 +104,17 @@ export function ProfitLossView({ data, isLoading }: ProfitLossViewProps) {
     setIsExporting(true);
     try {
       await exportRowsToXlsx(
-        `laba-rugi_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        `laba-rugi_${rangeSuffix(filters.startDate, filters.endDate)}.xlsx`,
         exportColumns,
         [data],
       );
     } finally {
       setIsExporting(false);
     }
-  }, [data]);
+    // The range belongs in the deps: without it, changing the date range and
+    // exporting writes the PREVIOUS range into the filename (DEBT-025 again,
+    // one step further in).
+  }, [data, filters.startDate, filters.endDate]);
 
   const chartData = React.useMemo(() => {
     if (!data) return [];

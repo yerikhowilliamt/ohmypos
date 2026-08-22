@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { TopProductsView } from './TopProductsView';
 import type { TopProductsResponse } from '@ohmypos/api-contracts';
@@ -10,6 +10,16 @@ vi.mock('@/hooks/useReports', async () => {
   const actual = await vi.importActual('@/hooks/useReports');
   return { ...actual, useTopProducts: vi.fn() };
 });
+
+const exportRowsToXlsx = vi.hoisted(() =>
+  vi.fn<(filename: string, columns: unknown, rows: unknown[]) => Promise<void>>(
+    async () => undefined,
+  ),
+);
+vi.mock('@/lib/export', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/export')>()),
+  exportRowsToXlsx,
+}));
 
 const period = {
   startDate: '2026-08-01',
@@ -64,5 +74,36 @@ describe('TopProductsView component', () => {
     expect(
       screen.getByText('Tidak ada produk terjual pada rentang ini.'),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * Trap 3 (TASK-073). `useTopProducts` is called with `limit: 10` — that is the
+ * DEFINITION of this report, not a pagination truncation. Handing this view an
+ * `exportAll` prop would change what the file means, from "the ten best sellers"
+ * to "the whole catalogue", while every other signal on screen still said top 10.
+ */
+describe('TopProductsView export stays the ranked set', () => {
+  it('exports exactly the ranked rows it renders, with no page walk', async () => {
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      ...withRows.rows[0]!,
+      rank: i + 1,
+      productId: `1111111${i}-1111-4111-8111-111111111111`,
+      productName: `Produk ${i + 1}`,
+    }));
+
+    vi.mocked(useTopProducts).mockReturnValue({
+      data: { ...withRows, rows },
+      isLoading: false,
+    } as unknown as ReturnType<typeof useTopProducts>);
+
+    exportRowsToXlsx.mockClear();
+    render(<TopProductsView filters={filters} enabled />);
+
+    // The button states 10, the report's own limit — not a server total.
+    fireEvent.click(screen.getByRole('button', { name: /export \(10\)/i }));
+
+    await waitFor(() => expect(exportRowsToXlsx).toHaveBeenCalled());
+    expect(exportRowsToXlsx.mock.calls[0]![2]).toHaveLength(10);
   });
 });

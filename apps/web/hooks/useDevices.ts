@@ -51,7 +51,7 @@ export function useDevices() {
   });
 }
 
-export function useAttendanceRecords(params?: AttendanceFilterParams) {
+function buildAttendanceQuery(params?: AttendanceFilterParams): string {
   const query = new URLSearchParams();
   if (params?.search) query.set('search', params.search);
   if (params?.branchId) query.set('branchId', params.branchId);
@@ -62,13 +62,25 @@ export function useAttendanceRecords(params?: AttendanceFilterParams) {
   if (params?.sortOrder) query.set('sortOrder', params.sortOrder);
   if (params?.page) query.set('page', String(params.page));
   if (params?.limit) query.set('limit', String(params.limit));
+  return query.toString();
+}
 
-  const queryString = query.toString();
-  const endpoint = `/devices/attendance${queryString ? `?${queryString}` : ''}`;
+/**
+ * One page, outside React Query — the Export button's `fetchAllPages` loop needs
+ * it (DEBT-048). Shares `buildAttendanceQuery` with the hook so the exported set
+ * can never drift from the one on screen.
+ */
+export function fetchAttendanceRecordsPage(params?: AttendanceFilterParams) {
+  const queryString = buildAttendanceQuery(params);
+  return apiFetch<AttendanceListResponse>(
+    `/devices/attendance${queryString ? `?${queryString}` : ''}`,
+  );
+}
 
+export function useAttendanceRecords(params?: AttendanceFilterParams) {
   return useQuery({
     queryKey: DEVICES_QUERY_KEYS.attendance(params),
-    queryFn: () => apiFetch<AttendanceListResponse>(endpoint),
+    queryFn: () => fetchAttendanceRecordsPage(params),
     // The 30s poll would otherwise drop the reader back to a loading skeleton
     // on whatever page they were reading.
     placeholderData: keepPreviousData,

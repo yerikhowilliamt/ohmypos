@@ -8,7 +8,8 @@ import type {
 } from '@ohmypos/api-contracts';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
-import type { ExportColumn } from '@/lib/export';
+import { rangeSuffix, type ExportColumn } from '@/lib/export';
+import type { ReportFilters } from '@/hooks/useReports';
 import { formatCurrency, formatPercent } from '@/lib/formatters';
 import { formatAccountType, getFlowIndicatorClasses } from '@/lib/vocabulary';
 import { ChartEmptyState, ReportBarChart } from './ReportChart';
@@ -16,6 +17,14 @@ import { ChartEmptyState, ReportBarChart } from './ReportChart';
 interface IncomeByPaymentMethodViewProps {
   data: IncomeByPaymentMethodResponse | undefined;
   isLoading: boolean;
+  /**
+   * The report's own date range, for the export filename (DEBT-025). Without
+   * it the file is named for the day it was exported, so two exports of
+   * different ranges on the same day overwrite each other in Downloads — and
+   * whoever opens the file later has no on-screen context to tell them which
+   * period it covers.
+   */
+  filters: ReportFilters;
 }
 
 const columns: ColumnDef<IncomeByPaymentMethodRow>[] = [
@@ -94,6 +103,7 @@ const exportColumns: ExportColumn<IncomeByPaymentMethodRow>[] = [
 export function IncomeByPaymentMethodView({
   data,
   isLoading,
+  filters,
 }: IncomeByPaymentMethodViewProps) {
   const chartData = React.useMemo(
     () =>
@@ -143,7 +153,7 @@ export function IncomeByPaymentMethodView({
         emptyMessage="Tidak ada data pendapatan"
         emptyDescription="Belum ada transaksi pada rentang tanggal ini."
         exportColumns={exportColumns}
-        exportFilename={`pendapatan-per-metode-bayar_${new Date().toISOString().slice(0, 10)}.xlsx`}
+        exportFilename={`pendapatan-per-metode-bayar_${rangeSuffix(filters.startDate, filters.endDate)}.xlsx`}
       />
     </div>
   );

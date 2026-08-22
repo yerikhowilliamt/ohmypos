@@ -8,6 +8,10 @@ const useStockMovements = vi.fn();
 
 vi.mock('@/hooks/useInventory', () => ({
   useStockMovements: (params: unknown) => useStockMovements(params),
+  fetchStockMovementsPage: vi.fn(async () => ({
+    data: [],
+    meta: { total: 0, page: 1, limit: 100, totalPages: 1 },
+  })),
 }));
 vi.mock('@/hooks/useMasterData', () => ({
   useRawMaterials: () => ({ data: [] }),
@@ -15,7 +19,8 @@ vi.mock('@/hooks/useMasterData', () => ({
 vi.mock('@/hooks/useBranches', () => ({
   useBranches: () => ({ data: [] }),
 }));
-vi.mock('@/lib/export', () => ({
+vi.mock('@/lib/export', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/export')>()),
   exportRowsToXlsx: vi.fn(),
 }));
 

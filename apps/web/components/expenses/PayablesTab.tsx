@@ -27,8 +27,11 @@ import type {
   PayableResponse,
   PayableSortBy,
   PayableStatus,
+  SortOrder,
 } from '@ohmypos/api-contracts';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 import {
+  fetchPayablesPage,
   usePayables,
   usePayablesSummary,
   useSuppliers,
@@ -109,14 +112,35 @@ export function PayablesTab() {
   };
 
   const activeSort = sorting[0];
-  const { data, isLoading } = usePayables({
-    supplierId: supplierId || undefined,
-    status: status || undefined,
-    page,
-    limit,
-    sortBy: toPayableSortBy(activeSort?.id),
-    sortOrder: activeSort?.desc === false ? 'asc' : 'desc',
-  });
+
+  // One object for both the on-screen query and the Export loop. Rebuilding the
+  // filters separately for the export is how the file quietly ends up holding a
+  // different set from the one the operator is looking at.
+  const queryParams = React.useMemo(
+    () => ({
+      supplierId: supplierId || undefined,
+      status: status || undefined,
+      page,
+      limit,
+      sortBy: toPayableSortBy(activeSort?.id),
+      sortOrder: (activeSort?.desc === false ? 'asc' : 'desc') as SortOrder,
+    }),
+    [supplierId, status, page, limit, activeSort?.id, activeSort?.desc],
+  );
+
+  const { data, isLoading } = usePayables(queryParams);
+
+  const exportAll = React.useCallback(
+    () =>
+      fetchAllPages((exportPage, exportLimit) =>
+        fetchPayablesPage({
+          ...queryParams,
+          page: exportPage,
+          limit: exportLimit,
+        }),
+      ),
+    [queryParams],
+  );
   const { data: summary = [] } = usePayablesSummary();
   const suppliersQuery = useSuppliers();
   const payables = data?.data ?? [];
@@ -324,7 +348,11 @@ export function PayablesTab() {
         }}
         emptyMessage="Belum ada utang tercatat."
         exportColumns={exportColumns}
+        // No date-range filter here on purpose: a payable is a state of today,
+        // not a range, so the export-time date IS the right label (DEBT-025).
         exportFilename={`utang-pemasok_${new Date().toISOString().slice(0, 10)}.xlsx`}
+        exportAll={exportAll}
+        exportTotal={paginationMeta.total}
       />
 
       <PayableSettlementDialog

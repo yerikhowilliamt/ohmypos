@@ -24,10 +24,12 @@ import { ApiError } from '@/lib/api';
 import { TRANSACTION_STATUS_LABELS } from '@/lib/vocabulary';
 import { useAccounts } from '@/hooks/useExpenses';
 import {
+  fetchReconciliationTransactionsPage,
   useReconciliationSummary,
   useReconciliationTransactions,
   type ReconciliationFilters,
 } from '@/hooks/useReconciliation';
+import { fetchAllPages } from '@/lib/fetchAllPages';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { BankStatementImportCard } from '@/components/reconciliation/BankStatementImportCard';
 import { BankTransactionsTable } from '@/components/reconciliation/BankTransactionsTable';
@@ -126,6 +128,17 @@ export function ReconciliationClient() {
   const accountsQuery = useAccounts();
   const summaryQuery = useReconciliationSummary(filters);
   const transactionsQuery = useReconciliationTransactions(filters);
+
+  // Closes over the SAME `filters` the table is showing — only page/limit are
+  // overridden. `search` stays in, because unlike the summary query the export
+  // must reflect exactly what is on screen (DEBT-048).
+  const exportAll = React.useCallback(
+    () =>
+      fetchAllPages((page, limit) =>
+        fetchReconciliationTransactionsPage({ ...filters, page, limit }),
+      ),
+    [filters],
+  );
 
   const forbidden = [
     accountsQuery.error,
@@ -248,6 +261,7 @@ export function ReconciliationClient() {
             },
             itemNoun: 'transaksi',
           }}
+          exportAll={exportAll}
         />
       </div>
 

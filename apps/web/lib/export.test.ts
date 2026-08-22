@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildWorkbook, type ExportColumn } from './export';
+import { buildWorkbook, rangeSuffix, type ExportColumn } from './export';
 
 interface Row {
   name: string;
@@ -49,5 +49,43 @@ describe('buildWorkbook', () => {
     const sheet = workbook.getWorksheet('Sheet1');
 
     expect(sheet?.rowCount).toBe(1);
+  });
+});
+
+/**
+ * DEBT-025: the filename is the only period label the person who opens the
+ * file later has — they do not have the screen it was exported from.
+ */
+describe('rangeSuffix', () => {
+  it('names a multi-day range by both ends', () => {
+    expect(rangeSuffix('2026-01-01', '2026-01-31')).toBe(
+      '2026-01-01_sd_2026-01-31',
+    );
+  });
+
+  it('collapses a single-day range to one date', () => {
+    expect(rangeSuffix('2026-01-05', '2026-01-05')).toBe('2026-01-05');
+  });
+
+  it('falls back to the LOCAL date, not the UTC one', () => {
+    // toISOString() would give the UTC date: in WIB (UTC+7) every export
+    // between 00:00 and 07:00 would be named with yesterday's date. Caught in
+    // the TASK-073 browser verification, which ran at 04:00 local.
+    expect(rangeSuffix()).toBe(new Date().toLocaleDateString('sv-SE'));
+  });
+
+  it('falls back to today when no range is given', () => {
+    // Correct for data that IS a state of today (payables, bank transactions)
+    // rather than a range.
+    expect(rangeSuffix()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(rangeSuffix('2026-01-01', undefined)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('distinguishes two different ranges exported on the same day', () => {
+    // The whole defect: both used to be `<report>_<today>.xlsx`, so the second
+    // download silently overwrote the first.
+    expect(rangeSuffix('2026-01-01', '2026-01-31')).not.toBe(
+      rangeSuffix('2026-02-01', '2026-02-28'),
+    );
   });
 });

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -8,6 +8,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 // renderWithClient, so nothing else pulls them in.
 import '@/test/test-utils';
 import { DataTable, SortableHeader } from './data-table';
+import { EXPORT_ROW_CAP, ExportTooLargeError } from '@/lib/fetchAllPages';
 
 interface Row {
   name: string;
@@ -447,5 +448,151 @@ describe('DataTable server-side search', () => {
 
     expect(screen.getByText(/tidak ditemukan data yang cocok/i)).toBeDefined();
     expect(screen.queryByText('Belum ada produk.')).toBeNull();
+  });
+});
+
+/**
+ * Export behaviour (TASK-073, DEBT-048).
+ *
+ * `exportRowsToXlsx` is mocked so these assert WHICH rows reach the workbook,
+ * not what exceljs does with them — that is `lib/export.test.ts`'s job.
+ */
+const exportRowsToXlsx = vi.hoisted(() =>
+  vi.fn<(filename: string, columns: unknown, rows: unknown[]) => Promise<void>>(
+    async () => undefined,
+  ),
+);
+vi.mock('@/lib/export', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/export')>()),
+  exportRowsToXlsx,
+}));
+
+const exportColumns = [{ header: 'Nama', accessor: (row: Row) => row.name }];
+
+const serverPagination = (total: number) => ({
+  meta: { total, page: 1, limit: 25, totalPages: Math.ceil(total / 25) },
+  onPageChange: vi.fn(),
+});
+
+describe('DataTable Export button', () => {
+  beforeEach(() => {
+    exportRowsToXlsx.mockClear();
+  });
+
+  it('exports the rows it holds when no exportAll is supplied', async () => {
+    // The seven client-side tables (reports, inventory summary, top products)
+    // already hold their whole result set. Adding a fetch loop there would only
+    // slow them down — and on TopProductsView it would change what the file
+    // MEANS, from "top 10" to "the whole catalogue".
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        exportColumns={exportColumns}
+        exportFilename="x.xlsx"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    await vi.waitFor(() => expect(exportRowsToXlsx).toHaveBeenCalled());
+    expect(exportRowsToXlsx.mock.calls[0]![2]).toEqual(data);
+  });
+
+  it('exports exportAll’s rows, not the page, when it is supplied', async () => {
+    const allRows: Row[] = [
+      ...data,
+      { name: 'Halaman 2', amount: 1 },
+      { name: 'Halaman 3', amount: 2 },
+    ];
+    const exportAll = vi.fn(async () => allRows);
+
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        exportColumns={exportColumns}
+        exportFilename="x.xlsx"
+        exportAll={exportAll}
+        exportTotal={allRows.length}
+        pagination={serverPagination(allRows.length)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    await vi.waitFor(() => expect(exportRowsToXlsx).toHaveBeenCalled());
+    expect(exportAll).toHaveBeenCalledTimes(1);
+    // Four rows in the file where the table only ever held two.
+    expect(exportRowsToXlsx.mock.calls[0]![2]).toEqual(allRows);
+  });
+
+  it('labels the button with the SERVER total, not the rows on screen', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        exportColumns={exportColumns}
+        exportFilename="x.xlsx"
+        exportAll={vi.fn(async () => [])}
+        exportTotal={1234}
+        pagination={serverPagination(1234)}
+      />,
+    );
+
+    // The count is the whole point of DEBT-048's fix: a partial export can no
+    // longer happen without the number on the button disagreeing with the file.
+    expect(
+      screen.getByRole('button', { name: /export \(1\.234\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('refuses — rather than truncating — a set past the cap', () => {
+    const exportAll = vi.fn(async () => []);
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        exportColumns={exportColumns}
+        exportFilename="x.xlsx"
+        exportAll={exportAll}
+        exportTotal={EXPORT_ROW_CAP + 1}
+        pagination={serverPagination(EXPORT_ROW_CAP + 1)}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: /export/i });
+    expect(button).toBeDisabled();
+
+    fireEvent.click(button);
+    expect(exportAll).not.toHaveBeenCalled();
+    expect(exportRowsToXlsx).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a failed export instead of failing silently', async () => {
+    // Silence here leaves the operator believing the file is in Downloads.
+    const exportAll = vi.fn(async () => {
+      throw new ExportTooLargeError(9999);
+    });
+
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        exportColumns={exportColumns}
+        exportFilename="x.xlsx"
+        exportAll={exportAll}
+        exportTotal={2}
+        pagination={serverPagination(2)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/persempit filter/i);
+    expect(exportRowsToXlsx).not.toHaveBeenCalled();
+    // And the button comes back — a failed export must be retryable.
+    expect(screen.getByRole('button', { name: /export/i })).not.toBeDisabled();
   });
 });
