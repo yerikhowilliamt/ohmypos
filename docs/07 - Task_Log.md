@@ -41,6 +41,29 @@
 
 ## Log
 
+### TASK-071 — Attendance: the month navigator that could not navigate, plus pagination for attendance and leave
+
+- **Date:** 2026-08-22
+- **Module / Phase:** `devices` (attendance) + `leave-requests`, API and web
+- **Objective:** Close DEBT-042 (unpaginated leave requests). Reading the code to do so turned up a correctness defect DEBT-042 does not describe, which became the larger half of the task.
+- **Relevant docs:** ADR-010 (contracts as source of truth), ADR-011 (RoleGuard), Playbook §8, DESIGN.md §22 (colour is never the sole carrier of meaning)
+- **What was done:**
+  - `AttendanceQuerySchema` gained `startDate`/`endDate` (filtering `loginAt`), `page`, `sortBy`, `sortOrder`, and a `limit` ceiling raised 200 → 500; response became `{ data, meta }` via `AttendanceListResponseSchema`.
+  - `LeaveRequestListQuerySchema` gained `overlapsFrom`/`overlapsTo`, paging and sorting; response became `{ data, meta }`.
+  - `AttendanceService.findRecords` and `LeaveRequestsService.findAll` rewritten to filter, page, count and order server-side. Sort keys `userName`, `branchName`, `deviceLabel` resolve through Prisma nested `orderBy`.
+  - `AttendanceCalendarMatrix` now sends the displayed month's bounds; `AttendanceLogTable` gained server paging/sorting and a date-range filter; `OwnerReviewQueue` gained a pager on both tables.
+  - New `apps/api/test/attendance.e2e-spec.ts` (18 assertions); `leave-requests.e2e-spec.ts` extended (5 → 10); new `AttendanceCalendarMatrix.test.tsx` (4 tests).
+- **The defect that was actually there:** `AttendanceQuerySchema` had no date parameter at all, so the endpoint could only answer "the N most recent logins". `AttendanceCalendarMatrix` has a prev/next month navigator, fetched `limit: 200` with no dates, and filtered to the displayed month **client-side**. The month never reached the server. Navigating to an earlier month matched nothing and fell through to `type: 'NONE'` — a blank cell, which on an attendance screen reads as *absent*. A month where everyone worked rendered identically to one where nobody logged in. Reproduced against real data: with 253 logins in the current month, the old-style request (`?limit=200`, no dates) returned rows no older than **5 August** — July was entirely invisible, and so were the first four days of August.
+- **Decisions made during this task:**
+  - Query params for leave are named `overlapsFrom`/`overlapsTo`, **not** `startDate`/`endDate`. The model has columns by those names, so same-named params would read as containment; the filter is an overlap (`startDate <= to AND endDate >= from`) so leave spanning a month boundary belongs to both months.
+  - `limit` max is 500 for attendance (overriding `PaginationQuerySchema`'s 100) so a month fits one page: 8 kasir × 2 logins × 31 days = 496.
+  - A month past that cap renders a visible warning band driven by `meta.total`, agreed with the user before implementation. Silently trimming would have re-created the exact defect being fixed, in a new shape.
+  - `OwnerReviewQueue`'s pending badge now counts `meta.total`, not `data.length` — otherwise it would read "50" while 130 requests waited.
+  - Removed `'userEmail'` from `AttendanceLogTable`'s `searchColumns`: no column has that id, so TanStack threw `[Table] Column with id 'userEmail' does not exist` on every render while contributing nothing. Pre-existing at HEAD; fixed because the file was already in scope. Email search logged as DEBT-052.
+- **Verification:** Sabotage-first on all three new behaviours — swapping `loginAt` → `createdAt` broke 10 of 18 attendance assertions; hardcoding sort direction broke 3; replacing the overlap filter with containment broke exactly the boundary-spanning test; removing the truncation band broke its web test. All restored: 28/28 e2e, 370/370 web, gate 13/13. Browser: July 2026 renders a full month of attendance where it previously rendered blank; the warning band fires at 500-of-805 with days 1–8 visibly empty beneath it; page 3 of 34 survives the 30s refetch with no skeleton; zero clipping and no horizontal overflow in both themes.
+- **Status:** Done
+- **Handoff notes:** Verification used ~830 synthetic attendance rows inserted into the **dev** DB tagged `user_agent = 'TASK071-VERIFY'` and deleted afterwards — dev is back to its original 2 rows. `findMine` on leave requests is deliberately still unpaginated (per-user, self-scoped, small). The matrix still filters to the exact day client-side inside `getDayStatus`; that is now redundant for the month but still correct and guards timezone edges. DEBT-051 records the aggregate-endpoint option (Option C) that was considered and deferred.
+
 ### TASK-070 — Stock Movement history: the read endpoint Phase 4 deferred, and the screen behind Dashboard 5's numbers
 
 - **Date:** 2026-08-22

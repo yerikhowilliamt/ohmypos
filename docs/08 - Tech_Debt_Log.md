@@ -39,6 +39,30 @@
 
 ## Log
 
+### DEBT-052 — Attendance log cannot be searched by employee email
+
+- **Date logged:** 2026-08-22
+- **Found during:** TASK-071 (Attendance date range + pagination)
+- **Description:** `AttendanceLogTable` listed `'userEmail'` in `searchColumns`, but no column has that id — the email is rendered inside the Karyawan cell alongside the name. TanStack therefore threw `[Table] Column with id 'userEmail' does not exist` on every render and the id contributed nothing to filtering. The dead id was removed; email is now genuinely unsearchable rather than apparently-searchable-but-broken.
+- **Why deferred:** Making it work means either a hidden `accessorKey: 'userEmail'` column or converting the Karyawan column to an `accessorFn` that concatenates name and email. The latter changes the column's id, which is now load-bearing for server-side sorting (`sortBy=userName`), so it was not worth the risk inside a task that had just wired that path.
+- **Impact if unaddressed:** An OWNER searching the attendance log by an employee's email address gets no results and no explanation.
+- **Trigger condition:** When DEBT-047 (server-side `search`) is implemented — email belongs in that server-side search term, which removes the need for a client-side column at all.
+- **Proposed resolution:** Fold `userEmail` into the server-side search added by DEBT-047 rather than reintroducing a client-side column.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-051 — Attendance calendar fetches raw logins instead of a server-reduced monthly matrix
+
+- **Date logged:** 2026-08-22
+- **Found during:** TASK-071 (Attendance date range + pagination) — Option C, considered and deferred
+- **Description:** `AttendanceCalendarMatrix` renders one cell per kasir per day, but fetches the month's raw `AttendanceRecord` rows and reduces them client-side in `getDayStatus` (leave beats attendance; any valid login beats a violation). The alternative is a purpose-built `GET /devices/attendance/matrix?month=YYYY-MM` returning the already-reduced cells with leave folded in, making the payload `cashiers × days` regardless of login volume.
+- **Why deferred:** The raw-row payload is bounded by a month and the 500-row page cap, and a month past that cap is now reported on screen rather than silently truncated. The aggregate endpoint would also move presentation precedence into the API, which this repo has kept client-side everywhere else — a real architectural shift to make for a table whose worst case is a few hundred rows.
+- **Impact if unaddressed:** Once a month routinely exceeds 500 logins (roughly 8+ kasir logging in twice a day), the matrix stops showing a complete month and falls back to the warning band. The band is honest, but it is a degraded view, not a working one.
+- **Trigger condition:** When the truncation band starts firing in normal use — i.e. a typical month's `meta.total` exceeds the page cap — or when the matrix is extended past a single month.
+- **Proposed resolution:** Add the aggregate endpoint described above, move the `getDayStatus` precedence rules into it with their own e2e coverage, and drop the matrix's second `useAllLeaveRequests` call.
+- **Priority:** Low
+- **Status:** Open
+
 ### DEBT-050 — Stock movement history has no running-balance column, and no drill-down from the summary
 
 - **Date logged:** 2026-08-22
@@ -257,8 +281,8 @@
 - **Trigger condition:** When total historical leave requests exceed 500 records or table loading latency exceeds 300ms.
 - **Proposed resolution:** Introduce cursor or offset pagination in `LeaveRequestListQuerySchema` and `LeaveRequestsService.findAll`, utilizing TanStack Table / React Query infinite query pagination on the frontend.
 - **Priority:** Low
-- **Status:** Open
-- **Re-flagged 2026-08-22 (Phase 14 gate):** Well under 500 historical requests; trigger has not fired.
+- **Status:** Resolved (2026-08-22, TASK-071) — `LeaveRequestListQuerySchema` gained `page`/`limit`/`sortBy`/`sortOrder` plus an `overlapsFrom`/`overlapsTo` window; `findAll` pages and counts server-side and returns `{ data, meta }`. `OwnerReviewQueue` pages both of its tables, and its pending badge now reads `meta.total` rather than the current page's length. Offset paging, not the cursor/infinite-query option this entry proposed — offset matches the shared `PaginationMetaSchema` every other paged list in the app already uses, and the footer needs a page count.
+- **Re-flagged 2026-08-22 (Phase 14 gate):** Well under 500 historical requests; trigger has not fired. Paid off later the same day anyway: the same contract change was needed to bound the attendance calendar's leave query, which was fetching every approved request in company history to shade one month.
 
 ### DEBT-041 — Accordion animation keyframes omitted and static TypeScript help content
 

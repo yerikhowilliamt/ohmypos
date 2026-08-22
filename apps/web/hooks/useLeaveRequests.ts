@@ -1,16 +1,41 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type {
   CreateLeaveRequest,
-  LeaveRequestListQuery,
+  LeaveRequestListResponse,
   LeaveRequestResponse,
+  LeaveRequestSortBy,
+  LeaveRequestStatus,
+  SortOrder,
 } from '@ohmypos/api-contracts';
 import { apiFetch } from '@/lib/api';
 
+/**
+ * Caller-side shape: every field optional. `LeaveRequestListQuery` is the
+ * schema's *output* type, where `page`/`limit` carry defaults and are therefore
+ * required — the server fills them in, the caller should not have to.
+ */
+export type LeaveRequestFilterParams = {
+  status?: LeaveRequestStatus;
+  userId?: string;
+  /** Overlap window, not containment — see useAllLeaveRequests below. */
+  overlapsFrom?: string;
+  overlapsTo?: string;
+  sortBy?: LeaveRequestSortBy;
+  sortOrder?: SortOrder;
+  page?: number;
+  limit?: number;
+};
+
 export const LEAVE_REQUESTS_QUERY_KEYS = {
   mine: ['leave-requests', 'me'] as const,
-  all: (query: LeaveRequestListQuery) =>
+  all: (query: LeaveRequestFilterParams) =>
     ['leave-requests', 'all', query] as const,
 };
 
@@ -21,16 +46,31 @@ export function useMyLeaveRequests() {
   });
 }
 
-export function useAllLeaveRequests(query: LeaveRequestListQuery = {}) {
+/**
+ * `overlapsFrom`/`overlapsTo` bound the result to leave that *overlaps* the
+ * window, so a request spanning a month boundary belongs to both months. The
+ * calendar matrix uses this instead of pulling every approved request in
+ * company history to shade a single month.
+ */
+export function useAllLeaveRequests(query: LeaveRequestFilterParams = {}) {
   const params = new URLSearchParams();
   if (query.status) params.set('status', query.status);
   if (query.userId) params.set('userId', query.userId);
+  if (query.overlapsFrom) params.set('overlapsFrom', query.overlapsFrom);
+  if (query.overlapsTo) params.set('overlapsTo', query.overlapsTo);
+  if (query.sortBy) params.set('sortBy', query.sortBy);
+  if (query.sortOrder) params.set('sortOrder', query.sortOrder);
+  if (query.page) params.set('page', String(query.page));
+  if (query.limit) params.set('limit', String(query.limit));
   const qs = params.toString();
 
   return useQuery({
     queryKey: LEAVE_REQUESTS_QUERY_KEYS.all(query),
     queryFn: () =>
-      apiFetch<LeaveRequestResponse[]>(`/leave-requests${qs ? `?${qs}` : ''}`),
+      apiFetch<LeaveRequestListResponse>(
+        `/leave-requests${qs ? `?${qs}` : ''}`,
+      ),
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -1,6 +1,9 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import type { LeaveRequestResponse } from '@ohmypos/api-contracts';
+import type {
+  LeaveRequestListResponse,
+  LeaveRequestResponse,
+} from '@ohmypos/api-contracts';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -172,7 +175,10 @@ describe('Leave Requests (e2e)', () => {
       .set('Cookie', owner.cookies)
       .expect(200);
 
-    const list = listRes.body as LeaveRequestResponse[];
+    const listBody = listRes.body as LeaveRequestListResponse;
+    const list = listBody.data;
+    expect(listBody.meta.total).toBeGreaterThanOrEqual(1);
+    expect(listBody.meta.page).toBe(1);
     expect(list.length).toBeGreaterThanOrEqual(1);
     const target = list.find((r) => r.userId === kasir.id);
     expect(target).toBeDefined();
@@ -222,5 +228,146 @@ describe('Leave Requests (e2e)', () => {
     const rejected = rejectRes.body as LeaveRequestResponse;
     expect(rejected.status).toBe('REJECTED');
     expect(rejected.reviewedByUserId).toBeDefined();
+  });
+  describe('pagination, overlap window and sorting', () => {
+    /**
+     * Three requests owned by the kasir, in a month no other test in this file
+     * touches, so the assertions below stay stable as tests are added above.
+     *
+     * `spanning` deliberately straddles the Nov/Dec boundary: it is the fixture
+     * that separates an overlap filter from a containment filter.
+     */
+    let earlyId = '';
+    let spanningId = '';
+    let lateId = '';
+
+    beforeAll(async () => {
+      const early = await prisma.leaveRequest.create({
+        data: {
+          userId: kasir.id,
+          startDate: new Date('2027-11-02'),
+          endDate: new Date('2027-11-04'),
+          reason: 'Window fixture: early November',
+          status: 'APPROVED',
+        },
+      });
+      earlyId = early.id;
+
+      const spanning = await prisma.leaveRequest.create({
+        data: {
+          userId: kasir.id,
+          startDate: new Date('2027-11-28'),
+          endDate: new Date('2027-12-03'),
+          reason: 'Window fixture: spans the month boundary',
+          status: 'APPROVED',
+        },
+      });
+      spanningId = spanning.id;
+
+      const late = await prisma.leaveRequest.create({
+        data: {
+          userId: kasir.id,
+          startDate: new Date('2027-12-20'),
+          endDate: new Date('2027-12-22'),
+          reason: 'Window fixture: late December',
+          status: 'APPROVED',
+        },
+      });
+      lateId = late.id;
+    });
+
+    it('returns a data/meta envelope with a total that counts the whole match, not the page', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/leave-requests?userId=' + kasir.id + '&limit=1&page=1')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const body = res.body as LeaveRequestListResponse;
+      expect(body.data).toHaveLength(1);
+      expect(body.meta.limit).toBe(1);
+      expect(body.meta.total).toBeGreaterThan(1);
+      expect(body.meta.totalPages).toBe(body.meta.total);
+    });
+
+    it('returns disjoint pages', async () => {
+      const q = `/api/v1/leave-requests?userId=${kasir.id}&limit=1&sortBy=startDate&sortOrder=asc`;
+      const first = await request(app.getHttpServer())
+        .get(`${q}&page=1`)
+        .set('Cookie', owner.cookies)
+        .expect(200);
+      const second = await request(app.getHttpServer())
+        .get(`${q}&page=2`)
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const a = (first.body as LeaveRequestListResponse).data[0];
+      const b = (second.body as LeaveRequestListResponse).data[0];
+      expect(a.id).not.toBe(b.id);
+    });
+
+    it('honours sortOrder — asc and desc return different first rows', async () => {
+      const base = `/api/v1/leave-requests?userId=${kasir.id}&sortBy=startDate&limit=1`;
+      const asc = await request(app.getHttpServer())
+        .get(`${base}&sortOrder=asc`)
+        .set('Cookie', owner.cookies)
+        .expect(200);
+      const desc = await request(app.getHttpServer())
+        .get(`${base}&sortOrder=desc`)
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const first = (asc.body as LeaveRequestListResponse).data[0];
+      const last = (desc.body as LeaveRequestListResponse).data[0];
+      expect(first.id).not.toBe(last.id);
+      expect(first.startDate < last.startDate).toBe(true);
+    });
+
+    it('overlaps, not contains: a request spanning the month boundary appears in BOTH months', async () => {
+      const november = await request(app.getHttpServer())
+        .get(
+          `/api/v1/leave-requests?userId=${kasir.id}&overlapsFrom=2027-11-01&overlapsTo=2027-11-30`,
+        )
+        .set('Cookie', owner.cookies)
+        .expect(200);
+      const novemberIds = (november.body as LeaveRequestListResponse).data.map(
+        (r) => r.id,
+      );
+
+      const december = await request(app.getHttpServer())
+        .get(
+          `/api/v1/leave-requests?userId=${kasir.id}&overlapsFrom=2027-12-01&overlapsTo=2027-12-31`,
+        )
+        .set('Cookie', owner.cookies)
+        .expect(200);
+      const decemberIds = (december.body as LeaveRequestListResponse).data.map(
+        (r) => r.id,
+      );
+
+      // The spanning request starts in November and ends in December, so it is
+      // part of both months. A gte/lte on startDate alone would put it only in
+      // November and silently drop it from the December calendar.
+      expect(novemberIds).toContain(spanningId);
+      expect(decemberIds).toContain(spanningId);
+
+      // ...and the window still excludes what genuinely falls outside it.
+      expect(novemberIds).toContain(earlyId);
+      expect(novemberIds).not.toContain(lateId);
+      expect(decemberIds).toContain(lateId);
+      expect(decemberIds).not.toContain(earlyId);
+    });
+
+    it('reports totalPages 1 for an empty result rather than 0', async () => {
+      const res = await request(app.getHttpServer())
+        .get(
+          `/api/v1/leave-requests?userId=${kasir.id}&overlapsFrom=2035-01-01&overlapsTo=2035-01-31`,
+        )
+        .set('Cookie', owner.cookies)
+        .expect(200);
+
+      const body = res.body as LeaveRequestListResponse;
+      expect(body.data).toHaveLength(0);
+      expect(body.meta.total).toBe(0);
+      expect(body.meta.totalPages).toBe(1);
+    });
   });
 });

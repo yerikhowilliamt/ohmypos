@@ -179,7 +179,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <CardTitle className="text-base">
             Daftar Transaksi Perlu Dicocokkan

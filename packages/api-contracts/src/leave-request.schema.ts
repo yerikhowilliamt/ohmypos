@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { UuidString } from './primitives';
+import {
+  PaginationMetaSchema,
+  PaginationQuerySchema,
+  SortOrderSchema,
+} from './pagination.schema';
 
 /** `YYYY-MM-DD`, same convention as ReportRangeQuerySchema's ReportDate. */
 const LeaveDate = z.iso.date();
@@ -19,9 +24,29 @@ export const CreateLeaveRequestSchema = z
   });
 export type CreateLeaveRequest = z.infer<typeof CreateLeaveRequestSchema>;
 
-export const LeaveRequestListQuerySchema = z.object({
+export const LeaveRequestSortBySchema = z.enum([
+  'createdAt',
+  'startDate',
+  'endDate',
+  'status',
+]);
+export type LeaveRequestSortBy = z.infer<typeof LeaveRequestSortBySchema>;
+
+/**
+ * `overlapsFrom`/`overlapsTo` are deliberately NOT named `startDate`/`endDate`:
+ * a leave request has columns by those names, so same-named query params would
+ * read as "requests whose startDate falls in this window" — which is the wrong
+ * test. A leave running 28 Feb to 3 Mar belongs to both months, so the filter is
+ * an overlap (`startDate <= overlapsTo AND endDate >= overlapsFrom`), not
+ * containment. The distinct names make that impossible to misread at a call site.
+ */
+export const LeaveRequestListQuerySchema = PaginationQuerySchema.extend({
   status: LeaveRequestStatus.optional(),
   userId: UuidString.optional(),
+  overlapsFrom: LeaveDate.optional(),
+  overlapsTo: LeaveDate.optional(),
+  sortBy: LeaveRequestSortBySchema.optional(),
+  sortOrder: SortOrderSchema.optional(),
 });
 export type LeaveRequestListQuery = z.infer<typeof LeaveRequestListQuerySchema>;
 
@@ -48,3 +73,11 @@ export const LeaveRequestResponseSchema = z.object({
   updatedAt: z.date().or(z.string()),
 });
 export type LeaveRequestResponse = z.infer<typeof LeaveRequestResponseSchema>;
+
+export const LeaveRequestListResponseSchema = z.object({
+  data: z.array(LeaveRequestResponseSchema),
+  meta: PaginationMetaSchema,
+});
+export type LeaveRequestListResponse = z.infer<
+  typeof LeaveRequestListResponseSchema
+>;

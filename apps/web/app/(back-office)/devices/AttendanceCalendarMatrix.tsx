@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   CalendarCheck,
   Download,
+  TriangleAlert,
 } from 'lucide-react';
 import type { BranchResponse, UserResponse } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
@@ -40,6 +41,13 @@ const STATUS_LABELS: Record<'VALID' | 'VIOLATION' | 'LEAVE' | 'NONE', string> =
 interface AttendanceCalendarMatrixProps {
   branches: BranchResponse[];
 }
+
+/**
+ * One page big enough to hold a whole month of logins: 8 kasir x 2 logins x 31
+ * days = 496. Matches the `limit` ceiling on AttendanceQuerySchema. A month
+ * past this is reported on screen, never silently trimmed.
+ */
+const MATRIX_PAGE_LIMIT = 500;
 
 const MONTH_NAMES = [
   'Januari',
@@ -85,18 +93,62 @@ export function AttendanceCalendarMatrix({
     );
   }, [allUsers, selectedBranchId]);
 
-  // Fetch attendance records
-  const { data: attendanceRecords = [], isLoading: isAttendanceLoading } =
+  /**
+   * The bounds of the month on screen, in local time. `endOfMonth` is the last
+   * day at 23:59:59.999 rather than midnight — a midnight bound would drop
+   * every login on the final day of every month.
+   *
+   * These are what makes the prev/next buttons above actually navigate. Before
+   * they were sent, the query fetched the 200 most recent logins globally and
+   * this component filtered them to `month` client-side, so any month older
+   * than those 200 rows spanned rendered every cell blank — which on this
+   * screen reads as "nobody came to work".
+   */
+  const { startOfMonth, endOfMonth, monthStartDay, monthEndDay } =
+    React.useMemo(() => {
+      const start = new Date(year, month, 1, 0, 0, 0, 0);
+      const end = new Date(year, month + 1, 0, 23, 59, 59, 999);
+      const asDay = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return {
+        startOfMonth: start.toISOString(),
+        endOfMonth: end.toISOString(),
+        monthStartDay: asDay(start),
+        monthEndDay: asDay(end),
+      };
+    }, [year, month]);
+
+  // Fetch attendance records for the displayed month only.
+  const { data: attendancePage, isLoading: isAttendanceLoading } =
     useAttendanceRecords({
       branchId: selectedBranchId === 'ALL' ? undefined : selectedBranchId,
-      limit: 200,
+      startDate: startOfMonth,
+      endDate: endOfMonth,
+      limit: MATRIX_PAGE_LIMIT,
     });
+  const attendanceRecords = React.useMemo(
+    () => attendancePage?.data ?? [],
+    [attendancePage],
+  );
+  /**
+   * A month bigger than one page must say so. Silently rendering the rows that
+   * fit would blank the rest of the cells, and a blank cell here is not "not
+   * loaded" — it is "absent". That is the exact defect this task removed, so it
+   * is not allowed back in a new shape.
+   */
+  const omittedCount = Math.max(
+    0,
+    (attendancePage?.meta.total ?? 0) - attendanceRecords.length,
+  );
 
-  // Fetch approved leave requests
-  const { data: leaveRequests = [], isLoading: isLeavesLoading } =
-    useAllLeaveRequests({
-      status: 'APPROVED',
-    });
+  // Fetch approved leave overlapping the displayed month.
+  const { data: leavePage, isLoading: isLeavesLoading } = useAllLeaveRequests({
+    status: 'APPROVED',
+    overlapsFrom: monthStartDay,
+    overlapsTo: monthEndDay,
+    limit: MATRIX_PAGE_LIMIT,
+  });
+  const leaveRequests = React.useMemo(() => leavePage?.data ?? [], [leavePage]);
 
   const isLoading = isUsersLoading || isAttendanceLoading || isLeavesLoading;
 
@@ -258,6 +310,26 @@ export function AttendanceCalendarMatrix({
           </Button>
         </div>
       </div>
+
+      {omittedCount > 0 ? (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2.5 text-xs text-text-primary"
+        >
+          <TriangleAlert
+            className="size-4 shrink-0 text-status-warning mt-px"
+            aria-hidden="true"
+          />
+          <span>
+            Menampilkan {attendanceRecords.length.toLocaleString('id-ID')} dari{' '}
+            {(attendancePage?.meta.total ?? 0).toLocaleString('id-ID')} log
+            login bulan ini.{' '}
+            <strong>{omittedCount.toLocaleString('id-ID')}</strong> log belum
+            termuat, jadi sebagian sel kosong di bawah bisa jadi bukan
+            ketidakhadiran. Persempit dengan filter cabang.
+          </span>
+        </div>
+      ) : null}
 
       {/* Legend Bar */}
       <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-text-secondary">
