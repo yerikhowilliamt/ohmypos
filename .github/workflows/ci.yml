@@ -96,6 +96,7 @@ jobs:
       DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/ohmypos_db?schema=public'
       PORT: 4015
       NODE_ENV: test
+      THROTTLE_LIMIT: 1000
       CORS_ORIGIN: 'http://localhost:3001'
       # Throwaway CI-only values — this Postgres and these tokens live only
       # for the duration of this job, so there's nothing sensitive to protect.
