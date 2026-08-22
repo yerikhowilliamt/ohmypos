@@ -21,8 +21,39 @@
  * signed correction rather than a physical arrival or consumption.
  */
 import { Injectable } from '@nestjs/common';
+import type { StockMovementResponse } from '@ohmypos/api-contracts';
 import { Prisma } from '../../generated/prisma/client';
+import { PrismaService } from '../../common/prisma/prisma.service';
+import { StockMovementQueryDto } from './stock-movements.dto';
 import { assertSufficientStock } from './stock.rules';
+
+type StockMovementWithRelations = Prisma.StockMovementGetPayload<{
+  include: { rawMaterial: true; branch: true };
+}>;
+
+/**
+ * Decimals cross the wire as strings (ADR-010 / MoneyString, QuantityString) —
+ * never as JS numbers, which would round a Decimal(18,4) quantity silently.
+ */
+function toStockMovementResponse(
+  m: StockMovementWithRelations,
+): StockMovementResponse {
+  return {
+    id: m.id,
+    rawMaterialId: m.rawMaterialId,
+    rawMaterialName: m.rawMaterial.name,
+    rawMaterialUnit: m.rawMaterial.unit,
+    branchId: m.branchId,
+    branchName: m.branch?.name ?? null,
+    direction: m.direction,
+    quantity: m.quantity.toString(),
+    referenceType: m.referenceType,
+    referenceId: m.referenceId,
+    unitCostAtMovement: m.unitCostAtMovement.toString(),
+    movementDate: m.movementDate.toISOString(),
+    createdAt: m.createdAt.toISOString(),
+  };
+}
 
 export interface InboundStockLine {
   rawMaterialId: string;
@@ -75,6 +106,79 @@ export interface OpeningStockInput {
 
 @Injectable()
 export class StockMovementsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * The READ half of this module (TASK-070), and deliberately the ONLY method
+   * here that uses `this.prisma` instead of taking the caller's `tx`: it is a
+   * query, not a participant in anyone's transaction boundary. The three
+   * `apply*` methods below must keep taking `tx` — see the file header.
+   */
+  async findAll(query: StockMovementQueryDto) {
+    const {
+      page = 1,
+      limit = 50,
+      sortBy,
+      sortOrder = 'desc',
+      rawMaterialId,
+      branchId,
+      direction,
+      referenceType,
+      startDate,
+      endDate,
+    } = query;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.StockMovementWhereInput = {
+      ...(rawMaterialId && { rawMaterialId }),
+      ...(branchId && { branchId }),
+      ...(direction && { direction }),
+      ...(referenceType && { referenceType }),
+      // `movementDate`, NOT `createdAt`: applyOpening stamps movementDate with
+      // the period start, so a stock-take entered on the 5th belongs to the 1st.
+      // Filtering createdAt would hide it from a search for its own period.
+      ...((startDate || endDate) && {
+        movementDate: {
+          ...(startDate && { gte: new Date(startDate) }),
+          ...(endDate && { lte: new Date(endDate) }),
+        },
+      }),
+    };
+
+    // `rawMaterialName` is the one sort key that is not a StockMovement column
+    // — same nested-orderBy shape as `supplierName` in PayablesService.
+    const orderBy: Prisma.StockMovementOrderByWithRelationInput =
+      sortBy === 'rawMaterialName'
+        ? { rawMaterial: { name: sortOrder } }
+        : { [sortBy ?? 'movementDate']: sortOrder };
+
+    const [data, total] = await Promise.all([
+      this.prisma.stockMovement.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+        // `branch` is a NULLABLE relation and Prisma's include left-joins it, so
+        // central rows (every OPENING, every central purchase) come back with
+        // branch: null rather than being dropped. That is most of this table.
+        include: { rawMaterial: true, branch: true },
+      }),
+      this.prisma.stockMovement.count({ where }),
+    ]);
+
+    return {
+      data: (data as StockMovementWithRelations[]).map(toStockMovementResponse),
+      meta: {
+        total,
+        page,
+        limit,
+        // `|| 1` — an empty result is still one (empty) page. Reporting 0 here
+        // is the bug TASK-068 fixed in ReconciliationService.
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  }
+
   /**
    * The ONE place raw-material locks are taken, in the ONE order every flow
    * uses (ADR-016). Ascending rawMaterialId: two transactions touching {A,B}

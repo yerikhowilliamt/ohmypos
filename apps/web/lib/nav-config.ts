@@ -104,7 +104,15 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
         { href: '/expenses/payables', label: 'Utang' },
       ],
     },
-    { href: '/inventory', label: 'Inventaris', icon: Boxes },
+    {
+      href: '/inventory',
+      label: 'Inventaris',
+      icon: Boxes,
+      children: [
+        { href: '/inventory', label: 'Ringkasan & Stok Awal' },
+        { href: '/inventory/movements', label: 'Riwayat Pergerakan' },
+      ],
+    },
     {
       href: '/reports',
       label: 'Laporan',
