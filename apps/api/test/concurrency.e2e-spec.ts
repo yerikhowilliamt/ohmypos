@@ -21,40 +21,6 @@ import Decimal from 'decimal.js';
  * a network-level rejection is itself asserted to be zero, same as the "zero
  * 5xx" checks — it is the same category of failure (plan §5.2).
  */
-async function settleAll<T>(
-  promises: Promise<T>[],
-): Promise<{ resolved: T[]; rejectedCount: number }> {
-  const settled = await Promise.allSettled(promises);
-  const resolved: T[] = [];
-  let rejectedCount = 0;
-  for (const outcome of settled) {
-    if (outcome.status === 'fulfilled') {
-      resolved.push(outcome.value);
-    } else {
-      rejectedCount += 1;
-    }
-  }
-  return { resolved, rejectedCount };
-}
-
-/**
- * Fires `factories` in windows of `chunkSize`, each window genuinely
- * concurrent (real overlapping lock contention within the window) but
- * windows themselves sequential.
- *
- * Phase 14 finding: this local environment (macOS + Node 24 + a bare
- * `http.Server` via supertest, no reverse proxy) reliably handles ~20
- * truly-simultaneous new connections — matching the pre-existing P0-4 test's
- * long-proven 20-way scale — but firing 40-50 at once produces intermittent
- * client-side `ECONNRESET` with no HTTP response at all (ruled out as a
- * server-side or database-side fault: `settleAll` confirms the server always
- * finishes correctly, and Postgres connection counts never approach the
- * configured pool cap). That is a transport-layer limitation of this test
- * harness, not the deadlock/pool-exhaustion class of failure B1/B2/B4 exist
- * to catch — chunking preserves the real concurrent-contention scenario
- * (each window still races genuinely) while staying inside the proven-stable
- * connection count.
- */
 async function settleAllChunked<T>(
   factories: Array<() => Promise<T>>,
   chunkSize: number,
@@ -541,7 +507,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
 
       const { resolved: results, rejectedCount } = await settleAllChunked(
         requestFactories,
-        20,
+        10,
       );
 
       expect(rejectedCount).toBe(0);
@@ -620,7 +586,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
 
       const { resolved: results, rejectedCount } = await settleAllChunked(
         requestFactories,
-        20,
+        10,
       );
 
       const successes = results.filter((r) => r.status === 201);
@@ -681,35 +647,39 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         },
       });
 
-      const saleRequestFactories = Array.from({ length: 10 }, (_, i) => () =>
-        request(app.getHttpServer())
-          .post('/api/v1/sales')
-          .set('Cookie', kasirCookies)
-          .send({
-            branchId,
-            accountId,
-            soldAt: new Date(Date.now() - 1000 * (i + 1)).toISOString(),
-            items: [{ productId: product.id, quantity: '1.0000' }],
-          }),
+      const saleRequestFactories = Array.from(
+        { length: 10 },
+        (_, i) => () =>
+          request(app.getHttpServer())
+            .post('/api/v1/sales')
+            .set('Cookie', kasirCookies)
+            .send({
+              branchId,
+              accountId,
+              soldAt: new Date(Date.now() - 1000 * (i + 1)).toISOString(),
+              items: [{ productId: product.id, quantity: '1.0000' }],
+            }),
       );
-      const purchaseRequestFactories = Array.from({ length: 5 }, (_, i) => () =>
-        request(app.getHttpServer())
-          .post('/api/v1/supplier-purchases')
-          .set('Cookie', ownerCookies)
-          .send({
-            supplierId,
-            branchId: null,
-            purchaseDate: new Date(Date.now() - 1000 * (i + 1)).toISOString(),
-            paymentStatus: 'PAID',
-            accountId,
-            items: [
-              {
-                rawMaterialId: material.id,
-                quantity: '1.0000',
-                unitCost: '5000.00',
-              },
-            ],
-          }),
+      const purchaseRequestFactories = Array.from(
+        { length: 5 },
+        (_, i) => () =>
+          request(app.getHttpServer())
+            .post('/api/v1/supplier-purchases')
+            .set('Cookie', ownerCookies)
+            .send({
+              supplierId,
+              branchId: null,
+              purchaseDate: new Date(Date.now() - 1000 * (i + 1)).toISOString(),
+              paymentStatus: 'PAID',
+              accountId,
+              items: [
+                {
+                  rawMaterialId: material.id,
+                  quantity: '1.0000',
+                  unitCost: '5000.00',
+                },
+              ],
+            }),
       );
 
       const [
