@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { OWNER_STATE } from './auth.setup';
+import { OWNER_STATE } from './fixtures';
 
 test('OWNER can create a raw material', async ({ browser }) => {
   const context = await browser.newContext({ storageState: OWNER_STATE });

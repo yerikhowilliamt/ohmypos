@@ -5,12 +5,14 @@
  * the login throttle (10 req/60 s on /auth/login).
  */
 import { test as setup } from '@playwright/test';
-import path from 'path';
-import { OWNER_CREDS, ADMIN_CREDS, KASIR_CREDS } from './fixtures';
-
-export const OWNER_STATE = path.join(__dirname, '.auth/owner.json');
-export const ADMIN_STATE = path.join(__dirname, '.auth/admin.json');
-export const KASIR_STATE = path.join(__dirname, '.auth/kasir.json');
+import {
+  OWNER_CREDS,
+  ADMIN_CREDS,
+  KASIR_CREDS,
+  OWNER_STATE,
+  ADMIN_STATE,
+  KASIR_STATE,
+} from './fixtures';
 
 async function saveSession(
   page: import('@playwright/test').Page,

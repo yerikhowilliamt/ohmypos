@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { KASIR_STATE } from './auth.setup';
+import { KASIR_STATE } from './fixtures';
 
 test('KASIR is redirected away from /master-data', async ({ browser }) => {
   const context = await browser.newContext({ storageState: KASIR_STATE });

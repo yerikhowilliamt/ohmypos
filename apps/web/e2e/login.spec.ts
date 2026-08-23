@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { OWNER_STATE, ADMIN_STATE, KASIR_STATE } from './auth.setup';
+import { OWNER_STATE, ADMIN_STATE, KASIR_STATE } from './fixtures';
 
 test('OWNER can login and lands on dashboard', async ({ browser }) => {
   const context = await browser.newContext({ storageState: OWNER_STATE });
