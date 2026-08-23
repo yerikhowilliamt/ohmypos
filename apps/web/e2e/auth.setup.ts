@@ -4,7 +4,7 @@
  * storageState file so individual tests can reuse sessions without hitting
  * the login throttle (10 req/60 s on /auth/login).
  */
-import { test as setup, expect } from '@playwright/test';
+import { test as setup } from '@playwright/test';
 import path from 'path';
 import { OWNER_CREDS, ADMIN_CREDS, KASIR_CREDS } from './fixtures';
 

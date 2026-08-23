@@ -16,8 +16,12 @@ test('OWNER can create a raw material', async ({ browser }) => {
   await page.locator('input#rm-cost').fill('10000');
   await page.locator('input#rm-threshold').fill('5');
   // Submit — click the dialog's own submit button (not the page header one)
-  await page.locator('[role="dialog"] button:has-text("Tambah Bahan Baku")').click();
+  await page
+    .locator('[role="dialog"] button:has-text("Tambah Bahan Baku")')
+    .click();
   // Verify the new row appears
-  await expect(page.locator(`text=PW Bahan ${ts}`)).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(`text=PW Bahan ${ts}`)).toBeVisible({
+    timeout: 10000,
+  });
   await context.close();
 });
