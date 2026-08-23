@@ -51,3 +51,6 @@ docs/reports/
 docs/e-statement/
 
 .agents/
+
+# db dump files — never commit (see docs/runbooks/backup-restore.md)
+backups/

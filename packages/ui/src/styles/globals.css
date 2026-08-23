@@ -20,26 +20,17 @@
 
   /* Luxury Display / Heading typography */
   --font-serif:
-    var(--font-cormorant-garamond, 'Cormorant Garamond'),
-    'Cinzel',
-    'Playfair Display',
-    ui-serif,
-    Georgia,
-    serif;
+    var(--font-cormorant-garamond, 'Cormorant Garamond'), 'Cinzel',
+    'Playfair Display', ui-serif, Georgia, serif;
 
   /* UI typography */
   --font-sans:
-    var(--font-plus-jakarta, 'Plus Jakarta Sans'),
-    'Plus Jakarta Sans Fallback',
-    ui-sans-serif,
-    system-ui,
-    sans-serif;
+    var(--font-plus-jakarta, 'Plus Jakarta Sans'), 'Plus Jakarta Sans Fallback',
+    ui-sans-serif, system-ui, sans-serif;
 
   /* Numeric / financial data */
   --font-mono:
-    var(--font-jetbrains-mono, 'JetBrains Mono'),
-    ui-monospace,
-    SFMono-Regular,
+    var(--font-jetbrains-mono, 'JetBrains Mono'), ui-monospace, SFMono-Regular,
     monospace;
 
   --text-xs: 11px;
@@ -50,7 +41,6 @@
   --text-2xl: 24px;
   --text-3xl: 30px;
 
-
   /* ============================================================
    * Brand
    *
@@ -60,16 +50,15 @@
    * Tertiary  — Deep Slate (#1E293B)
    * ============================================================ */
 
-  --color-brand-primary: #C5A880;
-  --color-brand-primary-hover: #B3936A;
-  --color-brand-secondary: #A37D4E;
-  --color-brand-tertiary: #1E293B;
+  --color-brand-primary: #c5a880;
+  --color-brand-primary-hover: #b3936a;
+  --color-brand-secondary: #a37d4e;
+  --color-brand-tertiary: #1e293b;
 
   /* Soft luxury surfaces */
-  --color-brand-primary-soft: #F7F2EA;
-  --color-brand-secondary-soft: #F5EDE4;
-  --color-brand-tertiary-soft: #F1F5F9;
-
+  --color-brand-primary-soft: #f7f2ea;
+  --color-brand-secondary-soft: #f5ede4;
+  --color-brand-tertiary-soft: #f1f5f9;
 
   /* ============================================================
    * Financial Accents (Jewel Tones)
@@ -78,102 +67,96 @@
    * ============================================================ */
 
   --color-accent-inflow: #166534;
-  --color-accent-inflow-soft: #ECFDF5;
-  --color-accent-outflow: #9F1239;
-  --color-accent-outflow-soft: #FFF1F2;
-
+  --color-accent-inflow-soft: #ecfdf5;
+  --color-accent-outflow: #9f1239;
+  --color-accent-outflow-soft: #fff1f2;
 
   /* ============================================================
    * Text
    * ============================================================ */
 
-  --color-text-primary: #18181B;
-  --color-text-secondary: #52525B;
-  --color-text-tertiary: #8C827A;
-  --color-text-inverse: #FFFFFF;
-  --color-text-gold: #C5A880;
-
+  --color-text-primary: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-tertiary: #8c827a;
+  --color-text-inverse: #ffffff;
+  --color-text-gold: #c5a880;
 
   /* ============================================================
    * Surface
    * ============================================================ */
 
-  --color-surface-base: #FBF9F5;
-  --color-surface-muted: #F4EFEB;
-  --color-surface-raised: #FFFFFF;
+  --color-surface-base: #fbf9f5;
+  --color-surface-muted: #f4efeb;
+  --color-surface-raised: #ffffff;
 
   /*
    * Strong surface is reserved for highlighted / selected states.
    * Soft warm champagne tint.
    */
-  --color-surface-strong: #F7F2EA;
+  --color-surface-strong: #f7f2ea;
 
-  --color-surface-dark: #12151B;
-  --color-surface-dark-raised: #1A1E26;
-
+  --color-surface-dark: #12151b;
+  --color-surface-dark-raised: #1a1e26;
 
   /* ============================================================
    * Border
    * ============================================================ */
 
-  --color-border-default: #EAE4DC;
-  --color-border-strong: #D6CDBF;
-  --color-border-gold: #C5A880;
-
+  --color-border-default: #eae4dc;
+  --color-border-strong: #d6cdbf;
+  --color-border-gold: #c5a880;
 
   /* ============================================================
    * Status
    * ============================================================ */
 
-  --color-status-success: #15803D;
-  --color-status-warning: #B45309;
-  --color-status-danger: #B91C1C;
+  --color-status-success: #15803d;
+  --color-status-warning: #b45309;
+  --color-status-danger: #b91c1c;
   --color-status-info: #475569;
-
 
   /* ============================================================
    * Shadcn / Semantic Theme
    * ============================================================ */
 
   /* Primary */
-  --color-primary: #C5A880;
-  --color-primary-foreground: #FFFFFF;
+  --color-primary: #c5a880;
+  --color-primary-foreground: #ffffff;
 
   /* Secondary surface */
-  --color-secondary: #F4EFEB;
-  --color-secondary-foreground: #18181B;
+  --color-secondary: #f4efeb;
+  --color-secondary-foreground: #18181b;
 
   /* Muted */
-  --color-muted: #F4EFEB;
-  --color-muted-foreground: #8C827A;
+  --color-muted: #f4efeb;
+  --color-muted-foreground: #8c827a;
 
   /* Accent */
-  --color-accent: #F7F2EA;
-  --color-accent-foreground: #18181B;
+  --color-accent: #f7f2ea;
+  --color-accent-foreground: #18181b;
 
   /* Destructive */
-  --color-destructive: #B91C1C;
-  --color-destructive-foreground: #FFFFFF;
+  --color-destructive: #b91c1c;
+  --color-destructive-foreground: #ffffff;
 
   /* Card */
-  --color-card: #FFFFFF;
-  --color-card-foreground: #18181B;
+  --color-card: #ffffff;
+  --color-card-foreground: #18181b;
 
   /* Popover */
-  --color-popover: #FFFFFF;
-  --color-popover-foreground: #18181B;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #18181b;
 
   /* Borders / inputs */
-  --color-border: #EAE4DC;
-  --color-input: #EAE4DC;
+  --color-border: #eae4dc;
+  --color-input: #eae4dc;
 
   /* Focus ring */
   --color-ring: rgba(197, 168, 128, 0.45);
 
   /* Background / foreground */
-  --color-background: #FBF9F5;
-  --color-foreground: #18181B;
-
+  --color-background: #fbf9f5;
+  --color-foreground: #18181b;
 
   /* ============================================================
    * Shadcn Sidebar (ui.shadcn.com/docs/components/sidebar)
@@ -193,7 +176,6 @@
   --color-sidebar-border: var(--color-border-default);
   --color-sidebar-ring: var(--color-focus-ring);
 
-
   /* ============================================================
    * Spacing
    * ============================================================ */
@@ -207,7 +189,6 @@
   --spacing-7: 40px;
   --spacing-8: 48px;
 
-
   /* ============================================================
    * Refined Micro-Radius (Architecture / Luxury)
    * ============================================================ */
@@ -219,17 +200,13 @@
   --radius-xl: 12px;
   --radius-pill: 9999px;
 
-
   /* ============================================================
    * Hairline & Ambient Shadows
    * ============================================================ */
 
-  --shadow-1:
-    0px 1px 2px 0px rgba(24, 24, 27, 0.04);
+  --shadow-1: 0px 1px 2px 0px rgba(24, 24, 27, 0.04);
 
-  --shadow-2:
-    0px 4px 16px -2px rgba(24, 24, 27, 0.08);
-
+  --shadow-2: 0px 4px 16px -2px rgba(24, 24, 27, 0.08);
 
   /* ============================================================
    * Motion
@@ -271,7 +248,6 @@
     animation: collapsible-up 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
-
 
 /* ==============================================================
  * Root
@@ -370,7 +346,6 @@
   --shadow-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
   --shadow-2: 0px 4px 16px -2px rgba(0, 0, 0, 0.45);
 }
-
 
 /* ==============================================================
  * Base

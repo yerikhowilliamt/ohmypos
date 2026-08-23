@@ -63,7 +63,11 @@ export interface InboundStockLine {
 
 export interface InboundStockInput {
   branchId: string | null;
-  referenceType: 'PURCHASE';
+  // 'SALE' added for DEBT-010: a sale void reverses its own outbound
+  // movement via applyInbound, reusing the SALE reference type rather than
+  // adding a dedicated one — nothing sums StockMovement by referenceType the
+  // way LedgerEntry is summed by sourceType, so the reuse is safe here.
+  referenceType: 'PURCHASE' | 'SALE';
   referenceId: string;
   movementDate: Date;
   lines: InboundStockLine[];

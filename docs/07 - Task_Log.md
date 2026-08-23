@@ -41,12 +41,29 @@
 
 ## Log
 
+### TASK-106 to TASK-112 — Void Sale frontend, button contrast fix, Sentry APM, Playwright CI, DEBT-047 mitigation, backup runbook
+
+- **Date:** 2026-08-23
+- **Module / Phase:** `apps/web` (POS void UI, e2e fixtures, Sentry), `apps/api` (Sentry), `packages/ui` (button contrast), `scripts/` (backup/restore), `.github/workflows/ci.yml` (CI retry + e2e job)
+- **Objective:** Ship six remaining plan items in one session: frontend void sale UI (DEBT-010 frontend piece), button contrast fix (DEBT-028), Sentry APM instrumentation (Plan §8), Playwright CI job (Plan §9), DEBT-047 flaky-CI mitigation (Plan §6), and the backup/restore runbook (Plan §7).
+- **Relevant docs:** DEBT-010, DEBT-028, DEBT-047, Engineering Playbook §7–§9, ADR-011 (role guards), System Design v4 §5 (KASIR/ADMIN/OWNER access), `docs/plannings/2026-08-23-roadmap-sisa-pekerjaan.md` (gitignored), `.agents/skills/e2e-playwright/SKILL.md`
+- **What was done:**
+  - **TASK-106 (Void Sale frontend — DEBT-010):** `apps/web/hooks/usePos.ts`: added `useVoidSale()` mutation calling `POST /sales/:id/void`; on success invalidates `['sales']`, raw-material, and product caches. `apps/web/components/pos/SalesHistoryTable.tsx`: added voided status badge ("Dibatalkan") with muted/line-through styling, ADMIN/OWNER-only "Batalkan" button, 30-minute disabled state with `title` tooltip, irreversible confirmation `Dialog` (warns: stok dikembalikan, kas dikurangi), success/error `Alert` feedback using existing `@ohmypos/ui/components/alert`. `apps/web/app/(pos)/sales/history/SalesHistoryClient.tsx`: passes `userRole={user.role}` to `SalesHistoryTable`. Tests: 5 new cases in `SalesHistoryTable.test.tsx` (role visibility, disabled window, voided badge, dialog open), updated `useVoidSale` mock in `SalesHistoryClient.search.test.tsx`. Closes DEBT-010 frontend piece.
+  - **TASK-107 (Button contrast — DEBT-028):** `packages/ui/src/components/ui/button.tsx` default variant: `text-white` changed to `text-text-primary dark:text-[#18181B]`. Contrast ratio ~8.9:1 (was ~2.1:1 white-on-gold). Closes DEBT-028.
+  - **TASK-108 (Sentry APM — Plan §8):** `@sentry/nestjs` added to `apps/api`, `@sentry/nextjs` added to `apps/web`. `apps/api/src/app.module.ts`: `SENTRY_DSN: z.string().url().optional()` added to `EnvSchema`. `apps/api/src/main.ts`: `Sentry.init()` called before app creation; no-op when `SENTRY_DSN` unset. `apps/web`: `instrumentation.ts`, `sentry.server.config.ts`, `sentry.client.config.ts`, `sentry.edge.config.ts` created. `next.config.ts` wrapped with `withSentryConfig` (tunnel option `/monitoring-tunnel`). `pnpm-workspace.yaml`: `@sentry/cli: true` added to `allowBuilds`. Zero behavior change when `SENTRY_DSN` is absent. Closes Plan §8.
+  - **TASK-109 (Playwright CI — Plan §9):** `@playwright/test` added as devDependency to `apps/web`. Created `apps/web/playwright.config.ts`, `apps/web/e2e/fixtures.ts`, `apps/web/e2e/auth.setup.ts`, `apps/web/e2e/login.spec.ts` (3-role login smoke), `apps/web/e2e/role-boundary.spec.ts` (KASIR blocked from `/master-data`), `apps/web/e2e/raw-material-crud.spec.ts` (OWNER creates raw material). `apps/web/package.json`: `"test:e2e": "playwright test"`. `.github/workflows/ci.yml`: new `e2e-web` job after existing `e2e` job. `.agents/skills/e2e-playwright/SKILL.md` updated with CI coverage note. Closes Plan §9.
+  - **TASK-110 (DEBT-047 mitigation — Plan §6):** CI `e2e` job in `.github/workflows/ci.yml` now retries once on failure (`continue-on-error: true` + conditional retry step). Root cause of flakiness did not converge within time-box; plan §6 stop condition reached. `docs/08 - Tech_Debt_Log.md` DEBT-047 status updated to "Open, mitigated." Closes Plan §6.
+  - **TASK-111 (Backup/restore runbook — Plan §7):** Created `scripts/db-backup.sh` and `scripts/db-restore.sh` (both `chmod +x`), and `docs/runbooks/backup-restore.md`. Confirmed against `docker-compose.yml`: postgres:16-alpine, port 5433, DB `ohmypos_db`. `backups/` added to `.gitignore`. Closes Plan §7.
+- **Decisions made during this task:** (1) Void feedback delivered via inline `<Alert>` rather than a toast — `@ohmypos/ui` has no `use-toast` export; adding one would require a new dependency. The Alert achieves the same goal without drift. (2) `useVoidSale` invalidates the broad `['sales']` key prefix rather than only `POS_QUERY_KEYS.salesList` so the POS screen's `recentSales` query (under `['sales', 'recent']`) is also busted — a voided sale that still appears in the "recent" pane would confuse a cashier. (3) Sentry DSN treated as optional in both API and web — zero-config deployment (no DSN set) must be a valid production state, not an error.
+- **Status:** Done
+- **Handoff notes:** Test baseline at session end: 166/166 API unit tests, 424/424 API e2e tests, 438/438 web unit tests — all green. No schema or migration changes. The void mutation does not retry (same reasoning as `useCreateSale` — `POST /sales/:id/void` has no idempotency key; a retry could double-void). If Sentry DSN is wired in the future, set `SENTRY_DSN` in the relevant `.env`; no code change required. Playwright e2e specs depend on a running dev server (`pnpm dev`) and seeded DB (`pnpm db:seed`) — see `playwright.config.ts` `webServer` block. DEBT-047 (e2e flakiness) remains open; the retry mitigation buys time but the root cause is unresolved.
+
 ### TASK-101 to TASK-105 — Second-pass adversarial QA review: close DEF-QA-01–06 (ledger-entries IDOR, allocation/matching races)
 
 - **Date:** 2026-08-23
 - **Module / Phase:** Security & concurrency hardening — `ledger-entries`, `allocation`, `matching` modules, plus one frontend dialog and e2e coverage
-- **Objective:** A second `/adversarial-qa-review` pass found that `docs/plannings/2026-08-23-remediasi-qa-production-ready.md` (DEF-001–005) had been written but never executed, despite TASK-082–099 landing in the same-looking commit. Close the gap: see ERR-029 for the full finding.
-- **Relevant docs:** `docs/plannings/2026-08-23-remediasi-qa-production-ready.md`, ADR-011 (branch/role enforcement), Playbook §7 (transaction/locking), §8 (guards)
+- **Objective:** A second `/adversarial-qa-review` pass found that `docs/plannings/2026-08-23-remediasi-qa-production-ready.md` (gitignored, not part of this repository) (DEF-001–005) had been written but never executed, despite TASK-082–099 landing in the same-looking commit. Close the gap: see ERR-029 for the full finding.
+- **Relevant docs:** `docs/plannings/2026-08-23-remediasi-qa-production-ready.md` (gitignored, not part of this repository), ADR-011 (branch/role enforcement), Playbook §7 (transaction/locking), §8 (guards)
 - **What was done:**
   - **Ledger-entries IDOR (DEF-QA-01):** `LedgerEntriesController` gained `RoleGuard` alongside `BranchScopeGuard`; `PATCH`/`DELETE :id` are now `@Roles('OWNER', 'ADMIN')`; `GET :id` passes the caller's `JwtPayload` into `LedgerEntriesService.findOne`, which throws `ForbiddenException` when a `KASIR` reads an entry outside their own `branchId`.
   - **Allocation revoke race (DEF-QA-02):** `AllocationService.revoke()` now reads the target allocation first, then locks `bank_transactions` then `ledger_entries` (`FOR UPDATE`, same order `create()` uses) before locking and updating the `allocations` row itself — closes the TOCTOU window between a concurrent `create()`'s sum-cap read and a `revoke()`.
@@ -63,7 +80,7 @@
 - **Date:** 2026-08-23
 - **Module / Phase:** Full-stack remediation: database triggers, schemas, API services/controllers, security middleware, and CI pipelines
 - **Objective:** Close 22 defects from the 2026-08-23 Adversarial QA Audit, raising system readiness from 5.5 to 9.0 (ready for production pilot).
-- **Relevant docs:** `docs/plannings/2026-08-23-remediasi-audit-qa-adversarial.md`, ADR-001–ADR-023, Engineering Playbook v3
+- **Relevant docs:** `docs/plannings/2026-08-23-remediasi-audit-qa-adversarial.md` (gitignored, not part of this repository), ADR-001–ADR-023, Engineering Playbook v3
 - **What was done:**
   - **TASK-082 (Idempotency Keys):** Added nullable `idempotency_key` and unique indexes to `sales`, `supplier_purchases`, and `payable_settlements`. Implemented client-generated UUID idempotency key handling across API and web clients. Closes DEF-A1, DEF-A2, DEF-A5, DEBT-017.
   - **TASK-083 (Ledger Allocation Limit):** Added DB trigger `trg_check_ledger_allocation_sum` on `allocations` enforcing `SUM(amount_portion) <= LedgerEntry.amount` with `SELECT FOR UPDATE` on `ledger_entries`. Closes DEF-A3.
@@ -92,7 +109,7 @@
 - **Date:** 2026-08-23
 - **Module / Phase:** `hooks/useExpenses.ts`, `GeneralExpenseTab`, `PurchaseEntryTab` — web only
 - **Objective:** Close DEBT-055. `useLedgerEntries` and `useSupplierPurchases` requested a hardcoded `limit=50` and neither table passed a `pagination` prop, so Pengeluaran Umum and Pembelian Bahan Baku showed the newest 50 rows with **nothing on screen** marking the truncation — and, since TASK-073, an export file that could be longer than the table above it.
-- **Relevant docs:** DEBT-055, DESIGN.md §12.4 Pagination, `docs/plannings/2026-08-23-roadmap-sisa-pekerjaan.md` §3 Gelombang 1b, `PayablesTab.tsx` (reference implementation)
+- **Relevant docs:** DEBT-055, DESIGN.md §12.4 Pagination, `docs/plannings/2026-08-23-roadmap-sisa-pekerjaan.md` (gitignored, not part of this repository) §3 Gelombang 1b, `PayablesTab.tsx` (reference implementation)
 - **What was done:**
   - `useExpenses.ts`: `LedgerEntryFilterParams` and `SupplierPurchaseFilterParams`, each with a `build*Query` **shared** between the hook and its `fetch*Page`. Both hooks now take the params object, key on `[...prefix, params]`, and use `keepPreviousData`. New exported `DEFAULT_EXPENSES_PAGE_SIZE = 10`, matching `PayablesTab`'s own default so the three tabs of one screen do not stop at three different row counts.
   - `type=OUTFLOW` stays hardcoded inside `buildLedgerEntryQuery` — it is what the Pengeluaran Umum screen *is*, not a filter the operator chose.
@@ -118,7 +135,7 @@
 - **Date:** 2026-08-23
 - **Module / Phase:** `supplier-purchases`, `ledger-entries`, `suppliers` — API and contracts only
 - **Objective:** Close DEBT-049, the last open item of the TASK-067…074 pagination/sort/search/export series. `GET /supplier-purchases`, `GET /ledger-entries` and `GET /suppliers` each accepted `sortBy` but pinned the direction in the service (`orderBy: { [sortBy ?? 'x']: 'desc' }`), so a client could pick the column and never the order.
-- **Relevant docs:** DEBT-049, ADR-010 (contracts as source of truth), Playbook §4, `docs/plannings/2026-08-23-roadmap-sisa-pekerjaan.md` §3 Gelombang 1
+- **Relevant docs:** DEBT-049, ADR-010 (contracts as source of truth), Playbook §4, `docs/plannings/2026-08-23-roadmap-sisa-pekerjaan.md` (gitignored, not part of this repository) §3 Gelombang 1
 - **What was done:**
   - `sortOrder: SortOrderSchema.optional()` added to `SupplierPurchaseQuerySchema`, `LedgerEntryQuerySchema` and `SupplierQuerySchema`, each importing `SortOrderSchema` from `pagination.schema` alongside `PaginationQuerySchema`.
   - Each service destructures `sortOrder` with the default that preserves its previous behaviour — `'desc'` for supplier purchases and ledger entries, **`'asc'` for suppliers** — and the literal in `orderBy` is replaced by the variable.
@@ -144,7 +161,7 @@
 - **Date:** 2026-08-23
 - **Module / Phase:** `DataTable`/`ExportButton`, `lib/export.ts`, six export call sites, five Reports views — web only
 - **Objective:** Close DEBT-048, DEBT-025 and DEBT-024. The Export button built its workbook from `table.getFilteredRowModel().rows` — one page under server pagination — so "Export" on Utang Pemasok produced 25 rows for an accountant with nothing in the file marking it partial.
-- **Relevant docs:** `docs/plannings/2026-08-23-full-export.md` (Option A, approved), DEBT-048/025/024, ADR-010, DESIGN.md §12.1/§12.4
+- **Relevant docs:** `docs/plannings/2026-08-23-full-export.md` (gitignored, not part of this repository) (Option A, approved), DEBT-048/025/024, ADR-010, DESIGN.md §12.1/§12.4
 - **What was done:**
   - New `apps/web/lib/fetchAllPages.ts`: walks a list endpoint 100 rows per request (`PaginationQuerySchema` caps `limit` at 100) until the set is complete. `EXPORT_ROW_CAP = 5000` — 50 requests, half the throttler's 100-per-60s budget (`app.module.ts`).
   - `DataTable` gained optional `exportAll` (row supplier) and `exportTotal` (real count). `ExportButton` now labels itself `Export (1.234)` and shows a `role="alert"` on failure instead of failing silently.
@@ -170,8 +187,8 @@
 
 - **Date:** 2026-08-23
 - **Module / Phase:** `sales`, `reconciliation`, `stock-movements`, `devices` (attendance) — API and web; plus the shared `DataTable`
-- **Objective:** Close DEBT-047 and DEBT-052. Four server-paginated tables offered a search box that was a TanStack column filter over the rows already on screen: it searched 25 rows while looking like it searched the whole history.
-- **Relevant docs:** ADR-010 (contracts as source of truth), ADR-011 (RoleGuard — unchanged, no endpoint's access widened), Playbook §4, DESIGN.md §12.1/§12.4, `docs/plannings/2026-08-23-server-side-search.md` (Option A, approved)
+- **Objective:** Close DEBT-059 (originally logged as "DEBT-047" — renumbered to resolve a same-day ID collision with the unrelated e2e-flakiness DEBT-047; see the Tech Debt Log entry) and DEBT-052. Four server-paginated tables offered a search box that was a TanStack column filter over the rows already on screen: it searched 25 rows while looking like it searched the whole history.
+- **Relevant docs:** ADR-010 (contracts as source of truth), ADR-011 (RoleGuard — unchanged, no endpoint's access widened), Playbook §4, DESIGN.md §12.1/§12.4, `docs/plannings/2026-08-23-server-side-search.md` (gitignored, not part of this repository) (Option A, approved)
 - **What was done:**
   - `search: z.string().trim().optional()` added to `SaleQuerySchema`, `ReconciliationQuerySchema`, `StockMovementQuerySchema` and `AttendanceQuerySchema`, following `SupplierQuerySchema`'s existing pattern.
   - Translated in the four services into `OR` + `contains` + `mode: 'insensitive'`: sales over id / branch / cashier / account; reconciliation over `description`; stock movements over raw material / branch; attendance over user name / **user email** / branch / device label.
@@ -181,7 +198,7 @@
   - Tests: 7 new e2e cases in `stock-movements.e2e-spec.ts`, 10 in `attendance.e2e-spec.ts`, 7 in `reconciliation-addendum.e2e-spec.ts`, 8 in `sales.e2e-spec.ts`; 5 new `data-table.test.tsx` cases; three new web suites (`SalesHistoryClient.search`, `StockMovementsClient.search`, `AttendanceLogTable.search`) and a `server-side search` block in `ReconciliationClient.test.tsx`.
 - **The trap that mattered most:** `ReconciliationQueryDto` serves **both** `GET /reconciliation/transactions` and `GET /reconciliation/summary`, and both go through the same `buildWhereClause`. The summary computes `variance = actualBankBalance − recordedLedgerBalance`. A keyword can only match a bank transaction's `description`, so putting `search` in the shared builder would shrink the bank side while the ledger side stayed whole — turning `variance` into a wrong number that still looks official. `search` is therefore applied inside `getTransactions` only, after `buildWhereClause` returns, and `summaryFilters` in `useReconciliation.ts` drops it on the frontend. Pinned by an e2e case asserting `/summary?search=alpha` returns a `variance` **identical** to `/summary`; sabotage-verified — moving the clause into `buildWhereClause` fails exactly that one case and nothing else.
 - **Decisions made during this task:**
-  - **Four modules, not the two DEBT-047 names.** Stock Movements and the Attendance log had the identical defect and all four share the same `data-table.tsx` change; splitting them would mean a second visit to the same file, which DEBT-047's own "worth doing once for several modules" reasoning existed to avoid.
+  - **Four modules, not the two DEBT-059 names.** Stock Movements and the Attendance log had the identical defect and all four share the same `data-table.tsx` change; splitting them would mean a second visit to the same file, which DEBT-059's own "worth doing once for several modules" reasoning existed to avoid.
   - **`serverSearch` supersedes `searchColumns` rather than being made type-exclusive.** The plan called them mutually exclusive; the implementation makes the precedence explicit and pins it with a test, which is cheaper than a discriminated-union prop and fails loudly if someone later makes the toolbar apply both.
   - **Page 1 is claimed at keystroke time, not in an effect on the debounced value** — see ERR-024. The effect version worked but issued one discarded request per settled keyword and made the tests timing-dependent.
   - **`pg_trgm` was not adopted.** `ILIKE '%x%'` cannot use an index, but the indexed version needs a migration (its own approval gate) and the API contract and frontend are byte-for-byte identical either way. Logged as **DEBT-054**, triggered by `EXPLAIN ANALYZE` on real volume rather than by a guess.
@@ -222,7 +239,7 @@
 - **Date:** 2026-08-22
 - **Module / Phase:** Tier 2 pagination — `StockMovement` (api + web + contracts)
 - **Objective:** Give `StockMovement` an HTTP surface. It had none: `stock-movements.module.ts` shipped with `controllers: []` and a comment deferring reads to "Dashboard 5 in Phase 6" — but Phase 6 built the AGGREGATE (`GET /inventory/summary`) and never the row-level log behind it, so the evidence under every figure on the Inventory screen was unreachable from the product.
-- **Relevant docs:** ERD §3, System Design §7, PRD §5.6, ADR-004 (central stock pool), ADR-007, ADR-011, ADR-018 (business day), ADR-010. Plan: `docs/plannings/2026-08-22-stock-movement-history-endpoint-and-screen.md`.
+- **Relevant docs:** ERD §3, System Design §7, PRD §5.6, ADR-004 (central stock pool), ADR-007, ADR-011, ADR-018 (business day), ADR-010. Plan: `docs/plannings/2026-08-22-stock-movement-history-endpoint-and-screen.md` (gitignored, not part of this repository).
 - **What was done:** Contract extended (`StockMovementResponseSchema` gained `rawMaterialName`/`rawMaterialUnit`/`branchName`; new `StockMovementSortBySchema`, `StockMovementQuerySchema`, `StockMovementListResponseSchema`). `StockMovementsService.findAll` added — server-side paging, five sort keys in both directions, six filters — plus `StockMovementsController` (`@Roles('OWNER')`) and the read-only `StockMovementQueryDto`. Frontend: `useStockMovements` hook, `StockMovementsTable`, `StockMovementsClient`, and the route `(back-office)/inventory/movements`. `nav-config.ts`'s flat `/inventory` entry became a group with two children. 21 new e2e assertions, 7 new web unit tests.
 - **Why a dedicated route rather than a third tab on `/inventory`:** the tab was the cheaper option and was rejected on one specific ground — `PeriodNavigator` sits in the page header **above** the tabs and is month-shaped, while a movement ledger needs a free date range plus four filters. As a tab it would have left the period control either inert (a control that lies) or binding (making "every movement for this material since March" impossible). TASK-067 and TASK-068 were both about removing controls that lied; adding one here to save a `page.tsx` would have undone the lesson.
 - **Decisions made during this task:** (1) **No running-balance column**, agreed with the user before coding. It is only definable for one material, sorted by date ascending, over the whole history — on a screen that pages, sorts five keys two ways and filters four fields it would be wrong in nearly every reachable state, and wrong silently. Logged as DEBT-050. (2) No `BranchScopeGuard`, mirroring `InventorySummaryController`: stock is one central pool (ADR-004), so a branch-partitioned history does not exist to be scoped; `branchId` is an attribution filter only, and OWNER is the only role on the route. (3) Sorting and filtering use **`movementDate`, never `createdAt`** — `applyOpening` stamps `movementDate` with the period start, so the two can differ by weeks. (4) The Flow Indicator carries direction in a chevron **and the words Masuk/Keluar**, never colour alone (DESIGN.md §12.2 + §22). (5) Write surface deliberately absent — no create DTO, so no door is advertised that does not exist.
@@ -268,7 +285,7 @@
 
 - **Date:** 2026-08-22
 - **Module / Phase:** Cross-cutting — e2e test infrastructure, inventory/reports period boundaries, concurrency, report query performance, ops readiness, tech-debt triage.
-- **Objective:** Close out the pre-launch hardening plan (`docs/plannings/2026-08-21-phase-14-verification-hardening.md`, 5 workstreams, 4 approval gates): a real end-to-end monthly-cycle e2e test against hand-computed figures; re-verify stock concurrency under load with two new attack patterns; measure report query performance at realistic data volume and issue a formal ADR-008 verdict; triage the Tech Debt Log's duplicate IDs and stale entries; bring ops readiness (health check, metrics, graceful shutdown, Docker healthcheck) up to a shippable baseline.
+- **Objective:** Close out the pre-launch hardening plan (`docs/plannings/2026-08-21-phase-14-verification-hardening.md` (gitignored, not part of this repository), 5 workstreams, 4 approval gates): a real end-to-end monthly-cycle e2e test against hand-computed figures; re-verify stock concurrency under load with two new attack patterns; measure report query performance at realistic data volume and issue a formal ADR-008 verdict; triage the Tech Debt Log's duplicate IDs and stale entries; bring ops readiness (health check, metrics, graceful shutdown, Docker healthcheck) up to a shippable baseline.
 - **Relevant docs:** ADR-007, ADR-008, ADR-016, ADR-018, ADR-023 (new), System Design §11, Playbook §7/§8/§15.
 - **What was done:**
   - **Gates 1–4 approved** (WIB adoption for inventory; `.env.test` + `ohmypos_e2e` for e2e isolation; `prom-client` dependency; apply the ADR-008 decision rule literally).
@@ -445,7 +462,7 @@
   - Ran `turbo run lint typecheck test build` for both `web` and `@ohmypos/ui`: all green — 49 test files / 326 tests pass (312 pre-existing + 4 dark-mode + 10 reworked/added sidebar), production build succeeds.
 - **Decisions made during this task:** (1) Pruned several stock shadcn exports (`SidebarRail`, `SidebarMenuAction`, `SidebarGroupAction`, `toggleSidebar`) rather than porting them "for future use" as the approved plan suggested — flagged above, a deliberate deviation from the literal plan text in favor of not shipping dead code, consistent with this session's general practice. (2) Kept `Popover` (not `DropdownMenu`) for the rail's nested-group flyout — already-styled, already-accessible, and switching primitives for a positioned link list would add new keyboard-nav semantics nobody asked for. (3) `SidebarInset` was evaluated and explicitly not adopted, to avoid re-deriving POS's exact-one-viewport sizing contract against a different primitive's assumptions.
 - **Status:** Done.
-- **Handoff notes:** No live browser verification was possible this session (Chrome extension not connected, checked at both the start and end of this task) — `lint`/`typecheck`/`test`/`build` all green is what backs this entry. Before calling this fully shipped, still owed: (1) the manual checklist from the plan (desktop/rail/mobile visual+keyboard check at each breakpoint, back-office dark-mode toggle confirming the sidebar and its `Popover`/`Tooltip`/Sheet popups all re-theme via the new `--color-sidebar-*` var() aliases and stay portaled inside the `data-theme` subtree, POS route still exactly one viewport tall with only `<main>` scrolling); (2) `apps/web/components/shell/Topbar.tsx`'s mobile-width logo still references the old `/logo.png` while `Sidebar.tsx` uses `/logo-rm-bg.png` — a pre-existing drift from before this task (not touched, out of scope for a component-swap task, but worth a follow-up pass); (3) `docs/plannings/ui-revamp-phase-5-premium-tokens.md` is still stale/superseded (flagged in TASK-052, still not addressed).
+- **Handoff notes:** No live browser verification was possible this session (Chrome extension not connected, checked at both the start and end of this task) — `lint`/`typecheck`/`test`/`build` all green is what backs this entry. Before calling this fully shipped, still owed: (1) the manual checklist from the plan (desktop/rail/mobile visual+keyboard check at each breakpoint, back-office dark-mode toggle confirming the sidebar and its `Popover`/`Tooltip`/Sheet popups all re-theme via the new `--color-sidebar-*` var() aliases and stay portaled inside the `data-theme` subtree, POS route still exactly one viewport tall with only `<main>` scrolling); (2) `apps/web/components/shell/Topbar.tsx`'s mobile-width logo still references the old `/logo.png` while `Sidebar.tsx` uses `/logo-rm-bg.png` — a pre-existing drift from before this task (not touched, out of scope for a component-swap task, but worth a follow-up pass); (3) `docs/plannings/ui-revamp-phase-5-premium-tokens.md` (gitignored, not part of this repository) is still stale/superseded (flagged in TASK-052, still not addressed).
 
 ### TASK-053 — Dark mode for back-office only
 
@@ -473,14 +490,14 @@
   3. Client-navigate to `/profile` or `/help` and to `/sales` (as OWNER) — confirm both stay light regardless of the toggle state just set, with no flash.
   4. Hard-reload a back-office page with dark active — confirm it loads dark immediately (FOUC check on `initialTheme`).
   5. Browser devtools contrast checker against the pairs in `docs/DESIGN.md` §6.6, especially the status/accent solid-fill cases flagged in decision (1) above — the computed numbers are believed correct but haven't been eyeballed on an actual rendered screen yet.
-  6. `docs/plannings/ui-revamp-phase-5-premium-tokens.md` is still stale/superseded (unrelated to this task, flagged in TASK-052) — not addressed here either.
+  6. `docs/plannings/ui-revamp-phase-5-premium-tokens.md` (gitignored, not part of this repository) is still stale/superseded (unrelated to this task, flagged in TASK-052) — not addressed here either.
 
 ### TASK-052 — UI Revamp Phase 5: "Quiet Luxury" token rebrand — closeout & consistency pass
 
 - **Date:** 2026-08-21
-- **Module / Phase:** UI Revamp Phase 5 (premium/luxury visual direction), supersedes the plan in `docs/plannings/ui-revamp-phase-5-premium-tokens.md`
+- **Module / Phase:** UI Revamp Phase 5 (premium/luxury visual direction), supersedes the plan in `docs/plannings/ui-revamp-phase-5-premium-tokens.md` (gitignored, not part of this repository)
 - **Objective:** Finish and verify a luxury/premium palette rebrand ("Quiet Luxury Outside, High-Precision Engine Inside" — Champagne Gold/Warm Bronze/Obsidian) that had already been substantially started outside this session (uncommitted working-tree changes present at session start: rewritten `docs/DESIGN.md`, rewritten `packages/ui/src/styles/globals.css` token layer, a new brand mark (`logo.png`, `favicon.ico`), and partial edits to `Sidebar.tsx`/`badge.tsx`/`button.tsx`/`layout.tsx`/`login/page.tsx`). This session did **not** author that initial direction — it inherited it, confirmed with the user that it (not the previously-planned sapphire "Ink & Brass" direction) is the one to continue, then closed the remaining gaps.
-- **Relevant docs:** `docs/DESIGN.md` (rewritten; now 13 sections instead of the previous 56 — §5 Typography, §6 Color Tokens, §7 Radius/Elevation, §8 Shell/Nav, §13 Anti-Patterns are the ones most load-bearing for this task). `docs/plannings/ui-revamp-phase-5-premium-tokens.md` is now **stale/superseded** — it describes a sapphire "Ink & Brass" direction that was never implemented; the shipped direction is Champagne Gold instead. That planning doc has not been deleted but should not be used as a reference for the current token values.
+- **Relevant docs:** `docs/DESIGN.md` (rewritten; now 13 sections instead of the previous 56 — §5 Typography, §6 Color Tokens, §7 Radius/Elevation, §8 Shell/Nav, §13 Anti-Patterns are the ones most load-bearing for this task). `docs/plannings/ui-revamp-phase-5-premium-tokens.md` (gitignored, not part of this repository) is now **stale/superseded** — it describes a sapphire "Ink & Brass" direction that was never implemented; the shipped direction is Champagne Gold instead. That planning doc has not been deleted but should not be used as a reference for the current token values.
 - **What was done:**
   - Verified `packages/ui/src/styles/globals.css` (already rewritten before this session) matches `docs/DESIGN.md` §6/§7 token-for-token (brand/accent/status/surface/text/border/radius/shadow) — no drift found, no edit needed there.
   - `apps/web/components/shell/Sidebar.tsx`: removed a now-unused `next/image` import (both rail and expanded logo branches had been collapsed to the same plain `<img>` markup, leaving `Image` imported but unused), deduplicated the now-identical rail/expanded logo ternary into one render, and aligned the two nested-nav-group active-link styles (`text-brand-primary` → `text-text-primary`) with the already-updated top-level `ROW_ACTIVE` convention so active state reads consistently at every nav depth.
@@ -490,7 +507,7 @@
   - Ran `turbo run lint typecheck test --filter=web --filter=@ohmypos/ui`: lint and typecheck clean (only pre-existing, unrelated `react-hooks/incompatible-library` warnings from `react-hook-form`'s `watch()` in three dialogs remain — not touched, out of scope), all 321 web tests pass including `Sidebar.test.tsx` (9 tests, unaffected by the active-style/import edits).
 - **Decisions made during this task:** (1) Confirmed with the user via `AskUserQuestion` which in-progress direction to continue — chose "continue the existing Champagne Gold work" over "run the old sapphire plan," since running the old plan would have overwritten real, already-substantially-correct work. (2) Left `QuantityStepper.tsx`'s `rounded-pill` outer control as-is despite `DESIGN.md` §7.1 now explicitly listing "stepper controls" under `radius.sm` — a test (`OrderPanel.test.tsx:35`) asserts `rounded-pill` on that exact element, and changing an established, tested UI pattern to satisfy a doc line felt like scope creep beyond "finish the rebrand"; flagged here instead of silently changed. (3) Did not attempt a full visual redesign pass of POS/back-office surfaces against the new DESIGN.md's §9/§10 (Obsidian order panel option, "count card" category filters, etc.) — those are net-new design decisions requiring visual judgment calls, not bugs in already-started work, and were left out of scope for this closeout task.
 - **Status:** Done (closeout of the palette/shell/token-consistency work). Not done: a full POS/back-office visual audit against the new DESIGN.md's more detailed §9/§10 guidance (Obsidian dark order panel, category "count cards" instead of pills, gold product-card accents gated on real data) — flagged as follow-up below, not attempted here.
-- **Handoff notes:** No live browser check was possible this session (Chrome extension not connected); relied on `lint`/`typecheck`/`test` (all green) plus pre-existing QA screenshots in `docs/screenshoots/` (captured during the earlier, out-of-session logo work) showing the intended sidebar look already renders correctly. Before the next visual pass: (1) `docs/plannings/ui-revamp-phase-5-premium-tokens.md` should be rewritten or marked superseded — it currently documents token values that were never shipped and will mislead a future reader; (2) DESIGN.md §9.4 raises an Obsidian-dark POS order panel option that `CartPanel.tsx`/`PosOrderSheet.tsx` don't currently implement (they're still light) — worth a deliberate decision with the user rather than assuming; (3) `apps/web/public/logo.svg` and `logo.webp` are now orphaned (nothing references them) and can likely be deleted once confirmed unused elsewhere.
+- **Handoff notes:** No live browser check was possible this session (Chrome extension not connected); relied on `lint`/`typecheck`/`test` (all green) plus pre-existing QA screenshots in `docs/screenshoots/` (captured during the earlier, out-of-session logo work) showing the intended sidebar look already renders correctly. Before the next visual pass: (1) `docs/plannings/ui-revamp-phase-5-premium-tokens.md` (gitignored, not part of this repository) should be rewritten or marked superseded — it currently documents token values that were never shipped and will mislead a future reader; (2) DESIGN.md §9.4 raises an Obsidian-dark POS order panel option that `CartPanel.tsx`/`PosOrderSheet.tsx` don't currently implement (they're still light) — worth a deliberate decision with the user rather than assuming; (3) `apps/web/public/logo.svg` and `logo.webp` are now orphaned (nothing references them) and can likely be deleted once confirmed unused elsewhere.
 
 ### TASK-051 — OWNER branch-selectable POS access + rename "Transaksi Kasir" → "Transaksi Penjualan"
 
@@ -512,7 +529,7 @@
 ### TASK-050 — UI Revamp Phase 4: Responsive Polish, Backoffice Alignment & Accessibility QA
 
 - **Date:** 2026-08-20
-- **Module / Phase:** UI Revamp Phase 4 (final phase), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Module / Phase:** UI Revamp Phase 4 (final phase), per `docs/plannings/ui-revamp-design-alignment.md` (gitignored, not part of this repository)
 - **Objective:** Close the four remaining responsive/a11y gaps: POS has no mobile bottom sheet below 768px, POS stacks instead of staying side-by-side at 768–1023px (tablet), backoffice tables lose their identifying column on horizontal scroll, and nothing respects `prefers-reduced-motion`.
 - **Relevant docs:** DESIGN.md §14 (Motion), §28 (Data Tables), §41.1–§41.6 (Responsive), §42 (Accessibility), §43 (Touch and Pointer), §44 (Component State Rules).
 - **What was done:**
@@ -525,12 +542,12 @@
     2. `CartPanel`'s root was unconditionally `shrink-0`, which is correct in the desktop/tablet row layout (holds its fixed width against `ProductGrid`) but meant that inside the mobile sheet's bounded-height column it refused to shrink to fit — `sheetRect.height` (512px, `max-h-[85dvh]`) vs. `scrollHeight` (653px), `overflow-y: visible` on `SheetContent`, so "Bayar" was clipped below the viewport with **no way to scroll to it at all**, not merely "reachable only after scrolling." Root cause confirmed via `window.getComputedStyle`/`getBoundingClientRect` in the live browser. Fixed by changing `CartPanel`'s className from `shrink-0` to `shrink md:shrink-0` — at mobile it now shrinks into the sheet's flex container, activating its own internal `overflow-y-auto` order-list region while the header and the payment/CTA foot (both already `shrink-0`) stay pinned.
 - **Decisions made during this task:** No tablet slide-over variant was built for the order panel — §41.3 makes it conditional ("if horizontal space is too tight"), and at 768px the 3-column grid remained usable in manual testing (confirmed live: 64px rail + 320px panel leaves enough room). Both fixes above stayed within the phase's existing file manifest (`PosOrderSheet.tsx`, `CartPanel.tsx`) rather than expanding scope.
 - **Status:** Done
-- **Handoff notes:** `pnpm turbo run lint typecheck test build` green (15/15 tasks) — 320/320 web tests (316 + 4 new `data-table.test.tsx`, including `PosScreen.test.tsx`'s suite unmodified per the plan's DoD), 0 lint errors (same 4 pre-existing unrelated `react-hook-form` warnings as prior phases). All four E2E scenarios from the plan's §6 were run live against `localhost:3001`/`localhost:4015` via Chrome automation and passed: (A) KASIR checkout at 1440×900 — search, add×2, pay, sale appears first in `/sales/history`; (B) the same checkout at 500×800 — order bar → sheet → pay → bar disappears (this is where the two bugs above were caught); (C) OWNER/KASIR at 900×700 — 64px rail with click-triggered flyout (hover events don't fire reliably through CDP automation — visually confirmed via a real click instead), `/master-data`'s product table keeps "Nama Produk" pinned while scrolling right past Status/Aksi, `/sales` keeps both zones side by side; (D) OWNER/ADMIN/KASIR sidebar contents match `getNavItems(role)` exactly — ADMIN shows only Data Master + Rekonsiliasi, KASIR shows only Penjualan/Cuti/Bantuan. Contrast math for DEBT item below confirmed by hand: `#00BFFF` vs. white ≈ 2.12:1. Not measured with a ruler in this session: exact pixel touch-target sizes (§5.2) and a full keyboard-only pass (§5.5's Tab/Esc walk) — both were exercised functionally (Esc closes the sheet's Radix dialog by construction; every interactive element already carries `focus-visible:ring-2`) but not itemized target-by-target. This closes the UI Revamp roadmap — see `docs/plannings/ui-revamp-design-alignment.md` for the four-phase summary.
+- **Handoff notes:** `pnpm turbo run lint typecheck test build` green (15/15 tasks) — 320/320 web tests (316 + 4 new `data-table.test.tsx`, including `PosScreen.test.tsx`'s suite unmodified per the plan's DoD), 0 lint errors (same 4 pre-existing unrelated `react-hook-form` warnings as prior phases). All four E2E scenarios from the plan's §6 were run live against `localhost:3001`/`localhost:4015` via Chrome automation and passed: (A) KASIR checkout at 1440×900 — search, add×2, pay, sale appears first in `/sales/history`; (B) the same checkout at 500×800 — order bar → sheet → pay → bar disappears (this is where the two bugs above were caught); (C) OWNER/KASIR at 900×700 — 64px rail with click-triggered flyout (hover events don't fire reliably through CDP automation — visually confirmed via a real click instead), `/master-data`'s product table keeps "Nama Produk" pinned while scrolling right past Status/Aksi, `/sales` keeps both zones side by side; (D) OWNER/ADMIN/KASIR sidebar contents match `getNavItems(role)` exactly — ADMIN shows only Data Master + Rekonsiliasi, KASIR shows only Penjualan/Cuti/Bantuan. Contrast math for DEBT item below confirmed by hand: `#00BFFF` vs. white ≈ 2.12:1. Not measured with a ruler in this session: exact pixel touch-target sizes (§5.2) and a full keyboard-only pass (§5.5's Tab/Esc walk) — both were exercised functionally (Esc closes the sheet's Radix dialog by construction; every interactive element already carries `focus-visible:ring-2`) but not itemized target-by-target. This closes the UI Revamp roadmap — see `docs/plannings/ui-revamp-design-alignment.md` (gitignored, not part of this repository) for the four-phase summary.
 
 ### TASK-049 — UI Revamp Phase 3: POS Order Panel & Transaction Flow
 
 - **Date:** 2026-08-20
-- **Module / Phase:** UI Revamp Phase 3 (POS order panel), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Module / Phase:** UI Revamp Phase 3 (POS order panel), per `docs/plannings/ui-revamp-design-alignment.md` (gitignored, not part of this repository)
 - **Objective:** Restructure zone 3's `CartPanel` into DESIGN.md §24's top-to-bottom anatomy — panel header, order list of single rows with a unified pill stepper, summary block, payment method, full-width primary CTA pinned at the bottom — without changing any cart *behaviour*.
 - **Relevant docs:** DESIGN.md §18.1, §20, §24, §24.1, §24.2, §24.3, §25, §26, §27, §41.5; ADR-004, ADR-013, ADR-015; DEBT-004.
 - **What was done:**
@@ -548,7 +565,7 @@
 ### TASK-048 — UI Revamp Phase 2: POS Product Discovery & Filter Cards
 
 - **Date:** 2026-08-20
-- **Module / Phase:** UI Revamp Phase 2 (POS product discovery zone), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Module / Phase:** UI Revamp Phase 2 (POS product discovery zone), per `docs/plannings/ui-revamp-design-alignment.md` (gitignored, not part of this repository)
 - **Objective:** Turn POS's middle zone from a search box over a plain card grid into DESIGN.md's §20/§21/§22 product discovery zone — a page header with the live WIB date and right-aligned search, a row of bordered filter cards with live counts, and a fixed-column grid whose first cell is the Add-New-Product affordance.
 - **Relevant docs:** DESIGN.md §18, §20, §21, §21.1, §22, §23, §41.3, §41.5; ADR-013 (advisory headroom); ADR-011 (role-gated `/master-data`); DEBT-018, DEBT-004.
 - **What was done:**
@@ -567,7 +584,7 @@
 ### TASK-047 — UI Revamp Phase 1: App Shell & Modern Sidebar Navigation
 
 - **Date:** 2026-08-20
-- **Module / Phase:** UI Revamp Phase 1 (app shell + sidebar), per `docs/plannings/ui-revamp-design-alignment.md`
+- **Module / Phase:** UI Revamp Phase 1 (app shell + sidebar), per `docs/plannings/ui-revamp-design-alignment.md` (gitignored, not part of this repository)
 - **Objective:** Replace the flat, fully-saturated sidebar with the anatomy DESIGN.md §16 specifies (search, "Menu" label, tinted active pill, icons, 768–1023px icon rail, account card/avatar), and give POS a fixed-height shell so Phases 2–4 can build a non-scrolling three-zone layout on top of it.
 - **Relevant docs:** DESIGN.md §15–17, §41.1–41.6, §42; AGENTS.md governance (no schema/dependency/contract changes, no Git writes).
 - **What was done:**
@@ -627,7 +644,7 @@
 - **Date:** 2026-08-20
 - **Module / Phase:** Documentation / Help Page (Phase 13)
 - **Objective:** Provide a dedicated role-aware Help/Documentation ("Bantuan") page with step-by-step guidance rendered through accessible accordion components without introducing new dependencies or MDX pipelines.
-- **Relevant docs:** `docs/plannings/phase-13-help-page.md`, AGENTS.md, DESIGN.md
+- **Relevant docs:** `docs/plannings/phase-13-help-page.md` (gitignored, not part of this repository), AGENTS.md, DESIGN.md
 - **What was done:**
   - Added Accordion component in `packages/ui/src/components/ui/accordion.tsx` wrapping `radix-ui` Accordion primitives.
   - Authored structured static typed guide data in `apps/web/lib/help-content.ts` with role-based filtering (`getHelpSections`).
@@ -756,7 +773,7 @@
 - **Date:** 2026-08-20
 - **Module / Phase:** Phase 12 — Leave Requests (Cuti)
 - **Objective:** Enable employees (KASIR) to submit leave requests and view submission history, while providing an OWNER-only review and approval/rejection queue.
-- **Relevant docs:** ADR-021, `docs/plannings/phase-12-leave-requests.md`, AGENTS.md
+- **Relevant docs:** ADR-021, `docs/plannings/phase-12-leave-requests.md` (gitignored, not part of this repository), AGENTS.md
 - **What was done:**
   - Added Prisma model `LeaveRequest` and enum `LeaveRequestStatus` in `apps/api/prisma/schema.prisma` with relations to `User` (`leaveRequests`, `reviewedLeaveRequests`), and applied migration `20260820010402_add_leave_requests`.
   - Added API contracts in `packages/api-contracts/src/leave-request.schema.ts` (`CreateLeaveRequestSchema`, `LeaveRequestListQuerySchema`, `LeaveRequestResponseSchema`) and exported in `index.ts`.
@@ -779,7 +796,7 @@
 - **Date:** 2026-08-19
 - **Module / Phase:** Phase 11 — Attendance & Device Tracking
 - **Objective:** Track KASIR login timestamp and physical device validity using signed HttpOnly device cookies activated via an authenticated OWNER ceremony; surface attendance violations as non-blocking login warning banners.
-- **Relevant docs:** ADR-021, `docs/plannings/phase-11-attendance-device-tracking.md`, AGENTS.md
+- **Relevant docs:** ADR-021, `docs/plannings/phase-11-attendance-device-tracking.md` (gitignored, not part of this repository), AGENTS.md
 - **What was done:**
   - Added ADR-021 in `docs/02 - ADR.md` documenting scope expansion for Attendance/Device Tracking & Leave Requests.
   - Added Prisma models `Device`, `AttendanceRecord`, and enum `AttendanceViolationReason` in `apps/api/prisma/schema.prisma` and applied migration `20260819151056_add_devices_and_attendance`.
@@ -967,7 +984,7 @@
 ### TASK-025 — Phase 10a: Profile Self-Service (name, password, delete-own-account)
 
 - **Date:** 2026-08-18
-- **Module / Phase:** Phase 10a of the HR-lite feature set (plan: `list-fitur-yang-kurang` / `docs/plannings/phase-10a-profile-self-service.md`) — second of six phases (9–13, with 10 split into 10a/10b) covering employee/branch management, profile self-service, attendance/device tracking, leave requests, and a help page.
+- **Module / Phase:** Phase 10a of the HR-lite feature set (plan: `list-fitur-yang-kurang` / `docs/plannings/phase-10a-profile-self-service.md` (gitignored, not part of this repository)) — second of six phases (9–13, with 10 split into 10a/10b) covering employee/branch management, profile self-service, attendance/device tracking, leave requests, and a help page.
 - **Objective:** Give every authenticated role (KASIR, ADMIN, OWNER) a self-service profile page to change their own display name, change their password (reusing the existing `PATCH /auth/password` endpoint), and soft-deactivate their own account ("Hapus Akun Saya" in the UI) — with the critical guard that the last active OWNER cannot deactivate themselves (ADR-011 §5: would leave the business with no one who can create/manage staff). `Sale.userId` is an audit trail (ERD §7 note 3) — no hard delete, ever.
 - **Relevant docs:** ADR-011 (role/branch rules, self-service scope), ERD §7 note 3 (no hard delete — `Sale.userId` audit trail), System Design v4 §5 (route/role table — neither `(back-office)` nor `(pos)` admits all three roles), Playbook §4 (Zod contracts), Playbook §8 (guards).
 - **What was done:**
@@ -1007,7 +1024,7 @@
 
 - **Date:** 2026-08-18
 - **Module / Phase:** Phase 8i — new `GET /reports/cash-balance` endpoint (Dashboard 3) and the OWNER-only `(back-office)/dashboard` overview screen (Dashboard 1).
-- **Objective:** Give OWNER a single landing screen summarizing cash, this month's P&L, supplier debt, and low-stock — combining a new running-cash-balance report with three already-existing endpoints (`profit-loss`, `daily-income`, `/payables/summary`, `/inventory/summary`). Executed from `docs/plannings/phase-8i-dashboard-overview.md` (an approved, fully-literal implementation plan that was itself reviewed and amended for four verified defects before execution — see below).
+- **Objective:** Give OWNER a single landing screen summarizing cash, this month's P&L, supplier debt, and low-stock — combining a new running-cash-balance report with three already-existing endpoints (`profit-loss`, `daily-income`, `/payables/summary`, `/inventory/summary`). Executed from `docs/plannings/phase-8i-dashboard-overview.md` (gitignored, not part of this repository) (an approved, fully-literal implementation plan that was itself reviewed and amended for four verified defects before execution — see below).
 - **Relevant docs:** PRD §5.4; ADR-004 (Kas Awal), ADR-008 (query-time reports), ADR-017 (P&L composition), ADR-018 (WIB report period); System Design v4 §5/§6.6; AGENTS.md glossary (Kas Awal, Admin/Owner route scope).
 - **What was done:**
   1. **`apps/api/src/common/period.ts`:** added `todayWib(now: Date): string` (WIB calendar day for an instant — stays pure, no internal `Date.now()`) and exported `WIB_OFFSET_MS`. Unit tests added to `period.spec.ts` (same-day, roll-over, early-UTC cases).
@@ -1027,7 +1044,7 @@
 
 - **Date:** 2026-08-18
 - **Module / Phase:** Phase 8j — `apps/web` Reconciliation back-office screen
-- **Objective:** Build the ADMIN/OWNER-only reconciliation UI per PRD §5.7 — bank statement CSV import, auto-match review queue, manual split allocation, and a filterable bank-transaction table with a summary strip — against the reconciliation backend that has been live since Phase 1–2 (`apps/api/src/modules/{import,matching,allocation,reconciliation}`). Executed from `docs/plannings/phase-8h-reconciliation.md` (an approved, fully-literal implementation plan).
+- **Objective:** Build the ADMIN/OWNER-only reconciliation UI per PRD §5.7 — bank statement CSV import, auto-match review queue, manual split allocation, and a filterable bank-transaction table with a summary strip — against the reconciliation backend that has been live since Phase 1–2 (`apps/api/src/modules/{import,matching,allocation,reconciliation}`). Executed from `docs/plannings/phase-8h-reconciliation.md` (gitignored, not part of this repository) (an approved, fully-literal implementation plan).
 - **Relevant docs:** PRD §5.7; System Design v4 §6.5; ADR-004, ADR-008, ADR-010, ADR-011, ADR-012; ADR-019 (new — see below); ERD v3 §2/§6 (`BankTransaction`, `Allocation`); DESIGN.md §34/§35 (split-allocation dialog).
 - **What was done:**
   1. **`lib/api.ts`:** `doFetch` now omits the JSON `Content-Type` header for a `FormData` body so the browser can set the multipart boundary itself — the only caller is the CSV import. JSON callers are unaffected (+2 tests in `api.test.ts`).
@@ -1052,7 +1069,7 @@
 - **Date:** 2026-08-18
 - **Module / Phase:** Phase 8g — `apps/web` Reports back-office screen
 - **Objective:** Build the OWNER-only Dashboard 3 reports UI per PRD §5.4 — P&L, sales-per-product profit, income by payment method, top 10 products, and daily income, all filterable by date range and branch, with charts — against the five `GET /reports/*` endpoints Phase 7 already shipped (`apps/api/src/modules/reports/*`). Pure frontend-rendering work; no backend/contract change.
-- **Relevant docs:** PRD §5.4; `docs/plannings/phase-7-reporting.md` (exact API shapes, ADR-017 P&L composition, ADR-018 WIB report boundaries); DESIGN.md §36/§37 (Reports density, Flow Indicator) and §51 (approved mockup, reference-not-spec); AGENTS.md governance (new-dependency approval gate).
+- **Relevant docs:** PRD §5.4; `docs/plannings/phase-7-reporting.md` (gitignored, not part of this repository) (exact API shapes, ADR-017 P&L composition, ADR-018 WIB report boundaries); DESIGN.md §36/§37 (Reports density, Flow Indicator) and §51 (approved mockup, reference-not-spec); AGENTS.md governance (new-dependency approval gate).
 - **What was done:**
   1. **New dependency (approved):** added `recharts@^3.10.1` to `apps/web` — no charting library existed in `packages/ui` or `apps/web` beforehand; verified React 19 peer-dep compatibility before installing.
   2. **`hooks/useReports.ts`:** 5 TanStack Query hooks (`useProfitLoss`, `useProductProfit`, `useIncomeByPaymentMethod`, `useTopProducts`, `useDailyIncome`), each building its query string from a shared `{startDate, endDate, branchId?}` filter shape (+ `rankBy`/`limit` for top-products), `enabled`-gated per active tab so switching tabs doesn't fire five requests at once. Test suite `useReports.test.ts`.
@@ -1303,7 +1320,7 @@
 
 - **Date:** 2026-08-17
 - **Module / Phase:** Phase 7 — Reporting Backend (Dashboard 3: P&L, Product Profit, Top Products, Income by Payment Method, Daily Income)
-- **Objective:** Implement the 5 Dashboard 3 query-time reporting endpoints per PRD §5.4, ADR-005, ADR-006, ADR-008, ADR-011, ADR-014, ADR-017, ADR-018, System Design v4 §5/§6.6/§11, and `docs/plannings/phase-7-reporting.md`.
+- **Objective:** Implement the 5 Dashboard 3 query-time reporting endpoints per PRD §5.4, ADR-005, ADR-006, ADR-008, ADR-011, ADR-014, ADR-017, ADR-018, System Design v4 §5/§6.6/§11, and `docs/plannings/phase-7-reporting.md` (gitignored, not part of this repository).
 - **Relevant docs:** PRD §5.4, System Design v4 §5, §6.6, §11, ADR-005, ADR-006, ADR-008, ADR-011, ADR-014, ADR-017, ADR-018, Playbook §4, §8, §10.
 - **What was done:**
   1. Authored and recorded ADR-017 (P&L dual margin & cash views) and ADR-018 (report period boundaries and daily buckets in Asia/Jakarta) in `docs/02 - ADR.md`.
@@ -1339,7 +1356,7 @@
   4. **No branch filter** — per ADR-004/Phase 6 §7.4 stock is a centralized pool; `GET /inventory/summary` has no branch dimension, so the prompt's "branch filter" line was corrected rather than implemented.
   5. Wrote `InventorySummaryTable.test.tsx` (7 cases): header/row rendering with `formatQuantity`, Flow Indicator classes on in/out cells, status badge label + semantic color, zero/negative quantity rendering, empty state, live search filter, and no-match empty state.
 - **Decisions made during this task:**
-  1. Option 1 selected (tabbed interface on `/inventory`) per user approval — summary and opening-stock worksheet live in one domain surface with a shared period navigator, per `docs/plannings/phase-08f-frontend-inventory-summary.md`.
+  1. Option 1 selected (tabbed interface on `/inventory`) per user approval — summary and opening-stock worksheet live in one domain surface with a shared period navigator, per `docs/plannings/phase-08f-frontend-inventory-summary.md` (gitignored, not part of this repository).
   2. Both tab queries run on mount (Tabs content is unmounted when inactive but the tanstack query still fires) — accepted for master-data scale; no `enabled`-gating added to keep the hook signature stable.
 - **Status:** Done
 - **Handoff notes:** `pnpm --filter web test` green (24 files, 174 tests); `pnpm --filter web typecheck` green; `eslint` green on all touched files. Pre-existing lint error in `apps/web/components/master-data/RecipeEditorDialog.tsx:74` (`watchedItems` unused) was NOT touched (out of scope, unrelated to this task). No schema, dependency, or Git changes made. What next phases must know: the summary table reuses `getFlowIndicatorClasses`/`getStockStatusBadgeClasses` from `apps/web/lib/vocabulary.ts` (DEBT-003 pattern) — any new screen with movement numbers should reuse the same helpers rather than introducing a bespoke indicator.
@@ -1360,7 +1377,7 @@
 
 - **Date:** 2026-08-17
 - **Module / Phase:** Phase 6 — Inventory (`OpeningStock`, `applyOpening` Stock Movements, Inventory Summary Query-time Aggregator, Worksheet Endpoint)
-- **Objective:** Implement opening stock declarations and monthly inventory summary reporting per PRD §5.5, §5.6, ADR-004, ADR-007, ADR-008, ADR-011, ADR-016, and `docs/plannings/phase-6-inventory.md`.
+- **Objective:** Implement opening stock declarations and monthly inventory summary reporting per PRD §5.5, §5.6, ADR-004, ADR-007, ADR-008, ADR-011, ADR-016, and `docs/plannings/phase-6-inventory.md` (gitignored, not part of this repository).
 - **Relevant docs:** PRD §5.5/§5.6, ADR-004, ADR-007, ADR-008, ADR-011, ADR-016, ERD v3 §3, System Design v4 §5, Playbook §5–§10.
 - **What was done:**
   1. Extended `schema.prisma` with `OpeningStock` model (`rawMaterialId`, `periodMonth` Date, `quantity` Decimal, `unitPrice` Decimal nullable, `createdAt`/`updatedAt`, unique constraint `[rawMaterialId, periodMonth]`) and `RawMaterial.openingStocks` relation. Generated and applied migration `20260816190141_add_opening_stock` (verified SQL: purely additive `CREATE TABLE` and indexes).
@@ -1408,7 +1425,7 @@
 
 - **Date:** 2026-08-16
 - **Module / Phase:** Phase 5 — Sales (`Sale`, `SaleItem`, outbound `StockMovement`, the income `LedgerEntry` a sale generates)
-- **Objective:** Implement the core POS sale flow per `docs/plannings/phase-5-sales.md` — multi-line sale creation, per-unit HPP snapshotting, aggregated stock decrement under row locks with a proven deadlock-free ordering, and branch/role-scoped access.
+- **Objective:** Implement the core POS sale flow per `docs/plannings/phase-5-sales.md` (gitignored, not part of this repository) — multi-line sale creation, per-unit HPP snapshotting, aggregated stock decrement under row locks with a proven deadlock-free ordering, and branch/role-scoped access.
 - **Relevant docs:** PRD §5.2, ADR-005, ADR-007, ADR-011, ADR-014, **ADR-015**, **ADR-016**, ERD v3 §3/§6, System Design v4 §6.1/§7, Playbook §5–§10.
 - **What was done:**
   1. Closed the DEBT-004 pre-step gate: no tax, discount, or order type in v1 — `Sale.totalAmount = Σ SaleItem.lineTotal`, discounts stay expressed through the existing per-line price override. Authored **ADR-015** (sale totals composition, per-unit `hppAtSale`, aggregated stock fan-out) and **ADR-016** (raw-material lock ordering as a system-wide invariant). Updated **DEBT-004** to Partially resolved and logged **DEBT-008/009/010** (batched lock statement deferred, no role restriction on price override, no void/refund path).

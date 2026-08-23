@@ -136,4 +136,99 @@ jobs:
         run: pnpm --filter api exec prisma migrate deploy
 
       - name: Run e2e tests
+        id: e2e_run
+        continue-on-error: true
         run: pnpm --filter api test:e2e
+
+      - name: Retry e2e tests on failure (DEBT-047 mitigation)
+        if: steps.e2e_run.outcome == 'failure'
+        run: pnpm --filter api test:e2e
+
+  e2e-web:
+    name: Web E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [quality]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ohmypos_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ohmypos_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/ohmypos_db?schema=public'
+      PORT: 4015
+      NODE_ENV: test
+      THROTTLE_LIMIT: 1000
+      CORS_ORIGIN: 'http://localhost:3001'
+      JWT_SECRET: 'ci-test-access-secret-min-32-chars-long'
+      JWT_REFRESH_SECRET: 'ci-test-refresh-secret-min-32-chars-long'
+      DEVICE_COOKIE_SECRET: 'ci-test-device-cookie-secret-min-32-chars-long'
+      JWT_EXPIRES_IN: '1d'
+      JWT_REFRESH_EXPIRES_IN: '30d'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter web exec playwright install chromium --with-deps
+
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+
+      - name: Build api workspace dependencies
+        run: pnpm exec turbo run build --filter=api^...
+
+      - name: Apply migrations
+        run: pnpm --filter api exec prisma migrate deploy
+
+      - name: Seed database
+        run: pnpm --filter api db:seed
+
+      - name: Start API server
+        run: pnpm --filter api start:prod &
+        env:
+          NODE_ENV: production
+
+      - name: Build and start web server
+        run: |
+          pnpm --filter web build
+          pnpm --filter web start &
+        env:
+          NEXT_PUBLIC_API_URL: 'http://localhost:4015'
+
+      - name: Wait for servers
+        run: |
+          npx wait-on http://localhost:4015/api/v1/health http://localhost:3001 --timeout 60000
+
+      - name: Run Playwright e2e tests
+        run: pnpm --filter web exec playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

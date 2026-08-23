@@ -212,6 +212,7 @@ export function SalesHistoryClient({ user }: SalesHistoryClientProps) {
 
       {/* Transactions Table */}
       <SalesHistoryTable
+        userRole={user.role}
         sales={salesList}
         isLoading={isSalesLoading}
         sorting={sorting}

@@ -26,16 +26,25 @@ export function ledgerScope(range: ReportRange, branchId?: string): Prisma.Sql {
 }
 
 /**
- * `s.sold_at >= from AND s.sold_at < to [AND s.branch_id = ...]`
+ * `s.sold_at >= from AND s.sold_at < to [AND s.branch_id = ...] AND s.status <> 'VOIDED'`
  *
  * Sale-side reports filter on the PARENT sale, never on sale_items — a
  * SaleItem has neither a date nor a branch of its own (ERD §3).
+ *
+ * DEBT-010: the `status <> 'VOIDED'` clause is what keeps every report that
+ * joins `sales` directly (productAggregate → productProfit/topProducts, and
+ * profitLoss()'s cogsRows) correct after a void, with no separate change
+ * needed in those queries — they all go through this one fragment. The
+ * REVENUE side (profitLoss()'s moneyRows, incomeByPaymentMethod,
+ * dailyIncome's incomeRows) reads `ledger_entries` directly with no join to
+ * `sales` at all, so it does NOT self-heal from this change — see the
+ * `LEFT JOIN sales` additions in reports.service.ts for that half.
  */
 export function saleScope(range: ReportRange, branchId?: string): Prisma.Sql {
   const branch = branchId
     ? Prisma.sql` AND s.branch_id = ${branchId}`
     : Prisma.empty;
-  return Prisma.sql`s.sold_at >= ${range.from} AND s.sold_at < ${range.to}${branch}`;
+  return Prisma.sql`s.sold_at >= ${range.from} AND s.sold_at < ${range.to} AND s.status <> 'VOIDED'${branch}`;
 }
 
 /**

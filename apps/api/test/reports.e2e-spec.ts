@@ -1064,6 +1064,90 @@ describe('Reports — Dashboard 3 (e2e)', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // 7a. Void (DEBT-010) — the report-correctness half of the fix. A void must
+  // NOT just flip Sale.status; report-filters.ts's saleScope() and the
+  // ledger-to-sales joins in reports.service.ts are what actually keep these
+  // numbers right. This is the test that proves that, not just the schema.
+  // ---------------------------------------------------------------------------
+  describe('Void (DEBT-010)', () => {
+    it('Case 41: a voided sale contributes zero to margin-view revenue/COGS/net-profit, but its reversal still moves cash', async () => {
+      // WIB "today" so the void lands inside its own [soldAt, soldAt+30min)
+      // window — this test creates and voids its own sale rather than
+      // reusing the `march` fixtures, which are all outside that window.
+      const todayWib = new Date(Date.now() + 7 * 3600 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      const range = { startDate: todayWib, endDate: todayWib };
+
+      const before = await getReport('profit-loss', {
+        ...range,
+        branchId: branchAId,
+      }).expect(200);
+      const beforeBody = before.body as ProfitLossResponse;
+
+      const saleId = await postSale(
+        branchAId,
+        cashAccountId,
+        new Date().toISOString(),
+        [{ productId: pKopiId, quantity: '3' }],
+      );
+      const saleRes = await request(app.getHttpServer())
+        .get(`/api/v1/sales/${saleId}`)
+        .set('Cookie', owner.cookies)
+        .expect(200);
+      const totalAmount = (saleRes.body as { totalAmount: string }).totalAmount;
+
+      const afterSale = await getReport('profit-loss', {
+        ...range,
+        branchId: branchAId,
+      }).expect(200);
+      const afterSaleBody = afterSale.body as ProfitLossResponse;
+      // Sanity: the un-voided sale DOES move the margin view, or this test
+      // would pass trivially without the void logic being exercised at all.
+      expect(Number(afterSaleBody.salesRevenue)).toBeGreaterThan(
+        Number(beforeBody.salesRevenue),
+      );
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/sales/${saleId}/void`)
+        .set('Cookie', owner.cookies)
+        .expect(201);
+
+      const afterVoid = await getReport('profit-loss', {
+        ...range,
+        branchId: branchAId,
+      }).expect(200);
+      const afterVoidBody = afterVoid.body as ProfitLossResponse;
+
+      // Margin view: byte-identical to before the sale ever existed.
+      expect(afterVoidBody.salesRevenue).toBe(beforeBody.salesRevenue);
+      expect(afterVoidBody.cogs).toBe(beforeBody.cogs);
+      expect(afterVoidBody.netProfit).toBe(beforeBody.netProfit);
+
+      // productProfit/topProducts ride the same saleScope() fragment — spot
+      // check one of them too, not just profitLoss().
+      const products = await getReport('product-profit', {
+        ...range,
+        branchId: branchAId,
+      }).expect(200);
+      expect((products.body as ProductProfitResponse).totals.revenue).toBe(
+        beforeBody.salesRevenue,
+      );
+
+      // Cash view: cash.totalInflow/totalOutflow are unconditional on
+      // source_type, so the real reversal OUTFLOW is visible and nets the
+      // sale's INFLOW back to zero — both still reflect what actually
+      // happened to cash, unlike the margin view above.
+      expect(Number(afterVoidBody.cash.totalInflow)).toBe(
+        Number(beforeBody.cash.totalInflow) + Number(totalAmount),
+      );
+      expect(Number(afterVoidBody.cash.totalOutflow)).toBe(
+        Number(beforeBody.cash.totalOutflow) + Number(totalAmount),
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // 8. Cross-report invariants
   // ---------------------------------------------------------------------------
   describe('Cross-report invariants', () => {

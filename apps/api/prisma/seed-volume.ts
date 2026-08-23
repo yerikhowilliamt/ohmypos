@@ -39,7 +39,9 @@ const prisma = new PrismaClient({
 const monthsArg = process.argv.find((a) => a.startsWith('--months='));
 const MONTHS = monthsArg ? Number(monthsArg.split('=')[1]) : 12;
 if (!Number.isInteger(MONTHS) || MONTHS < 1 || MONTHS > 60) {
-  throw new Error(`--months must be an integer between 1 and 60, got: ${monthsArg}`);
+  throw new Error(
+    `--months must be an integer between 1 and 60, got: ${monthsArg}`,
+  );
 }
 
 const BATCH_SIZE = 5000;
@@ -190,7 +192,10 @@ async function ensureMasterData() {
     {
       name: 'Volume Teh Manis',
       sellPrice: 10000,
-      recipe: [{ material: 'Volume Teh', qty: 0.01 }, { material: 'Volume Gula', qty: 0.025 }],
+      recipe: [
+        { material: 'Volume Teh', qty: 0.01 },
+        { material: 'Volume Gula', qty: 0.025 },
+      ],
     },
     {
       name: 'Volume Coklat Susu',
@@ -257,7 +262,13 @@ async function ensureMasterData() {
     products.push({ id: product.id, sellPrice: def.sellPrice, hpp, recipe });
   }
 
-  return { branches, accounts, user, products, salesCategoryId: salesCategory.id };
+  return {
+    branches,
+    accounts,
+    user,
+    products,
+    salesCategoryId: salesCategory.id,
+  };
 }
 
 async function main() {

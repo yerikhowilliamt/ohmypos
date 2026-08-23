@@ -63,6 +63,7 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 7.  **Documentation Log:** After tests pass and the task is complete, you MUST document the work in the respective logs under `docs/`: `06 - Error_Log.md`, `07 - Task_Log.md`, and/or `08 - Tech_Debt_Log.md`.
 8.  **Database Changes:** Run `pnpm --filter api prisma migrate dev --name <name>` to migrate, then `pnpm --filter api db:seed` to reset synthetic data. Remember: schema/migration changes require approval first (see Governance above).
 9.  **Code generation & Types:** Zod schemas drive both API validation and TS types. Do not manually type request/response objects if a Zod schema exists. **NEVER use the `any` type.**
+10. **Plan Closure Verification:** When a remediation/task plan is marked done, the commit or PR description MUST explicitly enumerate which plan items it closes (by ID, e.g. "Closes DEBT-009, DEBT-013"), cross-checked against the actual diff before committing — a plan item is not "closed" until its corresponding file changes are actually present in the diff. (Added after ERR-029: a previously approved remediation plan was believed shipped but was never actually executed, leaving a live defect in place until a second audit caught it.)
 
 ## Troubleshooting
 

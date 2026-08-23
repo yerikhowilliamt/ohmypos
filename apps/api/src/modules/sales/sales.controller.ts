@@ -82,4 +82,19 @@ export class SalesController {
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.salesService.findOne(id);
   }
+
+  /**
+   * DEBT-010 — minimal interim void, ADMIN/OWNER only. `userId` comes from the
+   * JWT, same reasoning as `create()`'s cashier attribution: a client-supplied
+   * voider id would be a forgeable audit trail.
+   */
+  @Post(':id/void')
+  @UseGuards(RoleGuard)
+  @Roles('ADMIN', 'OWNER')
+  async void(
+    @Param('id', ParseUUIDPipe) id: string,
+    @ReqUser('sub') userId: string,
+  ) {
+    return this.salesService.void(id, userId);
+  }
 }

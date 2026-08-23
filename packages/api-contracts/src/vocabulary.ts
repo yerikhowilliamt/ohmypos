@@ -102,6 +102,7 @@ export const LEDGER_SOURCE_TYPE_LABELS: Readonly<
   SALE: 'Penjualan',
   PURCHASE: 'Pembelian',
   PAYABLE_SETTLEMENT: 'Pelunasan Utang',
+  SALE_VOID: 'Pembatalan Penjualan',
 };
 
 export function formatLedgerSourceType(source: LedgerSourceType): string {
