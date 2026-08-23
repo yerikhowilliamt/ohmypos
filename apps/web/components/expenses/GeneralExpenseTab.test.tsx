@@ -9,6 +9,14 @@ import { renderWithClient } from '@/test/test-utils';
 import { GeneralExpenseTab } from './GeneralExpenseTab';
 import * as apiModule from '@/lib/api';
 
+vi.mock('@/lib/export', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/export')>();
+  return {
+    ...actual,
+    exportRowsToXlsx: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 vi.mock('@/lib/api', () => ({
   apiFetch: vi.fn(),
   API_BASE_URL: 'http://localhost:4015/api/v1',
