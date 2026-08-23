@@ -19,5 +19,6 @@ export async function login(
   await page.locator('input[type="email"]').fill(creds.email);
   await page.locator('input[type="password"]').fill(creds.password);
   await page.locator('button:has-text("Masuk")').click();
-  await page.waitForURL(/\/(master-data|reconciliation|sales)/);
+  // OWNER → /dashboard, ADMIN → /master-data, KASIR → /sales
+  await page.waitForURL(/\/(dashboard|master-data|reconciliation|sales)/);
 }
