@@ -424,6 +424,14 @@ model Sale {
   totalAmount Decimal @map("total_amount") @db.Decimal(18, 2)
   soldAt DateTime @map("sold_at")
 
+  /// Kunci idempotensi yang dibuat klien (TASK-082, menutup DEBT-017 dan
+  /// DEF-A1/A2/A5). Nullable: baris sebelum TASK-082 tidak punya kunci, dan
+  /// Postgres mengizinkan NULL berulang pada indeks unik, jadi tidak ada
+  /// backfill. Polanya menyalin Allocation.idempotencyKey — indeks unik-lah
+  /// yang benar-benar menegakkan deduplikasi di bawah balapan; cek di service
+  /// hanya membuat kasus umum murah.
+  idempotencyKey String? @map("idempotency_key")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -442,6 +450,7 @@ model Sale {
   @@index([branchId, soldAt])
   @@index([userId])
   @@index([accountId])
+  @@unique([idempotencyKey])
   @@map("sales")
 }
 
@@ -531,6 +540,9 @@ model SupplierPurchase {
 
   note String?
 
+  /// Kunci idempotensi klien (TASK-082).
+  idempotencyKey String? @map("idempotency_key")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -550,6 +562,7 @@ model SupplierPurchase {
   @@index([purchaseDate])
   /// Dashboard 2.2 lists purchases by branch and date; KASIR always filters by branch.
   @@index([branchId, purchaseDate])
+  @@unique([idempotencyKey])
   @@map("supplier_purchases")
 }
 
@@ -627,6 +640,9 @@ model PayableSettlement {
   settledAt DateTime @map("settled_at")
   note      String?
 
+  /// Kunci idempotensi klien (TASK-082).
+  idempotencyKey String? @map("idempotency_key")
+
   /// Append-only, like Allocation — a settlement is corrected by recording
   /// another movement, never by editing history.
   createdAt DateTime @default(now()) @map("created_at")
@@ -637,6 +653,7 @@ model PayableSettlement {
 
   @@index([payableId])
   @@index([settledAt])
+  @@unique([idempotencyKey])
   @@map("payable_settlements")
 }
 

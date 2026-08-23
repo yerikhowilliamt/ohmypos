@@ -90,3 +90,14 @@ export const SignedMoneyString = decimalString({
   nonNegative: false,
 });
 export type SignedMoneyString = z.infer<typeof SignedMoneyString>;
+
+/**
+ * Kunci idempotensi yang dibuat klien untuk endpoint pencipta uang (TASK-082).
+ *
+ * UUID, bukan string bebas: panjangnya pasti, tabrakan tak sengaja secara
+ * praktis mustahil, dan `crypto.randomUUID()` tersedia di setiap browser yang
+ * POS ini dukung. Opsional supaya klien lama tetap jalan — tanpa kunci,
+ * perilakunya persis seperti sebelum TASK-082, termasuk risikonya.
+ */
+export const IdempotencyKey = UuidString;
+export type IdempotencyKey = z.infer<typeof IdempotencyKey>;

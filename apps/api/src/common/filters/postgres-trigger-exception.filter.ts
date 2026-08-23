@@ -56,9 +56,21 @@ export class PostgresTriggerExceptionFilter implements ExceptionFilter {
       });
     }
 
+    const request = host.switchToHttp().getRequest<{
+      method?: string;
+      url?: string;
+      id?: string;
+    }>();
+
     // Log the entity/operation, never the payload (Playbook §9 — no PII in logs).
     this.logger.error(
-      `Unhandled exception: ${exception instanceof Error ? exception.name : typeof exception}`,
+      {
+        err: exception,
+        correlationId: request?.id,
+        method: request?.method,
+        url: request?.url,
+      },
+      `Unhandled exception: ${exception instanceof Error ? exception.name : typeof exception} — ${exception instanceof Error ? exception.message : ''}`,
     );
 
     return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({

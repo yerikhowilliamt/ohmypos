@@ -56,3 +56,12 @@ export class CentralBranchNotSellableException extends BadRequestException {
     this.name = 'CentralBranchNotSellableException';
   }
 }
+
+export class BackdatedSaleException extends BadRequestException {
+  constructor(limitDays: number) {
+    super(
+      `Tanggal transaksi melampaui batas input susulan (maksimal ${limitDays} hari yang lalu untuk kasir). Hubungi Owner untuk transaksi periode lampau.`,
+    );
+    this.name = 'BackdatedSaleException';
+  }
+}

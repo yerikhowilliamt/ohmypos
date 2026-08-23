@@ -35,7 +35,11 @@ export class ImportController {
 
   @Post('csv/:accountId')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
   @ApiOperation({ summary: 'Import a bank statement CSV into an account' })
   @ApiConsumes('multipart/form-data')
   @ApiQuery({ name: 'format', enum: ['BCA', 'MANDIRI'] })
@@ -76,7 +80,11 @@ export class ImportController {
    */
   @Post('pdf/:accountId')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
   @ApiOperation({ summary: 'Import a bank statement PDF into an account' })
   @ApiConsumes('multipart/form-data')
   @ApiQuery({ name: 'format', enum: ['MANDIRI_PDF'] })

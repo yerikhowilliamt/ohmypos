@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { LoggerModule } from 'nestjs-pino';
 import pino from 'pino';
 import { ZodValidationPipe } from 'nestjs-zod';
+import { z } from 'zod';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RoleGuard } from './common/guards/role.guard';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
@@ -35,10 +36,21 @@ import { SalesModule } from './modules/sales/sales.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { ReportsModule } from './modules/reports/reports.module';
 
+const EnvSchema = z.object({
+  DATABASE_URL: z.string().min(1),
+  JWT_SECRET: z.string().min(32),
+  JWT_REFRESH_SECRET: z.string().min(32),
+  DEVICE_COOKIE_SECRET: z.string().min(32),
+  CORS_ORIGIN: z.string().optional(),
+  PORT: z.coerce.number().int().optional(),
+  THROTTLE_LIMIT: z.coerce.number().int().optional(),
+});
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate: (config) => EnvSchema.parse(config),
       envFilePath:
         process.env.NODE_ENV === 'production' ? '.env' : ['.env.local', '.env'],
     }),

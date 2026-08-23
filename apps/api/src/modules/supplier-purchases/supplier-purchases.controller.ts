@@ -15,6 +15,7 @@ import { BranchScopeGuard } from '../../common/guards/branch-scope.guard';
 import { BranchScoped } from '../../common/decorators/branch-scoped.decorator';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ReqUser } from '../../common/decorators/req-user.decorator';
 import {
   CreateSupplierPurchaseDto,
   SupplierPurchaseQueryDto,
@@ -37,8 +38,11 @@ export class SupplierPurchasesController {
   @Post()
   @UseGuards(BranchScopeGuard)
   @BranchScoped('body.branchId')
-  create(@Body() dto: CreateSupplierPurchaseDto) {
-    return this.supplierPurchasesService.create(dto);
+  create(
+    @Body() dto: CreateSupplierPurchaseDto,
+    @ReqUser('role') role: string,
+  ) {
+    return this.supplierPurchasesService.create(dto, role);
   }
 
   @Get()

@@ -35,3 +35,12 @@ export class CentralBranchNotAssignableException extends BadRequestException {
     this.name = 'CentralBranchNotAssignableException';
   }
 }
+
+export class BackdatedPurchaseException extends BadRequestException {
+  constructor(limitDays: number) {
+    super(
+      `Tanggal transaksi pembelian melampaui batas input susulan (maksimal ${limitDays} hari yang lalu untuk kasir). Hubungi Owner untuk transaksi periode lampau.`,
+    );
+    this.name = 'BackdatedPurchaseException';
+  }
+}

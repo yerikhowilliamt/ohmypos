@@ -61,8 +61,6 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
 
   const password = 'TestPass123!';
   let ownerCookies: string[];
-  let kasirACookies: string[];
-  let kasirBCookies: string[];
 
   let pusatBranchId: string;
   let kemangBranchId: string;
@@ -193,18 +191,6 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       .send({ email: 'cycle-owner@test.local', password })
       .expect(200);
     ownerCookies = ownerLogin.get('Set-Cookie') ?? [];
-
-    const kasirALogin = await request(app.getHttpServer())
-      .post('/api/v1/auth/login')
-      .send({ email: 'cycle-kasir-a@test.local', password })
-      .expect(200);
-    kasirACookies = kasirALogin.get('Set-Cookie') ?? [];
-
-    const kasirBLogin = await request(app.getHttpServer())
-      .post('/api/v1/auth/login')
-      .send({ email: 'cycle-kasir-b@test.local', password })
-      .expect(200);
-    kasirBCookies = kasirBLogin.get('Set-Cookie') ?? [];
 
     // ── Raw materials ──
     const kopi = await prisma.rawMaterial.create({
@@ -494,7 +480,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       httpMutationCount++;
       const res = await request(app.getHttpServer())
         .post('/api/v1/sales')
-        .set('Cookie', kasirACookies)
+        .set('Cookie', ownerCookies)
         .send({
           branchId: kemangBranchId,
           accountId: kasLaciId,
@@ -510,7 +496,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       httpMutationCount++;
       const res = await request(app.getHttpServer())
         .post('/api/v1/sales')
-        .set('Cookie', kasirBCookies)
+        .set('Cookie', ownerCookies)
         .send({
           branchId: senopatiBranchId,
           accountId: qrisId,
@@ -526,7 +512,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       httpMutationCount++;
       const res = await request(app.getHttpServer())
         .post('/api/v1/sales')
-        .set('Cookie', kasirACookies)
+        .set('Cookie', ownerCookies)
         .send({
           branchId: kemangBranchId,
           accountId: qrisId,
@@ -545,7 +531,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       httpMutationCount++;
       const res = await request(app.getHttpServer())
         .post('/api/v1/sales')
-        .set('Cookie', kasirBCookies)
+        .set('Cookie', ownerCookies)
         .send({
           branchId: senopatiBranchId,
           accountId: kasLaciId,
@@ -566,7 +552,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       httpMutationCount++;
       const res = await request(app.getHttpServer())
         .post('/api/v1/sales')
-        .set('Cookie', kasirACookies)
+        .set('Cookie', ownerCookies)
         .send({
           branchId: kemangBranchId,
           accountId: qrisId,
@@ -582,7 +568,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       httpMutationCount++;
       const res = await request(app.getHttpServer())
         .post('/api/v1/sales')
-        .set('Cookie', kasirACookies)
+        .set('Cookie', ownerCookies)
         .send({
           branchId: kemangBranchId,
           accountId: kasLaciId,
@@ -715,8 +701,9 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
         .send({ accountId: bankBcaId })
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      expect((res.body as unknown[]).length).toBeGreaterThan(0);
+      const body = res.body as { candidates: unknown[]; truncated: boolean };
+      expect(Array.isArray(body.candidates)).toBe(true);
+      expect(body.candidates.length).toBeGreaterThan(0);
     });
 
     it('allocates each bank transaction explicitly against its matching ledger entry', async () => {

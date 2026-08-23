@@ -1,5 +1,7 @@
-import { InternalServerErrorException } from '@nestjs/common';
+import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
+
+const logger = new Logger('SystemRefs');
 
 /**
  * ADR-014 (plan §3): LedgerEntry.branchId is NOT NULL, but a central purchase
@@ -21,9 +23,11 @@ export async function resolveLedgerBranchId(
     where: { name: CENTRAL_BRANCH_NAME },
   });
   if (!central) {
-    // An environment fault, not a client error: the seed owns this row.
-    throw new InternalServerErrorException(
-      `System branch "${CENTRAL_BRANCH_NAME}" is missing — run \`pnpm --filter api db:seed\``,
+    logger.error(
+      `System reference missing: branch "${CENTRAL_BRANCH_NAME}". Run the seed for this environment.`,
+    );
+    throw new ServiceUnavailableException(
+      'Konfigurasi sistem belum lengkap. Hubungi administrator.',
     );
   }
   return central.id;
@@ -36,9 +40,11 @@ export async function resolvePurchaseCategoryId(
     where: { name: PURCHASE_CATEGORY_NAME },
   });
   if (!category) {
-    // An environment fault, not a client error: the seed owns this row.
-    throw new InternalServerErrorException(
-      `System category "${PURCHASE_CATEGORY_NAME}" is missing — run \`pnpm --filter api db:seed\``,
+    logger.error(
+      `System reference missing: category "${PURCHASE_CATEGORY_NAME}". Run the seed for this environment.`,
+    );
+    throw new ServiceUnavailableException(
+      'Konfigurasi sistem belum lengkap. Hubungi administrator.',
     );
   }
   return category.id;
@@ -51,9 +57,11 @@ export async function resolveSaleCategoryId(
     where: { name: SALE_CATEGORY_NAME },
   });
   if (!category) {
-    // An environment fault, not a client error: the seed owns this row.
-    throw new InternalServerErrorException(
-      `System category "${SALE_CATEGORY_NAME}" is missing — run \`pnpm --filter api db:seed\``,
+    logger.error(
+      `System reference missing: category "${SALE_CATEGORY_NAME}". Run the seed for this environment.`,
+    );
+    throw new ServiceUnavailableException(
+      'Konfigurasi sistem belum lengkap. Hubungi administrator.',
     );
   }
   return category.id;

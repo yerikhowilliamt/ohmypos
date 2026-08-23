@@ -363,6 +363,82 @@ describe('Auth & role-based access control (e2e)', () => {
     });
   });
 
+  describe('ledger-entries/:id access control (DEF-QA-01)', () => {
+    let branchAEntryId: string;
+    let branchBEntryId: string;
+
+    beforeAll(async () => {
+      const [entryA, entryB] = await Promise.all([
+        prisma.ledgerEntry.create({
+          data: {
+            accountId,
+            categoryId,
+            branchId: branchA,
+            entryDate: new Date('2026-03-03'),
+            amount: '15.00',
+            type: 'INFLOW',
+          },
+        }),
+        prisma.ledgerEntry.create({
+          data: {
+            accountId,
+            categoryId,
+            branchId: branchB,
+            entryDate: new Date('2026-03-03'),
+            amount: '25.00',
+            type: 'INFLOW',
+          },
+        }),
+      ]);
+      branchAEntryId = entryA.id;
+      branchBEntryId = entryB.id;
+    });
+
+    it('lets a KASIR read a ledger entry from their own branch', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/v1/ledger-entries/${branchAEntryId}`)
+        .set('Cookie', kasir.cookies)
+        .expect(200);
+    });
+
+    it('rejects a KASIR reading a ledger entry from another branch (IDOR)', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/v1/ledger-entries/${branchBEntryId}`)
+        .set('Cookie', kasir.cookies)
+        .expect(403);
+    });
+
+    it('rejects a KASIR updating any ledger entry, even their own branch', async () => {
+      await request(app.getHttpServer())
+        .patch(`/api/v1/ledger-entries/${branchAEntryId}`)
+        .set('Cookie', kasir.cookies)
+        .send({ amount: '999.00' })
+        .expect(403);
+    });
+
+    it('rejects a KASIR deleting any ledger entry', async () => {
+      await request(app.getHttpServer())
+        .delete(`/api/v1/ledger-entries/${branchAEntryId}`)
+        .set('Cookie', kasir.cookies)
+        .expect(403);
+    });
+
+    it('lets an ADMIN update a ledger entry from any branch', async () => {
+      await request(app.getHttpServer())
+        .patch(`/api/v1/ledger-entries/${branchBEntryId}`)
+        .set('Cookie', admin.cookies)
+        .send({ amount: '30.00' })
+        .expect(200);
+    });
+
+    it('lets an OWNER delete a ledger entry from any branch', async () => {
+      await request(app.getHttpServer())
+        .delete(`/api/v1/ledger-entries/${branchBEntryId}`)
+        .set('Cookie', owner.cookies)
+        .expect(200);
+    });
+  });
+
   describe('role/branch consistency (ADR-011 §2)', () => {
     it('rejects creating a KASIR without a branch', async () => {
       await request(app.getHttpServer())

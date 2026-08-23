@@ -126,12 +126,14 @@ describe('PayableSettlementDialog', () => {
       );
     expect(postCall).toBeDefined();
     const payload = JSON.parse(String(postCall?.[1]?.body));
-    expect(payload).toEqual({
-      accountId: mockAccounts[0].id,
-      amount: '500000',
-      settledAt: expect.any(String),
-      note: '',
-    });
+    expect(payload).toEqual(
+      expect.objectContaining({
+        accountId: mockAccounts[0].id,
+        amount: '500000',
+        settledAt: expect.any(String),
+        note: '',
+      }),
+    );
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

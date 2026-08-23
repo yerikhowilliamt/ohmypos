@@ -83,7 +83,7 @@ export class ProductsController {
   @Roles('OWNER', 'ADMIN')
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: 5 * 1024 * 1024 },
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
       fileFilter: (_req, file, cb) => {
         const allowedMimeTypes = [
           'image/jpeg',

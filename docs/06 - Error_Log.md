@@ -37,6 +37,26 @@
 
 ## Log
 
+### ERR-029 — Second-pass adversarial QA review found a planned remediation (TASK-101–105) that was never actually executed
+
+- **Date found:** 2026-08-23
+- **Found during:** A second `/adversarial-qa-review` pass against `feat/adversarial-qa-remediation`, after TASK-082–099 (ERR-028's remediation wave) had already landed in commit `529f12e`.
+- **Symptom:** `docs/plannings/2026-08-23-remediasi-qa-production-ready.md` documents 5 defects (DEF-001–005) with a fully-specified fix for each — but none of the 5 were actually in the commit whose message claimed "adversarial review remediation across financial, concurrency, and security gates." Concretely: `GET/PATCH/DELETE /ledger-entries/:id` had no `@Roles`/`@BranchScoped` at all (any authenticated `KASIR` could read/edit/delete any branch's manual ledger entries); `AllocationService.revoke()` still locked only the `allocations` row, not the parent `bank_transactions`/`ledger_entries` rows `create()` locks; `MatchingService.proposeMatches()` had no transaction or row-locking at all, so two concurrent reconciliation sessions could double-propose the same bank transactions.
+- **Root cause:** The planning document was written and left in the repo in its "awaiting approval" state; a later commit that also touched `matching.service.ts` and `allocation.service.ts` for unrelated reasons (the DEF-A4 window-bound fix, TASK-084) was mistaken for having covered this plan too, because it touched the same files. Nothing in the repo cross-checks a standing plan document against what a commit actually shipped.
+- **Resolution:** Implemented all 5 items directly (this session): `RoleGuard` + `@Roles('OWNER','ADMIN')` on `PATCH`/`DELETE /ledger-entries/:id`, service-level branch check for `GET :id` when the caller is `KASIR`; `AllocationService.revoke()` now locks `bank_transactions` then `ledger_entries` (same order as `create()`) before touching the `allocations` row; `MatchingService.proposeMatches()` now runs inside a `$transaction` and selects `UNRESOLVED` bank transactions with `FOR UPDATE SKIP LOCKED`. The 5th item (`SplitAllocationDialog.tsx`'s `Select value={line.ledgerEntryId || undefined}`) was a real controlled/uncontrolled toggle and is fixed; the plan's other named file, `AccountFormDialog.tsx`, was checked and its `Select` was already always-controlled — no change needed there. The reports.service.ts timezone item (DEF-004) was investigated and found not to be a real defect — `entry_date` is written and compared as UTC-instant `Date` objects consistently on both sides, so no fix was applied.
+- **Prevention:** Added e2e coverage for every item that had none: `ledger-entries/:id` IDOR/RBAC cases in `auth-rbac.e2e-spec.ts`, a concurrent create/revoke regression in `allocation-sum.e2e-spec.ts`, and a concurrent double-propose regression in the same file. A standing plan document with an "awaiting approval" status line should be treated as a checklist to close out or explicitly reject, not archived as though the next unrelated commit touching the same files closed it.
+- **Severity:** Critical — the ledger-entries gap is a live cross-branch IDOR on financial data with no role restriction at all.
+
+### ERR-028 — Prisma 7 `meta.target` variations in unique constraint violation errors (`P2002`)
+
+- **Date found:** 2026-08-23
+- **Found during:** TASK-082 & TASK-085 (E2E testing of idempotency keys under concurrent race conditions)
+- **Symptom:** Concurrency race tests for `POST /sales`, `POST /supplier-purchases`, and `POST /payables/:id/settlements` received 500 instead of 200/201 when `P2002` was thrown by loser transactions.
+- **Root cause:** The initial `isIdempotencyReplay` helper strictly matched `meta.target === indexName` or array containing `idempotency_key`. In Prisma 7 with driver adapters, `meta.target` can arrive as a string, an array of strings, or field names in camelCase (`idempotencyKey`).
+- **Resolution:** Updated `isIdempotencyReplay` in `apps/api/src/common/idempotency.ts` to inspect string targets, array targets (checking both `idempotency_key` and `idempotencyKey`), and fallback to truthy for P2002 in idempotency-guarded endpoints.
+- **Prevention:** Always inspect runtime shapes of driver adapter error payloads in integration tests across concurrent execution branches.
+- **Severity:** High — caused replay logic to treat loser concurrent requests as 500s rather than returning the existing transaction response.
+
 ### ERR-027 — Asserting a paginated table's row total matched two elements, because the Export button now carries the same number
 
 - **Date found:** 2026-08-23

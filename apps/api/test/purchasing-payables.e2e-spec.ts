@@ -725,7 +725,7 @@ describe('Purchasing & Payables (e2e)', () => {
         .send({
           supplierId: supplierAId,
           branchId: branch1Id,
-          purchaseDate: '2026-08-16T10:00:00.000Z',
+          purchaseDate: new Date().toISOString(),
           paymentStatus: 'UNPAID',
           items: [
             {
@@ -748,7 +748,7 @@ describe('Purchasing & Payables (e2e)', () => {
         .send({
           supplierId: supplierAId,
           branchId: branch2Id,
-          purchaseDate: '2026-08-16T10:00:00.000Z',
+          purchaseDate: new Date().toISOString(),
           paymentStatus: 'UNPAID',
           items: [
             {
@@ -896,6 +896,83 @@ describe('Purchasing & Payables (e2e)', () => {
 
       const resBody = res.body as { data: unknown[] };
       expect(Array.isArray(resBody.data)).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 4b. Backdate limit — KASIR only (DEF-QA-06 / TASK-087)
+  // ---------------------------------------------------------------------------
+  describe('Backdate limit', () => {
+    it('rejects a KASIR purchase dated more than 3 days in the past', async () => {
+      const tooOld = new Date();
+      tooOld.setUTCDate(tooOld.getUTCDate() - 4);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', kasir1.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: branch1Id,
+          purchaseDate: tooOld.toISOString(),
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect((res.body as { message: string }).message).toContain(
+        'batas input susulan',
+      );
+    });
+
+    it('allows a KASIR purchase dated within the 3-day backdate window', async () => {
+      const withinWindow = new Date();
+      withinWindow.setUTCDate(withinWindow.getUTCDate() - 2);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', kasir1.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: branch1Id,
+          purchaseDate: withinWindow.toISOString(),
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
+    });
+
+    it('exempts OWNER from the KASIR backdate limit', async () => {
+      const wayOld = new Date();
+      wayOld.setUTCDate(wayOld.getUTCDate() - 10);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: branch1Id,
+          purchaseDate: wayOld.toISOString(),
+          paymentStatus: 'UNPAID',
+          items: [
+            {
+              rawMaterialId: rawMaterialGulaId,
+              quantity: '1.0000',
+              unitCost: '12000.00',
+            },
+          ],
+        })
+        .expect(201);
     });
   });
 

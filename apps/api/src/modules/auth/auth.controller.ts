@@ -141,7 +141,11 @@ export class AuthController {
 
   @Post('me/photo')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+    }),
+  )
   @ApiOperation({ summary: 'Upload your own profile photo' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

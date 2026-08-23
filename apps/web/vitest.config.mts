@@ -15,5 +15,14 @@ export default defineConfig({
     // Radix dialogs/popovers in jsdom are slow; 5s default flakes under
     // turbo's parallel lint/typecheck/build CPU load.
     testTimeout: 15000,
+    coverage: {
+      provider: 'v8',
+      thresholds: {
+        statements: 80,
+        branches: 75,
+        functions: 74,
+        lines: 81,
+      },
+    },
   },
 });
