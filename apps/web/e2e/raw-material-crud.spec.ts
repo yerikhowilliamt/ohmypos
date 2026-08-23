@@ -4,9 +4,7 @@ import { OWNER_STATE } from './fixtures';
 test('OWNER can create a raw material', async ({ browser }) => {
   const context = await browser.newContext({ storageState: OWNER_STATE });
   const page = await context.newPage();
-  await page.goto('/master-data');
-  // Switch to Bahan Baku tab
-  await page.locator('[role="tab"]:has-text("Bahan Baku")').click();
+  await page.goto('/master-data/raw-materials');
   // Open add dialog
   await page.locator('button:has-text("Tambah Bahan Baku")').first().click();
   // Fill the form
