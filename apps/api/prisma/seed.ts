@@ -38,7 +38,7 @@ import { SalesService } from '../src/modules/sales/sales.service';
 async function main() {
   const prisma = new PrismaService();
 
-  const stockMovementsService = new StockMovementsService();
+  const stockMovementsService = new StockMovementsService(prisma);
   const ledgerEntriesService = new LedgerEntriesService(prisma);
   const supplierPurchasesService = new SupplierPurchasesService(
     prisma,
