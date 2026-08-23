@@ -9,6 +9,10 @@ const useSales = vi.fn();
 
 vi.mock('@/hooks/usePos', () => ({
   useSales: (params: unknown) => useSales(params),
+  useVoidSale: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+  }),
 }));
 vi.mock('@/hooks/useBranches', () => ({
   useBranches: () => ({ data: [] }),

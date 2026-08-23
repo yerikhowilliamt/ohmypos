@@ -38,7 +38,7 @@ import { SalesService } from '../src/modules/sales/sales.service';
 async function main() {
   const prisma = new PrismaService();
 
-  const stockMovementsService = new StockMovementsService();
+  const stockMovementsService = new StockMovementsService(prisma);
   const ledgerEntriesService = new LedgerEntriesService(prisma);
   const supplierPurchasesService = new SupplierPurchasesService(
     prisma,
@@ -140,9 +140,7 @@ async function main() {
     ),
   );
   const categoryPenjualan = categories.find((c) => c.name === 'Penjualan')!;
-  const categoryOperasional = categories.find(
-    (c) => c.name === 'Operasional',
-  )!;
+  const categoryOperasional = categories.find((c) => c.name === 'Operasional')!;
 
   const ownerEmail = process.env.SEED_OWNER_EMAIL ?? 'owner@ohmypos.local';
   const ownerPassword = process.env.SEED_OWNER_PASSWORD ?? 'ChangeMe123!';

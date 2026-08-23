@@ -42,6 +42,7 @@ const EnvSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   DEVICE_COOKIE_SECRET: z.string().min(32),
   CORS_ORIGIN: z.string().optional(),
+  SENTRY_DSN: z.string().url().optional(),
   PORT: z.coerce.number().int().optional(),
   THROTTLE_LIMIT: z.coerce.number().int().optional(),
 });

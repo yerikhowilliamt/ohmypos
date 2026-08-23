@@ -127,6 +127,9 @@ const saleResponse: SaleResponse = {
       lineTotal: '40000.00',
     },
   ],
+  status: 'COMPLETED',
+  voidedAt: null,
+  voidedByUserId: null,
   createdAt: '2026-08-17T03:00:00.000Z',
   updatedAt: '2026-08-17T03:00:00.000Z',
 };

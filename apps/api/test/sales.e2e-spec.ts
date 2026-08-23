@@ -342,6 +342,12 @@ describe('Sales (e2e)', () => {
       .send(body);
   }
 
+  async function voidSale(cookies: string[], id: string) {
+    return request(app.getHttpServer())
+      .post(`/api/v1/sales/${id}/void`)
+      .set('Cookie', cookies);
+  }
+
   async function cleanup() {
     // SaleItem cascades from Sale, but deleted explicitly anyway to match the
     // repo's established style (Phase 4's SupplierPurchaseItem does the same
@@ -987,6 +993,195 @@ describe('Sales (e2e)', () => {
         items: [{ productId: pGuardId, quantity: '1' }],
       });
       expect(asAdmin.status).toBe(201);
+    });
+  });
+
+  describe('Price override restriction (DEBT-009)', () => {
+    // KASIR's 3-day backdate limit (see 'Backdate limit' above) runs before
+    // this check in Phase 1 — use "now", not a fixed historical date, so
+    // these cases actually exercise the override check, not the date guard.
+    it('rejects a KASIR sale with a per-line price that differs from the master price', async () => {
+      const res = await postSale(kasir1.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: new Date().toISOString(),
+        items: [
+          { productId: pOverrideId, quantity: '1', unitPrice: '15000.00' },
+        ],
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { message: string }).message).toContain(
+        'tidak diizinkan mengubah harga',
+      );
+    });
+
+    it('allows a KASIR sale that sends the exact master price explicitly', async () => {
+      const res = await postSale(kasir1.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: new Date().toISOString(),
+        items: [
+          { productId: pOverrideId, quantity: '1', unitPrice: '18000.00' },
+        ],
+      });
+      expect(res.status).toBe(201);
+    });
+
+    it('allows a KASIR sale with no unitPrice at all', async () => {
+      const res = await postSale(kasir1.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: new Date().toISOString(),
+        items: [{ productId: pOverrideId, quantity: '1' }],
+      });
+      expect(res.status).toBe(201);
+    });
+
+    it('still allows ADMIN and OWNER to override a line price', async () => {
+      const asAdmin = await postSale(admin.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: new Date().toISOString(),
+        items: [
+          { productId: pOverrideId, quantity: '1', unitPrice: '15000.00' },
+        ],
+      });
+      expect(asAdmin.status).toBe(201);
+
+      const asOwner = await postSale(owner.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: new Date().toISOString(),
+        items: [
+          { productId: pOverrideId, quantity: '1', unitPrice: '15000.00' },
+        ],
+      });
+      expect(asOwner.status).toBe(201);
+    });
+  });
+
+  describe('Void (DEBT-010)', () => {
+    it('rejects a KASIR attempt to void a sale', async () => {
+      const created = await postSale(owner.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: new Date().toISOString(),
+        items: [{ productId: pBaseId, quantity: '1' }],
+      });
+      expect(created.status).toBe(201);
+
+      const res = await voidSale(
+        kasir1.cookies,
+        (created.body as SaleResponse).id,
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it('allows ADMIN/OWNER to void within the window, and fully reverses stock + cash', async () => {
+      const [gulaBefore, kopiBefore] = await Promise.all([
+        prisma.rawMaterial.findUniqueOrThrow({ where: { id: mBaseGulaId } }),
+        prisma.rawMaterial.findUniqueOrThrow({ where: { id: mBaseKopiId } }),
+      ]);
+      const accountBefore = await prisma.account.findUniqueOrThrow({
+        where: { id: accountId },
+      });
+
+      const created = await postSale(owner.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: new Date().toISOString(),
+        items: [{ productId: pBaseId, quantity: '2' }],
+      });
+      expect(created.status).toBe(201);
+      const saleId = (created.body as SaleResponse).id;
+
+      const voided = await voidSale(admin.cookies, saleId);
+      expect(voided.status).toBe(201);
+      const voidedBody = voided.body as SaleResponse;
+      expect(voidedBody.status).toBe('VOIDED');
+      expect(voidedBody.voidedAt).not.toBeNull();
+      expect(voidedBody.voidedByUserId).toBeTruthy();
+
+      const [gulaAfter, kopiAfter] = await Promise.all([
+        prisma.rawMaterial.findUniqueOrThrow({ where: { id: mBaseGulaId } }),
+        prisma.rawMaterial.findUniqueOrThrow({ where: { id: mBaseKopiId } }),
+      ]);
+      // Sale consumed 2 × recipe, void puts every bit of it back — net zero.
+      expect(gulaAfter.currentStock.toFixed(4)).toBe(
+        gulaBefore.currentStock.toFixed(4),
+      );
+      expect(kopiAfter.currentStock.toFixed(4)).toBe(
+        kopiBefore.currentStock.toFixed(4),
+      );
+
+      const accountAfter = await prisma.account.findUniqueOrThrow({
+        where: { id: accountId },
+      });
+      // Cash view: the reversal is a real OUTFLOW ledger entry, not a delete —
+      // Account itself has no stored balance column (it's derived from
+      // LedgerEntry at query time), so this just confirms the row wasn't
+      // mutated in place.
+      expect(accountAfter.updatedAt.getTime()).toBe(
+        accountBefore.updatedAt.getTime(),
+      );
+
+      const reversalEntry = await prisma.ledgerEntry.findFirst({
+        where: { sourceType: 'SALE_VOID', sourceId: saleId },
+      });
+      expect(reversalEntry).not.toBeNull();
+      expect(reversalEntry!.type).toBe('OUTFLOW');
+      expect(reversalEntry!.amount.toFixed(2)).toBe(
+        (created.body as SaleResponse).totalAmount,
+      );
+    });
+
+    it('rejects voiding the same sale twice, including under a concurrent double-attempt', async () => {
+      const created = await postSale(owner.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: new Date().toISOString(),
+        items: [{ productId: pBaseId, quantity: '1' }],
+      });
+      const saleId = (created.body as SaleResponse).id;
+
+      const [first, second] = await Promise.all([
+        voidSale(owner.cookies, saleId),
+        voidSale(owner.cookies, saleId),
+      ]);
+      const statuses = [first.status, second.status].sort();
+      // One wins (201), one loses (400) — never both succeed, never both fail.
+      expect(statuses).toEqual([201, 400]);
+
+      const third = await voidSale(owner.cookies, saleId);
+      expect(third.status).toBe(400);
+    });
+
+    it('rejects a void attempted after the window has expired', async () => {
+      const old = new Date(Date.now() - 45 * 60_000); // 45 min ago > 30 min window
+      const created = await postSale(owner.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: old.toISOString(),
+        items: [{ productId: pBaseId, quantity: '1' }],
+      });
+      expect(created.status).toBe(201);
+
+      const res = await voidSale(
+        owner.cookies,
+        (created.body as SaleResponse).id,
+      );
+      expect(res.status).toBe(400);
+      expect((res.body as { message: string }).message).toContain(
+        'batas waktu pembatalan',
+      );
+    });
+
+    it('404s voiding a sale that does not exist', async () => {
+      const res = await voidSale(
+        owner.cookies,
+        '99999999-9999-4999-8999-999999999999',
+      );
+      expect(res.status).toBe(404);
     });
   });
 

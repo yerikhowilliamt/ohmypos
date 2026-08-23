@@ -109,6 +109,10 @@ export const SaleItemResponseSchema = z.object({
 });
 export type SaleItemResponse = z.infer<typeof SaleItemResponseSchema>;
 
+/** DEBT-010 — minimal interim void guard. No PARTIAL_REFUND value in v1. */
+export const SaleStatusSchema = z.enum(['COMPLETED', 'VOIDED']);
+export type SaleStatus = z.infer<typeof SaleStatusSchema>;
+
 export const SaleResponseSchema = z.object({
   id: UuidString,
   branchId: UuidString,
@@ -126,6 +130,10 @@ export const SaleResponseSchema = z.object({
   grossMargin: MoneyString,
   soldAt: DateTimeString,
   items: z.array(SaleItemResponseSchema),
+  /** DEBT-010 — COMPLETED unless voided within the same-day window. */
+  status: SaleStatusSchema,
+  voidedAt: DateTimeString.nullable(),
+  voidedByUserId: UuidString.nullable(),
   createdAt: DateTimeString,
   updatedAt: DateTimeString,
 });
@@ -165,7 +173,7 @@ export const SaleQuerySchema = PaginationQuerySchema.extend({
   /**
    * Free-text search over transaction id, branch name, cashier name and account
    * name — exactly the columns the toolbar used to filter client-side, which
-   * only ever saw the page on screen (DEBT-047).
+   * only ever saw the page on screen (DEBT-059).
    */
   search: z.string().trim().optional(),
   branchId: UuidString.optional(),

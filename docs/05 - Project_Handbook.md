@@ -68,7 +68,7 @@ Core principle to keep in mind while working in this repo: **any operation that 
 |---|---|
 | `00 - PRD.md` | Problem, goals, functional requirements per dashboard, confirmed branch policy |
 | `01 - System Design.md` | Monorepo structure, module responsibilities, key flows, deployment |
-| `02 - ADR.md` | The 12 architecturally significant decisions and their rationale |
+| `02 - ADR.md` | The architecturally significant decisions and their rationale (23 as of this writing — see the doc itself for the current count) |
 | `03 - ERD.md` | Field-level schema, relationships, combined diagram, porting notes |
 | `04 - Engineering Playbook.md` | Day-to-day rules — transactions, branch scoping, role enforcement, testing, CI, Definition of Done |
 | `DESIGN.md` | Design tokens, accessibility rules, component expectations |
@@ -103,7 +103,7 @@ Seed data (`pnpm --filter api db:seed`) uses entirely fictional branches, suppli
 - Stock and cash are centralized pools; there is no per-branch balance anywhere in the schema (ADR-004) — do not build features that assume otherwise without a new ADR revisiting this.
 - No message queue or background job runner in v1 — everything is synchronous request/response (System Design §9).
 - Reports are computed at query time, not from materialized views (ADR-008) — expect this to need revisiting once real transaction volume is known.
-- PDF bank statement parsing is out of scope, same as Kasync (PRD §10).
+- PDF bank statement parsing is supported for the Mandiri Livin e-statement only (ADR-022, reversing the original PRD §10 deferral). Other issuers are still CSV-only, and password-protected PDFs are rejected rather than decrypted.
 - User creation is `OWNER`-only with no approval workflow or self-registration — do not build an `ADMIN`-initiates/`OWNER`-approves flow without a new ADR revisiting ADR-011.
 - `ADMIN`'s frontend access is limited to `(back-office)/master-data` and `(back-office)/reconciliation` only — not reports, inventory, expenses, or user management (System Design v4 §5). This was a deliberate v1 decision, not an oversight — don't widen it without flagging it for a doc update first.
 - Ported tables follow Kasync's literal schema, not a re-derivation (ADR-012) — including enum names (`INFLOW`/`OUTFLOW`, not `INCOME`/`EXPENSE`) and the fields that carry import de-duplication and allocation idempotency. ERD §7 lists the porting traps.

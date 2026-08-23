@@ -17,6 +17,7 @@ allowBuilds:
   # the platform binary; without it, login cannot hash or verify a password.
   bcrypt: true
   canvas: false
+  '@sentry/cli': true
 minimumReleaseAgeExclude:
   - '@turbo/darwin-64@2.10.10'
   - '@turbo/darwin-arm64@2.10.10'

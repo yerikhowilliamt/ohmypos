@@ -116,7 +116,7 @@ export class ReportsService {
     const [moneyRows, cogsRows] = await Promise.all([
       this.prisma.$queryRaw<ProfitLossMoneyRow[]>`
         SELECT
-          COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'  AND le.source_type =  'SALE'), 0)   AS sales_revenue,
+          COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'  AND le.source_type =  'SALE' AND (s.id IS NULL OR s.status <> 'VOIDED')), 0)   AS sales_revenue,
           COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'  AND le.source_type <> 'SALE'), 0)   AS other_income,
           COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'OUTFLOW' AND le.source_type =  'MANUAL'), 0) AS operating_expenses,
           COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'OUTFLOW'
@@ -124,6 +124,12 @@ export class ReportsService {
           COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'), 0)                                 AS total_inflow,
           COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'OUTFLOW'), 0)                                AS total_outflow
         FROM ledger_entries le
+        -- DEBT-010: only join is used to exclude a voided sale's original
+        -- INFLOW from sales_revenue — total_inflow/total_outflow stay
+        -- unconditional on source_type/status by design, so a void's real
+        -- reversal OUTFLOW still nets the cash view to zero (see
+        -- report-filters.ts's saleScope() doc comment for the full split).
+        LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id
         WHERE ${ledgerWhere}`,
       this.prisma.$queryRaw<ProfitLossCogsRow[]>`
         SELECT
@@ -211,15 +217,17 @@ export class ReportsService {
 
     const rows = await this.prisma.$queryRaw<IncomeByAccountRow[]>`
       SELECT
-        le.account_id                                                        AS account_id,
-        a.name                                                               AS account_name,
-        a.type                                                               AS account_type,
-        COALESCE(SUM(le.amount), 0)                                          AS total,
-        COALESCE(SUM(le.amount) FILTER (WHERE le.source_type =  'SALE'), 0)  AS sales_total,
-        COALESCE(SUM(le.amount) FILTER (WHERE le.source_type <> 'SALE'), 0)  AS other_total,
-        COUNT(*)::int                                                        AS entry_count
+        le.account_id                                                                                          AS account_id,
+        a.name                                                                                                  AS account_name,
+        a.type                                                                                                  AS account_type,
+        COALESCE(SUM(le.amount), 0)                                                                             AS total,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.source_type = 'SALE' AND (s.id IS NULL OR s.status <> 'VOIDED')), 0) AS sales_total,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.source_type <> 'SALE'), 0)                                    AS other_total,
+        COUNT(*)::int                                                                                           AS entry_count
       FROM ledger_entries le
       JOIN accounts a ON a.id = le.account_id
+      -- DEBT-010: same voided-sale exclusion as profitLoss()'s moneyRows.
+      LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id
       WHERE le.type = 'INFLOW' AND ${ledgerWhere}
       GROUP BY le.account_id, a.name, a.type
       ORDER BY total DESC, a.name ASC`;
@@ -252,7 +260,11 @@ export class ReportsService {
           COALESCE(SUM(le.amount), 0) AS income,
           COUNT(*)::int               AS entry_count
         FROM ledger_entries le
-        WHERE le.type = 'INFLOW' AND ${ledgerWhere}
+        -- DEBT-010: same voided-sale exclusion as profitLoss()'s moneyRows —
+        -- non-sale INFLOW rows (le.source_type <> 'SALE') never match this
+        -- join, so they're unaffected either way.
+        LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id
+        WHERE le.type = 'INFLOW' AND (s.id IS NULL OR s.status <> 'VOIDED') AND ${ledgerWhere}
         GROUP BY 1`,
       this.prisma.$queryRaw<DailyCogsQueryRow[]>`
         SELECT

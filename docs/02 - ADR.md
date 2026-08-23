@@ -167,7 +167,7 @@
 
 ---
 
-## ADR-009: Hand-written shared API contract types in `packages/api-contracts` (not code-generated, for now)
+## ADR-009: Hand-written shared API contract types in `packages/api-contracts` (not code-generated, for now) — Superseded by ADR-010
 
 **Status:** Accepted, provisional
 

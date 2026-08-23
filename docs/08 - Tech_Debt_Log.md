@@ -51,6 +51,102 @@
 - **Priority:** Low
 - **Status:** Open
 
+### DEBT-059 — Search boxes on four server-paginated tables only searched the page already on screen (originally mislabeled DEBT-047)
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-072, while auditing every server-paginated table's search box
+- **Description:** `DataTable`'s search box was a TanStack column filter over the rows already rendered client-side. For a table with server-side pagination, that meant it searched only the current page (e.g. 25 rows) while looking like it searched the whole history. Affected Sales, Reconciliation, Stock Movements, and Attendance. This debt was originally logged and referenced under the ID "DEBT-047" in `TASK-072`'s planning doc and Task Log entry — a same-day ID collision with the unrelated, pre-existing `DEBT-047` below (e2e-suite flakiness, logged one day earlier on 2026-08-22). Renumbered here to DEBT-059 to resolve the collision; every reference to "DEBT-047" in a search-box context has been updated to DEBT-059.
+- **Why deferred:** Not deferred — closed the same day it was formally logged, as part of the TASK-067…074 pagination/sort/search/export series.
+- **Impact if unaddressed:** A search box that silently searches 25 rows instead of the whole table is a "lying control" (per the TASK-067…074 series' own framing) — an operator trusts a "no results" answer that may only mean "not on this page."
+- **Trigger condition:** N/A — resolved in the same task this was logged.
+- **Proposed resolution:** See resolution below.
+- **Priority:** Medium
+- **Status:** Resolved (2026-08-23, TASK-072) — `search` param added to `SaleQuerySchema`, `ReconciliationQuerySchema`, `StockMovementQuerySchema`, `AttendanceQuerySchema`; each service translates it into `OR`/`contains`/`mode: 'insensitive'`. `DataTable` gained a `serverSearch` prop that takes precedence over the old client-side `searchColumns` filter. Also closed DEBT-052 (attendance email search) in the same task.
+
+### DEBT-057 — e2e suite reports false failures when run twice within 60 seconds
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-073/TASK-074, while chasing an apparently-red e2e run
+- **Description:** Running `test:e2e` twice within roughly 60 seconds causes the second run to fail assorted, unrelated assertions — the second run inherits the first run's `@nestjs/throttler` budget rather than starting fresh, so requests that should succeed get rate-limited instead.
+- **Why deferred:** Confirmed to be a test-harness artifact, not a product defect — `git stash` against the committed baseline reproduced the identical failure, ruling out a regression from the work in progress at the time. Waiting ~75 seconds between full-suite runs reliably produces a clean 347/347 pass with no code change.
+- **Impact if unaddressed:** A developer or CI job that reruns the e2e suite too soon after a previous run sees an apparently-red suite and may waste time debugging code that isn't broken.
+- **Trigger condition:** If CI itself (not just a local rerun) starts showing this pattern — CI's throttler budget/timing may differ from local runs.
+- **Proposed resolution:** Either reset/isolate the throttler's in-memory store between e2e runs (e.g. a distinct store per test process, or an explicit reset in global teardown), or document the ~75s cooldown as the expected local workflow.
+- **Priority:** Low — test-infrastructure reliability, not a product defect.
+- **Status:** Open
+
+### DEBT-056 — No server-side export endpoint; export walks the list endpoint client-side up to a 5,000-row cap
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-073 (export-all-filtered-rows feature)
+- **Description:** `fetchAllPages.ts` exports by walking the existing paginated list endpoint 100 rows per request until the filtered set is exhausted, capped at 5,000 rows (`EXPORT_ROW_CAP`) — half the throttler's 100-request/60s budget. There is no dedicated server-side export endpoint that streams/generates the file directly.
+- **Why deferred:** The client-side walk was simpler to ship (Option A, approved) and, at measured volume, fast: TASK-073's browser verification pulled 594 rows in 6 requests, completing instantly.
+- **Impact if unaddressed:** Past the 5,000-row cap, the Export button refuses rather than truncates (a deliberate choice — see TASK-073), so the failure mode is a visible, honest error rather than silent data loss. But an operator who needs to export more than 5,000 filtered rows currently cannot, at all.
+- **Trigger condition:** `ExportTooLargeError` is actually seen by a real operator, or a single export's client-side walk takes longer than ~15 seconds.
+- **Proposed resolution:** Option B from TASK-073's planning doc — a dedicated server-side export endpoint that streams the file directly from the database, removing both the row cap and the client-side request-walking overhead.
+- **Priority:** Low — not yet triggered at measured volume.
+- **Status:** Open
+
+### DEBT-055 — Two Pengeluaran tabs (`GeneralExpenseTab`, `PurchaseEntryTab`) capped at 50 rows with no pagination footer
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-073, while inventorying every export call site
+- **Description:** `useLedgerEntries` and `useSupplierPurchases` requested a hardcoded `limit=50` and neither table passed a `pagination` prop, so Pengeluaran Umum and Pembelian Bahan Baku showed only the newest 50 rows with nothing on screen marking the truncation — worse than DEBT-048/DEBT-059's shape, since at least those had a visible (if incomplete) control.
+- **Why deferred:** Discovered mid-TASK-073 as a previously-unlogged defect; TASK-073's approved scope fixed only their *export* path, leaving the on-screen pagination footer for a dedicated follow-up task.
+- **Impact if unaddressed:** Pengeluaran Umum showing 10-of-several-hundred rows (post-fix default page size) with no indication more exist is a materially weaker screen than every other paginated table in the app.
+- **Trigger condition:** N/A — resolved the same day it was logged.
+- **Proposed resolution:** See resolution below.
+- **Priority:** Medium
+- **Status:** Resolved (2026-08-23, TASK-081) — both hooks converted to a shared `build*Query` pattern with `page`/`limit`/`sorting` state and a real pagination footer (`DEFAULT_EXPENSES_PAGE_SIZE = 10`, matching `PayablesTab`). Five columns with a `SortableHeader` for a key the backend doesn't support were also demoted to plain headers in the same task — see the task's own "trap that mattered most" note.
+
+### DEBT-054 — `ILIKE '%x%'` search predicates run without a supporting index (`pg_trgm` not adopted)
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-072, while implementing server-side search
+- **Description:** The `search` parameter added across Sales, Reconciliation, Stock Movements, and Attendance translates to `ILIKE '%keyword%'`, which cannot use a standard B-tree index. A `pg_trgm` trigram index would make it indexable, but adopting it needs its own schema migration and approval gate.
+- **Why deferred:** The API contract and frontend are byte-for-byte identical with or without the index, so nothing needs to be rewritten later — only the migration needs to land. Not adopted proactively because no real-volume measurement yet shows it's needed.
+- **Impact if unaddressed:** Search queries degrade to a sequential scan as table volume grows; at low volume (current state) this is unmeasured but presumed negligible.
+- **Trigger condition:** `EXPLAIN ANALYZE` against real production volume shows a sequential scan that is actually felt (per the roadmap's own framing) — not yet measured.
+- **Proposed resolution:** Add a `pg_trgm` GIN index on the searched columns via a new migration (schema/migration approval gate applies).
+- **Priority:** Low — unmeasured, and the fix is additive/non-breaking whenever it lands.
+- **Status:** Open
+
+### DEBT-053 — Pengeluaran screen's three tabs (`GeneralExpenseTab`, `PurchaseEntryTab`, `PayablesTab`) have no search box
+
+- **Date logged:** 2026-08-23 (originally scoped to `PayablesTab` alone; widened to all three tabs the same day once `PurchaseEntryTab` gained server pagination)
+- **Found during:** TASK-072 (originally, for `PayablesTab`); widened during TASK-081 once `PurchaseEntryTab` and `GeneralExpenseTab` also became server-paginated, making the same gap apply to all three
+- **Description:** All three tabs of the Pengeluaran screen are server-paginated but none has a search box — an operator looking for a specific invoice, purchase, or expense must page through manually. This is an absent feature, not a lying control: none of the three ever had a search box that claimed to search more than it did.
+- **Why deferred:** Adding search to all three is scoped as new capability, not a defect fix, and was out of scope for both TASK-072 (search-box remediation) and TASK-081 (pagination-footer remediation).
+- **Impact if unaddressed:** An operator searching for a specific transaction on any of these three tabs has no tool but manual paging.
+- **Trigger condition:** An operator is observed manually paging to find a specific invoice/purchase/expense.
+- **Proposed resolution:** Extend the same `search` param + `serverSearch` `DataTable` prop pattern already built for Sales/Reconciliation/Stock Movements/Attendance (TASK-072) to `LedgerEntryQuerySchema`/`SupplierPurchaseQuerySchema`/the existing `PayableQuerySchema`.
+- **Priority:** Low — feature gap, not a defect.
+- **Status:** Open
+
+### DEBT-049 — Three list endpoints accepted a sort key but ignored its direction
+
+- **Date logged:** 2026-08-23 (last open item of the TASK-067…074 series; exact originating task not separately recorded)
+- **Found during:** Identified during the TASK-067…074 pagination/sort/search/export audit
+- **Description:** `GET /supplier-purchases`, `GET /ledger-entries`, and `GET /suppliers` each accepted a `sortBy` parameter but pinned the direction in the service (`orderBy: { [sortBy ?? 'x']: 'desc' }`), so a client could choose the column but never the order.
+- **Why deferred:** Sequenced as the last item of the TASK-067…074 series rather than fixed opportunistically alongside an unrelated task, to keep each task's diff scoped to one concern.
+- **Impact if unaddressed:** A user clicking a column header to reverse sort order gets no effect — a lying control, the same class of defect the rest of the TASK-067…074 series existed to remove.
+- **Trigger condition:** N/A — resolved the same day it was logged.
+- **Proposed resolution:** See resolution below.
+- **Priority:** Medium
+- **Status:** Resolved (2026-08-23, TASK-074) — `sortOrder` added to all three query schemas, each service defaulting to its own pre-existing implicit order (`'desc'` for purchases/ledger entries, `'asc'` for suppliers) so omitting the param preserves prior behavior exactly.
+
+### DEBT-048 — Export button exported only the current page, not the full filtered result set
+
+- **Date logged:** 2026-08-23
+- **Found during:** Identified during the TASK-067…074 series; formally scoped in `docs/plannings/2026-08-23-full-export.md`
+- **Description:** `ExportButton` built its workbook from `table.getFilteredRowModel().rows` — under server pagination, that's one page. Exporting "Utang Pemasok" produced 25 rows for an accountant with nothing in the file marking it as partial.
+- **Why deferred:** Not deferred — scoped and closed in the same task it was formally logged (TASK-073), alongside DEBT-025 and DEBT-024.
+- **Impact if unaddressed:** A silently-partial financial export is the same "lying control" failure mode as an unpaginated table with no footer — the file looks complete and isn't.
+- **Trigger condition:** N/A — resolved in the same task this was logged.
+- **Proposed resolution:** See resolution below.
+- **Priority:** High — financial export data, not a cosmetic gap.
+- **Status:** Resolved (2026-08-23, TASK-073) — new `fetchAllPages.ts` walks the list endpoint to completion (capped at 5,000 rows — see DEBT-056), wired into six export call sites, each sharing its query builder with the on-screen fetch so the two can never drift apart.
+
 ### DEBT-047 — `npm run test:e2e` (full 13-file suite) is flaky under back-to-back load, beyond the already-known concurrency-burst ceiling
 
 - **Date logged:** 2026-08-22
@@ -62,7 +158,7 @@
 - **Trigger condition:** If the flake rate increases materially, or CI (not just local `pnpm dev` machines) starts showing it — CI runners have different resource ceilings than this local machine and may not reproduce this class of issue at all, or may reproduce it worse.
 - **Proposed resolution:** Re-run automatically once on e2e failure before treating a CI run as red (cheap, immediate mitigation). If it recurs often enough to matter, the next investigation step is event-loop-lag instrumentation (`perf_hooks.monitorEventLoopDelay`) correlated against request timestamps during a full run, to determine whether ts-jest's per-file compile pause is the shared trigger across all six observed failure modes.
 - **Priority:** Low — test-infrastructure reliability, not a product defect.
-- **Status:** Open
+- **Status:** Open, mitigated (2026-08-23) — CI `e2e` job now retries once automatically on failure (Plan §6 stop condition reached; root cause didn't converge within time-box). Local reproduction remains ~1-in-6 to 1-in-13 full runs; CI retry suppresses false-red runs without masking true regressions.
 
 ### DEBT-046 — `pnpm audit` in CI is advisory only (`continue-on-error: true`)
 
@@ -87,6 +183,42 @@
 - **Proposed resolution:** See ADR-023.
 - **Priority:** High
 - **Status:** Resolved (2026-08-22, Phase 14 Gate 1) — ADR-023 written and approved: `inventory/period.ts` now delegates to `common/period.ts` for WIB boundaries, the single place a calendar-month boundary is computed. A follow-on bug this fix would otherwise have introduced was found and fixed in the same pass: writing the WIB-shifted instant into `OpeningStock.periodMonth` (`@db.Date`) would have stored one calendar day earlier than every existing row, orphaning the `(rawMaterialId, periodMonth)` unique key. Fixed via a decoupled `periodMonthDate` field, verified empirically (not assumed) to reproduce the pre-fix stored date exactly — no data migration needed. `apps/api/test/inventory.e2e-spec.ts`'s Case R and Case D-1 were updated to the new (correct) WIB-based expected values. Full e2e suite (13 suites / 247 tests at the time) verified green.
+
+### DEBT-052 — Attendance search excluded user email
+
+- **Date logged:** 2026-08-22
+- **Found during:** TASK-071, while removing a `searchColumns` entry (`'userEmail'`) that referenced a column id `AttendanceLogTable` doesn't have (which was throwing a TanStack console error on every render)
+- **Description:** Removing the broken `'userEmail'` searchColumns entry (a pre-existing bug, unrelated to TASK-071's actual scope) meant attendance search could no longer match by email at all, even accidentally.
+- **Why deferred:** Fixing search properly for Attendance was TASK-072's scope (server-side search), not TASK-071's; TASK-071 only needed the console error gone.
+- **Impact if unaddressed:** An operator searching attendance by email would get no matches.
+- **Trigger condition:** N/A — resolved the next day.
+- **Proposed resolution:** See resolution below.
+- **Priority:** Low
+- **Status:** Resolved (2026-08-23, TASK-072) — Attendance's new server-side `search` param matches user name, user email, branch, and device label.
+
+### DEBT-051 — No aggregate endpoint for the attendance calendar matrix; it still fetches a bounded page and can undercount within a month
+
+- **Date logged:** 2026-08-22
+- **Found during:** TASK-071 (Option C, considered and deferred)
+- **Description:** `AttendanceCalendarMatrix` fetches attendance rows for the displayed month directly (now correctly bounded by the month's date range, per TASK-071's main fix) rather than calling a dedicated aggregate/summary endpoint. A month whose login count exceeds the query's `limit` (raised to 500 in TASK-071) triggers a visible warning band rather than silently under-rendering, but the underlying shape — fetch-then-render-a-calendar-from-raw-rows — still doesn't scale indefinitely.
+- **Why deferred:** TASK-071's approved scope was fixing the date-boundary defect (the month never reaching the server at all) — a genuine correctness bug — not redesigning the data-fetching shape. The 500-row ceiling covers the current realistic case (8 kasir × 2 logins × 31 days = 496) with a visible warning band beyond it, agreed with the user before implementation.
+- **Impact if unaddressed:** A branch/period combination that legitimately exceeds 500 attendance rows in one month shows a truncation warning rather than the full picture.
+- **Trigger condition:** A month's attendance rows for the queried scope regularly exceed 500 and the warning band fires often enough to be a real UX problem, not an edge case.
+- **Proposed resolution:** A dedicated `GET /attendance/calendar-summary`-style endpoint that aggregates day-status server-side instead of shipping raw rows to be bucketed client-side.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-050 — No running-balance column on the Stock Movement history table
+
+- **Date logged:** 2026-08-22
+- **Found during:** TASK-070 (Stock Movement history endpoint + screen)
+- **Description:** The Stock Movement history table shows each movement's quantity and direction but not a running balance ("stock after this movement"). A running balance is only well-defined for one material, sorted by date ascending, over its whole history — on a screen that pages, sorts five keys in two directions, and filters four fields, a computed running balance would be wrong in nearly every reachable state, and wrong silently.
+- **Why deferred:** Agreed with the user before coding, as a correctness-driven exclusion rather than a time-saving shortcut — see the description above.
+- **Impact if unaddressed:** An operator wanting "what was the stock level right after this specific movement" has to compute it manually from Inventory Summary + movement rows.
+- **Trigger condition:** Someone asks "what was the stock after this movement?" often enough to justify the complexity of a correct implementation (e.g. scoped to a single material, single sort order, no paging).
+- **Proposed resolution:** A material-scoped, date-ascending-only detail view (not the general paged/sorted/filtered table) where a running balance is well-defined, rather than adding it to the general table.
+- **Priority:** Low — held back by this reasoning even more strongly after TASK-074 added a second sort direction (see roadmap notes), not by implementation cost.
+- **Status:** Open
 
 ### DEBT-035 — Hybrid dark-mode theme triggering across `[data-theme='dark']` and `.dark` selectors
 

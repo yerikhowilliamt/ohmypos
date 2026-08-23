@@ -38,7 +38,7 @@ The target business currently manages sales, expenses, raw material purchases, a
 
 - Multi-tenant SaaS (selling OhMyPos to other businesses) — schema should not actively block this later, but no tenant-isolation work is done in v1.
 - Native mobile app — web-based responsive UI only for v1.
-- Employee shift/payroll management.
+- Employee shift/payroll management. (ADR-021 partially reversed this: attendance tracking and leave requests shipped in v1; payroll computation itself remains out of scope.)
 - Customer loyalty / CRM features.
 - Automated purchase ordering / supplier catalog integration.
 
@@ -138,7 +138,7 @@ Net effect on the data model (detailed in System Design / ERD): `branchId` is st
 
 - Multi-tenant SaaS packaging.
 - Native mobile apps.
-- Employee payroll/shift management.
+- Employee payroll/shift management. (ADR-021 partially reversed this: attendance tracking and leave requests shipped in v1; payroll computation itself remains out of scope.)
 - Customer-facing loyalty/CRM.
 - Automated supplier ordering.
 - PDF bank statement parsing beyond the Mandiri Livin e-statement (implemented in ADR-022). Other issuers, scanned/image-only PDFs requiring OCR, and password-protected PDFs remain out of scope — a locked file must be unlocked by the user before upload.

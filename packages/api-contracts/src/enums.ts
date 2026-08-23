@@ -26,12 +26,18 @@ export type TransactionStatus = z.infer<typeof TransactionStatus>;
 export const AllocationStatus = z.enum(['ACTIVE', 'REVOKED']);
 export type AllocationStatus = z.infer<typeof AllocationStatus>;
 
-/** OhMyPos-only: what generated a `LedgerEntry` (ERD §2). */
+/**
+ * OhMyPos-only: what generated a `LedgerEntry` (ERD §2). `SALE_VOID` (DEBT-010)
+ * is the reversal entry a sale void writes — kept distinct from `SALE` for
+ * audit-trail legibility only; report correctness comes from `Sale.status`,
+ * not from this value (see reports.service.ts / report-filters.ts).
+ */
 export const LedgerSourceType = z.enum([
   'MANUAL',
   'SALE',
   'PURCHASE',
   'PAYABLE_SETTLEMENT',
+  'SALE_VOID',
 ]);
 export type LedgerSourceType = z.infer<typeof LedgerSourceType>;
 

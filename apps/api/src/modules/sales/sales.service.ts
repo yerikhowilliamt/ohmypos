@@ -27,8 +27,11 @@ import {
   BackdatedSaleException,
   CentralBranchNotSellableException,
   InactiveProductException,
+  PriceOverrideNotAllowedException,
   RecipeIncompleteException,
+  SaleAlreadyVoidedException,
   SaleProductNotFoundException,
+  SaleVoidWindowExpiredException,
 } from './sales.exceptions';
 import {
   calculateSaleLineTotal,
@@ -137,6 +140,29 @@ export class SalesService {
             .map((p) => p.name);
           if (incompleteNames.length > 0) {
             throw new RecipeIncompleteException([...new Set(incompleteNames)]);
+          }
+
+          // DEBT-009: KASIR may never charge a price that differs from
+          // Product.sellPrice — only ADMIN/OWNER can. Checked here (Phase 1,
+          // read-only) rather than left to resolveUnitPrice()/Phase 3, so a
+          // disallowed override fails before any lock is taken. Mirrors
+          // resolveUnitPrice()'s own "differs from master price" comparison
+          // exactly, so the two can never disagree on a boundary case.
+          if (role === 'KASIR') {
+            const overriddenNames = dto.items
+              .filter((item) => {
+                if (item.unitPrice === undefined) return false;
+                const product = productById.get(item.productId)!;
+                return !new Prisma.Decimal(item.unitPrice).equals(
+                  product.sellPrice,
+                );
+              })
+              .map((item) => productById.get(item.productId)!.name);
+            if (overriddenNames.length > 0) {
+              throw new PriceOverrideNotAllowedException([
+                ...new Set(overriddenNames),
+              ]);
+            }
           }
 
           const requirements = aggregateStockRequirements(
@@ -355,5 +381,118 @@ export class SalesService {
     }
 
     return toSaleResponse(sale);
+  }
+
+  /**
+   * DEBT-010 minimal interim void guard — NOT a general refund workflow.
+   * Same-day, ~30-minute window from `soldAt`, ADMIN/OWNER only (RoleGuard on
+   * the controller is authoritative), full reversal only (no partial refund).
+   *
+   * Never deletes or mutates the original Sale/SaleItem/LedgerEntry rows —
+   * financial history, same "Restrict everywhere" rule the schema already
+   * enforces (ERD §3). A void instead writes a reversal LedgerEntry (OUTFLOW)
+   * and an inbound StockMovement, then flips Sale.status. Mirrors
+   * AllocationService.revoke()'s TOCTOU-safe lock-then-recheck shape
+   * (allocation.service.ts) — a concurrent void of the same sale must
+   * serialize, never race.
+   *
+   * Report correctness (profitLoss/incomeByPaymentMethod/dailyIncome no
+   * longer counting a voided sale's revenue) is NOT this method's job — it
+   * lives in report-filters.ts's saleScope() and the ledger-to-sales joins in
+   * reports.service.ts. See those files for why a status flip alone would
+   * not be enough.
+   */
+  async void(id: string, userId: string) {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const target = await tx.sale.findUnique({
+          where: { id },
+          include: {
+            items: {
+              include: { product: { include: { recipeItems: true } } },
+            },
+          },
+        });
+        if (!target) {
+          throw new NotFoundException(`Sale with ID ${id} not found`);
+        }
+
+        // Lock the sale row before re-checking status — see the TOCTOU note
+        // above. `id` is a TEXT column, no ::uuid cast (same trap as
+        // stock-movements.service.ts's lockRawMaterialsInIdOrder).
+        await tx.$queryRaw`SELECT id FROM sales WHERE id = ${id} FOR UPDATE`;
+
+        const sale = await tx.sale.findUniqueOrThrow({ where: { id } });
+        if (sale.status === 'VOIDED') {
+          throw new SaleAlreadyVoidedException(id);
+        }
+
+        const VOID_WINDOW_MINUTES = 30;
+        const windowEnd = new Date(
+          sale.soldAt.getTime() + VOID_WINDOW_MINUTES * 60_000,
+        );
+        if (new Date() > windowEnd) {
+          throw new SaleVoidWindowExpiredException(VOID_WINDOW_MINUTES);
+        }
+
+        // Reverse stock — same fan-out calculator create() uses, applied as
+        // an inbound movement. Reuses referenceType 'SALE' (see
+        // stock-movements.service.ts's InboundStockInput comment for why).
+        const requirements = aggregateStockRequirements(
+          target.items.map((item) => ({
+            quantity: item.quantity,
+            recipeItems: item.product.recipeItems.map((ri) => ({
+              rawMaterialId: ri.rawMaterialId,
+              quantityUsed: ri.quantityUsed,
+            })),
+          })),
+        );
+        const lockedMaterials = await tx.rawMaterial.findMany({
+          where: {
+            id: { in: requirements.map((r) => r.rawMaterialId) },
+          },
+        });
+        const materialById = new Map(lockedMaterials.map((m) => [m.id, m]));
+
+        await this.stockMovementsService.applyInbound(tx, {
+          branchId: sale.branchId,
+          referenceType: 'SALE',
+          referenceId: sale.id,
+          movementDate: new Date(),
+          lines: requirements.map((r) => ({
+            rawMaterialId: r.rawMaterialId,
+            quantity: r.quantity,
+            unitCost: materialById.get(r.rawMaterialId)!.unitCost,
+          })),
+        });
+
+        // Reverse cash — a real OUTFLOW ledger entry. Dedicated sourceType
+        // is for audit-trail legibility only; correctness for the P&L margin
+        // view comes from the Sale.status exclusion in reports.service.ts.
+        await this.ledgerEntriesService.createSystemEntry(tx, {
+          accountId: sale.accountId,
+          categoryId: await resolveSaleCategoryId(tx),
+          branchId: sale.branchId,
+          entryDate: new Date(),
+          amount: sale.totalAmount,
+          type: 'OUTFLOW',
+          sourceType: 'SALE_VOID',
+          sourceId: sale.id,
+        });
+
+        const updated: SaleWithRelations = await tx.sale.update({
+          where: { id },
+          data: {
+            status: 'VOIDED',
+            voidedAt: new Date(),
+            voidedByUserId: userId,
+          },
+          include: saleWithRelationsInclude,
+        });
+
+        return toSaleResponse(updated);
+      },
+      { maxWait: 5000, timeout: 15000 },
+    );
   }
 }

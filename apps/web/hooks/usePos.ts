@@ -122,3 +122,24 @@ export function useSales(params: SalesFilterParams = {}) {
     placeholderData: keepPreviousData,
   });
 }
+
+export function useVoidSale() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<SaleResponse>(`/sales/${id}/void`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['sales'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: MASTER_DATA_QUERY_KEYS.rawMaterials,
+      });
+      queryClient.invalidateQueries({
+        queryKey: MASTER_DATA_QUERY_KEYS.products,
+      });
+    },
+  });
+}

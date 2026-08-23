@@ -16,7 +16,7 @@ const mockSales: SaleResponse[] = [
     totalAmount: '45000',
     totalHpp: '20000',
     grossMargin: '25000',
-    soldAt: '2026-08-19T10:00:00.000Z',
+    soldAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(), // 10 mins ago
     items: [
       {
         id: '66666666-6666-6666-6666-666666666666',
@@ -29,6 +29,9 @@ const mockSales: SaleResponse[] = [
         lineTotal: '45000',
       },
     ],
+    status: 'COMPLETED',
+    voidedAt: null,
+    voidedByUserId: null,
     createdAt: '2026-08-19T10:00:00.000Z',
     updatedAt: '2026-08-19T10:00:00.000Z',
   },
@@ -49,6 +52,17 @@ const singlePage = {
   },
 };
 
+vi.mock('@/hooks/usePos', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    useVoidSale: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+  };
+});
+
 describe('SalesHistoryTable', () => {
   it('renders sales history data and opens receipt dialog on click', () => {
     render(<SalesHistoryTable sales={mockSales} {...singlePage} />);
@@ -64,5 +78,65 @@ describe('SalesHistoryTable', () => {
 
     expect(screen.getByText(/Cabang Cabang Tebet/i)).toBeDefined();
     expect(screen.getByText('Kopi Susu Gula Aren')).toBeDefined();
+  });
+
+  it('shows void button for ADMIN/OWNER for recent sales', () => {
+    render(
+      <SalesHistoryTable userRole="ADMIN" sales={mockSales} {...singlePage} />,
+    );
+    expect(screen.getByRole('button', { name: /batalkan/i })).toBeDefined();
+    expect(
+      screen
+        .getByRole('button', { name: /batalkan/i })
+        .hasAttribute('disabled'),
+    ).toBeFalsy();
+  });
+
+  it('hides void button for KASIR', () => {
+    render(
+      <SalesHistoryTable userRole="KASIR" sales={mockSales} {...singlePage} />,
+    );
+    expect(screen.queryByRole('button', { name: /batalkan/i })).toBeNull();
+  });
+
+  it('disables void button if sale is older than 30 minutes', () => {
+    const oldSale = {
+      ...mockSales[0],
+      soldAt: new Date(Date.now() - 1000 * 60 * 40).toISOString(), // 40 mins ago
+    };
+    render(
+      <SalesHistoryTable userRole="OWNER" sales={[oldSale]} {...singlePage} />,
+    );
+    const btn = screen.getByRole('button', { name: /batalkan/i });
+    expect(btn).toBeDefined();
+    expect(btn.hasAttribute('disabled')).toBeTruthy();
+  });
+
+  it('hides void button if sale is already voided and shows badge', () => {
+    const voidedSale = {
+      ...mockSales[0],
+      status: 'VOIDED' as const,
+    };
+    render(
+      <SalesHistoryTable
+        userRole="ADMIN"
+        sales={[voidedSale]}
+        {...singlePage}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /batalkan/i })).toBeNull();
+    expect(screen.getByText('Dibatalkan')).toBeDefined();
+  });
+
+  it('opens confirmation dialog on void click', () => {
+    render(
+      <SalesHistoryTable userRole="ADMIN" sales={mockSales} {...singlePage} />,
+    );
+    const btn = screen.getByRole('button', { name: /batalkan/i });
+    fireEvent.click(btn);
+    expect(
+      screen.getByText(/Apakah Anda yakin ingin membatalkan/i),
+    ).toBeDefined();
+    expect(screen.getByRole('button', { name: /Ya, Batalkan/i })).toBeDefined();
   });
 });

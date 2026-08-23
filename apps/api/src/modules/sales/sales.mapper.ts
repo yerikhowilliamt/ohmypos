@@ -58,6 +58,9 @@ export function toSaleResponse(sale: SaleWithRelations): SaleResponse {
     grossMargin: grossMargin.toFixed(2),
     soldAt: sale.soldAt.toISOString(),
     items,
+    status: sale.status,
+    voidedAt: sale.voidedAt ? sale.voidedAt.toISOString() : null,
+    voidedByUserId: sale.voidedByUserId,
     createdAt: sale.createdAt.toISOString(),
     updatedAt: sale.updatedAt.toISOString(),
   };
