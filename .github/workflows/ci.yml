@@ -200,6 +200,9 @@ jobs:
       - name: Build api workspace dependencies
         run: pnpm exec turbo run build --filter=api^...
 
+      - name: Build API
+        run: pnpm --filter api build
+
       - name: Apply migrations
         run: pnpm --filter api exec prisma migrate deploy
 
@@ -215,12 +218,10 @@ jobs:
         run: |
           pnpm --filter web build
           pnpm --filter web start &
-        env:
-          NEXT_PUBLIC_API_URL: 'http://localhost:4015'
 
       - name: Wait for servers
         run: |
-          npx wait-on http://localhost:4015/api/v1/health http://localhost:3001 --timeout 60000
+          npx wait-on http://localhost:4015/api/v1/health http://localhost:3001 --timeout 120000
 
       - name: Run Playwright e2e tests
         run: pnpm --filter web exec playwright test
