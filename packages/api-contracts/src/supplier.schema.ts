@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DateTimeString, UuidString } from './primitives';
-import { PaginationQuerySchema } from './pagination.schema';
+import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
 
 /**
  * OhMyPos — Supplier contracts (ERD §3, PRD §5.3).
@@ -36,5 +36,6 @@ export type SupplierSortBy = z.infer<typeof SupplierSortBySchema>;
 export const SupplierQuerySchema = PaginationQuerySchema.extend({
   search: z.string().trim().optional(),
   sortBy: SupplierSortBySchema.optional(),
+  sortOrder: SortOrderSchema.optional(),
 });
 export type SupplierQuery = z.infer<typeof SupplierQuerySchema>;

@@ -1,7 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
+import type {
+  ColumnDef,
+  OnChangeFn,
+  SortingState,
+} from '@tanstack/react-table';
 import { Button } from '@ohmypos/ui/components/button';
 import { ArrowRight, Plus } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
@@ -11,13 +15,18 @@ import {
 } from '@/lib/vocabulary';
 import { Badge } from '@ohmypos/ui/components/badge';
 import {
+  DEFAULT_EXPENSES_PAGE_SIZE,
   fetchSupplierPurchasesPage,
   useSupplierPurchases,
 } from '@/hooks/useExpenses';
 import { fetchAllPages } from '@/lib/fetchAllPages';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import type { ExportColumn } from '@/lib/export';
-import type { SupplierPurchaseResponse } from '@ohmypos/api-contracts';
+import type {
+  SortOrder,
+  SupplierPurchaseResponse,
+  SupplierPurchaseSortBy,
+} from '@ohmypos/api-contracts';
 import { PurchaseEntryFormDialog } from './PurchaseEntryFormDialog';
 import { CentralBranchTag } from './CentralBranchTag';
 
@@ -38,7 +47,7 @@ const columns: ColumnDef<SupplierPurchaseResponse>[] = [
   },
   {
     accessorKey: 'supplierName',
-    header: ({ column }) => <SortableHeader label="Pemasok" column={column} />,
+    header: 'Pemasok',
     cell: ({ row }) => (
       <span className="font-medium text-text-primary">
         {row.original.supplierName}
@@ -48,13 +57,13 @@ const columns: ColumnDef<SupplierPurchaseResponse>[] = [
   {
     accessorFn: (row) => row.branchId ?? 'Central',
     id: 'branchId',
-    header: ({ column }) => <SortableHeader label="Lokasi" column={column} />,
+    header: 'Lokasi',
     cell: ({ row }) => <CentralBranchTag branchId={row.original.branchId} />,
   },
   {
     accessorKey: 'paymentStatus',
     filterFn: 'equalsString',
-    header: ({ column }) => <SortableHeader label="Status" column={column} />,
+    header: 'Status',
     cell: ({ row }) => (
       <Badge
         className={`text-[11px] ${getPaymentStatusBadgeClasses(row.original.paymentStatus)}`}
@@ -79,6 +88,26 @@ const columns: ColumnDef<SupplierPurchaseResponse>[] = [
   },
 ];
 
+/**
+ * The two column ids that exist as backend sort keys
+ * (`SupplierPurchaseSortBySchema`). `supplierName`, `branchId` and
+ * `paymentStatus` render plain headers: the server cannot order by them, and a
+ * sortable header over one page reorders 10 rows while looking like it ordered
+ * every purchase — same pattern as `StockMovementsTable`.
+ */
+const SORTABLE_COLUMN_IDS: SupplierPurchaseSortBy[] = [
+  'purchaseDate',
+  'totalAmount',
+];
+
+function toSupplierPurchaseSortBy(
+  columnId: string | undefined,
+): SupplierPurchaseSortBy {
+  return SORTABLE_COLUMN_IDS.includes(columnId as SupplierPurchaseSortBy)
+    ? (columnId as SupplierPurchaseSortBy)
+    : 'purchaseDate';
+}
+
 const exportColumns: ExportColumn<SupplierPurchaseResponse>[] = [
   { header: 'Tanggal', accessor: (row) => new Date(row.purchaseDate) },
   { header: 'Pemasok', accessor: (row) => row.supplierName },
@@ -93,15 +122,49 @@ const exportColumns: ExportColumn<SupplierPurchaseResponse>[] = [
 export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [unpaidBanner, setUnpaidBanner] = React.useState<string | null>(null);
-  const { data, isLoading } = useSupplierPurchases();
-  const purchases = data?.data ?? [];
+  const [page, setPage] = React.useState(1);
+  const [limit, setLimit] = React.useState(DEFAULT_EXPENSES_PAGE_SIZE);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    { id: 'purchaseDate', desc: true },
+  ]);
 
-  // See GeneralExpenseTab: the export covers the whole set even though the
-  // table above it still stops at 50 rows (DEBT-055).
+  // A sort change invalidates the current page number — page 2 of the old
+  // ordering is not page 2 of the new one.
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    setSorting((current) =>
+      typeof updater === 'function' ? updater(current) : updater,
+    );
+    setPage(1);
+  };
+
+  const activeSort = sorting[0];
+
+  // One object for both the on-screen query and the Export loop, so the file
+  // can never hold a different ordering or filter than the screen.
+  const queryParams = React.useMemo(
+    () => ({
+      page,
+      limit,
+      sortBy: toSupplierPurchaseSortBy(activeSort?.id),
+      sortOrder: (activeSort?.desc === false ? 'asc' : 'desc') as SortOrder,
+    }),
+    [page, limit, activeSort?.id, activeSort?.desc],
+  );
+
+  const { data, isLoading } = useSupplierPurchases(queryParams);
+  const purchases = data?.data ?? [];
+  const paginationMeta = data?.meta ?? { total: 0, page, limit, totalPages: 1 };
+
   const exportAll = React.useCallback(
     () =>
-      fetchAllPages((page, limit) => fetchSupplierPurchasesPage(page, limit)),
-    [],
+      fetchAllPages((exportPage, exportLimit) =>
+        fetchSupplierPurchasesPage({
+          ...queryParams,
+          page: exportPage,
+          limit: exportLimit,
+        }),
+      ),
+    [queryParams],
   );
 
   const handleUnpaidPurchaseCreated = (supplierName: string) => {
@@ -155,11 +218,22 @@ export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
         columns={columns}
         data={purchases}
         isLoading={isLoading}
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
+        pagination={{
+          meta: paginationMeta,
+          onPageChange: setPage,
+          onLimitChange: (next) => {
+            setLimit(next);
+            setPage(1);
+          },
+          itemNoun: 'pembelian',
+        }}
         emptyMessage="Belum ada pembelian tercatat."
         exportColumns={exportColumns}
         exportFilename={`pembelian-bahan-baku_${new Date().toISOString().slice(0, 10)}.xlsx`}
         exportAll={exportAll}
-        exportTotal={data?.meta.total}
+        exportTotal={paginationMeta.total}
       />
 
       <PurchaseEntryFormDialog

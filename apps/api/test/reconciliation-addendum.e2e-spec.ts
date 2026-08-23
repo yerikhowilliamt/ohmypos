@@ -239,6 +239,95 @@ describe('Reconciliation backend addendum (e2e)', () => {
   });
 
   /**
+   * TASK-074 / DEBT-049. `LedgerEntryQuerySchema` accepted `sortBy` but the
+   * service pinned the direction (`orderBy: { [sortBy ?? 'entryDate']: 'desc' }`),
+   * so the Expenses table's sort headers could only ever produce a descending
+   * list. These cases fail unless the direction actually reaches Prisma: the
+   * asc and desc expectations are exact reverses of each other, so a hardcoded
+   * direction breaks one of them whichever literal is chosen.
+   *
+   * The window is 2026-06, disjoint from the 2026-01…2026-03 dates the
+   * date-range block above writes, so those rows cannot drift in here.
+   */
+  describe('GET /ledger-entries — sortOrder (TASK-074)', () => {
+    const WINDOW = { startDate: '2026-06-01', endDate: '2026-06-30' };
+
+    /**
+     * Seeded per test, not in a `beforeAll`: the suite-level `beforeEach` above
+     * truncates `ledgerEntry` before every case, so a once-only fixture would
+     * be wiped before the first assertion ever runs.
+     *
+     * entryDate ascending (05 → 15 → 25) deliberately disagrees with amount
+     * ascending (10 → 20 → 30 lands on 25 → 05 → 15), so `sortBy` and
+     * `sortOrder` are observable independently of each other.
+     */
+    async function seed() {
+      const make = async (entryDate: string, amount: string) =>
+        prisma.ledgerEntry.create({
+          data: {
+            accountId,
+            categoryId,
+            branchId,
+            entryDate: new Date(entryDate),
+            amount,
+            type: 'INFLOW',
+          },
+        });
+
+      return {
+        lowId: (await make('2026-06-25', '10.00')).id,
+        midId: (await make('2026-06-05', '20.00')).id,
+        highId: (await make('2026-06-15', '30.00')).id,
+      };
+    }
+
+    async function list(query: Record<string, string>) {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/ledger-entries')
+        .query({ ...WINDOW, limit: '50', ...query })
+        .set('Cookie', adminCookies)
+        .expect(200);
+      return (res.body as { data: Array<{ id: string; amount: string }> }).data;
+    }
+
+    it('sortBy=amount honours sortOrder in both directions', async () => {
+      const { lowId, midId, highId } = await seed();
+
+      const asc = await list({ sortBy: 'amount', sortOrder: 'asc' });
+      expect(asc.map((row) => row.id)).toEqual([lowId, midId, highId]);
+
+      const desc = await list({ sortBy: 'amount', sortOrder: 'desc' });
+      expect(desc.map((row) => row.id)).toEqual([highId, midId, lowId]);
+    });
+
+    it('sortBy=entryDate honours sortOrder independently of amount', async () => {
+      const { lowId, midId, highId } = await seed();
+
+      const asc = await list({ sortBy: 'entryDate', sortOrder: 'asc' });
+      expect(asc.map((row) => row.id)).toEqual([midId, highId, lowId]);
+    });
+
+    it('omitting sortOrder still defaults to desc', async () => {
+      const { lowId, midId, highId } = await seed();
+
+      const implicit = await list({ sortBy: 'entryDate' });
+      const explicit = await list({ sortBy: 'entryDate', sortOrder: 'desc' });
+      expect(implicit.map((row) => row.id)).toEqual(
+        explicit.map((row) => row.id),
+      );
+      expect(implicit.map((row) => row.id)).toEqual([lowId, highId, midId]);
+    });
+
+    it('an unknown sortOrder is rejected, not coerced', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/ledger-entries')
+        .query({ sortOrder: 'sideways' })
+        .set('Cookie', adminCookies)
+        .expect(400);
+    });
+  });
+
+  /**
    * TASK-068. `sortOrder` never existed on this endpoint and the web client
    * hardcoded `sortBy: 'txnDate'` in `buildQuery`, so the table's three sort
    * headers reordered the visible page and never reached the API at all. These

@@ -1279,4 +1279,159 @@ describe('Purchasing & Payables (e2e)', () => {
         .expect(403);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Supplier purchases & suppliers listing — sortOrder (TASK-074, DEBT-049)
+  //
+  // Both endpoints accepted `sortBy` but pinned the direction in the service
+  // (`orderBy: { [sortBy ?? 'x']: 'desc' }`), so a descending-only list looked
+  // sortable and was not. These cases only pass if the direction actually
+  // reaches Prisma — the asc/desc assertions are opposite-signed, so a service
+  // that ignores `sortOrder` fails one of them whichever way it hardcodes.
+  //
+  // Every listing assertion is fenced by a purchaseDate window (or a `search`
+  // prefix) unique to this block, so rows written by earlier describes in this
+  // same file cannot drift into the comparison.
+  // ---------------------------------------------------------------------------
+  describe('Supplier purchases & suppliers listing — sortOrder', () => {
+    const WINDOW_START = '2026-11-01T00:00:00.000Z';
+    const WINDOW_END = '2026-11-30T23:59:59.999Z';
+    const WINDOW = `startDate=${WINDOW_START}&endDate=${WINDOW_END}`;
+
+    beforeAll(async () => {
+      // Three central PAID purchases, distinct on both sort keys at once:
+      // purchaseDate ascending runs 05 → 15 → 25 while totalAmount ascending
+      // runs 12k → 24k → 36k, so `sortBy` and `sortOrder` are independently
+      // observable rather than accidentally agreeing.
+      const rows: Array<[string, string]> = [
+        ['2026-11-05T10:00:00.000Z', '1.0000'],
+        ['2026-11-15T10:00:00.000Z', '2.0000'],
+        ['2026-11-25T10:00:00.000Z', '3.0000'],
+      ];
+
+      for (const [purchaseDate, quantity] of rows) {
+        await request(app.getHttpServer())
+          .post('/api/v1/supplier-purchases')
+          .set('Cookie', owner.cookies)
+          .send({
+            supplierId: supplierAId,
+            branchId: null,
+            purchaseDate,
+            paymentStatus: 'PAID',
+            accountId: defaultAccountId,
+            note: 'PP Test sortOrder fixture',
+            items: [
+              {
+                rawMaterialId: rawMaterialGulaId,
+                quantity,
+                unitCost: '12000.00',
+              },
+            ],
+          })
+          .expect(201);
+      }
+    });
+
+    async function listPurchases(qs: string) {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/supplier-purchases?${qs}`)
+        .set('Cookie', owner.cookies)
+        .expect(200);
+      return (res.body as { data: SupplierPurchaseResponse[] }).data;
+    }
+
+    it('Case 37: GET /supplier-purchases honours sortOrder on purchaseDate', async () => {
+      const asc = await listPurchases(
+        `${WINDOW}&sortBy=purchaseDate&sortOrder=asc&limit=50`,
+      );
+      expect(asc).toHaveLength(3);
+      const ascTimes = asc.map((p) => new Date(p.purchaseDate).getTime());
+      for (let i = 1; i < ascTimes.length; i += 1) {
+        expect(ascTimes[i]).toBeGreaterThanOrEqual(ascTimes[i - 1]);
+      }
+
+      const desc = await listPurchases(
+        `${WINDOW}&sortBy=purchaseDate&sortOrder=desc&limit=50`,
+      );
+      expect(desc.map((p) => p.id)).toEqual(
+        [...asc].reverse().map((p) => p.id),
+      );
+    });
+
+    it('Case 38: GET /supplier-purchases honours sortOrder on totalAmount', async () => {
+      const asc = await listPurchases(
+        `${WINDOW}&sortBy=totalAmount&sortOrder=asc&limit=50`,
+      );
+      const ascAmounts = asc.map((p) => Number(p.totalAmount));
+      expect(ascAmounts).toEqual(['12000', '24000', '36000'].map(Number));
+
+      const desc = await listPurchases(
+        `${WINDOW}&sortBy=totalAmount&sortOrder=desc&limit=50`,
+      );
+      expect(desc.map((p) => Number(p.totalAmount))).toEqual(
+        [...ascAmounts].reverse(),
+      );
+    });
+
+    it('Case 39: omitting sortOrder on /supplier-purchases still defaults to desc', async () => {
+      const implicit = await listPurchases(
+        `${WINDOW}&sortBy=purchaseDate&limit=50`,
+      );
+      const explicit = await listPurchases(
+        `${WINDOW}&sortBy=purchaseDate&sortOrder=desc&limit=50`,
+      );
+      expect(implicit.map((p) => p.id)).toEqual(explicit.map((p) => p.id));
+    });
+
+    it('Case 40: an unknown sortOrder is rejected on /supplier-purchases, not coerced', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/supplier-purchases?sortOrder=sideways')
+        .set('Cookie', owner.cookies)
+        .expect(400);
+    });
+
+    it('Case 41: GET /suppliers honours sortOrder on name', async () => {
+      const list = async (qs: string) => {
+        const res = await request(app.getHttpServer())
+          .get(`/api/v1/suppliers?search=PP%20&sortBy=name&limit=50&${qs}`)
+          .set('Cookie', owner.cookies)
+          .expect(200);
+        return (res.body as { data: Array<{ id: string; name: string }> }).data;
+      };
+
+      const asc = await list('sortOrder=asc');
+      expect(asc.length).toBeGreaterThan(1);
+      for (let i = 1; i < asc.length; i += 1) {
+        expect(
+          asc[i].name.localeCompare(asc[i - 1].name),
+        ).toBeGreaterThanOrEqual(0);
+      }
+
+      const desc = await list('sortOrder=desc');
+      expect(desc.map((s) => s.id)).toEqual(
+        [...asc].reverse().map((s) => s.id),
+      );
+    });
+
+    it('Case 42: omitting sortOrder on /suppliers still defaults to asc', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/suppliers?search=PP%20&sortBy=name&limit=50')
+        .set('Cookie', owner.cookies)
+        .expect(200);
+      const names = (res.body as { data: Array<{ name: string }> }).data.map(
+        (s) => s.name,
+      );
+      expect(names.length).toBeGreaterThan(1);
+      for (let i = 1; i < names.length; i += 1) {
+        expect(names[i].localeCompare(names[i - 1])).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('Case 43: an unknown sortOrder is rejected on /suppliers, not coerced', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/suppliers?sortOrder=sideways')
+        .set('Cookie', owner.cookies)
+        .expect(400);
+    });
+  });
 });

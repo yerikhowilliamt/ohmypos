@@ -37,6 +37,36 @@
 
 ## Log
 
+### ERR-027 — Asserting a paginated table's row total matched two elements, because the Export button now carries the same number
+
+- **Date found:** 2026-08-23
+- **Found during:** TASK-081, writing `GeneralExpenseTab.test.tsx`
+- **Symptom:** `screen.getByText(/340/)` threw `Found multiple elements with the text: /340/`, dumping the whole table plus the Export button's SVG. The assertion was checking that the new pagination footer states the real row count.
+- **Root cause:** Not a duplicate render. TASK-073 gave `ExportButton` an `exportTotal` so its label reads `Export (340)` — the honest count that makes a short spreadsheet impossible to ship silently. TASK-081 then added the footer, which states the same total a second time by design ("Menampilkan 1–10 dari 340 pengeluaran"). Any paginated table with an export now shows its total in two places, so a text query for the number alone is ambiguous **on every such table**, not just this one.
+- **Resolution:** Scope the assertion to the footer, which already carries `data-testid="data-table-pagination"`, and assert its `textContent` rather than searching the document: `Menampilkan`, the range `1–10`, the total `340`, and the `itemNoun`. Asserting the range as well caught a second sloppiness in the same line — `toContain('1–1')` passes against `1–10`, so the exact range had to be written out.
+- **Prevention:** Rule for any test touching a server-paginated table: **query the footer by its testid and assert `textContent`; never `getByText` a bare number.** The number appears in the footer, the Export label, and potentially a summary card. Applied in both suites added by TASK-081 and consistent with how `PayablesTab.test.tsx` already reads its footer. `data-table.tsx` documents `exportTotal` as "the real count behind the filter" — that comment is the reason the duplication exists and should not be removed.
+- **Severity:** Low — a test-authoring error, caught immediately by the failure it caused. Logged because it is now a property of every paginated table in the app, so the next person writing this assertion hits it too.
+
+### ERR-026 — `pnpm test:e2e -- <pattern>` reports "No tests found" and exits 1, which reads like a broken suite
+
+- **Date found:** 2026-08-23
+- **Found during:** TASK-074, trying to run only the two e2e suites the change touched
+- **Symptom:** `pnpm test:e2e -- --testPathPatterns=reconciliation-addendum` printed `No tests found, exiting with code 1`, `testRegex: .e2e-spec.ts$ - 15 matches`, and `Pattern: --testPathPatterns=reconciliation-addendum - 0 matches`, then failed with `ELIFECYCLE`. An earlier invocation with two patterns had silently run only one of the two suites, so the first read of the results was also wrong.
+- **Root cause:** `apps/api`'s script is `jest --config ./test/jest-e2e.json --runInBand`. pnpm forwards everything after `--` as **positional arguments** to that command, so jest received the literal string `--testPathPatterns=reconciliation-addendum` as a path pattern rather than as a flag. Jest then matched it against file paths, found nothing, and — correctly, from its point of view — reported no tests. The exit code 1 is what makes this dangerous: in a transcript it is indistinguishable from a suite that ran and failed.
+- **Resolution:** Invoke jest directly with the config the script uses and pass patterns positionally: `npx jest --config ./test/jest-e2e.json --runInBand <pattern> [<pattern>...]`. Both affected suites then ran and reported real numbers.
+- **Prevention:** Concrete rule, and a companion to **DEBT-057**: **a red or empty e2e result is not evidence of a regression until the invocation is confirmed to have selected the intended suites.** Check the `Test Suites: N total` line against the number of suites expected before reading any failure; `1 total` when two were named means the selection failed, not the code. DEBT-057 covers the other way this misleads (a rerun inside 60s inherits the previous run's throttler budget). Both belong in the same reflex: verify the run before diagnosing the code.
+- **Severity:** Low — tooling only, no product behaviour involved. Logged because it produced a wrong reading of test results twice within one task.
+
+### ERR-025 — E2E fixtures created in a nested `beforeAll` were deleted before the first assertion by a suite-level `beforeEach` truncation
+
+- **Date found:** 2026-08-23
+- **Found during:** TASK-074, adding `sortOrder` coverage to `GET /ledger-entries`
+- **Symptom:** Three new cases in `reconciliation-addendum.e2e-spec.ts` failed with `expect(received).toEqual(expected)` where received was `[]` and expected was a three-id array. The endpoint returned an empty page for a date window the fixtures had definitely been written into, while the seven pre-existing cases in the same file stayed green.
+- **Root cause:** Jest hook ordering, not the query. The new `describe` seeded its three `LedgerEntry` rows in its own `beforeAll`, but the file has a suite-level `beforeEach` at line 107 that runs `prisma.ledgerEntry.deleteMany({})`. Every enclosing `beforeAll` runs once before any test in the file; every enclosing `beforeEach` runs before **each** test. So the sequence was: seed once → truncate → first test → truncate → second test. The fixtures existed for the interval between the two hooks and never during an assertion. The empty result was therefore correct behaviour reported against absent data, which is why it looked like a broken filter.
+- **Resolution:** Replaced the `beforeAll` with a `seed()` helper the three cases call as their first line, returning the ids they assert on. The date-range block above it was already written this way — its fixtures are created inside each `it` — which is the signal that was there to be read before writing a `beforeAll` into that file.
+- **Prevention:** Rule for any e2e suite in this repo: **before adding a `beforeAll` to a nested `describe`, grep the file for `beforeEach` and `deleteMany` / `resetDatabase`.** Several suites here truncate per test on purpose so cases cannot leak fixtures into each other, and in those files a `beforeAll` fixture is silently dead. The `seed()` helper carries a comment saying exactly this, so the next person editing that block is told why the fixtures are per-test. Checkable in review: a `beforeAll` that writes rows in a file containing a top-level `beforeEach` truncation is always wrong.
+- **Severity:** Low — test-harness only; no product code was involved and the endpoint under test was behaving correctly the entire time. Logged because the failure presented as "the filter returns nothing", which points the next reader at the query rather than at the hooks.
+
 ### ERR-024 — Resetting the page in an effect on the debounced keyword fired one request with the new search and the old page number
 
 - **Date found:** 2026-08-23

@@ -55,7 +55,7 @@ export class SuppliersService {
   }
 
   async findAll(query: SupplierQueryDto) {
-    const { page = 1, limit = 50, sortBy, search } = query;
+    const { page = 1, limit = 50, sortBy, sortOrder = 'asc', search } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.SupplierWhereInput = {
@@ -69,7 +69,7 @@ export class SuppliersService {
         where,
         skip,
         take: limit,
-        orderBy: { [sortBy ?? 'name']: 'asc' },
+        orderBy: { [sortBy ?? 'name']: sortOrder },
       }),
       this.prisma.supplier.count({ where }),
     ]);

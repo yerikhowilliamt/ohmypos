@@ -15,6 +15,7 @@ import type {
   CreateSupplier,
   CreateSupplierPurchase,
   LedgerEntryResponse,
+  LedgerEntrySortBy,
   PaginationMeta,
   PayableResponse,
   PayableSettlementResponse,
@@ -23,9 +24,16 @@ import type {
   PayableSupplierSummary,
   SortOrder,
   SupplierPurchaseResponse,
+  SupplierPurchaseSortBy,
   SupplierResponse,
 } from '@ohmypos/api-contracts';
 import { apiFetch } from '@/lib/api';
+
+/**
+ * Matches `PayablesTab`'s own `DEFAULT_PAGE_SIZE`, so the three tabs of the
+ * Pengeluaran screen do not each stop at a different row count.
+ */
+export const DEFAULT_EXPENSES_PAGE_SIZE = 10;
 
 export const EXPENSES_QUERY_KEYS = {
   ledgerEntries: ['ledger-entries'] as const,
@@ -66,22 +74,41 @@ export function useBranches() {
 
 // --- General Expenses (manual LedgerEntry, type=OUTFLOW, sourceType=MANUAL) ---
 
+export interface LedgerEntryFilterParams {
+  page?: number;
+  limit?: number;
+  sortBy?: LedgerEntrySortBy;
+  sortOrder?: SortOrder;
+}
+
 /**
- * One page of manual outflow entries. `page`/`limit` are parameters rather than
- * a hardcoded `limit=50` so the Export button can loop the whole set
- * (DEBT-048) — the screen itself still shows only the first 50, which is a
- * separate defect logged as DEBT-055.
+ * `type=OUTFLOW` is not a parameter: it is what the Pengeluaran Umum screen
+ * *is*, not something the operator chose. Everything the operator can change
+ * goes through the params object so the on-screen query and the Export loop
+ * cannot diverge (see `buildPayableQuery` for the same reasoning).
  */
-export function fetchLedgerEntriesPage(page = 1, limit = 50) {
+function buildLedgerEntryQuery(params: LedgerEntryFilterParams): string {
+  const searchParams = new URLSearchParams();
+  searchParams.set('type', 'OUTFLOW');
+  searchParams.set('sortBy', params.sortBy ?? 'entryDate');
+  searchParams.set('sortOrder', params.sortOrder ?? 'desc');
+  searchParams.set('page', String(params.page ?? 1));
+  searchParams.set('limit', String(params.limit ?? DEFAULT_EXPENSES_PAGE_SIZE));
+  return searchParams.toString();
+}
+
+/** One page, outside React Query — `fetchAllPages` needs it (DEBT-048). */
+export function fetchLedgerEntriesPage(params: LedgerEntryFilterParams = {}) {
   return apiFetch<{ data: LedgerEntryResponse[]; meta: PaginationMeta }>(
-    `/ledger-entries?type=OUTFLOW&sortBy=entryDate&page=${page}&limit=${limit}`,
+    `/ledger-entries?${buildLedgerEntryQuery(params)}`,
   );
 }
 
-export function useLedgerEntries() {
+export function useLedgerEntries(params: LedgerEntryFilterParams = {}) {
   return useQuery({
-    queryKey: EXPENSES_QUERY_KEYS.ledgerEntries,
-    queryFn: () => fetchLedgerEntriesPage(),
+    queryKey: [...EXPENSES_QUERY_KEYS.ledgerEntries, params] as const,
+    queryFn: () => fetchLedgerEntriesPage(params),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -131,17 +158,41 @@ export function useCreateSupplier() {
 
 // --- Supplier Purchases ---
 
-/** See `fetchLedgerEntriesPage` — same reasoning, same DEBT-048/DEBT-055 split. */
-export function fetchSupplierPurchasesPage(page = 1, limit = 50) {
+export interface SupplierPurchaseFilterParams {
+  page?: number;
+  limit?: number;
+  sortBy?: SupplierPurchaseSortBy;
+  sortOrder?: SortOrder;
+}
+
+/** See `buildLedgerEntryQuery` — same reasoning, same shared-object rule. */
+function buildSupplierPurchaseQuery(
+  params: SupplierPurchaseFilterParams,
+): string {
+  const searchParams = new URLSearchParams();
+  searchParams.set('sortBy', params.sortBy ?? 'purchaseDate');
+  searchParams.set('sortOrder', params.sortOrder ?? 'desc');
+  searchParams.set('page', String(params.page ?? 1));
+  searchParams.set('limit', String(params.limit ?? DEFAULT_EXPENSES_PAGE_SIZE));
+  return searchParams.toString();
+}
+
+/** One page, outside React Query — `fetchAllPages` needs it (DEBT-048). */
+export function fetchSupplierPurchasesPage(
+  params: SupplierPurchaseFilterParams = {},
+) {
   return apiFetch<{ data: SupplierPurchaseResponse[]; meta: PaginationMeta }>(
-    `/supplier-purchases?sortBy=purchaseDate&page=${page}&limit=${limit}`,
+    `/supplier-purchases?${buildSupplierPurchaseQuery(params)}`,
   );
 }
 
-export function useSupplierPurchases() {
+export function useSupplierPurchases(
+  params: SupplierPurchaseFilterParams = {},
+) {
   return useQuery({
-    queryKey: EXPENSES_QUERY_KEYS.supplierPurchases,
-    queryFn: () => fetchSupplierPurchasesPage(),
+    queryKey: [...EXPENSES_QUERY_KEYS.supplierPurchases, params] as const,
+    queryFn: () => fetchSupplierPurchasesPage(params),
+    placeholderData: keepPreviousData,
   });
 }
 
