@@ -482,25 +482,25 @@ describe('Inventory (e2e)', () => {
 
       // Steps 6-9: Sales inside May (each consumes 0.5kg per product unit)
       await postSale(
-        kasir.cookies,
+        owner.cookies,
         pReconId,
         '4.0000',
         '2026-05-05T03:00:00.000Z',
       ); // 2.0000 kg
       await postSale(
-        kasir.cookies,
+        owner.cookies,
         pReconId,
         '10.0000',
         '2026-05-15T03:00:00.000Z',
       ); // 5.0000 kg
       await postSale(
-        kasir.cookies,
+        owner.cookies,
         pReconId,
         '6.0000',
         '2026-05-25T03:00:00.000Z',
       ); // 3.0000 kg
       await postSale(
-        kasir.cookies,
+        owner.cookies,
         pReconId,
         '2.0000',
         '2026-05-31T23:59:59.999Z',
@@ -774,7 +774,7 @@ describe('Inventory (e2e)', () => {
       );
       // Sale consuming 20 on May 5th (currentStock 80.0000)
       await postSale(
-        kasir.cookies,
+        owner.cookies,
         pDeclMidId,
         '20.0000',
         '2026-05-05T10:00:00.000Z',
@@ -905,7 +905,7 @@ describe('Inventory (e2e)', () => {
         '2026-04-01T10:00:00.000Z',
       );
       await postSale(
-        kasir.cookies,
+        owner.cookies,
         pNegId,
         '95.0000',
         '2026-05-05T10:00:00.000Z',

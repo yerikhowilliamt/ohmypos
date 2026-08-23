@@ -843,7 +843,7 @@ describe('Sales (e2e)', () => {
       const res = await postSale(kasir1.cookies, {
         branchId: branch1Id,
         accountId,
-        soldAt: '2026-08-16T15:00:00.000Z',
+        soldAt: new Date().toISOString(),
         items: [{ productId: pGuardId, quantity: '1' }],
       });
       expect(res.status).toBe(201);
@@ -854,7 +854,7 @@ describe('Sales (e2e)', () => {
       const res = await postSale(kasir1.cookies, {
         branchId: branch2Id,
         accountId,
-        soldAt: '2026-08-16T15:01:00.000Z',
+        soldAt: new Date().toISOString(),
         items: [{ productId: pGuardId, quantity: '1' }],
       });
       expect(res.status).toBe(403);
@@ -866,7 +866,7 @@ describe('Sales (e2e)', () => {
         .set('Cookie', kasir1.cookies)
         .send({
           accountId,
-          soldAt: '2026-08-16T15:02:00.000Z',
+          soldAt: new Date().toISOString(),
           items: [{ productId: pGuardId, quantity: '1' }],
         });
       expect(res.status).toBe(403);
@@ -876,7 +876,7 @@ describe('Sales (e2e)', () => {
       const branch2Sale = await postSale(owner.cookies, {
         branchId: branch2Id,
         accountId,
-        soldAt: '2026-08-16T15:03:00.000Z',
+        soldAt: new Date().toISOString(),
         items: [{ productId: pGuardId, quantity: '1' }],
       });
       expect(branch2Sale.status).toBe(201);

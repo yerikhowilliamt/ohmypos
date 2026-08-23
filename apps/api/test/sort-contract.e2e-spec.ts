@@ -17,7 +17,6 @@ import {
   LedgerEntrySortBySchema,
   LeaveRequestSortBySchema,
   AttendanceSortBySchema,
-  BankTransactionSortBySchema,
   ReconciliationSortBySchema,
 } from '@ohmypos/api-contracts';
 
@@ -98,8 +97,8 @@ describe('Sort Contract (e2e - TASK-086)', () => {
     testSortOptions('/api/v1/suppliers', SupplierSortBySchema);
   });
 
-  describe('/api/v1/inventory/movements', () => {
-    testSortOptions('/api/v1/inventory/movements', StockMovementSortBySchema);
+  describe('/api/v1/stock-movements', () => {
+    testSortOptions('/api/v1/stock-movements', StockMovementSortBySchema);
   });
 
   describe('/api/v1/ledger-entries', () => {
@@ -110,12 +109,8 @@ describe('Sort Contract (e2e - TASK-086)', () => {
     testSortOptions('/api/v1/leave-requests', LeaveRequestSortBySchema);
   });
 
-  describe('/api/v1/attendance', () => {
-    testSortOptions('/api/v1/attendance', AttendanceSortBySchema);
-  });
-
-  describe('/api/v1/bank-transactions', () => {
-    testSortOptions('/api/v1/bank-transactions', BankTransactionSortBySchema);
+  describe('/api/v1/devices/attendance', () => {
+    testSortOptions('/api/v1/devices/attendance', AttendanceSortBySchema);
   });
 
   describe('/api/v1/reconciliation/transactions', () => {

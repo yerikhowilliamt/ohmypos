@@ -725,7 +725,7 @@ describe('Purchasing & Payables (e2e)', () => {
         .send({
           supplierId: supplierAId,
           branchId: branch1Id,
-          purchaseDate: '2026-08-16T10:00:00.000Z',
+          purchaseDate: new Date().toISOString(),
           paymentStatus: 'UNPAID',
           items: [
             {
@@ -748,7 +748,7 @@ describe('Purchasing & Payables (e2e)', () => {
         .send({
           supplierId: supplierAId,
           branchId: branch2Id,
-          purchaseDate: '2026-08-16T10:00:00.000Z',
+          purchaseDate: new Date().toISOString(),
           paymentStatus: 'UNPAID',
           items: [
             {
