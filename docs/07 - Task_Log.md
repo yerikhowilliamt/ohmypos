@@ -41,6 +41,58 @@
 
 ## Log
 
+### TASK-081 — The two Pengeluaran tabs that stopped at 50 rows without saying so
+
+- **Date:** 2026-08-23
+- **Module / Phase:** `hooks/useExpenses.ts`, `GeneralExpenseTab`, `PurchaseEntryTab` — web only
+- **Objective:** Close DEBT-055. `useLedgerEntries` and `useSupplierPurchases` requested a hardcoded `limit=50` and neither table passed a `pagination` prop, so Pengeluaran Umum and Pembelian Bahan Baku showed the newest 50 rows with **nothing on screen** marking the truncation — and, since TASK-073, an export file that could be longer than the table above it.
+- **Relevant docs:** DEBT-055, DESIGN.md §12.4 Pagination, `docs/plannings/2026-08-23-roadmap-sisa-pekerjaan.md` §3 Gelombang 1b, `PayablesTab.tsx` (reference implementation)
+- **What was done:**
+  - `useExpenses.ts`: `LedgerEntryFilterParams` and `SupplierPurchaseFilterParams`, each with a `build*Query` **shared** between the hook and its `fetch*Page`. Both hooks now take the params object, key on `[...prefix, params]`, and use `keepPreviousData`. New exported `DEFAULT_EXPENSES_PAGE_SIZE = 10`, matching `PayablesTab`'s own default so the three tabs of one screen do not stop at three different row counts.
+  - `type=OUTFLOW` stays hardcoded inside `buildLedgerEntryQuery` — it is what the Pengeluaran Umum screen *is*, not a filter the operator chose.
+  - Both tabs gained `page`/`limit`/`sorting` state, a `handleSortingChange` that resets to page 1, a `queryParams` memo shared with `exportAll`, and a `pagination` prop with `itemNoun` `pengeluaran` / `pembelian`.
+  - Five columns lost their `SortableHeader` (see below).
+  - Tests: two new suites, `GeneralExpenseTab.test.tsx` and `PurchaseEntryTab.test.tsx`, 7 cases each. 59 web suites / 433 tests, up from 57 / 419.
+- **The trap that mattered most:** **the footer was the smaller half of this defect.** Five columns across the two tables carried a `SortableHeader` for a key the backend has none of — `note` and `sourceType` on the ledger, `supplierName`, `branchId` and `paymentStatus` on purchases. While the tables held 50 unpaginated rows those headers were merely local; the moment `data` holds one page of 10, each one reorders ten rows while presenting itself as ordering the whole ledger. That is the identical lying-control class the pagination footer was added to remove, so shipping the footer without this would have closed one instance and opened five. They now render plain string headers, following `StockMovementsTable`, and only the real backend keys (`entryDate`/`amount`, `purchaseDate`/`totalAmount`) stay sortable. Pinned by a case per tab asserting those headers are absent and the real one present.
+- **Decisions made during this task:**
+  - **`DEFAULT_EXPENSES_PAGE_SIZE` was added rather than reusing `PayablesTab`'s constant in place.** Editing `PayablesTab` was out of scope; the new constant's docstring names the number it is matching so the coupling is visible rather than coincidental.
+  - **Page size 10, not 50.** Keeping 50 would have made the footer technically present and practically invisible on a small dataset, which is how a control ends up untrusted. Every other server-paginated table in the app defaults to 10 or 25.
+  - **`fetchLedgerEntriesPage(page, limit)` became `fetchLedgerEntriesPage(params)`** (same for purchases). The positional form could not carry `sortBy`/`sortOrder`, and a params object is what the other five paginated hooks already take.
+  - **This is the first consumer of TASK-074's `sortOrder`** on `/ledger-entries` and `/supplier-purchases`. The two tasks were done back-to-back on purpose, so those two hook files were touched once rather than twice.
+- **Status:** Done
+- **Handoff notes:**
+  - **No schema, contract, or API change** — `git status` for this task touches `apps/web` only. Gates: `turbo run lint typecheck test` green 13/13; 59 web suites / 433 tests; API e2e green at 15 suites / 358 tests (unchanged by this task).
+  - **Sabotage-verified three ways**, each reverted after: removing the `pagination` prop reddens the footer/page-reset/page-size cases only; making `exportAll` rebuild its params instead of spreading `queryParams` reddens only the export-parity case; restoring a `SortableHeader` on `note` / `Lokasi` reddens only the no-fake-sort case.
+  - **Browser verification was not performed** — no dev server in this session. The manual check worth doing: on both tabs confirm the footer reads a total larger than 10, page forward, and confirm the Export count matches the footer's total.
+  - **Every paginated table now states its total twice** — once in the footer, once in the `Export (340)` label TASK-073 added — so `getByText` on a bare number is ambiguous on all of them. Assert the footer's `textContent` via `data-testid="data-table-pagination"` instead; see **ERR-027**.
+  - **Not done here, deliberately:** neither tab has a search box or a date-range filter. Neither is a regression — they never had one — but Pengeluaran Umum showing 10 of several hundred rows with no way to search is a weaker screen than Sales History beside it. That is the same shape as **DEBT-053** (`PayablesTab` has no search box either), which has been widened to cover all three tabs of this screen rather than a new entry being invented here — its parenthetical calling `PurchaseEntryTab` "not comparable" was true only until this task.
+
+### TASK-074 — The three list endpoints that accepted a sort key but not its direction
+
+- **Date:** 2026-08-23
+- **Module / Phase:** `supplier-purchases`, `ledger-entries`, `suppliers` — API and contracts only
+- **Objective:** Close DEBT-049, the last open item of the TASK-067…074 pagination/sort/search/export series. `GET /supplier-purchases`, `GET /ledger-entries` and `GET /suppliers` each accepted `sortBy` but pinned the direction in the service (`orderBy: { [sortBy ?? 'x']: 'desc' }`), so a client could pick the column and never the order.
+- **Relevant docs:** DEBT-049, ADR-010 (contracts as source of truth), Playbook §4, `docs/plannings/2026-08-23-roadmap-sisa-pekerjaan.md` §3 Gelombang 1
+- **What was done:**
+  - `sortOrder: SortOrderSchema.optional()` added to `SupplierPurchaseQuerySchema`, `LedgerEntryQuerySchema` and `SupplierQuerySchema`, each importing `SortOrderSchema` from `pagination.schema` alongside `PaginationQuerySchema`.
+  - Each service destructures `sortOrder` with the default that preserves its previous behaviour — `'desc'` for supplier purchases and ledger entries, **`'asc'` for suppliers** — and the literal in `orderBy` is replaced by the variable.
+  - No DTO changes were needed: all three `*QueryDto` classes are `createZodDto(...)` over the schemas above, so the field arrives typed.
+  - Tests: 7 new e2e cases in `purchasing-payables.e2e-spec.ts` (Cases 37–43, covering `/supplier-purchases` and `/suppliers`) and 4 in `reconciliation-addendum.e2e-spec.ts` (`GET /ledger-entries — sortOrder`). API e2e 15 suites / 358 tests, up from 347.
+- **The trap that mattered most:** the three defaults are **not** all `'desc'`. `SuppliersService` ordered by name ascending; destructuring `sortOrder = 'desc'` there would have silently reversed the master-data supplier list and the POS/expenses supplier dropdowns for every caller that does not pass the parameter. Pinned by Case 42, which asserts a *bare* `?sortBy=name` still comes back A→Z.
+- **Decisions made during this task:**
+  - **`sortOrder` stays off `PaginationQuerySchema`**, per DEBT-049's own reasoning and the comment already on `SortOrderSchema`. Opting in per module keeps "advertises it" and "respects it" the same set; hoisting it would re-create the silent-drop bug TASK-067 existed to fix.
+  - **Every sort assertion is fenced by a filter unique to its block** — a `purchaseDate` window of 2026-11 for purchases, a `search=PP ` prefix for suppliers, an `entryDate` window of 2026-06 for ledger entries. Rows written by earlier describes in the same file therefore cannot drift into the comparison, which is what makes "asc is the exact reverse of desc" a safe assertion rather than a flaky one.
+  - **The fixtures make `sortBy` and `sortOrder` independently observable.** In each block the date order and the amount order deliberately *disagree*, so a service that honours the direction but ignores the key (or vice versa) fails rather than passing by coincidence.
+  - **Ledger fixtures are seeded per test, not in a `beforeAll`.** `reconciliation-addendum.e2e-spec.ts` has a suite-level `beforeEach` that truncates `ledgerEntry`; a once-only fixture was written, wiped, and produced three empty-array failures before this was found — see **ERR-025**.
+  - **No `apps/web` change.** None of the three endpoints has a server-driven sort header today: `useSuppliers` is a `limit=100` dropdown feed, and the two expenses tabs are DEBT-055 / TASK-081. The contract addition is optional and additive, so ADR-010's "update both sides in the same PR" has nothing to update on the web side yet.
+- **Status:** Done
+- **Handoff notes:**
+  - **No schema change, no migration, no new dependency, no access change** — no second approval gate was needed. Gates: `turbo run lint typecheck test` green 13/13 (57 web suites / 419 tests unchanged); API e2e green.
+  - **Sabotage-verified before the green was trusted:** reverting all three `orderBy` lines to their hardcoded literals reddens exactly 5 cases (37, 38, 41, and the two ledger direction cases) and nothing else. The three "omitting sortOrder keeps the old default" cases stay green under sabotage *by design* — that is what they exist to protect.
+  - **This closes the TASK-067…074 series.** Every server-paginated table is now honest about rows, search, export and sort direction.
+  - **Two ways an e2e result misled during this task, both now logged.** `pnpm test:e2e -- <pattern>` forwards the pattern positionally and reports `No tests found` with exit 1, indistinguishable from a failing suite (**ERR-026**); run `npx jest --config ./test/jest-e2e.json --runInBand <pattern>` instead and check the `Test Suites: N total` line against how many were named. The other is **DEBT-057** (a rerun inside 60s inherits the throttler budget). Verify the run before diagnosing the code.
+  - **The natural next task is TASK-081 / DEBT-055** — `GeneralExpenseTab` and `PurchaseEntryTab` still request `limit=50` with no pagination footer. Two of the three endpoints touched here (`/supplier-purchases`, `/ledger-entries`) are exactly the ones it needs, and they now accept the full `page`/`limit`/`sortBy`/`sortOrder` set, so its server side is finished in advance.
+
 ### TASK-073 — Export that covers the whole filtered set, not the page that happened to be on screen
 
 - **Date:** 2026-08-23

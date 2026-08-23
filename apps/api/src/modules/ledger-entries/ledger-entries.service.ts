@@ -76,7 +76,7 @@ export class LedgerEntriesService {
   }
 
   async findAll(query: LedgerEntryQuery) {
-    const { page, limit, sortBy } = query;
+    const { page, limit, sortBy, sortOrder = 'desc' } = query;
     const skip = (page - 1) * limit;
 
     const entryDateFilter: Prisma.DateTimeFilter | undefined =
@@ -100,7 +100,7 @@ export class LedgerEntriesService {
         where,
         skip,
         take: limit,
-        orderBy: { [sortBy ?? 'entryDate']: 'desc' },
+        orderBy: { [sortBy ?? 'entryDate']: sortOrder },
       }),
       this.prisma.ledgerEntry.count({ where }),
     ]);

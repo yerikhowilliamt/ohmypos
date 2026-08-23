@@ -4,6 +4,7 @@ import { DateTimeString, MoneyString, UuidString } from './primitives';
 import {
   PaginationMetaSchema,
   PaginationQuerySchema,
+  SortOrderSchema,
 } from './pagination.schema';
 
 export const CreateLedgerEntrySchema = z.object({
@@ -34,6 +35,7 @@ export const LedgerEntryQuerySchema = PaginationQuerySchema.extend({
   accountId: UuidString.optional(),
   type: TransactionType.optional(),
   sortBy: LedgerEntrySortBySchema.optional(),
+  sortOrder: SortOrderSchema.optional(),
   /**
    * Inclusive `entryDate` bounds (ADR-019 / Reconciliation split-allocation
    * candidate picker). Independent of each other — either may be supplied

@@ -1,17 +1,29 @@
 'use client';
 
 import * as React from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
+import type {
+  ColumnDef,
+  OnChangeFn,
+  SortingState,
+} from '@tanstack/react-table';
 import { Button } from '@ohmypos/ui/components/button';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Plus } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import { formatLedgerSourceType } from '@/lib/vocabulary';
-import { fetchLedgerEntriesPage, useLedgerEntries } from '@/hooks/useExpenses';
+import {
+  DEFAULT_EXPENSES_PAGE_SIZE,
+  fetchLedgerEntriesPage,
+  useLedgerEntries,
+} from '@/hooks/useExpenses';
 import { fetchAllPages } from '@/lib/fetchAllPages';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import type { ExportColumn } from '@/lib/export';
-import type { LedgerEntryResponse } from '@ohmypos/api-contracts';
+import type {
+  LedgerEntryResponse,
+  LedgerEntrySortBy,
+  SortOrder,
+} from '@ohmypos/api-contracts';
 import { GeneralExpenseFormDialog } from './GeneralExpenseFormDialog';
 
 const columns: ColumnDef<LedgerEntryResponse>[] = [
@@ -27,7 +39,7 @@ const columns: ColumnDef<LedgerEntryResponse>[] = [
   },
   {
     accessorKey: 'note',
-    header: ({ column }) => <SortableHeader label="Catatan" column={column} />,
+    header: 'Catatan',
     cell: ({ row }) => (
       <span className="text-text-primary">
         {row.original.note ?? <span className="text-text-tertiary">—</span>}
@@ -37,7 +49,7 @@ const columns: ColumnDef<LedgerEntryResponse>[] = [
   {
     accessorKey: 'sourceType',
     filterFn: 'includesString',
-    header: ({ column }) => <SortableHeader label="Sumber" column={column} />,
+    header: 'Sumber',
     cell: ({ row }) => (
       <Badge
         variant={row.original.sourceType === 'MANUAL' ? 'outline' : 'secondary'}
@@ -62,6 +74,21 @@ const columns: ColumnDef<LedgerEntryResponse>[] = [
   },
 ];
 
+/**
+ * The two column ids that exist as backend sort keys (`LedgerEntrySortBySchema`).
+ * `note` and `sourceType` deliberately render a plain header instead of a
+ * `SortableHeader`: with one page in `data`, a sortable header the server
+ * cannot honour would reorder 10 rows while looking like it ordered the whole
+ * ledger — same pattern as `StockMovementsTable`.
+ */
+const SORTABLE_COLUMN_IDS: LedgerEntrySortBy[] = ['entryDate', 'amount'];
+
+function toLedgerEntrySortBy(columnId: string | undefined): LedgerEntrySortBy {
+  return SORTABLE_COLUMN_IDS.includes(columnId as LedgerEntrySortBy)
+    ? (columnId as LedgerEntrySortBy)
+    : 'entryDate';
+}
+
 const exportColumns: ExportColumn<LedgerEntryResponse>[] = [
   { header: 'Tanggal', accessor: (row) => new Date(row.entryDate) },
   { header: 'Catatan', accessor: (row) => row.note ?? '' },
@@ -74,17 +101,49 @@ const exportColumns: ExportColumn<LedgerEntryResponse>[] = [
 
 export function GeneralExpenseTab() {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
-  const { data, isLoading } = useLedgerEntries();
-  const entries = data?.data ?? [];
+  const [page, setPage] = React.useState(1);
+  const [limit, setLimit] = React.useState(DEFAULT_EXPENSES_PAGE_SIZE);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    { id: 'entryDate', desc: true },
+  ]);
 
-  // The screen still shows the first 50 (`useLedgerEntries`'s default) — the
-  // export deliberately does NOT stop there. The resulting file can hold more
-  // rows than the table above it; that mismatch is the screen's defect
-  // (DEBT-055), not the export's, and a short spreadsheet is the worse of the
-  // two failures (DEBT-048).
+  // A sort change invalidates the current page number — page 2 of the old
+  // ordering is not page 2 of the new one.
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    setSorting((current) =>
+      typeof updater === 'function' ? updater(current) : updater,
+    );
+    setPage(1);
+  };
+
+  const activeSort = sorting[0];
+
+  // One object for both the on-screen query and the Export loop, so the file
+  // can never hold a different ordering or filter than the screen.
+  const queryParams = React.useMemo(
+    () => ({
+      page,
+      limit,
+      sortBy: toLedgerEntrySortBy(activeSort?.id),
+      sortOrder: (activeSort?.desc === false ? 'asc' : 'desc') as SortOrder,
+    }),
+    [page, limit, activeSort?.id, activeSort?.desc],
+  );
+
+  const { data, isLoading } = useLedgerEntries(queryParams);
+  const entries = data?.data ?? [];
+  const paginationMeta = data?.meta ?? { total: 0, page, limit, totalPages: 1 };
+
   const exportAll = React.useCallback(
-    () => fetchAllPages((page, limit) => fetchLedgerEntriesPage(page, limit)),
-    [],
+    () =>
+      fetchAllPages((exportPage, exportLimit) =>
+        fetchLedgerEntriesPage({
+          ...queryParams,
+          page: exportPage,
+          limit: exportLimit,
+        }),
+      ),
+    [queryParams],
   );
 
   return (
@@ -112,11 +171,22 @@ export function GeneralExpenseTab() {
         columns={columns}
         data={entries}
         isLoading={isLoading}
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
+        pagination={{
+          meta: paginationMeta,
+          onPageChange: setPage,
+          onLimitChange: (next) => {
+            setLimit(next);
+            setPage(1);
+          },
+          itemNoun: 'pengeluaran',
+        }}
         emptyMessage="Belum ada pengeluaran tercatat."
         exportColumns={exportColumns}
         exportFilename={`pengeluaran-umum_${new Date().toISOString().slice(0, 10)}.xlsx`}
         exportAll={exportAll}
-        exportTotal={data?.meta.total}
+        exportTotal={paginationMeta.total}
       />
 
       <GeneralExpenseFormDialog

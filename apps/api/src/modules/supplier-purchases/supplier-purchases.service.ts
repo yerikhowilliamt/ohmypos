@@ -225,6 +225,7 @@ export class SupplierPurchasesService {
       page = 1,
       limit = 50,
       sortBy,
+      sortOrder = 'desc',
       supplierId,
       branchId,
       paymentStatus,
@@ -250,7 +251,7 @@ export class SupplierPurchasesService {
         where,
         skip,
         take: limit,
-        orderBy: { [sortBy ?? 'purchaseDate']: 'desc' },
+        orderBy: { [sortBy ?? 'purchaseDate']: sortOrder },
         include: {
           supplier: true,
           items: {

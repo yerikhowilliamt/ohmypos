@@ -6,7 +6,7 @@ import {
   UuidString,
 } from './primitives';
 import { PaymentStatus, PurchasePaymentStatusInput } from './enums';
-import { PaginationQuerySchema } from './pagination.schema';
+import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
 
 /**
  * OhMyPos — SupplierPurchase contracts (ERD §3, System Design §6.2, ADR-004, ADR-006).
@@ -129,5 +129,6 @@ export const SupplierPurchaseQuerySchema = PaginationQuerySchema.extend({
   startDate: DateTimeString.optional(),
   endDate: DateTimeString.optional(),
   sortBy: SupplierPurchaseSortBySchema.optional(),
+  sortOrder: SortOrderSchema.optional(),
 });
 export type SupplierPurchaseQuery = z.infer<typeof SupplierPurchaseQuerySchema>;
