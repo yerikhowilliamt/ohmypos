@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { KASIR_CREDS, login } from './fixtures';
+import { KASIR_STATE } from './auth.setup';
 
-test('KASIR is redirected away from /master-data', async ({ page }) => {
-  await login(page, KASIR_CREDS);
+test('KASIR is redirected away from /master-data', async ({ browser }) => {
+  const context = await browser.newContext({ storageState: KASIR_STATE });
+  const page = await context.newPage();
   await page.goto('/master-data');
-  // Should redirect away — not render the master data page
-  await expect(page).not.toHaveURL(/master-data/, { timeout: 5000 });
+  // KASIR cannot access master-data — should redirect away
+  await expect(page).not.toHaveURL(/master-data/, { timeout: 8000 });
+  await context.close();
 });

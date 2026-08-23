@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { OWNER_CREDS, login } from './fixtures';
+import { OWNER_STATE } from './auth.setup';
 
-test('OWNER can create a raw material', async ({ page }) => {
-  await login(page, OWNER_CREDS);
+test('OWNER can create a raw material', async ({ browser }) => {
+  const context = await browser.newContext({ storageState: OWNER_STATE });
+  const page = await context.newPage();
   await page.goto('/master-data');
   // Switch to Bahan Baku tab
   await page.locator('[role="tab"]:has-text("Bahan Baku")').click();
@@ -15,11 +16,8 @@ test('OWNER can create a raw material', async ({ page }) => {
   await page.locator('input#rm-cost').fill('10000');
   await page.locator('input#rm-threshold').fill('5');
   // Submit — click the dialog's own submit button (not the page header one)
-  await page
-    .locator('[role="dialog"] button:has-text("Tambah Bahan Baku")')
-    .click();
+  await page.locator('[role="dialog"] button:has-text("Tambah Bahan Baku")').click();
   // Verify the new row appears
-  await expect(page.locator(`text=PW Bahan ${ts}`)).toBeVisible({
-    timeout: 10000,
-  });
+  await expect(page.locator(`text=PW Bahan ${ts}`)).toBeVisible({ timeout: 10000 });
+  await context.close();
 });
