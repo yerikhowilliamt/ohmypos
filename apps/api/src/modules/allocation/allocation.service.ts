@@ -181,11 +181,25 @@ export class AllocationService {
 
   async revoke(id: string) {
     return this.prisma.$transaction(async (tx) => {
-      // Kunci dulu, baca kedua — pola yang sama dengan PayablesService.settle.
+      const target = await tx.allocation.findUnique({ where: { id } });
+      if (!target) {
+        throw new NotFoundException(`Allocation with id ${id} not found`);
+      }
+
+      // DEF-QA-02: lock the same parent rows `create()` locks, in the same
+      // order (bank_transactions then ledger_entries), before touching the
+      // allocation itself. Without this, a concurrent `create()` on the same
+      // transaction/entry pair can read the allocation-sum aggregate mid-
+      // revoke and either over-count a row that is about to disappear or
+      // under-count one that a rolled-back revoke never actually removed —
+      // exactly the TOCTOU race the trigger alone was not enough to close at
+      // the application layer. Matching `create()`'s lock order also means
+      // the two operations can never deadlock against each other.
+      await tx.$queryRaw`SELECT id FROM bank_transactions WHERE id = ${target.bankTransactionId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM ledger_entries WHERE id = ${target.ledgerEntryId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM allocations WHERE id = ${id} FOR UPDATE`;
 
       const allocation = await tx.allocation.findUnique({ where: { id } });
-
       if (!allocation) {
         throw new NotFoundException(`Allocation with id ${id} not found`);
       }

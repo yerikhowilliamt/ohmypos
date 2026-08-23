@@ -39,6 +39,18 @@
 
 ## Log
 
+### DEBT-058 — `CreateUserDialog.tsx`/`EditUserDialog.tsx` call React Hook Form's `watch()` in the render body, degrading React Compiler
+
+- **Date logged:** 2026-08-23
+- **Found during:** TASK-101 to TASK-105, while investigating DEF-QA-04 (the plan named `AccountFormDialog.tsx`, which turned out already correct; these two files were noticed as a lint warning while confirming the fix's scope, not part of the plan's original 5 items)
+- **Description:** Both dialogs call `const role = watch('role')` directly in the component body. ESLint's `react-hooks/incompatible-library` rule flags this: React Compiler cannot safely memoize a component using a `watch()` return value, so it skips memoization for the whole component. Functionally correct today — just gives up the Compiler's memoization for these two components.
+- **Why deferred:** Out of scope for TASK-101 to TASK-105 (not one of the 5 items the plan identified, and fixing it means restructuring around `useWatch` or a controlled `Select` pattern, which touches component behavior beyond a QA-remediation pass).
+- **Impact if unaddressed:** No functional bug — purely a missed optimization. Impact grows only if these dialogs' surrounding tree starts depending on Compiler memoization for performance.
+- **Trigger condition:** Next time either dialog is touched for an unrelated reason, or if user-management screens show a real performance issue.
+- **Proposed resolution:** Replace `watch('role')` with `useWatch({ control, name: 'role' })`, matching whatever pattern `SplitAllocationDialog.tsx`/`AccountFormDialog.tsx` already use for controlled `Select` values.
+- **Priority:** Low
+- **Status:** Open
+
 ### DEBT-047 — `npm run test:e2e` (full 13-file suite) is flaky under back-to-back load, beyond the already-known concurrency-burst ceiling
 
 - **Date logged:** 2026-08-22

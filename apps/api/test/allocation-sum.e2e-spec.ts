@@ -377,4 +377,124 @@ describe('Allocation sum constraint (e2e)', () => {
       })
       .expect(400);
   });
+
+  describe('Concurrency races (DEF-QA-02, DEF-QA-03)', () => {
+    it('never lets a concurrent create() and revoke() push the ACTIVE sum past the transaction amount', async () => {
+      const { txn, entry } = await makePair('100.00', '100.00');
+
+      const first = await request(app.getHttpServer())
+        .post('/api/v1/allocations')
+        .set('Cookie', adminCookies)
+        .send({
+          bankTransactionId: txn.id,
+          ledgerEntryId: entry.id,
+          amountPortion: '100.00',
+        })
+        .expect(201);
+      const allocationId = (first.body as Array<{ id: string }>)[0].id;
+
+      // 5 concurrent revoke attempts racing 5 concurrent top-up creates
+      // against the same (bankTransaction, ledgerEntry) pair — DEF-QA-02's
+      // fix locks bank_transactions then ledger_entries in both create() and
+      // revoke(), in that order, so these can never interleave into an
+      // over-allocated state no matter how they're scheduled.
+      const revokeAttempts = Array.from({ length: 5 }, () =>
+        request(app.getHttpServer())
+          .post(`/api/v1/allocations/${allocationId}/revoke`)
+          .set('Cookie', adminCookies),
+      );
+      const createAttempts = Array.from({ length: 5 }, () =>
+        request(app.getHttpServer())
+          .post('/api/v1/allocations')
+          .set('Cookie', adminCookies)
+          .send({
+            bankTransactionId: txn.id,
+            ledgerEntryId: entry.id,
+            amountPortion: '100.00',
+          }),
+      );
+
+      const results = await Promise.all([...revokeAttempts, ...createAttempts]);
+      for (const res of results) {
+        expect([200, 201, 400]).toContain(res.status);
+        expect(res.status).not.toBeGreaterThanOrEqual(500);
+      }
+
+      const active = await prisma.allocation.findMany({
+        where: { bankTransactionId: txn.id, status: 'ACTIVE' },
+      });
+      const activeSum = active.reduce(
+        (sum, a) => sum + Number(a.amountPortion),
+        0,
+      );
+      expect(activeSum).toBeLessThanOrEqual(100);
+    });
+
+    it('never proposes the same UNRESOLVED bank transaction to two concurrent propose calls', async () => {
+      const pairs = await Promise.all(
+        Array.from({ length: 10 }, (_, i) => {
+          const amount = `${150 + i}.00`;
+          return Promise.all([
+            prisma.bankTransaction.create({
+              data: {
+                accountId,
+                txnDate: new Date('2026-04-01'),
+                amount,
+                type: 'INFLOW',
+                description: `race-${i}`,
+                status: 'UNRESOLVED',
+              },
+            }),
+            prisma.ledgerEntry.create({
+              data: {
+                accountId,
+                categoryId,
+                branchId,
+                entryDate: new Date('2026-04-01'),
+                amount,
+                type: 'INFLOW',
+              },
+            }),
+          ]);
+        }),
+      );
+      const allTxnIds = pairs.map(([txn]) => txn.id);
+
+      const [resA, resB] = await Promise.all([
+        request(app.getHttpServer())
+          .post('/api/v1/matching/propose')
+          .set('Cookie', adminCookies)
+          .send({ accountId }),
+        request(app.getHttpServer())
+          .post('/api/v1/matching/propose')
+          .set('Cookie', adminCookies)
+          .send({ accountId }),
+      ]);
+
+      const idsA = new Set(
+        (
+          resA.body as { candidates: Array<{ bankTransactionIds: string[] }> }
+        ).candidates.flatMap((c) => c.bankTransactionIds),
+      );
+      const idsB = new Set(
+        (
+          resB.body as { candidates: Array<{ bankTransactionIds: string[] }> }
+        ).candidates.flatMap((c) => c.bankTransactionIds),
+      );
+
+      const overlap = [...idsA].filter((id) => idsB.has(id));
+      expect(overlap).toHaveLength(0);
+
+      // Every transaction ends up PENDING_REVIEW exactly once, or is still
+      // UNRESOLVED (both calls' SELECT ... FOR UPDATE SKIP LOCKED happened to
+      // race the exact same instant) — never left in a state a duplicate
+      // proposal would imply.
+      const reloaded = await prisma.bankTransaction.findMany({
+        where: { id: { in: allTxnIds } },
+      });
+      for (const t of reloaded) {
+        expect(['UNRESOLVED', 'PENDING_REVIEW']).toContain(t.status);
+      }
+    });
+  });
 });

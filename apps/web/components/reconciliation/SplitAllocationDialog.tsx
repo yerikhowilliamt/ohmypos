@@ -340,7 +340,13 @@ export function SplitAllocationDialog({
                         Catatan Pembukuan
                       </Label>
                       <Select
-                        value={line.ledgerEntryId || undefined}
+                        // DEF-QA-04: always a defined string. `|| undefined`
+                        // made this Select uncontrolled at mount (empty draft
+                        // line) and controlled the moment an entry was picked
+                        // — exactly the transition React warns about. `''`
+                        // keeps it controlled throughout; SelectValue already
+                        // renders the placeholder for it.
+                        value={line.ledgerEntryId}
                         onValueChange={(value) =>
                           updateLine(line.id, { ledgerEntryId: value })
                         }

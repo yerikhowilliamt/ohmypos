@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import type {
 } from '@ohmypos/api-contracts';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
+import type { JwtPayload } from '../../common/types/jwt-payload.interface';
 
 /**
  * Ported from Kasync with the ERD v3 extensions: `accountId` (required),
@@ -111,10 +113,20 @@ export class LedgerEntriesService {
     };
   }
 
-  async findOne(id: string) {
+  /**
+   * `user` is only passed by the controller's `GET :id` route (DEF-QA-01) —
+   * `update`/`remove` call this internally after their own OWNER/ADMIN-only
+   * guard has already run, so no branch check is needed there.
+   */
+  async findOne(id: string, user?: JwtPayload) {
     const entry = await this.prisma.ledgerEntry.findUnique({ where: { id } });
     if (!entry) {
       throw new NotFoundException(`Ledger entry with ID ${id} not found`);
+    }
+    if (user?.role === 'KASIR' && entry.branchId !== user.branchId) {
+      throw new ForbiddenException(
+        'You do not have access to data for another branch',
+      );
     }
     return entry;
   }

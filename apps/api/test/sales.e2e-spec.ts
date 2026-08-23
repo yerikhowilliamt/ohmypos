@@ -936,6 +936,61 @@ describe('Sales (e2e)', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // 5b. Backdate limit — KASIR only (DEF-QA-06 / TASK-087)
+  // ---------------------------------------------------------------------------
+  describe('Backdate limit', () => {
+    it('rejects a KASIR sale dated more than 3 days in the past', async () => {
+      const tooOld = new Date();
+      tooOld.setUTCDate(tooOld.getUTCDate() - 4);
+
+      const res = await postSale(kasir1.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: tooOld.toISOString(),
+        items: [{ productId: pGuardId, quantity: '1' }],
+      });
+      expect(res.status).toBe(400);
+      expect((res.body as { message: string }).message).toContain(
+        'batas input susulan',
+      );
+    });
+
+    it('allows a KASIR sale dated within the 3-day backdate window', async () => {
+      const withinWindow = new Date();
+      withinWindow.setUTCDate(withinWindow.getUTCDate() - 2);
+
+      const res = await postSale(kasir1.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: withinWindow.toISOString(),
+        items: [{ productId: pGuardId, quantity: '1' }],
+      });
+      expect(res.status).toBe(201);
+    });
+
+    it('exempts OWNER and ADMIN from the KASIR backdate limit', async () => {
+      const wayOld = new Date();
+      wayOld.setUTCDate(wayOld.getUTCDate() - 10);
+
+      const asOwner = await postSale(owner.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: wayOld.toISOString(),
+        items: [{ productId: pGuardId, quantity: '1' }],
+      });
+      expect(asOwner.status).toBe(201);
+
+      const asAdmin = await postSale(admin.cookies, {
+        branchId: branch1Id,
+        accountId,
+        soldAt: wayOld.toISOString(),
+        items: [{ productId: pGuardId, quantity: '1' }],
+      });
+      expect(asAdmin.status).toBe(201);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // 6. Integrity & the ProductInUse guard (decision 8)
   // ---------------------------------------------------------------------------
   describe('Integrity', () => {
