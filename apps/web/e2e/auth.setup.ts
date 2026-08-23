@@ -24,6 +24,19 @@ async function saveSession(
   await page.locator('input[type="email"]').fill(creds.email);
   await page.locator('input[type="password"]').fill(creds.password);
   await page.locator('button:has-text("Masuk")').click();
+
+  // Handle KASIR unregistered-device attendance warning if it appears
+  const warningButton = page.locator(
+    'button:has-text("Lanjutkan ke Aplikasi")',
+  );
+  await Promise.race([
+    page.waitForURL(expectedUrlPattern, { timeout: 15000 }).catch(() => {}),
+    warningButton
+      .waitFor({ state: 'visible', timeout: 15000 })
+      .then(() => warningButton.click())
+      .catch(() => {}),
+  ]);
+
   await page.waitForURL(expectedUrlPattern, { timeout: 30000 });
   await page.context().storageState({ path: stateFile });
 }
