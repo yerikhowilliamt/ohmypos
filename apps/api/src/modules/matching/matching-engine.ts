@@ -40,6 +40,8 @@ export interface MatchingOptions {
 }
 
 export class MatchingEngine {
+  private static readonly SUBSET_BUDGET = 2_000_000;
+
   private readonly defaultOptions: Required<MatchingOptions> = {
     dateToleranceDays: 3,
     maxAggregationSubsetSize: 4,
@@ -50,7 +52,7 @@ export class MatchingEngine {
     bankTxns: BankTransactionInput[],
     ledgerEntries: LedgerEntryInput[],
     options?: MatchingOptions,
-  ): MatchCandidate[] {
+  ): { candidates: MatchCandidate[]; truncated: boolean } {
     const opts = { ...this.defaultOptions, ...options };
     const candidates: MatchCandidate[] = [];
 
@@ -103,8 +105,15 @@ export class MatchingEngine {
     }
 
     // 3. Aggregation Matches
+    let budget = MatchingEngine.SUBSET_BUDGET;
+    let truncated = false;
+
     for (const entry of ledgerEntries) {
       if (exactMatchedLedgerIds.has(entry.id)) continue;
+      if (budget <= 0) {
+        truncated = true;
+        break;
+      }
 
       const availableTxns = bankTxns.filter(
         (t) =>
@@ -114,10 +123,32 @@ export class MatchingEngine {
             opts.dateToleranceDays,
       );
 
+      if (availableTxns.length < 2) continue;
+
+      // Penyaring aritmetika (TASK-084 opsi B). Sebuah subset berukuran 2..N
+      // hanya bisa berjumlah antara (dua terkecil) dan (N terbesar). Entri di
+      // luar rentang itu TIDAK MUNGKIN cocok, jadi membangun subsetnya adalah
+      // kerja yang pasti terbuang. Inilah yang memangkas sebagian besar biaya
+      // pada data nyata, karena kebanyakan pengeluaran kecil dan kebanyakan
+      // subset besar.
+      const sorted = [...availableTxns].sort((a, b) =>
+        a.amount.comparedTo(b.amount),
+      );
+      const maxSize = Math.min(opts.maxAggregationSubsetSize, sorted.length);
+      const minReachable = sorted[0].amount.plus(sorted[1].amount);
+      const maxReachable = sorted
+        .slice(-maxSize)
+        .reduce((acc, t) => acc.plus(t.amount), new Decimal(0));
+
+      if (entry.amount.lt(minReachable) || entry.amount.gt(maxReachable)) {
+        continue;
+      }
+
       const subsets = this.getSubsets(
         availableTxns,
         opts.maxAggregationSubsetSize,
       );
+      budget -= subsets.length;
 
       for (const subset of subsets) {
         const sumAmount = subset.reduce(
@@ -144,9 +175,12 @@ export class MatchingEngine {
     }
 
     // Sort and limit
-    return candidates
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, opts.maxCandidates);
+    return {
+      candidates: candidates
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, opts.maxCandidates),
+      truncated,
+    };
   }
 
   private isExactMatch(
@@ -187,7 +221,10 @@ export class MatchingEngine {
     maxSize: number,
   ): BankTransactionInput[][] {
     const results: BankTransactionInput[][] = [];
-    // Guard against combinatorial explosion by truncating candidate pool to max 20 items
+    // DEF-A17: pemotongan ini TIDAK diam-diam lagi — pemanggilnya melaporkan
+    // `truncated` saat anggaran habis. Batas 20 di sini tetap ada sebagai
+    // pengaman kombinatorik per-entri; kalau kolam kandidat > 20 secara rutin,
+    // itu sinyal untuk menyempitkan jendela tanggal, bukan menaikkan angka ini.
     const boundedArr = arr.length > 20 ? arr.slice(0, 20) : arr;
     const n = boundedArr.length;
     const limit = Math.min(maxSize, n);

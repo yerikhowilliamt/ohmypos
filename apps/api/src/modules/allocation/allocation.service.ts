@@ -109,6 +109,13 @@ export class AllocationService {
         }
 
         for (const item of txnItems) {
+          // Kunci entri buku besar SESUDAH transaksi bank — lihat rencana
+          // TASK-083 §Jebakan. Membalik urutan ini membuat dua alokasi
+          // bersamaan yang menyentuh pasangan (txn, entry) yang bertukar bisa
+          // saling deadlock, dan Postgres membatalkan salah satunya dengan
+          // 40P01 yang tidak bisa ditindaklanjuti pemanggil.
+          await tx.$queryRaw`SELECT id FROM ledger_entries WHERE id = ${item.ledgerEntryId} FOR UPDATE`;
+
           const ledgerEntry = await tx.ledgerEntry.findUnique({
             where: { id: item.ledgerEntryId },
           });
@@ -119,7 +126,6 @@ export class AllocationService {
             );
           }
 
-          // Direction must agree — you cannot settle an outflow with an inflow.
           if (bankTransaction.type !== ledgerEntry.type) {
             throw new BadRequestException(
               `BankTransaction type (${bankTransaction.type}) does not match LedgerEntry type (${ledgerEntry.type})`,
@@ -132,6 +138,27 @@ export class AllocationService {
               created.push(existing);
               continue;
             }
+          }
+
+          // DEF-A3: batas sisi-entri. Kembarannya di sisi transaksi bank ada di
+          // atas (baris ~100); trigger trg_check_ledger_allocation_sum
+          // menegakkan hal yang sama di basis data dan itulah yang menutup
+          // balapan. Dua-duanya disengaja (lihat komentar kepala berkas).
+          const entryAllocations = await tx.allocation.findMany({
+            where: { ledgerEntryId: item.ledgerEntryId, status: 'ACTIVE' },
+          });
+          const entryAllocated = entryAllocations.reduce(
+            (sum, alloc) =>
+              sum.plus(new Decimal(alloc.amountPortion.toString())),
+            new Decimal(0),
+          );
+          const entryAmount = new Decimal(ledgerEntry.amount.toString());
+          const wouldBe = entryAllocated.plus(new Decimal(item.amountPortion));
+
+          if (wouldBe.gt(entryAmount)) {
+            throw new BadRequestException(
+              `Total allocation (${wouldBe.toString()}) exceeds ledger entry amount (${entryAmount.toString()}) for entry ${item.ledgerEntryId}`,
+            );
           }
 
           created.push(
@@ -153,21 +180,23 @@ export class AllocationService {
   }
 
   async revoke(id: string) {
-    const allocation = await this.prisma.allocation.findUnique({
-      where: { id },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      // Kunci dulu, baca kedua — pola yang sama dengan PayablesService.settle.
+      await tx.$queryRaw`SELECT id FROM allocations WHERE id = ${id} FOR UPDATE`;
 
-    if (!allocation) {
-      throw new NotFoundException(`Allocation with id ${id} not found`);
-    }
+      const allocation = await tx.allocation.findUnique({ where: { id } });
 
-    if (allocation.status === 'REVOKED') {
-      throw new BadRequestException(`Allocation ${id} is already revoked`);
-    }
+      if (!allocation) {
+        throw new NotFoundException(`Allocation with id ${id} not found`);
+      }
+      if (allocation.status === 'REVOKED') {
+        throw new BadRequestException(`Allocation ${id} is already revoked`);
+      }
 
-    return this.prisma.allocation.update({
-      where: { id },
-      data: { status: 'REVOKED', revokedAt: new Date() },
+      return tx.allocation.update({
+        where: { id },
+        data: { status: 'REVOKED', revokedAt: new Date() },
+      });
     });
   }
 

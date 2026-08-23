@@ -26,7 +26,7 @@ export class MatchingService {
     });
 
     if (bankTxns.length === 0) {
-      return [];
+      return { candidates: [], truncated: false };
     }
 
     // Scope ledger entries to a window around the bank transactions rather than
@@ -38,8 +38,17 @@ export class MatchingService {
     minDate.setUTCDate(minDate.getUTCDate() - tolerance);
     maxDate.setUTCDate(maxDate.getUTCDate() + tolerance);
 
+    // TASK-084: jendela ini dulu tak berbatas — rentang min-ke-maks SELURUH
+    // transaksi UNRESOLVED. Satu transaksi lama yang tidak pernah
+    // direkonsiliasi menarik setahun entri ke dalam memori dan ke dalam
+    // enumerasi subset. `take` memberi batas atas yang bisa dihitung; urutan
+    // menaik `entryDate` membuat potongannya deterministik, bukan sembarang.
+    const MAX_LEDGER_WINDOW = 5000;
+
     const ledgerEntries = await this.prisma.ledgerEntry.findMany({
       where: { entryDate: { gte: minDate, lte: maxDate } },
+      orderBy: { entryDate: 'asc' },
+      take: MAX_LEDGER_WINDOW,
     });
 
     const bankInputs: BankTransactionInput[] = bankTxns.map((tx) => ({
@@ -57,11 +66,15 @@ export class MatchingService {
     }));
 
     const engine = new MatchingEngine();
-    const candidates = engine.proposeMatches(bankInputs, ledgerInputs, {
-      dateToleranceDays: dto?.dateToleranceDays,
-      maxAggregationSubsetSize: dto?.maxAggregationSubsetSize,
-      maxCandidates: dto?.maxCandidates,
-    });
+    const { candidates, truncated } = engine.proposeMatches(
+      bankInputs,
+      ledgerInputs,
+      {
+        dateToleranceDays: dto?.dateToleranceDays,
+        maxAggregationSubsetSize: dto?.maxAggregationSubsetSize,
+        maxCandidates: dto?.maxCandidates,
+      },
+    );
 
     const bankTxnIdsToUpdate = new Set<string>();
     for (const candidate of candidates) {
@@ -77,7 +90,13 @@ export class MatchingService {
       });
     }
 
-    return candidates;
+    return {
+      candidates,
+      // `true` berarti: pencarian berhenti sebelum selesai. UI wajib
+      // mengatakannya kepada pengguna — "tidak ada kandidat lain" dan "kami
+      // berhenti mencari" adalah dua kalimat yang berbeda.
+      truncated: truncated || ledgerEntries.length === MAX_LEDGER_WINDOW,
+    };
   }
 
   /**

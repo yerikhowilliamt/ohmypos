@@ -55,6 +55,8 @@ export function PayableSettlementDialog({
   payable,
 }: PayableSettlementDialogProps) {
   const [serverError, setServerError] = React.useState<string | null>(null);
+  const [settlementIdempotencyKey, setSettlementIdempotencyKey] =
+    React.useState(() => crypto.randomUUID());
   const { data: accounts = [] } = useAccounts();
   const settleMutation = useSettlePayable();
 
@@ -82,6 +84,8 @@ export function PayableSettlementDialog({
         settledAt: todayIsoDate(),
         note: '',
       });
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSettlementIdempotencyKey(crypto.randomUUID());
     }
   }, [open, payable, reset]);
 
@@ -121,7 +125,14 @@ export function PayableSettlementDialog({
     if (!payable) return;
     setServerError(null);
     try {
-      await settleMutation.mutateAsync({ payableId: payable.id, data: values });
+      await settleMutation.mutateAsync({
+        payableId: payable.id,
+        data: {
+          ...values,
+          idempotencyKey: settlementIdempotencyKey,
+        },
+      });
+      setSettlementIdempotencyKey(crypto.randomUUID());
       onOpenChange(false);
     } catch (error) {
       setServerError(

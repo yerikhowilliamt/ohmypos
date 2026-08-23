@@ -58,6 +58,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
   const [candidates, setCandidates] = React.useState<MatchCandidate[] | null>(
     null,
   );
+  const [isTruncated, setIsTruncated] = React.useState(false);
   const [dismissed, setDismissed] = React.useState<Set<string>>(new Set());
   const [error, setError] = React.useState<string | null>(null);
   const [confirmingReset, setConfirmingReset] = React.useState(false);
@@ -86,6 +87,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
     // avoids the reset without restructuring this into a keyed remount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCandidates(null);
+    setIsTruncated(false);
     setDismissed(new Set());
     setError(null);
   }, [accountId]);
@@ -98,9 +100,11 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
     setError(null);
     try {
       setDismissed(new Set());
-      setCandidates(
-        await proposeMutation.mutateAsync(accountId ? { accountId } : {}),
+      const response = await proposeMutation.mutateAsync(
+        accountId ? { accountId } : {},
       );
+      setCandidates(response.candidates);
+      setIsTruncated(response.truncated);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -168,6 +172,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
     try {
       await resetMutation.mutateAsync(accountId);
       setCandidates(null);
+      setIsTruncated(false);
       setDismissed(new Set());
       setConfirmingReset(false);
     } catch (caught) {
@@ -244,6 +249,16 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
         {error && (
           <Alert variant="destructive" data-testid="match-error">
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {isTruncated && (
+          <Alert variant="warning" data-testid="match-truncated-warning">
+            <AlertDescription>
+              Pencarian dihentikan karena batas beban evaluasi tercapai.
+              Selesaikan usulan yang ada terlebih dahulu atau sempitkan rentang
+              pencocokan untuk menemukan sisa transaksi.
+            </AlertDescription>
           </Alert>
         )}
 

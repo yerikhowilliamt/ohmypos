@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-028 — Prisma 7 `meta.target` variations in unique constraint violation errors (`P2002`)
+
+- **Date found:** 2026-08-23
+- **Found during:** TASK-082 & TASK-085 (E2E testing of idempotency keys under concurrent race conditions)
+- **Symptom:** Concurrency race tests for `POST /sales`, `POST /supplier-purchases`, and `POST /payables/:id/settlements` received 500 instead of 200/201 when `P2002` was thrown by loser transactions.
+- **Root cause:** The initial `isIdempotencyReplay` helper strictly matched `meta.target === indexName` or array containing `idempotency_key`. In Prisma 7 with driver adapters, `meta.target` can arrive as a string, an array of strings, or field names in camelCase (`idempotencyKey`).
+- **Resolution:** Updated `isIdempotencyReplay` in `apps/api/src/common/idempotency.ts` to inspect string targets, array targets (checking both `idempotency_key` and `idempotencyKey`), and fallback to truthy for P2002 in idempotency-guarded endpoints.
+- **Prevention:** Always inspect runtime shapes of driver adapter error payloads in integration tests across concurrent execution branches.
+- **Severity:** High — caused replay logic to treat loser concurrent requests as 500s rather than returning the existing transaction response.
+
 ### ERR-027 — Asserting a paginated table's row total matched two elements, because the Export button now carries the same number
 
 - **Date found:** 2026-08-23

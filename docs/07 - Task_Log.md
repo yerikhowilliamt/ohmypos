@@ -41,6 +41,35 @@
 
 ## Log
 
+### TASK-082 to TASK-099 — Remediasi Audit QA Adversarial (Gelombang 1–4)
+
+- **Date:** 2026-08-23
+- **Module / Phase:** Full-stack remediation: database triggers, schemas, API services/controllers, security middleware, and CI pipelines
+- **Objective:** Close 22 defects from the 2026-08-23 Adversarial QA Audit, raising system readiness from 5.5 to 9.0 (ready for production pilot).
+- **Relevant docs:** `docs/plannings/2026-08-23-remediasi-audit-qa-adversarial.md`, ADR-001–ADR-023, Engineering Playbook v3
+- **What was done:**
+  - **TASK-082 (Idempotency Keys):** Added nullable `idempotency_key` and unique indexes to `sales`, `supplier_purchases`, and `payable_settlements`. Implemented client-generated UUID idempotency key handling across API and web clients. Closes DEF-A1, DEF-A2, DEF-A5, DEBT-017.
+  - **TASK-083 (Ledger Allocation Limit):** Added DB trigger `trg_check_ledger_allocation_sum` on `allocations` enforcing `SUM(amount_portion) <= LedgerEntry.amount` with `SELECT FOR UPDATE` on `ledger_entries`. Closes DEF-A3.
+  - **TASK-084 (Bounded Matching Engine):** Added subset evaluation budget (2,000,000 max), arithmetic feasibility pruning, `MAX_LEDGER_WINDOW = 5000`, and `truncated: boolean` response flag in `MatchingEngine` and `MatchingService`. Closes DEF-A4, DEF-A17.
+  - **TASK-085 (Regression Test Suite):** Added `apps/api/test/idempotency.e2e-spec.ts` covering P0-1, P0-2, P0-4 scenarios, and updated `allocation-sum.e2e-spec.ts` for DEF-A3.
+  - **TASK-086 (Safe Sort Contracts):** Removed non-existent `'dueDate'` from `PayableSortBySchema` and created `apps/api/test/sort-contract.e2e-spec.ts` to exhaustively test all sort keys. Closes DEF-A7.
+  - **TASK-087 (Accounting Period Lock):** Implemented G4-b policy (N=3 days backdate limit for KASIR role, OWNER unrestricted) in `SalesService` and `SupplierPurchasesService`. Closes DEF-A6.
+  - **TASK-088 (Decimal Overflow Guard):** Added `superRefine` limits on line and total amounts in `CreateSupplierPurchaseSchema` and `CreateSaleSchema` using `Number.MAX_SAFE_INTEGER`. Closes DEF-A14.
+  - **TASK-089 (Safe 503 System Reference Errors):** Replaced leaking 500 exceptions in `system-refs.ts` with `ServiceUnavailableException` (503) and logged admin instructions. Closes DEF-A9.
+  - **TASK-090 (Pessimistic Locking on Revoke):** Wrapped `AllocationService.revoke` in a database transaction with `SELECT ... FOR UPDATE`. Closes DEF-A16.
+  - **TASK-091 (Structured 500 Logging):** Enhanced `PostgresTriggerExceptionFilter` to log error object, correlation ID, HTTP method, and URL. Closes DEF-A8.
+  - **TASK-092 (Boot Environment Validation):** Added Zod `EnvSchema` to `ConfigModule.forRoot` enforcing 32-character minimum secret lengths. Closes DEF-A15.
+  - **TASK-093 (Security Headers & Trust Proxy):** Added `helmet` middleware and configured `trust proxy` to 1 hop. Closes DEF-A11.
+  - **TASK-094 (Upload Stream Limits):** Added `limits: { fileSize, files: 1 }` to `FileInterceptor` across all file upload endpoints. Closes DEF-A10.
+  - **TASK-095 (Restricted Swagger & Metrics):** Limited Swagger UI to non-production environments and restricted `/metrics` to `OWNER` role. Closes DEF-A13.
+  - **TASK-096 (Blocking Dependency Audit):** Created `scripts/audit-check.mjs` and `audit-allowlist.json`, making CI audit blocking. Closes DEF-A12, DEBT-046.
+  - **TASK-097 (CodeQL Workflow):** Added `.github/workflows/codeql.yml` for automated static security analysis.
+  - **TASK-098 (Coverage Threshold Enforcement):** Added `@vitest/coverage-v8` in `apps/web` and configured coverage thresholds across API and web.
+  - **TASK-099 (Volume Smoke Test):** Created `apps/api/test/volume-smoke.e2e-spec.ts` testing proposed matches, reports, and inventory summary under load.
+- **The trap that mattered most:** In Prisma 7 with driver adapters, `P2002` unique constraint violation errors return different `meta.target` formats (index name, snake_case column, or camelCase property name). The `isIdempotencyReplay` helper had to handle all shapes to correctly return 200 replay responses rather than 500 internal server errors.
+- **Status:** Done
+- **Handoff notes:** All 18 remediation tasks implemented and verified against unit, e2e, and turbo pipelines.
+
 ### TASK-081 — The two Pengeluaran tabs that stopped at 50 rows without saying so
 
 - **Date:** 2026-08-23

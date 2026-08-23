@@ -42,10 +42,14 @@ export class SalesController {
   @UseGuards(BranchScopeGuard, RoleGuard)
   @BranchScoped('body.branchId')
   @Roles('KASIR', 'ADMIN', 'OWNER')
-  async create(@Body() dto: CreateSaleDto, @ReqUser('sub') userId: string) {
+  async create(
+    @Body() dto: CreateSaleDto,
+    @ReqUser('sub') userId: string,
+    @ReqUser('role') role: string,
+  ) {
     const stopTimer = this.metrics.saleDurationSeconds.startTimer();
     try {
-      const result = await this.salesService.create(dto, userId);
+      const result = await this.salesService.create(dto, userId, role);
       this.metrics.saleCreatedTotal.inc();
       return result;
     } catch (error) {

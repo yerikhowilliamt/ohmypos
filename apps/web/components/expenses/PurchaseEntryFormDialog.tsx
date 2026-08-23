@@ -101,6 +101,9 @@ export function PurchaseEntryFormDialog({
 }: PurchaseEntryFormDialogProps) {
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [isSupplierCreateOpen, setIsSupplierCreateOpen] = React.useState(false);
+  const [purchaseIdempotencyKey, setPurchaseIdempotencyKey] = React.useState(
+    () => crypto.randomUUID(),
+  );
 
   const { data: suppliersData } = useSuppliers();
   const suppliers = suppliersData?.data ?? [];
@@ -133,6 +136,8 @@ export function PurchaseEntryFormDialog({
   React.useEffect(() => {
     if (open) {
       reset(DEFAULT_VALUES);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPurchaseIdempotencyKey(crypto.randomUUID());
     }
   }, [open, reset]);
 
@@ -153,10 +158,15 @@ export function PurchaseEntryFormDialog({
   const onSubmit = async (values: CreateSupplierPurchase) => {
     setServerError(null);
     try {
-      const created = await createMutation.mutateAsync(values);
+      const payload = {
+        ...values,
+        idempotencyKey: purchaseIdempotencyKey,
+      };
+      const created = await createMutation.mutateAsync(payload);
       if (created.paymentStatus === 'UNPAID') {
         onUnpaidPurchaseCreated?.(created.supplierName);
       }
+      setPurchaseIdempotencyKey(crypto.randomUUID());
       onOpenChange(false);
     } catch (error) {
       setServerError(

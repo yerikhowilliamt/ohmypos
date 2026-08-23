@@ -24,6 +24,7 @@ import { LedgerEntriesService } from '../ledger-entries/ledger-entries.service';
 import { calculateHpp } from '../products/hpp.calculator';
 import { CreateSaleDto, SaleQueryDto } from './sales.dto';
 import {
+  BackdatedSaleException,
   CentralBranchNotSellableException,
   InactiveProductException,
   RecipeIncompleteException,
@@ -36,6 +37,7 @@ import {
 } from './sale-totals';
 import { aggregateStockRequirements } from './sale-stock.calculator';
 import { SaleWithRelations, toSaleResponse } from './sales.mapper';
+import { isIdempotencyReplay } from '../../common/idempotency';
 
 const saleWithRelationsInclude = {
   branch: true,
@@ -59,189 +61,228 @@ export class SalesService {
    * interactive-transaction default would surface that as a P2028/500 on a sale
    * that was merely queued, not broken. 15s absorbs a queue; it is not a retry.
    */
-  async create(dto: CreateSaleDto, userId: string) {
-    return this.prisma.$transaction(
-      async (tx) => {
-        // ── Phase 1: resolve (reads only, no locks yet) ─────────────────────
-        const branch = await tx.branch.findUnique({
-          where: { id: dto.branchId },
-        });
-        if (!branch) {
-          throw new NotFoundException(
-            `Branch with ID ${dto.branchId} not found`,
+  async create(dto: CreateSaleDto, userId: string, role?: string) {
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          // ── SISIPAN 1: pra-cek replay (kasus umum: kirim ulang, bukan balapan)
+          if (dto.idempotencyKey) {
+            const replay = await tx.sale.findUnique({
+              where: { idempotencyKey: dto.idempotencyKey },
+              include: saleWithRelationsInclude,
+            });
+            if (replay) {
+              return toSaleResponse(replay);
+            }
+          }
+
+          // TASK-087 / DEF-A6 (G4-b N=3): Kasir batas mundur 3 hari
+          const BACKDATE_LIMIT_DAYS = 3;
+          if (role === 'KASIR') {
+            const earliest = new Date();
+            earliest.setUTCDate(earliest.getUTCDate() - BACKDATE_LIMIT_DAYS);
+            earliest.setUTCHours(0, 0, 0, 0);
+            if (new Date(dto.soldAt) < earliest) {
+              throw new BackdatedSaleException(BACKDATE_LIMIT_DAYS);
+            }
+          }
+
+          // ── Phase 1: resolve (reads only, no locks yet) ─────────────────────
+          const branch = await tx.branch.findUnique({
+            where: { id: dto.branchId },
+          });
+          if (!branch) {
+            throw new NotFoundException(
+              `Branch with ID ${dto.branchId} not found`,
+            );
+          }
+          // ADR-014/ADR-015: `Pusat (Dapur Sentral)` is a ledger-attribution row,
+          // not a till — there is no central sale (ADR-004).
+          if (branch.name === CENTRAL_BRANCH_NAME) {
+            throw new CentralBranchNotSellableException();
+          }
+
+          const account = await tx.account.findUnique({
+            where: { id: dto.accountId },
+          });
+          if (!account) {
+            throw new NotFoundException(
+              `Account with ID ${dto.accountId} not found`,
+            );
+          }
+
+          const productIds = dto.items.map((i) => i.productId);
+          const products = await tx.product.findMany({
+            where: { id: { in: productIds } },
+            include: { recipeItems: true },
+          });
+          const productById = new Map(products.map((p) => [p.id, p]));
+
+          const missingIds = productIds.filter((id) => !productById.has(id));
+          if (missingIds.length > 0) {
+            throw new SaleProductNotFoundException([...new Set(missingIds)]);
+          }
+
+          const inactiveNames = [
+            ...new Set(products.filter((p) => !p.isActive)),
+          ].map((p) => p.name);
+          if (inactiveNames.length > 0) {
+            throw new InactiveProductException(inactiveNames);
+          }
+
+          // ADR-013: "no recipe" is a different fact than "recipe costs nothing" —
+          // a recipeless product is rejected, never sold at hppAtSale = 0 (plan §6).
+          const incompleteNames = products
+            .filter((p) => p.recipeItems.length === 0)
+            .map((p) => p.name);
+          if (incompleteNames.length > 0) {
+            throw new RecipeIncompleteException([...new Set(incompleteNames)]);
+          }
+
+          const requirements = aggregateStockRequirements(
+            dto.items.map((item) => {
+              const product = productById.get(item.productId)!;
+              return {
+                quantity: new Prisma.Decimal(item.quantity),
+                recipeItems: product.recipeItems.map((ri) => ({
+                  rawMaterialId: ri.rawMaterialId,
+                  quantityUsed: ri.quantityUsed,
+                })),
+              };
+            }),
           );
-        }
-        // ADR-014/ADR-015: `Pusat (Dapur Sentral)` is a ledger-attribution row,
-        // not a till — there is no central sale (ADR-004).
-        if (branch.name === CENTRAL_BRANCH_NAME) {
-          throw new CentralBranchNotSellableException();
-        }
 
-        const account = await tx.account.findUnique({
-          where: { id: dto.accountId },
-        });
-        if (!account) {
-          throw new NotFoundException(
-            `Account with ID ${dto.accountId} not found`,
+          // ── Phase 2: acquire (ALL locks, ascending order, before any mutation
+          //    or any read of unitCost/currentStock — ADR-016) ────────────────
+          await this.stockMovementsService.lockRawMaterialsInIdOrder(
+            tx,
+            requirements.map((r) => r.rawMaterialId),
           );
-        }
 
-        const productIds = dto.items.map((i) => i.productId);
-        const products = await tx.product.findMany({
-          where: { id: { in: productIds } },
-          include: { recipeItems: true },
-        });
-        const productById = new Map(products.map((p) => [p.id, p]));
+          const lockedMaterials = await tx.rawMaterial.findMany({
+            where: { id: { in: requirements.map((r) => r.rawMaterialId) } },
+          });
+          const materialById = new Map(lockedMaterials.map((m) => [m.id, m]));
 
-        const missingIds = productIds.filter((id) => !productById.has(id));
-        if (missingIds.length > 0) {
-          throw new SaleProductNotFoundException([...new Set(missingIds)]);
-        }
-
-        const inactiveNames = [
-          ...new Set(products.filter((p) => !p.isActive)),
-        ].map((p) => p.name);
-        if (inactiveNames.length > 0) {
-          throw new InactiveProductException(inactiveNames);
-        }
-
-        // ADR-013: "no recipe" is a different fact than "recipe costs nothing" —
-        // a recipeless product is rejected, never sold at hppAtSale = 0 (plan §6).
-        const incompleteNames = products
-          .filter((p) => p.recipeItems.length === 0)
-          .map((p) => p.name);
-        if (incompleteNames.length > 0) {
-          throw new RecipeIncompleteException([...new Set(incompleteNames)]);
-        }
-
-        const requirements = aggregateStockRequirements(
-          dto.items.map((item) => {
+          // ── Phase 3: compute and mutate ──────────────────────────────────────
+          const lineComputations = dto.items.map((item) => {
             const product = productById.get(item.productId)!;
-            return {
-              quantity: new Prisma.Decimal(item.quantity),
-              recipeItems: product.recipeItems.map((ri) => ({
-                rawMaterialId: ri.rawMaterialId,
+            const quantity = new Prisma.Decimal(item.quantity);
+            const { unitPriceAtSale, isPriceOverridden } = resolveUnitPrice({
+              override: item.unitPrice
+                ? new Prisma.Decimal(item.unitPrice)
+                : undefined,
+              masterPrice: product.sellPrice,
+            });
+            const lineTotal = calculateSaleLineTotal({
+              quantity,
+              unitPrice: unitPriceAtSale,
+            });
+
+            // Same calculateHpp call the Products module uses (ADR-005) — the live
+            // figure and the snapshot must never be two implementations that can
+            // drift. Locked rows only; recipeItems.length > 0 already asserted
+            // above, so this is never null.
+            const hppAtSale = calculateHpp(
+              product.recipeItems.map((ri) => ({
                 quantityUsed: ri.quantityUsed,
+                unitCost: materialById.get(ri.rawMaterialId)!.unitCost,
               })),
+            )!;
+
+            return {
+              productId: item.productId,
+              quantity,
+              unitPriceAtSale,
+              isPriceOverridden,
+              hppAtSale,
+              lineTotal,
             };
-          }),
-        );
-
-        // ── Phase 2: acquire (ALL locks, ascending order, before any mutation
-        //    or any read of unitCost/currentStock — ADR-016) ────────────────
-        await this.stockMovementsService.lockRawMaterialsInIdOrder(
-          tx,
-          requirements.map((r) => r.rawMaterialId),
-        );
-
-        const lockedMaterials = await tx.rawMaterial.findMany({
-          where: { id: { in: requirements.map((r) => r.rawMaterialId) } },
-        });
-        const materialById = new Map(lockedMaterials.map((m) => [m.id, m]));
-
-        // ── Phase 3: compute and mutate ──────────────────────────────────────
-        const lineComputations = dto.items.map((item) => {
-          const product = productById.get(item.productId)!;
-          const quantity = new Prisma.Decimal(item.quantity);
-          const { unitPriceAtSale, isPriceOverridden } = resolveUnitPrice({
-            override: item.unitPrice
-              ? new Prisma.Decimal(item.unitPrice)
-              : undefined,
-            masterPrice: product.sellPrice,
-          });
-          const lineTotal = calculateSaleLineTotal({
-            quantity,
-            unitPrice: unitPriceAtSale,
           });
 
-          // Same calculateHpp call the Products module uses (ADR-005) — the live
-          // figure and the snapshot must never be two implementations that can
-          // drift. Locked rows only; recipeItems.length > 0 already asserted
-          // above, so this is never null.
-          const hppAtSale = calculateHpp(
-            product.recipeItems.map((ri) => ({
-              quantityUsed: ri.quantityUsed,
-              unitCost: materialById.get(ri.rawMaterialId)!.unitCost,
-            })),
-          )!;
+          const totalAmount = calculateSaleTotal(
+            lineComputations.map((l) => l.lineTotal),
+          );
 
-          return {
-            productId: item.productId,
-            quantity,
-            unitPriceAtSale,
-            isPriceOverridden,
-            hppAtSale,
-            lineTotal,
-          };
-        });
-
-        const totalAmount = calculateSaleTotal(
-          lineComputations.map((l) => l.lineTotal),
-        );
-
-        const categoryId = await resolveSaleCategoryId(tx);
-        const entry = await this.ledgerEntriesService.createSystemEntry(tx, {
-          accountId: dto.accountId,
-          categoryId,
-          branchId: dto.branchId,
-          entryDate: new Date(dto.soldAt),
-          amount: totalAmount,
-          type: 'INFLOW',
-          sourceType: 'SALE',
-          sourceId: null, // linked after the Sale exists, below
-        });
-
-        const sale = await tx.sale.create({
-          data: {
-            branchId: dto.branchId,
+          const categoryId = await resolveSaleCategoryId(tx);
+          const entry = await this.ledgerEntriesService.createSystemEntry(tx, {
             accountId: dto.accountId,
-            userId,
-            ledgerEntryId: entry.id,
-            totalAmount,
-            soldAt: new Date(dto.soldAt),
-          },
-        });
+            categoryId,
+            branchId: dto.branchId,
+            entryDate: new Date(dto.soldAt),
+            amount: totalAmount,
+            type: 'INFLOW',
+            sourceType: 'SALE',
+            sourceId: null, // linked after the Sale exists, below
+          });
 
-        await tx.saleItem.createMany({
-          data: lineComputations.map((l) => ({
-            saleId: sale.id,
-            productId: l.productId,
-            quantity: l.quantity,
-            unitPriceAtSale: l.unitPriceAtSale,
-            isPriceOverridden: l.isPriceOverridden,
-            hppAtSale: l.hppAtSale,
-            lineTotal: l.lineTotal,
-          })),
-        });
+          const sale = await tx.sale.create({
+            data: {
+              branchId: dto.branchId,
+              accountId: dto.accountId,
+              userId,
+              ledgerEntryId: entry.id,
+              totalAmount,
+              soldAt: new Date(dto.soldAt),
+              idempotencyKey: dto.idempotencyKey ?? null,
+            },
+          });
 
-        // Raises InsufficientStockException and writes nothing if any material
-        // is short — the transaction then rolls back everything above too.
-        await this.stockMovementsService.applyOutbound(tx, {
-          branchId: dto.branchId,
-          referenceType: 'SALE',
-          referenceId: sale.id,
-          movementDate: new Date(dto.soldAt),
-          lines: requirements.map((r) => ({
-            rawMaterialId: r.rawMaterialId,
-            quantity: r.quantity,
-            unitCost: materialById.get(r.rawMaterialId)!.unitCost,
-          })),
-        });
+          await tx.saleItem.createMany({
+            data: lineComputations.map((l) => ({
+              saleId: sale.id,
+              productId: l.productId,
+              quantity: l.quantity,
+              unitPriceAtSale: l.unitPriceAtSale,
+              isPriceOverridden: l.isPriceOverridden,
+              hppAtSale: l.hppAtSale,
+              lineTotal: l.lineTotal,
+            })),
+          });
 
-        await tx.ledgerEntry.update({
-          where: { id: entry.id },
-          data: { sourceId: sale.id },
-        });
+          // Raises InsufficientStockException and writes nothing if any material
+          // is short — the transaction then rolls back everything above too.
+          await this.stockMovementsService.applyOutbound(tx, {
+            branchId: dto.branchId,
+            referenceType: 'SALE',
+            referenceId: sale.id,
+            movementDate: new Date(dto.soldAt),
+            lines: requirements.map((r) => ({
+              rawMaterialId: r.rawMaterialId,
+              quantity: r.quantity,
+              unitCost: materialById.get(r.rawMaterialId)!.unitCost,
+            })),
+          });
 
-        const created = (await tx.sale.findUnique({
-          where: { id: sale.id },
+          await tx.ledgerEntry.update({
+            where: { id: entry.id },
+            data: { sourceId: sale.id },
+          });
+
+          const created = (await tx.sale.findUnique({
+            where: { id: sale.id },
+            include: saleWithRelationsInclude,
+          })) as SaleWithRelations;
+
+          return toSaleResponse(created);
+        },
+        { maxWait: 5000, timeout: 15000 },
+      );
+    } catch (error) {
+      if (
+        dto.idempotencyKey &&
+        isIdempotencyReplay(error, 'sales_idempotency_key_key')
+      ) {
+        const original = await this.prisma.sale.findUnique({
+          where: { idempotencyKey: dto.idempotencyKey },
           include: saleWithRelationsInclude,
-        })) as SaleWithRelations;
-
-        return toSaleResponse(created);
-      },
-      { maxWait: 5000, timeout: 15000 },
-    );
+        });
+        if (original) {
+          return toSaleResponse(original);
+        }
+      }
+      throw error;
+    }
   }
 
   async findAll(query: SaleQueryDto) {

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   DateTimeString,
+  IdempotencyKey,
   MoneyString,
   QuantityString,
   UuidString,
@@ -40,6 +41,7 @@ export const CreateSupplierPurchaseSchema = z
     /** The account the money left, when paymentStatus = PAID. Forbidden otherwise. */
     accountId: UuidString.optional(),
     note: z.string().trim().max(500).optional(),
+    idempotencyKey: IdempotencyKey.optional(),
     items: z.array(SupplierPurchaseItemInputSchema).min(1),
     // NOTE: there is deliberately no `totalAmount` field. The server computes it
     // from the items (§9.3) — a client-supplied total is a money-correctness hole.
@@ -64,8 +66,21 @@ export const CreateSupplierPurchaseSchema = z
     }
     // One line per raw material, so the FOR UPDATE lock set and the stock
     // increment are unambiguous (mirrors ReplaceRecipeSchema's superRefine).
+    // Number.MAX_SAFE_INTEGER = 9_007_199_254_740_991 (~9 * 10^15), safe in JS numbers
+    const MAX_LINE_TOTAL = Number.MAX_SAFE_INTEGER;
+    let purchaseTotal = 0;
     const seen = new Set<string>();
     dto.items.forEach((item, index) => {
+      const lineTotal = Number(item.quantity) * Number(item.unitCost);
+      purchaseTotal += lineTotal;
+      if (lineTotal > MAX_LINE_TOTAL) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['items', index, 'unitCost'],
+          message:
+            'total baris melebihi nilai maksimum yang bisa disimpan (Decimal(18,2))',
+        });
+      }
       if (seen.has(item.rawMaterialId)) {
         ctx.addIssue({
           code: 'custom',
@@ -75,6 +90,15 @@ export const CreateSupplierPurchaseSchema = z
       }
       seen.add(item.rawMaterialId);
     });
+
+    if (purchaseTotal > MAX_LINE_TOTAL) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['items'],
+        message:
+          'total pembelian melebihi nilai maksimum yang bisa disimpan (Decimal(18,2))',
+      });
+    }
   });
 export type CreateSupplierPurchase = z.infer<
   typeof CreateSupplierPurchaseSchema

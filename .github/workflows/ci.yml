@@ -68,12 +68,8 @@ jobs:
       - name: Quality gate (lint, typecheck, unit test, build)
         run: pnpm exec turbo run lint typecheck test build
 
-      # Non-blocking: findings still show up in the log, but a transitive
-      # advisory with no upstream fix yet (e.g. via @nestjs/swagger) shouldn't
-      # turn every PR red. Revisit if this needs to gate merges again.
-      - name: Dependency audit
-        run: pnpm audit
-        continue-on-error: true
+      - name: Dependency audit (blocking with allowlist)
+        run: node scripts/audit-check.mjs
 
   e2e:
     name: API E2E Tests (Postgres)
@@ -100,8 +96,9 @@ jobs:
       CORS_ORIGIN: 'http://localhost:3001'
       # Throwaway CI-only values — this Postgres and these tokens live only
       # for the duration of this job, so there's nothing sensitive to protect.
-      JWT_SECRET: 'ci-test-access-secret'
-      JWT_REFRESH_SECRET: 'ci-test-refresh-secret'
+      JWT_SECRET: 'ci-test-access-secret-min-32-chars-long'
+      JWT_REFRESH_SECRET: 'ci-test-refresh-secret-min-32-chars-long'
+      DEVICE_COOKIE_SECRET: 'ci-test-device-cookie-secret-min-32-chars-long'
       JWT_EXPIRES_IN: '1d'
       JWT_REFRESH_EXPIRES_IN: '30d'
     steps:

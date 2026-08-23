@@ -26,3 +26,12 @@ export const MatchCandidateSchema = z.object({
   dateDifferenceDays: z.number().int(),
 });
 export type MatchCandidate = z.infer<typeof MatchCandidateSchema>;
+
+export const ProposeMatchesResponseSchema = z.object({
+  candidates: z.array(MatchCandidateSchema),
+  /** Pencarian berhenti sebelum selesai — lihat TASK-084. */
+  truncated: z.boolean(),
+});
+export type ProposeMatchesResponse = z.infer<
+  typeof ProposeMatchesResponseSchema
+>;

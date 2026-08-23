@@ -49,7 +49,10 @@ function mockApi(options?: {
   vi.mocked(apiModule.apiFetch).mockImplementation(
     (path: string, init?: RequestInit) => {
       if (path === '/matching/propose' && init?.method === 'POST') {
-        return Promise.resolve([candidate]);
+        return Promise.resolve({
+          candidates: [candidate],
+          truncated: false,
+        });
       }
       if (path.startsWith('/reconciliation/transactions')) {
         return Promise.resolve({
@@ -231,7 +234,10 @@ describe('MatchReviewQueue', () => {
     vi.mocked(apiModule.apiFetch).mockImplementation(
       (path: string, init?: RequestInit) => {
         if (path === '/matching/propose' && init?.method === 'POST') {
-          return Promise.resolve([candidate]);
+          return Promise.resolve({
+            candidates: [candidate],
+            truncated: false,
+          });
         }
         if (path.startsWith('/reconciliation/transactions')) {
           // T2 is missing — a stale or truncated list.
@@ -274,7 +280,10 @@ describe('MatchReviewQueue', () => {
       vi.mocked(apiModule.apiFetch).mockImplementation(
         (path: string, init?: RequestInit) => {
           if (path === '/matching/propose' && init?.method === 'POST') {
-            return Promise.resolve([candidate]);
+            return Promise.resolve({
+              candidates: [candidate],
+              truncated: false,
+            });
           }
           if (path.startsWith('/reconciliation/transactions')) {
             const page = new URLSearchParams(path.split('?')[1] ?? '').get(

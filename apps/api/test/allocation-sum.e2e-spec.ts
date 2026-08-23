@@ -293,6 +293,77 @@ describe('Allocation sum constraint (e2e)', () => {
     expect(await prisma.allocation.count()).toBe(1);
   });
 
+  it('rejects an allocation that would exceed ledger entry amount (DEF-A3 / TASK-083)', async () => {
+    // 1 LedgerEntry OUTFLOW 100.00, 2 BankTransactions OUTFLOW each 100.00
+    const entry = await prisma.ledgerEntry.create({
+      data: {
+        accountId,
+        categoryId,
+        branchId,
+        entryDate: new Date('2026-02-01'),
+        amount: '100.00',
+        type: 'OUTFLOW',
+      },
+    });
+
+    const txn1 = await prisma.bankTransaction.create({
+      data: {
+        accountId,
+        txnDate: new Date('2026-02-01'),
+        amount: '100.00',
+        type: 'OUTFLOW',
+        description: 'Withdrawal 1',
+        status: 'UNRESOLVED',
+      },
+    });
+
+    const txn2 = await prisma.bankTransaction.create({
+      data: {
+        accountId,
+        txnDate: new Date('2026-02-01'),
+        amount: '100.00',
+        type: 'OUTFLOW',
+        description: 'Withdrawal 2',
+        status: 'UNRESOLVED',
+      },
+    });
+
+    // 1st allocation takes the full 100.00 of entry
+    await request(app.getHttpServer())
+      .post('/api/v1/allocations')
+      .set('Cookie', adminCookies)
+      .send({
+        bankTransactionId: txn1.id,
+        ledgerEntryId: entry.id,
+        amountPortion: '100.00',
+      })
+      .expect(201);
+
+    // 2nd allocation to same entry must fail with 400
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/allocations')
+      .set('Cookie', adminCookies)
+      .send({
+        bankTransactionId: txn2.id,
+        ledgerEntryId: entry.id,
+        amountPortion: '100.00',
+      })
+      .expect(400);
+
+    const body = res.body as { message: string };
+    expect(body.message).toMatch(/exceeds ledger entry amount/i);
+
+    const activeAllocations = await prisma.allocation.findMany({
+      where: { ledgerEntryId: entry.id, status: 'ACTIVE' },
+    });
+    expect(activeAllocations).toHaveLength(1);
+
+    const reloadedTxn2 = await prisma.bankTransaction.findUnique({
+      where: { id: txn2.id },
+    });
+    expect(reloadedTxn2?.status).not.toBe('MATCHED');
+  });
+
   it('rejects a rupiah amount with more precision than the column holds', async () => {
     const { txn, entry } = await makePair('100.00', '100.00');
 

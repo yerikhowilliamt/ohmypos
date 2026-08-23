@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { DateTimeString, MoneyString, UuidString } from './primitives';
+import {
+  DateTimeString,
+  IdempotencyKey,
+  MoneyString,
+  UuidString,
+} from './primitives';
 import { PayableStatus } from './enums';
 import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
 
@@ -11,6 +16,7 @@ export const CreatePayableSettlementSchema = z.object({
   amount: MoneyString.refine((v) => Number(v) > 0, 'must be greater than zero'),
   settledAt: DateTimeString,
   note: z.string().trim().max(500).optional(),
+  idempotencyKey: IdempotencyKey.optional(),
 });
 export type CreatePayableSettlement = z.infer<
   typeof CreatePayableSettlementSchema
@@ -61,7 +67,6 @@ export type PayableSupplierSummary = z.infer<
 // Payable column — see PayablesService.findAll for its nested orderBy.
 export const PayableSortBySchema = z.enum([
   'createdAt',
-  'dueDate',
   'originalAmount',
   'remainingBalance',
   'supplierName',

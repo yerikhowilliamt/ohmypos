@@ -85,6 +85,9 @@ function PosScreenInner({
   const [completedSale, setCompletedSale] = React.useState<SaleResponse | null>(
     null,
   );
+  const [saleIdempotencyKey, setSaleIdempotencyKey] = React.useState(() =>
+    crypto.randomUUID(),
+  );
 
   const productList = React.useMemo(() => products.data ?? [], [products.data]);
   const materialList = React.useMemo(
@@ -208,6 +211,7 @@ function PosScreenInner({
       // Taken at submit, not at cart open: CreateSaleSchema rejects a soldAt more
       // than five minutes ahead, and a cart can sit open longer than that.
       soldAt: new Date(),
+      idempotencyKey: saleIdempotencyKey,
     });
 
     if (!mapped.ok) {
@@ -228,6 +232,7 @@ function PosScreenInner({
     createSale.mutate(mapped.value, {
       onSuccess: (sale) => {
         setCompletedSale(sale);
+        setSaleIdempotencyKey(crypto.randomUUID());
         // The only path that clears the cart.
         dispatch({ type: 'SUBMIT_OK' });
       },
@@ -263,6 +268,7 @@ function PosScreenInner({
     state.accountId,
     state.lines,
     state.submit.status,
+    saleIdempotencyKey,
   ]);
 
   const errorMessage = (error: unknown): string | null =>

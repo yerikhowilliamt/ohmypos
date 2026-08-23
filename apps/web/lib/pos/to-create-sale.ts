@@ -18,6 +18,7 @@ export interface ToCreateSaleInput {
   lines: CartLine[];
   /** Injected rather than read from the clock, so the mapping stays pure. */
   soldAt: Date;
+  idempotencyKey?: string;
 }
 
 export function toCreateSale({
@@ -25,11 +26,13 @@ export function toCreateSale({
   accountId,
   lines,
   soldAt,
+  idempotencyKey,
 }: ToCreateSaleInput): ToCreateSaleResult {
   const candidate = {
     branchId,
     accountId,
     soldAt: soldAt.toISOString(),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
     items: lines.map((line) => ({
       productId: line.productId,
       quantity: formatFixed(fromInt(line.quantity, 0), QUANTITY_SCALE),

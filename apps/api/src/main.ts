@@ -1,6 +1,8 @@
+import type { Express } from 'express';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
@@ -8,6 +10,11 @@ import { PostgresTriggerExceptionFilter } from './common/filters/postgres-trigge
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // Security headers & trusted reverse proxy (TASK-093 / DEF-A11)
+  app.use(helmet());
+  const expressApp = app.getHttpAdapter().getInstance() as Express;
+  expressApp.set('trust proxy', 1);
 
   const allowedOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
@@ -35,11 +42,14 @@ async function bootstrap() {
     .build();
   // cleanupOpenApiDoc lets @nestjs/swagger render the Zod-derived DTOs, keeping
   // packages/api-contracts the single source of truth for the spec (Playbook §11).
-  SwaggerModule.setup(
-    'docs',
-    app,
-    cleanupOpenApiDoc(SwaggerModule.createDocument(app, config)),
-  );
+  // TASK-095: Swagger only outside production.
+  if (process.env.NODE_ENV !== 'production') {
+    SwaggerModule.setup(
+      'docs',
+      app,
+      cleanupOpenApiDoc(SwaggerModule.createDocument(app, config)),
+    );
+  }
 
   const port = process.env.PORT ?? 4015;
   await app.listen(port);

@@ -187,7 +187,7 @@
 - **Trigger condition:** Before any external security claim is made about this project, or when a *direct* (not transitive) advisory appears with no available fix, whichever comes first.
 - **Proposed resolution:** Either fail the build on advisories at or above a chosen severity (e.g. `pnpm audit --audit-level=high`) once the team is ready to treat that as a merge blocker, or add a scheduled (non-blocking) job that posts a summary instead of relying on someone reading PR CI logs.
 - **Priority:** Low
-- **Status:** Open
+- **Status:** **Resolved 2026-08-23 (TASK-096)** — Created `scripts/audit-check.mjs` and `audit-allowlist.json` with dated reviews and justifications for transitive advisories. CI step was updated to execute this script in a blocking manner without `continue-on-error: true`. Closes DEF-A12.
 
 ### DEBT-045 — Inventory Summary and reports resolved calendar-month boundaries differently (UTC vs WIB), a 7-hour disagreement
 
@@ -654,7 +654,7 @@
 - **Trigger condition:** A duplicated sale is observed in production, or the POS is put on a connection where lost responses are routine.
 - **Proposed resolution:** Add a client-generated `idempotencyKey` (UUID) to `CreateSaleSchema` with a unique index on `Sale`. On replay, return the original `SaleResponse` with 200 instead of creating a second sale. Then the POS can offer a plain retry.
 - **Priority:** Medium
-- **Status:** Open
+- **Status:** **Resolved 2026-08-23 (TASK-082)** — Note: the proposed resolution was incomplete because the double-spend vulnerability was not limited to `POST /sales` alone; identical double-entry hazards existed in `POST /supplier-purchases` and `POST /payables/:id/settlements`. Implemented client-generated UUID idempotency key with unique DB indexes across all three endpoints, returning replay responses with 200/201 without creating duplicate rows, stock movements, or ledger entries. Closes DEF-A1, DEF-A2, DEF-A5.
 
 ### DEBT-018 — POS omits mockup elements with no backing data model
 

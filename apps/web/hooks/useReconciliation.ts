@@ -15,9 +15,9 @@ import type {
   CreateAllocation,
   ImportResult,
   LedgerEntryResponse,
-  MatchCandidate,
   PaginationMeta,
   ProposeMatches,
+  ProposeMatchesResponse,
   ReconciliationSortBy,
   ReconciliationSummary,
   SortOrder,
@@ -384,7 +384,7 @@ export function useProposeMatches() {
   const invalidate = useReconciliationInvalidation();
   return useMutation({
     mutationFn: (dto: ProposeMatches) =>
-      apiFetch<MatchCandidate[]>('/matching/propose', {
+      apiFetch<ProposeMatchesResponse>('/matching/propose', {
         method: 'POST',
         body: JSON.stringify(dto),
       }),
