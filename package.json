@@ -14,6 +14,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "check": "turbo run lint typecheck test",
+    "create:owner": "pnpm --filter api create:owner",
     "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css}\" \"*.{json,mjs}\" --ignore-path .gitignore"
   },
   "devDependencies": {
