@@ -17,7 +17,9 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
-    "db:seed": "ts-node -O '{\"module\":\"commonjs\"}' prisma/seed.ts"
+    "db:seed": "ts-node -O '{\"module\":\"commonjs\"}' prisma/seed.ts",
+    "create:owner": "ts-node -O '{\"module\":\"commonjs\"}' scripts/create-owner.ts",
+    "create-owner": "ts-node -O '{\"module\":\"commonjs\"}' scripts/create-owner.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.29",

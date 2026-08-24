@@ -41,6 +41,19 @@
 
 ## Log
 
+### CLI Tool — Owner Provisioning Script (Option 2)
+
+- **Date:** 2026-08-24
+- **Module / Phase:** `apps/api` CLI scripts & Auth / User provisioning
+- **Objective:** Sediakan script CLI internal untuk membuat akun role OWNER tanpa memerlukan UI super admin terpisah.
+- **Relevant docs:** ADR-011, PRD v1.1, System Design v4 §5
+- **What was done:**
+  - `apps/api/scripts/create-owner.ts`: Script pembuatan akun OWNER mandiri dengan validasi nama (>= 2 char), email unik & format valid, password (>= 8 char) di-hash dengan bcrypt, role otomatis `OWNER`, `branchId: null`. Mendukung input argumen CLI (`--name`, `--email`, `--password`) maupun interactive prompt (dengan input password tersembunyi).
+  - `apps/api/package.json`: Menambahkan command script `"create-owner": "ts-node -O '{\"module\":\"commonjs\"}' scripts/create-owner.ts"`.
+- **Decisions made during this task:** Menggunakan pola CLI script internal tanpa ekspos endpoint publik baru atau modifikasi skema role DB, menjaga prinsip YAGNI dan arsitektur single-tenant.
+- **Status:** Done
+- **Handoff notes:** Script siap digunakan via `pnpm --filter api create-owner` di terminal/server.
+
 ### Phase 2, 3, 4 — Dynamic Business Profile on Sales Receipt & Nav Consolidation
 
 - **Date:** 2026-08-24
