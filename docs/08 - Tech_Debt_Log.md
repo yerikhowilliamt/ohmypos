@@ -39,6 +39,18 @@
 
 ## Log
 
+### DEBT-060 — Sales receipt renders current `BusinessProfile.name` instead of snapshotting `businessNameAtSale`
+
+- **Date logged:** 2026-08-24
+- **Found during:** Phase 2, 3, 4 (Dynamic business name on sales receipt integration)
+- **Description:** `SaleReceiptDialog` and `SaleSuccessDialog` fetch the active business profile name via `useBusinessProfile()` query. If the business updates its name later in `Profil Bisnis`, historical receipts rendered in `SalesHistoryTable` reflect the new name rather than the business name in effect at transaction time.
+- **Why deferred:** In v1 (single business, single tenant), business rebranding or name changes are rare. Adding a `businessName` column to the `sales` table would require modifying `schema.prisma`, running a migration, and breaking/extending `SaleResponseSchema` contracts for minimal practical gain in v1.
+- **Impact if unaddressed:** Rebranding a business retroactively updates the header on historical receipt previews and reprints.
+- **Trigger condition:** Multi-tenant roadmap requirement or legal requirement for immutable business name snapshots on historical tax invoices.
+- **Proposed resolution:** Add `businessNameAtSale String?` to `Sale` model in Prisma and populate from `BusinessProfile.name` at `POST /sales` transaction boundary.
+- **Priority:** Low
+- **Status:** Open
+
 ### DEBT-058 — `CreateUserDialog.tsx`/`EditUserDialog.tsx` call React Hook Form's `watch()` in the render body, degrading React Compiler
 
 - **Date logged:** 2026-08-23

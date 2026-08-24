@@ -34,4 +34,5 @@ export * from './period.schema';
 export * from './opening-stock.schema';
 export * from './inventory-summary.schema';
 export * from './report.schema';
+export * from './business-profile.schema';
 export * from './vocabulary';

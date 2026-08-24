@@ -79,6 +79,13 @@ export interface LedgerEntryFilterParams {
   limit?: number;
   sortBy?: LedgerEntrySortBy;
   sortOrder?: SortOrder;
+  /**
+   * Filter by transaction direction.
+   * - 'OUTFLOW' (default) — Pengeluaran Umum screen behaviour.
+   * - 'INFLOW' — inflow entries only.
+   * - 'ALL' — no type filter; returns both directions (used by dashboard feed).
+   */
+  type?: 'INFLOW' | 'OUTFLOW' | 'ALL';
 }
 
 /**
@@ -89,7 +96,12 @@ export interface LedgerEntryFilterParams {
  */
 function buildLedgerEntryQuery(params: LedgerEntryFilterParams): string {
   const searchParams = new URLSearchParams();
-  searchParams.set('type', 'OUTFLOW');
+  // 'ALL' → omit type param so API returns both directions.
+  // Default (type absent or 'OUTFLOW') → OUTFLOW, preserving Pengeluaran Umum screen.
+  const effectiveType = params.type ?? 'OUTFLOW';
+  if (effectiveType !== 'ALL') {
+    searchParams.set('type', effectiveType);
+  }
   searchParams.set('sortBy', params.sortBy ?? 'entryDate');
   searchParams.set('sortOrder', params.sortOrder ?? 'desc');
   searchParams.set('page', String(params.page ?? 1));

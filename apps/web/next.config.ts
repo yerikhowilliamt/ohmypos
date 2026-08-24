@@ -41,6 +41,27 @@ const nextConfig: NextConfig = {
   // pnpm hoists/symlinks workspace deps up to the repo root — without this,
   // file tracing anchors on apps/web and misses them.
   outputFileTracingRoot: path.join(__dirname, '../../'),
+  async redirects() {
+    return [
+      { source: '/users', destination: '/business/users', permanent: true },
+      {
+        source: '/branches',
+        destination: '/business/branches',
+        permanent: true,
+      },
+      { source: '/devices', destination: '/business/devices', permanent: true },
+      {
+        source: '/devices/attendance',
+        destination: '/business/devices/attendance',
+        permanent: true,
+      },
+      {
+        source: '/leave-requests',
+        destination: '/business/leave-requests',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-030 — `SalesHistoryTable.test.tsx` failed with `No QueryClient set` after `SaleReceiptDialog` introduced `useBusinessProfile()`
+
+- **Date found:** 2026-08-24
+- **Found during:** Phase 2, 3, 4 (Dynamic business name on sales receipt integration)
+- **Symptom:** `vitest run` reported `Error: No QueryClient set, use QueryClientProvider to set one` across 6 tests in `SalesHistoryTable.test.tsx` and 5 tests in `SalesHistoryClient.search.test.tsx`.
+- **Root cause:** `SalesHistoryTable` renders `SaleReceiptDialog` in its subtree. When `SaleReceiptDialog` was updated to fetch the dynamic business profile name via `useBusinessProfile()`, tests calling standard `render(...)` directly had no `QueryClientProvider` context mounted.
+- **Resolution:** Replaced raw `render(...)` in both test suites with `renderWithClient(...)` from `@/test/test-utils`.
+- **Prevention:** When embedding hooks or sub-components that consume `@tanstack/react-query` inside presentational or table components, ensure all parent component unit tests use `renderWithClient` rather than bare `render`.
+- **Severity:** Low — test-authoring context requirement caught during local test suite execution.
+
 ### ERR-029 — Second-pass adversarial QA review found a planned remediation (TASK-101–105) that was never actually executed
 
 - **Date found:** 2026-08-23

@@ -6,7 +6,7 @@ describe('getNavItems', () => {
     const kasirItems = getNavItems('KASIR');
     expect(kasirItems.map((item) => item.href)).toEqual([
       '/sales',
-      '/leave-requests',
+      '/business/leave-requests',
       '/help',
     ]);
     expect(kasirItems[0].children).toEqual([
@@ -42,10 +42,7 @@ describe('getNavItems', () => {
       '/expenses',
       '/inventory',
       '/reports',
-      '/users',
-      '/branches',
-      '/devices',
-      '/leave-requests',
+      '/business',
       '/help',
     ]);
     expect(hrefs[0]).toBe('/dashboard');
@@ -74,9 +71,13 @@ describe('getNavItems', () => {
       { href: '/reports/top-products', label: '10 Produk Terlaris' },
       { href: '/reports/daily', label: 'Pendapatan Harian' },
     ]);
-    expect(items.find((item) => item.href === '/devices')?.children).toEqual([
-      { href: '/devices', label: 'Daftar Perangkat' },
-      { href: '/devices/attendance', label: 'Log Absensi' },
+    expect(items.find((item) => item.href === '/business')?.children).toEqual([
+      { href: '/business', label: 'Profil Bisnis' },
+      { href: '/business/users', label: 'Pengguna' },
+      { href: '/business/branches', label: 'Cabang' },
+      { href: '/business/devices', label: 'Perangkat' },
+      { href: '/business/devices/attendance', label: 'Log Absensi' },
+      { href: '/business/leave-requests', label: 'Cuti' },
     ]);
   });
 

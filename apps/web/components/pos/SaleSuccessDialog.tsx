@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
 import { formatCurrency, formatQuantity } from '@/lib/formatters';
+import { useBusinessProfile } from '@/hooks/useBusinessProfile';
 
 interface SaleSuccessDialogProps {
   sale: SaleResponse | null;
@@ -30,15 +31,22 @@ interface SaleSuccessDialogProps {
 export function SaleSuccessDialog({
   sale,
   onClose,
-  businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME || 'OhMyPos',
+  businessName,
 }: SaleSuccessDialogProps) {
+  const { data: profile } = useBusinessProfile();
+  const activeBusinessName =
+    businessName ??
+    profile?.name ??
+    process.env.NEXT_PUBLIC_BUSINESS_NAME ??
+    'OhMyPos';
+
   return (
     <Dialog open={sale !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="space-y-0.5">
             <h2 className="text-base font-bold text-text-primary">
-              {businessName}
+              {activeBusinessName}
             </h2>
             {sale && (
               <p className="text-xs text-text-secondary">

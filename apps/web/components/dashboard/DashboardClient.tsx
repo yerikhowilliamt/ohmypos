@@ -10,7 +10,11 @@ import {
   useTopProducts,
 } from '@/hooks/useReports';
 import { useInventorySummary } from '@/hooks/useInventory';
-import { usePayablesSummary } from '@/hooks/useExpenses';
+import {
+  usePayablesSummary,
+  useSupplierPurchases,
+  useLedgerEntries,
+} from '@/hooks/useExpenses';
 import { useSales } from '@/hooks/usePos';
 import { DashboardKpiCards } from './DashboardKpiCards';
 import { BranchProfitabilityCard } from './BranchProfitabilityCard';
@@ -29,6 +33,7 @@ import {
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { formatCurrency, formatQuantity } from '@/lib/formatters';
+import { LEDGER_SOURCE_TYPE_LABELS } from '@ohmypos/api-contracts';
 import {
   AlertTriangle,
   ArrowRight,
@@ -52,6 +57,22 @@ function getCurrentMonthString(): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
 }
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  PAID: 'Lunas',
+  UNPAID: 'Belum Bayar',
+  PARTIAL: 'Sebagian',
+};
+
+type ActivityItem = {
+  id: string;
+  kind: 'sale' | 'purchase' | 'ledger';
+  label: string;
+  sublabel: string;
+  amount: string;
+  date: string;
+  isInflow: boolean;
+};
 
 export function DashboardClient() {
   const today = React.useMemo(() => toDateString(new Date()), []);
@@ -80,6 +101,19 @@ export function DashboardClient() {
     sortBy: 'soldAt',
     sortOrder: 'desc',
   });
+  const { data: recentPurchasesData, isLoading: isRecentPurchasesLoading } =
+    useSupplierPurchases({
+      limit: 5,
+      sortBy: 'purchaseDate',
+      sortOrder: 'desc',
+    });
+  const { data: recentLedgerData, isLoading: isRecentLedgerLoading } =
+    useLedgerEntries({
+      limit: 5,
+      sortBy: 'entryDate',
+      sortOrder: 'desc',
+      type: 'ALL',
+    });
   const { data: inventorySummary, isLoading: isInventoryLoading } =
     useInventorySummary(currentPeriod);
   const { data: payablesSummary, isLoading: isPayablesLoading } =
@@ -117,6 +151,44 @@ export function DashboardClient() {
       color: CHART_COLORS[i % CHART_COLORS.length],
     }));
   }, [incomeByPayment]);
+
+  const activityItems = React.useMemo<ActivityItem[]>(() => {
+    const sales: ActivityItem[] = (recentSalesData?.data ?? []).map((s) => ({
+      id: `sale-${s.id}`,
+      kind: 'sale',
+      label: s.cashierName,
+      sublabel: s.branchName || 'Pusat',
+      amount: s.totalAmount,
+      date: s.soldAt,
+      isInflow: true,
+    }));
+    const purchases: ActivityItem[] = (recentPurchasesData?.data ?? []).map(
+      (p) => ({
+        id: `purchase-${p.id}`,
+        kind: 'purchase',
+        label: p.supplierName,
+        sublabel: PAYMENT_STATUS_LABELS[p.paymentStatus] ?? p.paymentStatus,
+        amount: p.totalAmount,
+        date: p.purchaseDate,
+        isInflow: false,
+      }),
+    );
+    const ledger: ActivityItem[] = (recentLedgerData?.data ?? []).map((e) => ({
+      id: `ledger-${e.id}`,
+      kind: 'ledger',
+      label: e.note ?? 'Catatan Kas',
+      sublabel: LEDGER_SOURCE_TYPE_LABELS[e.sourceType],
+      amount: e.amount,
+      date: String(e.entryDate),
+      isInflow: e.type === 'INFLOW',
+    }));
+    return [...sales, ...purchases, ...ledger]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5);
+  }, [recentSalesData, recentPurchasesData, recentLedgerData]);
+
+  const isActivityLoading =
+    isRecentSalesLoading || isRecentPurchasesLoading || isRecentLedgerLoading;
 
   return (
     <div className="space-y-6">
@@ -241,13 +313,13 @@ export function DashboardClient() {
                     height={160}
                     valueFormatter={(v) => formatCurrency(v)}
                   />
-                  <div className="space-y-1.5 max-h-[100px] overflow-y-auto pr-1">
+                  <div className="space-y-1.5 max-h-25 overflow-y-auto pr-1 scrollbar-none">
                     {paymentMethodsPieData.map((item, idx) => (
                       <div
                         key={item.name}
                         className="flex items-center justify-between text-xs"
                       >
-                        <div className="flex items-center gap-1.5 truncate max-w-[140px]">
+                        <div className="flex items-center gap-1.5 truncate max-w-35">
                           <span
                             className="size-2.5 rounded-full shrink-0"
                             style={{
@@ -339,61 +411,62 @@ export function DashboardClient() {
           </CardContent>
         </Card>
 
-        {/* Transaksi Kasir Terakhir */}
+        {/* Transaksi Terkini */}
         <Card className="p-4 shadow-1 bg-surface-raised border-border-default">
           <CardHeader className="px-0 pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                <TrendingUp className="size-4 text-brand-primary" />
-                Transaksi Terkini
-              </CardTitle>
-              <Link
-                href="/sales/history"
-                className="text-xs text-brand-primary hover:underline inline-flex items-center gap-1"
-              >
-                Riwayat <ArrowRight className="size-3" />
-              </Link>
-            </div>
+            <CardTitle className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <TrendingUp className="size-4 text-brand-primary" />
+              Transaksi Terkini
+            </CardTitle>
           </CardHeader>
           <CardContent className="px-0 pt-2">
-            {isRecentSalesLoading ? (
+            {isActivityLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((n) => (
                   <Skeleton key={n} className="h-9 w-full" />
                 ))}
               </div>
-            ) : (recentSalesData?.data ?? []).length === 0 ? (
+            ) : activityItems.length === 0 ? (
               <p className="text-xs text-text-secondary py-4 text-center">
-                Belum ada transaksi penjualan kasir.
+                Belum ada transaksi.
               </p>
             ) : (
               <ul className="divide-y divide-border-default">
-                {(recentSalesData?.data ?? []).map((sale) => (
+                {activityItems.map((item) => (
                   <li
-                    key={sale.id}
+                    key={item.id}
                     className="py-2 flex items-center justify-between text-xs"
                   >
                     <div className="truncate">
                       <p className="font-medium text-text-primary truncate">
-                        {sale.cashierName}
+                        {item.label}
                       </p>
                       <p className="text-[10px] text-text-tertiary">
-                        {new Date(sale.soldAt).toLocaleTimeString('id-ID', {
+                        {new Date(item.date).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'short',
                           hour: '2-digit',
                           minute: '2-digit',
                         })}{' '}
-                        · {sale.branchName || 'Pusat'}
+                        · {item.sublabel}
                       </p>
                     </div>
                     <div className="flex flex-col items-end font-mono shrink-0 ml-2">
-                      <span className="font-semibold text-accent-inflow">
-                        {formatCurrency(sale.totalAmount)}
+                      <span
+                        className={`font-semibold ${item.isInflow ? 'text-accent-inflow' : 'text-status-danger'}`}
+                      >
+                        {item.isInflow ? '+' : '-'}
+                        {formatCurrency(item.amount)}
                       </span>
                       <Badge
                         variant="outline"
                         className="text-[9px] px-1 py-0 h-4"
                       >
-                        {sale.accountName || 'Kas'}
+                        {item.kind === 'sale'
+                          ? 'Penjualan'
+                          : item.kind === 'purchase'
+                            ? 'Pembelian'
+                            : 'Kas'}
                       </Badge>
                     </div>
                   </li>
@@ -427,8 +500,8 @@ export function DashboardClient() {
             ) : (
               <div className="space-y-3 text-xs">
                 {lowStockRows.length > 0 && (
-                  <div className="p-2.5 rounded-md border border-status-warning/30 bg-amber-50/50 flex items-start gap-2.5">
-                    <Package className="size-4 text-status-warning shrink-0 mt-0.5" />
+                  <div className="p-2.5 rounded-md border border-status-danger/30 bg-status-danger/5 flex items-start gap-2.5">
+                    <Package className="size-4 text-status-danger shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="font-semibold text-text-primary">
                         {lowStockRows.length} Bahan Baku Menipis
@@ -448,7 +521,7 @@ export function DashboardClient() {
                 )}
 
                 {suppliersWithUtang.length > 0 && (
-                  <div className="p-2.5 rounded-md border border-status-danger/30 bg-status-warning/5 flex items-start gap-2.5">
+                  <div className="p-2.5 rounded-md border border-status-danger/30 bg-status-danger/5 flex items-start gap-2.5">
                     <Wallet className="size-4 text-status-danger shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="font-semibold text-text-primary">

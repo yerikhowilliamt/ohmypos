@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import type { SaleResponse } from '@ohmypos/api-contracts';
+import { renderWithClient } from '@/test/test-utils';
 import { SalesHistoryTable } from './SalesHistoryTable';
 
 const mockSales: SaleResponse[] = [
@@ -65,7 +66,7 @@ vi.mock('@/hooks/usePos', async (importOriginal) => {
 
 describe('SalesHistoryTable', () => {
   it('renders sales history data and opens receipt dialog on click', () => {
-    render(<SalesHistoryTable sales={mockSales} {...singlePage} />);
+    renderWithClient(<SalesHistoryTable sales={mockSales} {...singlePage} />);
 
     expect(screen.getByText('Cabang Tebet')).toBeDefined();
     expect(screen.getByText('Budi Kasir')).toBeDefined();
@@ -81,7 +82,7 @@ describe('SalesHistoryTable', () => {
   });
 
   it('shows void button for ADMIN/OWNER for recent sales', () => {
-    render(
+    renderWithClient(
       <SalesHistoryTable userRole="ADMIN" sales={mockSales} {...singlePage} />,
     );
     expect(screen.getByRole('button', { name: /batalkan/i })).toBeDefined();
@@ -93,7 +94,7 @@ describe('SalesHistoryTable', () => {
   });
 
   it('hides void button for KASIR', () => {
-    render(
+    renderWithClient(
       <SalesHistoryTable userRole="KASIR" sales={mockSales} {...singlePage} />,
     );
     expect(screen.queryByRole('button', { name: /batalkan/i })).toBeNull();
@@ -104,7 +105,7 @@ describe('SalesHistoryTable', () => {
       ...mockSales[0],
       soldAt: new Date(Date.now() - 1000 * 60 * 40).toISOString(), // 40 mins ago
     };
-    render(
+    renderWithClient(
       <SalesHistoryTable userRole="OWNER" sales={[oldSale]} {...singlePage} />,
     );
     const btn = screen.getByRole('button', { name: /batalkan/i });
@@ -117,7 +118,7 @@ describe('SalesHistoryTable', () => {
       ...mockSales[0],
       status: 'VOIDED' as const,
     };
-    render(
+    renderWithClient(
       <SalesHistoryTable
         userRole="ADMIN"
         sales={[voidedSale]}
@@ -129,7 +130,7 @@ describe('SalesHistoryTable', () => {
   });
 
   it('opens confirmation dialog on void click', () => {
-    render(
+    renderWithClient(
       <SalesHistoryTable userRole="ADMIN" sales={mockSales} {...singlePage} />,
     );
     const btn = screen.getByRole('button', { name: /batalkan/i });

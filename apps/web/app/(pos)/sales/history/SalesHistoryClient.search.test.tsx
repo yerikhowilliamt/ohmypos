@@ -1,9 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import type { UserResponse } from '@ohmypos/api-contracts';
-// Side-effect import: installs the jsdom polyfills Radix Select needs.
-import '@/test/test-utils';
+import { renderWithClient } from '@/test/test-utils';
 
 const useSales = vi.fn();
 
@@ -53,12 +52,12 @@ describe('SalesHistoryClient server-side search', () => {
   });
 
   it('sends no search parameter before anything is typed', () => {
-    render(<SalesHistoryClient user={OWNER} />);
+    renderWithClient(<SalesHistoryClient user={OWNER} />);
     expect(lastParams().search).toBeUndefined();
   });
 
   it('sends the keyword to the hook once typing settles', async () => {
-    render(<SalesHistoryClient user={OWNER} />);
+    renderWithClient(<SalesHistoryClient user={OWNER} />);
 
     fireEvent.change(screen.getByLabelText('Cari riwayat penjualan'), {
       target: { value: 'tebet' },
@@ -70,7 +69,7 @@ describe('SalesHistoryClient server-side search', () => {
   });
 
   it('returns to page 1 when the keyword changes', async () => {
-    render(<SalesHistoryClient user={OWNER} />);
+    renderWithClient(<SalesHistoryClient user={OWNER} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Halaman berikutnya' }));
     await waitFor(() => {
@@ -89,7 +88,7 @@ describe('SalesHistoryClient server-side search', () => {
   });
 
   it('drops the parameter when the box is cleared', async () => {
-    render(<SalesHistoryClient user={OWNER} />);
+    renderWithClient(<SalesHistoryClient user={OWNER} />);
     const box = screen.getByLabelText('Cari riwayat penjualan');
 
     fireEvent.change(box, { target: { value: 'tebet' } });
@@ -104,7 +103,7 @@ describe('SalesHistoryClient server-side search', () => {
   });
 
   it('clears the keyword with Reset Filter', async () => {
-    render(<SalesHistoryClient user={OWNER} />);
+    renderWithClient(<SalesHistoryClient user={OWNER} />);
 
     fireEvent.change(screen.getByLabelText('Cari riwayat penjualan'), {
       target: { value: 'tebet' },

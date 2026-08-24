@@ -35,6 +35,7 @@ import { PayablesModule } from './modules/payables/payables.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { BusinessProfileModule } from './modules/business-profile/business-profile.module';
 
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
@@ -120,6 +121,7 @@ const EnvSchema = z.object({
     SalesModule,
     InventoryModule,
     ReportsModule,
+    BusinessProfileModule,
   ],
 
   providers: [
