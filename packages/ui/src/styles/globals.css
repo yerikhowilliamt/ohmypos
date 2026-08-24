@@ -1,0 +1,404 @@
+@import 'tailwindcss';
+
+/**
+ * OhMyPos Design Tokens
+ *
+ * Single source of truth for values defined in DESIGN.md.
+ * Luxury Hospitality & High-End Retail UI:
+ *   Primary   — #C5A880 (Champagne Gold)
+ *   Secondary — #A37D4E (Warm Bronze)
+ *   Tertiary  — #1E293B (Deep Charcoal / Slate)
+ *
+ * Consuming application supplies loaded fonts through next/font.
+ * Components reference semantic tokens rather than raw hex values.
+ */
+
+@theme {
+  /* ============================================================
+   * Typography
+   * ============================================================ */
+
+  /* Luxury Display / Heading typography */
+  --font-serif:
+    var(--font-cormorant-garamond, 'Cormorant Garamond'), 'Cinzel',
+    'Playfair Display', ui-serif, Georgia, serif;
+
+  /* UI typography */
+  --font-sans:
+    var(--font-plus-jakarta, 'Plus Jakarta Sans'), 'Plus Jakarta Sans Fallback',
+    ui-sans-serif, system-ui, sans-serif;
+
+  /* Numeric / financial data */
+  --font-mono:
+    var(--font-jetbrains-mono, 'JetBrains Mono'), ui-monospace, SFMono-Regular,
+    monospace;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+
+  /* ============================================================
+   * Brand
+   *
+   * OhMyPos Luxury Brand Palette:
+   * Primary   — Champagne Gold (#C5A880)
+   * Secondary — Warm Bronze (#A37D4E)
+   * Tertiary  — Deep Slate (#1E293B)
+   * ============================================================ */
+
+  --color-brand-primary: #c5a880;
+  --color-brand-primary-hover: #b3936a;
+  --color-brand-secondary: #a37d4e;
+  --color-brand-tertiary: #1e293b;
+
+  /* Soft luxury surfaces */
+  --color-brand-primary-soft: #f7f2ea;
+  --color-brand-secondary-soft: #f5ede4;
+  --color-brand-tertiary-soft: #f1f5f9;
+
+  /* ============================================================
+   * Financial Accents (Jewel Tones)
+   *
+   * Used by Flow Indicator motif and financial visualizations.
+   * ============================================================ */
+
+  --color-accent-inflow: #166534;
+  --color-accent-inflow-soft: #ecfdf5;
+  --color-accent-outflow: #9f1239;
+  --color-accent-outflow-soft: #fff1f2;
+
+  /* ============================================================
+   * Text
+   * ============================================================ */
+
+  --color-text-primary: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-tertiary: #8c827a;
+  --color-text-inverse: #ffffff;
+  --color-text-gold: #c5a880;
+
+  /* ============================================================
+   * Surface
+   * ============================================================ */
+
+  --color-surface-base: #fbf9f5;
+  --color-surface-muted: #f4efeb;
+  --color-surface-raised: #ffffff;
+
+  /*
+   * Strong surface is reserved for highlighted / selected states.
+   * Soft warm champagne tint.
+   */
+  --color-surface-strong: #f7f2ea;
+
+  --color-surface-dark: #12151b;
+  --color-surface-dark-raised: #1a1e26;
+
+  /* ============================================================
+   * Border
+   * ============================================================ */
+
+  --color-border-default: #eae4dc;
+  --color-border-strong: #d6cdbf;
+  --color-border-gold: #c5a880;
+
+  /* ============================================================
+   * Status
+   * ============================================================ */
+
+  --color-status-success: #15803d;
+  --color-status-warning: #b45309;
+  --color-status-danger: #b91c1c;
+  --color-status-info: #475569;
+
+  /* ============================================================
+   * Shadcn / Semantic Theme
+   * ============================================================ */
+
+  /* Primary */
+  --color-primary: #c5a880;
+  --color-primary-foreground: #ffffff;
+
+  /* Secondary surface */
+  --color-secondary: #f4efeb;
+  --color-secondary-foreground: #18181b;
+
+  /* Muted */
+  --color-muted: #f4efeb;
+  --color-muted-foreground: #8c827a;
+
+  /* Accent */
+  --color-accent: #f7f2ea;
+  --color-accent-foreground: #18181b;
+
+  /* Destructive */
+  --color-destructive: #b91c1c;
+  --color-destructive-foreground: #ffffff;
+
+  /* Card */
+  --color-card: #ffffff;
+  --color-card-foreground: #18181b;
+
+  /* Popover */
+  --color-popover: #ffffff;
+  --color-popover-foreground: #18181b;
+
+  /* Borders / inputs */
+  --color-border: #eae4dc;
+  --color-input: #eae4dc;
+
+  /* Focus ring */
+  --color-ring: rgba(197, 168, 128, 0.45);
+
+  /* Background / foreground */
+  --color-background: #fbf9f5;
+  --color-foreground: #18181b;
+
+  /* ============================================================
+   * Shadcn Sidebar (ui.shadcn.com/docs/components/sidebar)
+   *
+   * Pure aliases onto existing semantic tokens (DESIGN.md §5 Typography) — no new
+   * colors. Because these are var() references, dark mode's
+   * [data-theme='dark'] block re-resolves them automatically once it
+   * overrides the tokens they point to; no separate dark entries needed.
+   * ============================================================ */
+
+  --color-sidebar: var(--color-surface-raised);
+  --color-sidebar-foreground: var(--color-text-primary);
+  --color-sidebar-primary: var(--color-brand-primary);
+  --color-sidebar-primary-foreground: var(--color-text-inverse);
+  --color-sidebar-accent: var(--color-surface-strong);
+  --color-sidebar-accent-foreground: var(--color-text-gold);
+  --color-sidebar-border: var(--color-border-default);
+  --color-sidebar-ring: var(--color-focus-ring);
+
+  /* ============================================================
+   * Spacing
+   * ============================================================ */
+
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 24px;
+  --spacing-6: 32px;
+  --spacing-7: 40px;
+  --spacing-8: 48px;
+
+  /* ============================================================
+   * Refined Micro-Radius (Architecture / Luxury)
+   * ============================================================ */
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 9999px;
+
+  /* ============================================================
+   * Hairline & Ambient Shadows
+   * ============================================================ */
+
+  --shadow-1: 0px 1px 2px 0px rgba(24, 24, 27, 0.04);
+
+  --shadow-2: 0px 4px 16px -2px rgba(24, 24, 27, 0.08);
+
+  /* ============================================================
+   * Motion
+   * ============================================================ */
+
+  --animate-duration-instant: 150ms;
+  --animate-duration-fast: 200ms;
+  --animate-duration-normal: 250ms;
+}
+
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}
+
+@layer utilities {
+  [data-slot='collapsible-content'][data-state='open'] {
+    animation: collapsible-down 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  [data-slot='collapsible-content'][data-state='closed'] {
+    animation: collapsible-up 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* ==============================================================
+ * Root
+ * ============================================================== */
+
+:root {
+  /*
+   * Luxury Champagne Gold ring.
+   * Used for focus indicators and interactive states.
+   */
+  --color-focus-ring: rgba(197, 168, 128, 0.45);
+}
+
+/* ==============================================================
+ * Dark theme — back-office only (`AppShell`'s `enableDarkMode` gate;
+ * POS and shared routes never set `data-theme`, so this block never
+ * applies there). Reuses the existing Obsidian surface family as its
+ * base. Every value below was checked against WCAG 2.2 AA (4.5:1 text,
+ * 3:1 non-text) for its dominant usage in this codebase — see
+ * `docs/07 - Task_Log.md` for the pairs and numbers. `--color-text-inverse`
+ * is deliberately NOT overridden here: it's only used by the tooltip chip,
+ * which stays a fixed dark surface in both themes.
+ * ============================================================== */
+
+.dark,
+[data-theme='dark'] {
+  /* Surfaces */
+  --color-surface-base: #12151b;
+  --color-surface-muted: #0d0f14;
+  --color-surface-raised: #1a1e26;
+  --color-surface-strong: #2b2a29;
+
+  /* Text */
+  --color-text-primary: #f5f2ec;
+  --color-text-secondary: #b8afa0;
+  --color-text-tertiary: #8a8275;
+
+  /* Borders */
+  --color-border-default: #2a2e38;
+  --color-border-strong: #3d4250;
+
+  /* Brand — primary/secondary/hover stay the same gold/bronze (already
+   * 8:1+ against the new dark surfaces); the "soft" washes and tertiary
+   * slate need dark-specific values since they're light washes in
+   * :root and would collide with the now-light text tokens above. */
+  --color-brand-primary-soft: #36322f;
+  --color-brand-secondary-soft: #2f2a25;
+  --color-brand-tertiary: #94a3b8;
+  --color-brand-tertiary-soft: #242d3b;
+
+  /* Status — chosen as a balance between "readable as plain text on a
+   * dark surface" (the dominant usage, >100 call sites for danger alone)
+   * and "readable as white text on a solid fill" (badges, KPI cards) —
+   * no single value hits AA on both axes at once, same trade-off already
+   * present in the light theme's gold buttons. */
+  --color-status-success: #16a34a;
+  --color-status-warning: #d97706;
+  --color-status-danger: #e5484d;
+  --color-status-info: #7382a0;
+
+  /* Financial accents — no white-on-fill usage for these (dots/bars/text
+   * only), so they can go straight to the more legible value. */
+  --color-accent-inflow: #22c55e;
+  --color-accent-inflow-soft: #153126;
+  --color-accent-outflow: #fb7185;
+  --color-accent-outflow-soft: #37242c;
+
+  /* Shadcn / semantic aliases — mirror the tokens above */
+  --color-secondary: #0d0f14;
+  --color-secondary-foreground: #f5f2ec;
+  --color-muted: #0d0f14;
+  --color-muted-foreground: #8a8275;
+  --color-accent: #36322f;
+  --color-accent-foreground: #f5f2ec;
+  --color-destructive: #e5484d;
+  --color-card: #1a1e26;
+  --color-card-foreground: #f5f2ec;
+  --color-popover: #1a1e26;
+  --color-popover-foreground: #f5f2ec;
+  --color-border: #2a2e38;
+  --color-input: #2a2e38;
+  --color-background: #12151b;
+  --color-foreground: #f5f2ec;
+
+  /* Shadcn Sidebar aliases */
+  --color-sidebar: #1a1e26;
+  --color-sidebar-foreground: #f5f2ec;
+  --color-sidebar-primary: #c5a880;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: #2b2a29;
+  --color-sidebar-accent-foreground: #c5a880;
+  --color-sidebar-border: #2a2e38;
+  --color-sidebar-ring: rgba(197, 168, 128, 0.45);
+
+  /* Shadows need much higher opacity to read against a dark surface. */
+  --shadow-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0px 4px 16px -2px rgba(0, 0, 0, 0.45);
+}
+
+/* ==============================================================
+ * Base
+ * ============================================================== */
+
+@layer base {
+  body {
+    background-color: var(--color-surface-base);
+    color: var(--color-text-primary);
+
+    font-family: var(--font-sans);
+    font-size: var(--text-md);
+    font-weight: 400;
+    line-height: 20px;
+  }
+
+  /*
+   * WCAG 2.2 AA:
+   * Focus indicators are never hidden or suppressed.
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /*
+   * Numeric data is tabular and monospaced.
+   *
+   * Recommended for:
+   * - prices
+   * - transaction amounts
+   * - invoice numbers
+   * - quantities
+   * - timestamps
+   * - percentages
+   */
+  .numeric {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ==============================================================
+ * Reduced motion
+ * ============================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

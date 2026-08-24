@@ -1,0 +1,7 @@
+# Generated code — never hand-edited, never formatted.
+# Prisma 7 emits its client as TypeScript into the source tree.
+**/generated/
+**/dist/
+**/.next/
+**/coverage/
+pnpm-lock.yaml

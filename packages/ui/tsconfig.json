@@ -1,0 +1,12 @@
+{
+  "extends": "@ohmypos/config/typescript/next.json",
+  "compilerOptions": {
+    "plugins": [],
+    "baseUrl": ".",
+    "paths": {
+      "@ohmypos/ui/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

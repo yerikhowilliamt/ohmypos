@@ -1,0 +1,889 @@
+// OhMyPos — schema for the modules ported from Kasync (ADR-001, ADR-012).
+//
+// Ported tables follow Kasync's literal schema as their baseline; OhMyPos's own
+// requirements are layered on top and marked "OhMyPos" below. See ERD v3 §2 for
+// the field-by-field reconciliation and §7 for the porting notes.
+//
+// New domain models (Product, Sale, RawMaterial, …) arrive in Phase 3.
+// The User model arrives in Phase 2 (ADR-011).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+
+  // Prisma 7 emits TypeScript into the source tree. These two options make the
+  // emitted imports compile under this app's CommonJS tsconfig; without them the
+  // generated files import with explicit `.ts` extensions, which `moduleResolution:
+  // node` rejects.
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums — verbatim from Kasync unless marked. Do not rename: the SQL triggers
+// write TransactionStatus literals, and AllocationService/MatchingEngine compare
+// TransactionType across BankTransaction and LedgerEntry (ADR-012).
+// ---------------------------------------------------------------------------
+
+enum AccountType {
+  BANK
+  CASH
+  EWALLET
+}
+
+enum TransactionType {
+  INFLOW
+  OUTFLOW
+}
+
+enum TransactionStatus {
+  UNRESOLVED // no candidate match found / zero allocation
+  PENDING_REVIEW // matching engine proposed a candidate, awaiting confirmation
+  PARTIALLY_ALLOCATED // sum(allocation) < amount
+  MATCHED // sum(allocation) == amount
+}
+
+enum AllocationStatus {
+  ACTIVE
+  REVOKED
+}
+
+/// OhMyPos — the three staff roles (ADR-011). `CASHIER` from the v1-draft ERD is
+/// superseded and must not be reintroduced (Playbook §18).
+enum UserRole {
+  KASIR
+  ADMIN
+  OWNER
+}
+
+/// OhMyPos — distinguishes Kasync's manual entries from system-generated ones.
+enum LedgerSourceType {
+  MANUAL
+  SALE
+  PURCHASE
+  PAYABLE_SETTLEMENT
+  /// DEBT-010: the reversal LedgerEntry a void writes. Kept distinct from
+  /// SALE for audit-trail legibility only — report correctness comes from
+  /// the Sale.status exclusion (see reports.service.ts / report-filters.ts),
+  /// not from this value.
+  SALE_VOID
+}
+
+/// DEBT-010 — minimal interim void guard (no partial refund; System Design
+/// §6.1 note on the void endpoint).
+enum SaleStatus {
+  COMPLETED
+  VOIDED
+}
+
+/// OhMyPos — ERD §3. PARTIALLY_PAID is never a creation-time value (ADR-006);
+/// the settlement flow writes it (plan §4).
+enum PaymentStatus {
+  PAID
+  UNPAID
+  PARTIALLY_PAID
+}
+
+/// OhMyPos — ERD §3.
+enum PayableStatus {
+  OPEN
+  PARTIALLY_SETTLED
+  SETTLED
+}
+
+/// OhMyPos — ERD §3.
+enum StockDirection {
+  IN
+  OUT
+}
+
+/// OhMyPos — ERD §3. PURCHASE (Phase 4) and SALE (Phase 5) are written; OPENING
+/// arrives in Phase 6. ADJUSTMENT has no writer yet, deliberately.
+enum StockReferenceType {
+  SALE
+  PURCHASE
+  OPENING
+  ADJUSTMENT
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Account {
+  id String @id @default(uuid())
+
+  name String
+  type AccountType
+
+  /// OhMyPos — Kas Awal (PRD §5.1). Kasync's Account has no balance column.
+  openingBalance Decimal @default(0) @map("opening_balance") @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bankTransactions   BankTransaction[]
+  ledgerEntries      LedgerEntry[]
+  payableSettlements PayableSettlement[]
+  sales              Sale[]
+
+  @@map("accounts")
+}
+
+model Category {
+  id String @id @default(uuid())
+
+  /// Kasync's unique is (userId, name); with multi-tenancy dropped it collapses to name.
+  name String @unique
+
+  /// OhMyPos — Kasync's Category is id/name only.
+  type TransactionType
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ledgerEntries LedgerEntry[]
+
+  @@map("categories")
+}
+
+model Branch {
+  id String @id @default(uuid())
+
+  name    String  @unique
+  /// OhMyPos.
+  address String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ledgerEntries     LedgerEntry[]
+  users             User[]
+  supplierPurchases SupplierPurchase[]
+  stockMovements    StockMovement[]
+  sales             Sale[]
+  devices           Device[]
+
+  @@map("branches")
+}
+
+model LedgerEntry {
+  id String @id @default(uuid())
+
+  /// OhMyPos, required — Kasync's LedgerEntry has no account link at all.
+  /// System Design §6.1 tags each sale's entry with the payment method's Account.
+  accountId String @map("account_id")
+
+  /// Required, matching Kasync. Consequence: the seed must supply system
+  /// categories, since sale/settlement entries cannot be uncategorised (ADR-012).
+  categoryId String @map("category_id")
+
+  /// Already present in Kasync — not an OhMyPos addition (ERD v3 corrects v2 here).
+  branchId String @map("branch_id")
+
+  entryDate DateTime        @map("entry_date")
+  amount    Decimal         @db.Decimal(18, 2)
+  type      TransactionType @default(OUTFLOW)
+
+  /// OhMyPos — traceability back to the event that generated this entry.
+  sourceType LedgerSourceType @default(MANUAL) @map("source_type")
+  sourceId   String?          @map("source_id")
+
+  note String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Restrict, not Cascade: deleting an Account must never delete financial history.
+  account  Account  @relation(fields: [accountId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+  branch   Branch   @relation(fields: [branchId], references: [id])
+
+  allocations Allocation[]
+
+  /// Three optional 1-1 back-relations. A given entry is generated by at most one
+  /// of these; `sourceType` says which (ERD §2).
+  supplierPurchase  SupplierPurchase?
+  payableSettlement PayableSettlement?
+  sale              Sale?
+
+  @@index([entryDate])
+  @@index([categoryId])
+  @@index([branchId])
+  /// OhMyPos — every Dashboard 3 report filters by date and often by branch (ERD §6).
+  @@index([branchId, entryDate])
+  /// OhMyPos — trace a ledger entry back to its Sale/Purchase/Settlement.
+  @@index([sourceType, sourceId])
+  @@map("ledger_entries")
+}
+
+model BankTransaction {
+  id String @id @default(uuid())
+
+  accountId   String          @map("account_id")
+  txnDate     DateTime        @map("txn_date")
+  amount      Decimal         @db.Decimal(18, 2)
+  type        TransactionType @default(OUTFLOW)
+  description String
+
+  /// Raw reference/ID from the bank statement — half of the import de-duplication.
+  externalRef String? @map("external_ref")
+  dedupHash   String? @map("dedup_hash")
+
+  /// Stored, trigger-synced denormalized field (unchanged pattern from Kasync).
+  status TransactionStatus @default(UNRESOLVED)
+
+  importedAt DateTime @default(now()) @map("imported_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  allocations Allocation[]
+
+  // Together these prevent importing the same bank row twice into one account.
+  @@unique([accountId, externalRef])
+  @@unique([accountId, dedupHash])
+  @@index([txnDate])
+  @@index([status])
+  @@map("bank_transactions")
+}
+
+model Allocation {
+  id String @id @default(uuid())
+
+  bankTransactionId String  @map("bank_transaction_id")
+  ledgerEntryId     String  @map("ledger_entry_id")
+  amountPortion     Decimal @map("amount_portion") @db.Decimal(18, 2)
+
+  status AllocationStatus @default(ACTIVE)
+  /// Set when status becomes REVOKED — revocation is a state change, never a delete.
+  revokedAt DateTime? @map("revoked_at")
+
+  /// Makes repeated allocation-create calls idempotent rather than duplicating.
+  idempotencyKey String? @map("idempotency_key")
+
+  /// Append-only: Kasync's allocations table has no updated_at.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  bankTransaction BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  ledgerEntry     LedgerEntry     @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([bankTransactionId, idempotencyKey])
+  @@index([bankTransactionId])
+  @@index([ledgerEntryId])
+  @@map("allocations")
+}
+
+model User {
+  id String @id @default(uuid())
+
+  name         String
+  email        String @unique
+  passwordHash String @map("password_hash")
+
+  /// Ported from Kasync's Auth pattern — supports refresh-token rotation.
+  refreshTokenHash String? @map("refresh_token_hash")
+
+  role UserRole
+
+  /// Required when role = KASIR, null for ADMIN/OWNER (ADR-011 §2). Prisma cannot
+  /// express a conditional constraint, so this is enforced in Zod and the service
+  /// layer, raising InvalidRoleBranchAssignmentException (Playbook §6).
+  branchId String? @map("branch_id")
+
+  /// Phase 10b, ADR-020 — reverses ERD §7 note 4's original "no Cloudinary"
+  /// decision. A Cloudinary secure_url, never a locally-stored file (Playbook).
+  photoUrl String? @map("photo_url")
+
+  /// ADR-011 §5 — OWNER-only deactivation. Soft, never a row delete, so the
+  /// Sale.userId audit trail survives a staff member leaving.
+  isActive Boolean @default(true) @map("is_active")
+
+  /// Ported from Kasync — immediate session revocation on logout, password
+  /// change, or deactivation.
+  tokenValidFrom DateTime @default(now()) @map("token_valid_from")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  sales  Sale[] @relation("SaleCashier")
+  /// DEBT-010 — sales this user voided (ADMIN/OWNER only, per RoleGuard on
+  /// POST /sales/:id/void). Separate from `sales` (the cashier relation)
+  /// since a User can appear on both sides for different rows.
+  voidedSales Sale[] @relation("SaleVoidedBy")
+
+  /// Phase 11 — the two device relations below are separate: a User can
+  /// activate zero or more devices (as OWNER) and separately generate zero or
+  /// more of their own attendance records (as KASIR). No User is ever on both
+  /// sides for the same row, but Prisma still needs both fields declared.
+  activatedDevices  Device[]
+  attendanceRecords AttendanceRecord[]
+
+  /// Phase 12 — two distinct relations: requests a User filed themselves, and
+  /// (OWNER only, in practice) requests a User reviewed as approver.
+  leaveRequests         LeaveRequest[] @relation("LeaveRequestUser")
+  reviewedLeaveRequests LeaveRequest[] @relation("LeaveRequestReviewer")
+
+  /// BranchScopeGuard filters on this for every KASIR-scoped request (ERD §6).
+  @@index([branchId])
+  @@map("users")
+}
+
+/// OhMyPos — ERD §3. Stock lives here and nowhere else (ADR-004).
+model RawMaterial {
+  id String @id @default(uuid())
+
+  name String @unique
+  /// satuan — kg, liter, pcs. Free text (ERD §3), not an enum.
+  unit String
+
+  /// Current cost per unit. Editing this changes every dependent product's
+  /// live HPP by design (ADR-005), and never rewrites history (SaleItem.hppAtSale).
+  unitCost Decimal @map("unit_cost") @db.Decimal(18, 2)
+
+  /// Denormalized running balance, only ever written inside the same transaction
+  /// as the StockMovement that justifies it, under FOR UPDATE (ADR-007, ERD §6).
+  /// NOT writable through this module's CRUD.
+  currentStock Decimal @default(0) @map("current_stock") @db.Decimal(18, 4)
+
+  lowStockThreshold Decimal @default(0) @map("low_stock_threshold") @db.Decimal(18, 4)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  recipeItems    RecipeItem[]
+  purchaseItems  SupplierPurchaseItem[]
+  stockMovements StockMovement[]
+  openingStocks  OpeningStock[]
+
+  @@map("raw_materials")
+}
+
+/// OhMyPos — ERD §3. No `hpp` column: HPP is computed live from RecipeItem +
+/// RawMaterial.unitCost (ADR-005), and no stock column: makeable quantity is
+/// derived, never stored (ADR-013).
+model Product {
+  id String @id @default(uuid())
+
+  name      String  @unique
+  sellPrice Decimal @map("sell_price") @db.Decimal(18, 2)
+  isActive  Boolean @default(true) @map("is_active")
+
+  photoUrl String? @map("photo_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  recipeItems RecipeItem[]
+  saleItems   SaleItem[]
+
+  @@map("products")
+}
+
+/// OhMyPos — bill of materials (ERD §3). The product's recipe is this set of
+/// rows; there is deliberately no separate Recipe table.
+model RecipeItem {
+  id String @id @default(uuid())
+
+  productId     String @map("product_id")
+  rawMaterialId String @map("raw_material_id")
+
+  quantityUsed Decimal @map("quantity_used") @db.Decimal(18, 4)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Cascade: a recipe has no meaning without its product.
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Restrict: deleting a raw material still used by a recipe must fail loudly,
+  // not silently empty out a product's cost basis.
+  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, rawMaterialId])
+  @@index([productId])
+  @@index([rawMaterialId])
+  @@map("recipe_items")
+}
+
+/// OhMyPos — ERD §3, System Design §6.1, PRD §5.2, ADR-015.
+///
+/// A sale ALWAYS has a branch: unlike SupplierPurchase there is no central sale,
+/// because a sale happens at an outlet by definition (ADR-004). The seeded
+/// `Pusat (Dapur Sentral)` branch is a ledger-attribution row, not a till, and is
+/// rejected at the service layer (ADR-014, plan §6).
+///
+/// `ledgerEntryId` is required and unique — like PayableSettlement's, unlike
+/// SupplierPurchase's. ADR-006's money-sometimes-moves asymmetry is a purchasing
+/// rule; at the moment of sale money always moves, so a sale with no income entry
+/// would be cash arriving with no record of it.
+model Sale {
+  id String @id @default(uuid())
+
+  branchId String @map("branch_id")
+  /// Payment method (System Design §6.1) — cash, transfer, QRIS, e-wallet all
+  /// resolve to an Account.
+  accountId String @map("account_id")
+  /// The cashier. Taken from the JWT, never the request body (plan §7.3): a
+  /// client-supplied cashier id is a forgeable audit trail. Users are
+  /// deactivated, never deleted (ADR-011 §5), so this reference always resolves.
+  userId String @map("user_id")
+  ledgerEntryId String @unique @map("ledger_entry_id")
+
+  /// = Σ SaleItem.lineTotal, and nothing else. No tax, no discount columns in v1
+  /// — the per-line price override is the discount mechanism (PRD §5.2, ADR-015,
+  /// DEBT-004). Every Phase 7 report reads this as the definition of revenue.
+  totalAmount Decimal @map("total_amount") @db.Decimal(18, 2)
+  soldAt DateTime @map("sold_at")
+
+  /// Kunci idempotensi yang dibuat klien (TASK-082, menutup DEBT-017 dan
+  /// DEF-A1/A2/A5). Nullable: baris sebelum TASK-082 tidak punya kunci, dan
+  /// Postgres mengizinkan NULL berulang pada indeks unik, jadi tidak ada
+  /// backfill. Polanya menyalin Allocation.idempotencyKey — indeks unik-lah
+  /// yang benar-benar menegakkan deduplikasi di bawah balapan; cek di service
+  /// hanya membuat kasus umum murah.
+  idempotencyKey String? @map("idempotency_key")
+
+  /// DEBT-010 — minimal interim void guard. Defaults COMPLETED so every
+  /// existing row backfills with no data migration. A void never deletes or
+  /// mutates the original sale/items/ledger entry (financial history, same
+  /// Restrict-everywhere rule as the rest of this model) — it writes a
+  /// reversal LedgerEntry + inbound StockMovement and flips this flag.
+  status         SaleStatus @default(COMPLETED) @map("status")
+  voidedAt       DateTime?  @map("voided_at")
+  voidedByUserId String?    @map("voided_by_user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Restrict everywhere: a sale is financial history and must not vanish because
+  // a branch, account, user or ledger row was deleted.
+  branch       Branch      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  account      Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  user         User        @relation("SaleCashier", fields: [userId], references: [id], onDelete: Restrict)
+  ledgerEntry  LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+  voidedByUser User?       @relation("SaleVoidedBy", fields: [voidedByUserId], references: [id], onDelete: Restrict)
+
+  items SaleItem[]
+
+  @@index([branchId])
+  @@index([soldAt])
+  /// Dashboard 3 filters by date and usually by branch; KASIR always by branch.
+  @@index([branchId, soldAt])
+  @@index([userId])
+  @@index([accountId])
+  @@index([status])
+  @@unique([idempotencyKey])
+  @@map("sales")
+}
+
+/// OhMyPos — ERD §3, ADR-005, ADR-015.
+///
+/// Deliberately NOT unique on (saleId, productId): the same product may appear
+/// twice in one cart at two different prices, which is exactly what the per-line
+/// override exists for (plan §8.2). This is the opposite of SupplierPurchaseItem's
+/// (supplierPurchaseId, rawMaterialId) unique — there the constraint is what made
+/// the lock set unambiguous; here the fan-out is aggregated across lines first
+/// (ADR-015 §3), which achieves the same thing without restricting the cart.
+model SaleItem {
+  id String @id @default(uuid())
+
+  saleId    String @map("sale_id")
+  productId String @map("product_id")
+
+  quantity Decimal @db.Decimal(18, 4)
+
+  /// What the customer actually paid per unit — the master price unless
+  /// overridden (PRD §5.2).
+  unitPriceAtSale Decimal @map("unit_price_at_sale") @db.Decimal(18, 2)
+  /// True only when the charged price DIFFERS from Product.sellPrice at sale
+  /// time. Sending the master price explicitly is not an override (plan §10.2).
+  isPriceOverridden Boolean @default(false) @map("is_price_overridden")
+
+  /// PER-UNIT HPP frozen at the moment of sale (ADR-005, ADR-015) — the same
+  /// number Product.hpp shows live, from the same calculateHpp call. COGS for
+  /// this line is hppAtSale × quantity; this column is NOT the line-extended
+  /// cost. Never recomputed: that is the whole point of ADR-005.
+  hppAtSale Decimal @map("hpp_at_sale") @db.Decimal(18, 2)
+
+  lineTotal Decimal @map("line_total") @db.Decimal(18, 2)
+
+  /// Append-only, like SupplierPurchaseItem and Allocation — no updatedAt. A
+  /// sale line is never edited. (ERD §3 lists one; Phase 4 set this precedent.)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Cascade: a line has no meaning without its sale. Restrict on product: a
+  // product that has been sold is referenced by financial history.
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([productId])
+  @@map("sale_items")
+}
+
+/// OhMyPos — ERD §3.
+model Supplier {
+  id String @id @default(uuid())
+
+  name String @unique
+  /// Free text — phone, WhatsApp, or a person's name. Not validated as a phone
+  /// number: Indonesian supplier contacts are not reliably one format.
+  contact String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  purchases SupplierPurchase[]
+  payables  Payable[]
+
+  @@map("suppliers")
+}
+
+/// OhMyPos — ERD §3, System Design §6.2.
+///
+/// `branchId = null` means CENTRAL PURCHASE (ADR-004, PRD §8.4) — the canonical
+/// and only marker for it. `ledgerEntryId` is set at creation only when the
+/// purchase was PAID up front; an unpaid purchase gets a `Payable` instead and
+/// never a ledger entry (ADR-006). The two are mutually exclusive at creation
+/// time (ERD §6).
+model SupplierPurchase {
+  id String @id @default(uuid())
+
+  supplierId String  @map("supplier_id")
+  branchId   String? @map("branch_id")
+
+  totalAmount   Decimal       @map("total_amount") @db.Decimal(18, 2)
+  purchaseDate  DateTime      @map("purchase_date")
+  paymentStatus PaymentStatus @map("payment_status")
+
+  /// Set at creation iff paymentStatus = PAID. Stays null forever otherwise —
+  /// a settled payable's expense lives on the settlements' entries, not here.
+  ledgerEntryId String? @unique @map("ledger_entry_id")
+
+  note String?
+
+  /// Kunci idempotensi klien (TASK-082).
+  idempotencyKey String? @map("idempotency_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Restrict everywhere: a purchase is financial history and must not vanish
+  // because a supplier or branch row was deleted.
+  supplier    Supplier     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  branch      Branch?      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  ledgerEntry LedgerEntry? @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+
+  // Cascade: a purchase line has no meaning without its purchase (same rule as
+  // RecipeItem → Product).
+  items   SupplierPurchaseItem[]
+  payable Payable?
+
+  @@index([supplierId])
+  @@index([branchId])
+  @@index([purchaseDate])
+  /// Dashboard 2.2 lists purchases by branch and date; KASIR always filters by branch.
+  @@index([branchId, purchaseDate])
+  @@unique([idempotencyKey])
+  @@map("supplier_purchases")
+}
+
+/// OhMyPos — ERD §3. `lineTotal` is a STORED column, so it is rounded per line
+/// to 2dp and `SupplierPurchase.totalAmount` is the sum of those rounded values
+/// (plan §9.3). This is deliberately different from HPP's round-once rule.
+model SupplierPurchaseItem {
+  id String @id @default(uuid())
+
+  supplierPurchaseId String @map("supplier_purchase_id")
+  rawMaterialId      String @map("raw_material_id")
+
+  quantity  Decimal @db.Decimal(18, 4)
+  unitCost  Decimal @map("unit_cost") @db.Decimal(18, 2)
+  lineTotal Decimal @map("line_total") @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  supplierPurchase SupplierPurchase @relation(fields: [supplierPurchaseId], references: [id], onDelete: Cascade)
+  rawMaterial      RawMaterial      @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+
+  /// One line per material per purchase — makes the FOR UPDATE lock set and the
+  /// stock increment unambiguous. Also enforced in Zod (§7.2).
+  @@unique([supplierPurchaseId, rawMaterialId])
+  @@index([supplierPurchaseId])
+  @@index([rawMaterialId])
+  @@map("supplier_purchase_items")
+}
+
+/// OhMyPos — ERD §3, ADR-006. Utang to a supplier for an unpaid purchase.
+///
+/// `remainingBalance` is a denormalized running balance in the same sense as
+/// RawMaterial.currentStock (System Design §7): the settlement rows are the
+/// source of truth, this column is the fast-read balance. It is written by
+/// exactly ONE code path — PayablesService.settle — inside a transaction that
+/// holds a FOR UPDATE lock on this row (plan §2 Option B, §9.6).
+model Payable {
+  id String @id @default(uuid())
+
+  /// Unique: one payable per unpaid purchase (ERD §3), never a rolled-up
+  /// per-supplier balance. The per-supplier figure PRD §5.3 asks for is a SUM
+  /// over these rows (GET /payables/summary).
+  supplierPurchaseId String @unique @map("supplier_purchase_id")
+  supplierId         String @map("supplier_id")
+
+  originalAmount   Decimal       @map("original_amount") @db.Decimal(18, 2)
+  remainingBalance Decimal       @map("remaining_balance") @db.Decimal(18, 2)
+  status           PayableStatus @default(OPEN)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  supplierPurchase SupplierPurchase    @relation(fields: [supplierPurchaseId], references: [id], onDelete: Restrict)
+  supplier         Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  settlements      PayableSettlement[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@map("payables")
+}
+
+/// OhMyPos — ERD §3, ADR-006. The moment money actually leaves the account, and
+/// therefore the only moment an unpaid purchase produces a LedgerEntry.
+model PayableSettlement {
+  id String @id @default(uuid())
+
+  payableId String @map("payable_id")
+  accountId String @map("account_id")
+  /// Required and unique: every settlement generates exactly one expense entry.
+  /// Unlike SupplierPurchase.ledgerEntryId this is NOT nullable — a settlement
+  /// with no ledger entry would be money moving with no record of it.
+  ledgerEntryId String @unique @map("ledger_entry_id")
+
+  amount    Decimal  @db.Decimal(18, 2)
+  settledAt DateTime @map("settled_at")
+  note      String?
+
+  /// Kunci idempotensi klien (TASK-082).
+  idempotencyKey String? @map("idempotency_key")
+
+  /// Append-only, like Allocation — a settlement is corrected by recording
+  /// another movement, never by editing history.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  payable     Payable     @relation(fields: [payableId], references: [id], onDelete: Restrict)
+  account     Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  ledgerEntry LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+
+  @@index([payableId])
+  @@index([settledAt])
+  @@unique([idempotencyKey])
+  @@map("payable_settlements")
+}
+
+/// OhMyPos — ERD §3, System Design §7. The append-only log that justifies every
+/// change to RawMaterial.currentStock. Written only inside the transaction that
+/// changes the balance, under FOR UPDATE (ADR-007).
+model StockMovement {
+  id String @id @default(uuid())
+
+  rawMaterialId String  @map("raw_material_id")
+  /// Attribution only — which branch triggered it. Null for central events
+  /// (a central purchase, an OPENING). Never a partitioning key (ADR-004).
+  branchId String? @map("branch_id")
+
+  direction StockDirection
+  quantity  Decimal        @db.Decimal(18, 4)
+
+  referenceType StockReferenceType @map("reference_type")
+  /// Points at the SupplierPurchase / Sale / OpeningStock that caused this.
+  /// Deliberately NOT a foreign key: it is polymorphic across three tables,
+  /// exactly like LedgerEntry.sourceId (ERD §2).
+  referenceId String? @map("reference_id")
+
+  unitCostAtMovement Decimal  @map("unit_cost_at_movement") @db.Decimal(18, 2)
+  movementDate       DateTime @map("movement_date")
+
+  /// Append-only — no updatedAt (ERD §3).
+  createdAt DateTime @default(now()) @map("created_at")
+
+  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+  branch      Branch?     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  /// Drives Dashboard 5's inventory summary (ERD §6).
+  @@index([rawMaterialId, movementDate])
+  /// Covers InventorySummaryService's unbounded `priorBuckets` groupBy
+  /// (WHERE movementDate < periodStart, GROUP BY rawMaterialId, direction) —
+  /// DEBT-013: that query has no lower date bound and scans all history, so
+  /// this is a covering index, not a query-shape fix (ADR-008 still applies).
+  @@index([rawMaterialId, movementDate, direction])
+  @@index([referenceType, referenceId])
+  @@index([branchId])
+  @@map("stock_movements")
+}
+
+/// OhMyPos — PRD §5.5 "Dashboard 4", ERD §3, System Design §6.4.
+///
+/// The monthly stock-take DECLARATION. The balance change it causes is a
+/// StockMovement (referenceType = OPENING) written in the same transaction, for
+/// the SIGNED DIFFERENCE between the declared figure and what the ledger already
+/// carried into the period (plan §3.2). The movement ledger stays the single
+/// source of truth; this table records what a human counted.
+model OpeningStock {
+  id String @id @default(uuid())
+
+  rawMaterialId String @map("raw_material_id")
+
+  /// First day of the month this applies to. @db.Date, not a timestamp: a month
+  /// is a calendar fact, and storing an instant here would invite a timezone
+  /// question the column cannot answer (plan §9). It is also what keeps the
+  /// unique constraint below undefeatable by a differing time-of-day.
+  periodMonth DateTime @map("period_month") @db.Date
+
+  /// The declared physical count at the START of the period — NOT a delta.
+  /// The delta is derived and lives on StockMovement (plan §3.2).
+  quantity Decimal @db.Decimal(18, 4)
+
+  /// Valuation for this declaration. Required IFF no PURCHASE movement exists
+  /// for this material in this period (PRD §5.5, plan §5); null otherwise, in
+  /// which case RawMaterial.unitCost is snapshotted onto the OPENING movement's
+  /// unitCostAtMovement instead. Nullable deviates from ERD v3 §3 — plan §10.4.
+  unitPrice Decimal? @map("unit_price") @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
+
+  /// ERD §6 — one declaration per material per month; also what makes the PUT
+  /// upsert idempotent (plan §6).
+  @@unique([rawMaterialId, periodMonth])
+  @@index([periodMonth])
+  @@map("opening_stocks")
+}
+
+enum AttendanceViolationReason {
+  NO_DEVICE_COOKIE
+  DEVICE_NOT_REGISTERED
+  DEVICE_WRONG_BRANCH
+  DEVICE_INACTIVE
+}
+
+/// Phase 11 — one physical terminal per row, scoped to a Branch (Context
+/// section: a branch shares 1-3 tablets across whichever KASIR works there,
+/// so this is not per-User). Activation is a one-time Owner action performed
+/// physically at the terminal (Context section) — activationCode/
+/// activationCodeExpiresAt exist only between creation and activation, then
+/// both go back to null.
+model Device {
+  id String @id @default(uuid())
+
+  branchId String @map("branch_id")
+  label    String
+
+  isActive Boolean @default(false) @map("is_active")
+
+  activatedByUserId String?   @map("activated_by_user_id")
+  activatedAt        DateTime? @map("activated_at")
+
+  /// Single-use, expiring code proving physical intent to activate. Unique so
+  /// DevicesService.activate can look a device up by code alone.
+  activationCode           String?   @unique @map("activation_code")
+  activationCodeExpiresAt DateTime? @map("activation_code_expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  branch            Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  activatedBy        User?              @relation(fields: [activatedByUserId], references: [id], onDelete: SetNull)
+  attendanceRecords AttendanceRecord[]
+
+  @@index([branchId])
+  @@map("devices")
+}
+
+/// Phase 11 — one row per login attempt, not per session (ERD-style append-
+/// only audit log). Written from AuthService.login(), only for role = KASIR
+/// (Context section — ADMIN/OWNER are not branch-scoped and are excluded).
+/// Login always succeeds regardless of isValid (Context section) — this table
+/// is informational/monitoring, never an access gate.
+model AttendanceRecord {
+  id String @id @default(uuid())
+
+  userId   String  @map("user_id")
+  deviceId String? @map("device_id")
+
+  loginAt DateTime @default(now()) @map("login_at")
+  isValid Boolean  @map("is_valid")
+
+  violationReason AttendanceViolationReason? @map("violation_reason")
+
+  /// Informational only, never used to determine isValid (Context section,
+  /// option 2 rejection — IP/UA are unreliable as a primary signal).
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([deviceId])
+  @@map("attendance_records")
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Phase 12 — cuti/leave requests, full approve/reject workflow by OWNER
+/// (Context section — user upgraded this from a passive note during
+/// planning). startDate/endDate are calendar days (@db.Date), same pattern as
+/// OpeningStock.periodMonth — a leave request is a date range, not an instant.
+model LeaveRequest {
+  id String @id @default(uuid())
+
+  userId String @map("user_id")
+
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  reason    String
+
+  status LeaveRequestStatus @default(PENDING)
+
+  reviewedByUserId String?   @map("reviewed_by_user_id")
+  reviewedAt       DateTime? @map("reviewed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// Two distinct relations to User from the same model — named to disambiguate
+  /// (Prisma requires this whenever more than one relation targets the same model).
+  user       User  @relation("LeaveRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("LeaveRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@map("leave_requests")
+}
+
+/// Business profile configuration — single record for business name, logo, and address.
+model BusinessProfile {
+  id        String   @id @default(uuid())
+  name      String   @default("OhMyPos")
+  logoUrl   String?  @map("logo_url")
+  address   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("business_profiles")
+}
+
+
+

@@ -1,0 +1,26 @@
+{
+  "name": "ohmypos",
+  "version": "0.0.1",
+  "private": true,
+  "description": "POS + back-office system for a multi-branch F&B business",
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "check": "turbo run lint typecheck test",
+    "create:owner": "pnpm --filter api create:owner",
+    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css}\" \"*.{json,mjs}\" --ignore-path .gitignore"
+  },
+  "devDependencies": {
+    "@ohmypos/config": "workspace:*",
+    "prettier": "^3.4.2",
+    "turbo": "^2.10.10",
+    "typescript": "^5.7.3"
+  }
+}

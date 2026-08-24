@@ -1,0 +1,100 @@
+{
+  "allowlist": [
+    {
+      "id": "GHSA-23hp-3jrh-7fpw",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist. Mitigated by isEvalSupported: false and file size limit.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-34x7-hfp2-rc4v",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist. Server runs with read-only extraction rules.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-8qq5-rm4j-mr97",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-83g3-92jg-28cx",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-qffp-2rhf-9h96",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-9ppj-qmqm-q256",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-r6q2-hw4h-h46w",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-wgrm-67xf-hhpq",
+      "package": "pdfjs-dist",
+      "reason": "PDF.js eval execution mitigated by explicit isEvalSupported: false setting in Mandiri parser (ADR-022).",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-8x88-c5mf-7j5w",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-pm4m-ph32-ghv5",
+      "package": "js-yaml",
+      "reason": "Transitive dependency via @nestjs/swagger. Swagger disabled in production.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-ggr8-5vv4-36mx",
+      "package": "deepmerge-ts",
+      "reason": "Transitive dependency via Prisma CLI tooling.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-r292-9mhp-454m",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-w5hq-g745-h8pq",
+      "package": "uuid",
+      "reason": "Transitive dependency via exceljs.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-vmf3-w455-68vh",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-w8wr-v893-vjvp",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-gvwx-54wh-qm9j",
+      "package": "tar",
+      "reason": "Transitive dependency via canvas -> pdfjs-dist.",
+      "reviewDate": "2026-11-23"
+    }
+  ]
+}
