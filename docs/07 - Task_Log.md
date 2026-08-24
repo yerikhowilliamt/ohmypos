@@ -41,6 +41,17 @@
 
 ## Log
 
+### TASK-108 — Replace rejected Vercel external rewrite with a same-origin BFF Route Handler
+
+- **Date:** 2026-08-25
+- **Module / Phase:** `apps/web` deployment routing and authentication
+- **Objective:** Restore production API access after Vercel rejected TASK-107's Render external rewrite with `DNS_HOSTNAME_RESOLVED_PRIVATE`, while retaining first-party HttpOnly cookies.
+- **Relevant docs:** System Design §5, §9, §10; ADR-002; ADR-011; ERR-031; ERR-032; DEBT-061
+- **What was done:** Removed `next.config.ts`'s external rewrite. Added the Node.js catch-all Route Handler `app/api/v1/[...path]/route.ts` and testable streaming transport `lib/api-proxy.ts`. The transport preserves methods, encoded paths, query strings, JSON/multipart streams, auth cookies, correlation IDs, backend statuses, response headers, and separate access/refresh `Set-Cookie` values; strips hop-by-hop and stale encoding/length headers; returns a sanitized traceable 502 on an upstream network failure; and blocks unsafe methods from a foreign browser origin. Updated deployment and system documentation.
+- **Decisions made during this task:** Kept `/api/v1` as the browser contract so no API callers changed. Used the Node.js runtime and streamed `Request.body` with `duplex: 'half'` rather than parsing/rebuilding payloads, which preserves multipart boundaries. Forwarded a deliberate request-header allowlist and removed hop-by-hop response headers rather than blindly reflecting either side. Kept backend SSR calls direct through `INTERNAL_API_BASE_URL`; only browser traffic uses the BFF.
+- **Status:** Done
+- **Handoff notes:** Vercel still requires `INTERNAL_API_BASE_URL=https://ohmypos-api.onrender.com/api/v1` and a redeploy containing this task. Full monorepo lint/typecheck/test passed (13/13 tasks; API 170 tests, web 450 tests). The official webpack production build passed, lists dynamic route `/api/v1/[...path]`, and its manifest contains no Render external rewrite. Existing Sentry, React Compiler, and test-console warnings are unchanged. Vercel Functions impose a 4.5 MB payload limit while three backend upload endpoints allow 5 MB; tracked explicitly as DEBT-061.
+
 ### TASK-107 — Same-origin authentication proxy for split-host deployment
 
 - **Date:** 2026-08-24
@@ -51,6 +62,7 @@
 - **Decisions made during this task:** Used a framework rewrite rather than a custom BFF Route Handler because the application needs transparent REST, upload, response-header, and `Set-Cookie` forwarding without duplicating proxy logic. `INTERNAL_API_BASE_URL` is the preferred deployment variable; `BACKEND_API_URL` and the legacy public variable remain server-side fallbacks for compatibility, but browser code no longer consumes any external API origin.
 - **Status:** Done
 - **Handoff notes:** In Vercel, set `INTERNAL_API_BASE_URL` to the Render API URL including `/api/v1` and redeploy. `NEXT_PUBLIC_API_BASE_URL` is no longer needed for browser routing and should be removed after the new variable is present. The full monorepo lint/typecheck/test gate passed (13/13 tasks; API 170 tests, web 445 tests). A production webpack build passed and its generated route manifest contains the `/api/v1/:path*` rewrite. Default Turbopack build could not run inside the agent sandbox because Turbopack attempted an internally bound port and received `EPERM`; this was an environment restriction, while the official webpack production build completed successfully. Existing lint and test warnings were unchanged and unrelated.
+- **Follow-up:** The external rewrite passed build and CI but failed on Vercel production with `DNS_HOSTNAME_RESOLVED_PRIVATE`; see ERR-032 and superseding TASK-108. TASK-107's same-origin browser URL decision remains, but its rewrite transport does not.
 
 ### UI/UX Polish — Luxury Split-Screen Editorial Login Page
 

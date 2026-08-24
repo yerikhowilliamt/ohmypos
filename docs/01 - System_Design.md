@@ -157,11 +157,15 @@ Three containers via `docker-compose`: `web` (Next.js), `api` (NestJS), and `pos
 
 In split-host production deployments (for example Vercel for `web` and Render
 for `api`), browser REST calls remain same-origin at `/api/v1`. The Next.js
-deployment reverse-proxies that path to the server-only
-`INTERNAL_API_BASE_URL`. This is required for the HttpOnly access and refresh
-cookies to belong to the web host, where Next.js route gating and Server
-Components can read and forward them; the browser must not call the unrelated
-backend host directly.
+deployment handles that path with a Node.js BFF Route Handler which streams the
+request to the server-only `INTERNAL_API_BASE_URL`. This is required for the
+HttpOnly access and refresh cookies to belong to the web host, where Next.js
+route gating and Server Components can read and forward them; the browser must
+not call the unrelated backend host directly. The BFF also rejects unsafe
+methods carrying a foreign `Origin` header and forwards backend `Set-Cookie`
+headers individually. An external Vercel rewrite is not used because Vercel's
+rewrite resolver rejected Render's hostname with
+`DNS_HOSTNAME_RESOLVED_PRIVATE` in production (ERR-032).
 
 ## 11. Risks / Things to Revisit
 

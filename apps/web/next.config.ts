@@ -1,10 +1,8 @@
 import path from 'node:path';
 import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
-import { resolveBackendApiBaseUrl } from './lib/api-url';
 
 const isVercel = process.env.VERCEL === '1';
-const backendApiBaseUrl = resolveBackendApiBaseUrl();
 
 const securityHeaders = [
   {
@@ -45,14 +43,6 @@ const nextConfig: NextConfig = {
         output: 'standalone',
         outputFileTracingRoot: path.join(__dirname, '../../'),
       }),
-  async rewrites() {
-    return [
-      {
-        source: '/api/v1/:path*',
-        destination: `${backendApiBaseUrl}/:path*`,
-      },
-    ];
-  },
   async redirects() {
     return [
       { source: '/users', destination: '/business/users', permanent: true },

@@ -39,6 +39,18 @@
 
 ## Log
 
+### DEBT-061 — Vercel BFF payload limit is lower than three backend upload limits
+
+- **Date logged:** 2026-08-25
+- **Found during:** TASK-108 — same-origin BFF Route Handler
+- **Description:** Vercel Functions cap request and response payloads at 4.5 MB. The bank statement import, product photo, and business logo endpoints currently accept files up to 5 MB in NestJS, so a file between those thresholds can pass the frontend/backend's stated validation but be rejected by Vercel before the BFF Route Handler processes it. Profile photos are already limited to 2 MB and are unaffected.
+- **Why deferred:** TASK-108's urgent scope is restoring production login/API access. Resolving upload sizing honestly requires a product choice: lower all affected public limits below Vercel's ceiling, implement direct/presigned object-storage uploads, or move the BFF off the constrained function path. Silently changing three upload contracts during an auth-routing incident would be scope drift.
+- **Impact if unaddressed:** Uploads between 4.5 MB and 5 MB receive Vercel `413 FUNCTION_PAYLOAD_TOO_LARGE` instead of the application's normal validation response.
+- **Trigger condition:** Before relying on production imports or image uploads near 5 MB, or the next time any affected upload flow is changed.
+- **Proposed resolution:** Short term, standardize affected UI and API validators on a safe 4 MB limit. Longer term, use presigned direct uploads for media and reconsider statement-import transport if larger files become operationally necessary.
+- **Priority:** Medium
+- **Status:** Open
+
 ### DEBT-060 — Sales receipt renders current `BusinessProfile.name` instead of snapshotting `businessNameAtSale`
 
 - **Date logged:** 2026-08-24
