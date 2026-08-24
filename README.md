@@ -62,12 +62,14 @@ Core principle to keep in mind while working in this repo: **any operation that 
 
 ### Web/API deployment
 
-Browser requests use the web origin's `/api/v1` path. Next.js reverse-proxies
-that path to `INTERNAL_API_BASE_URL`, which keeps HttpOnly authentication
-cookies first-party and visible to Next.js route gating. On Vercel, set
-`INTERNAL_API_BASE_URL` to the Render API URL including `/api/v1`, for example
-`https://your-api.onrender.com/api/v1`. Do not set the browser API base to the
-Render origin.
+Browser requests use the web origin's `/api/v1` path. A Next.js BFF Route
+Handler streams those requests to `INTERNAL_API_BASE_URL`, which keeps HttpOnly
+authentication cookies first-party and visible to Next.js route gating. On
+Vercel, set `INTERNAL_API_BASE_URL` to the Render API URL including `/api/v1`,
+for example `https://your-api.onrender.com/api/v1`. Do not set the browser API
+base to the Render origin. The BFF is deliberately a Route Handler rather than
+an external rewrite because Vercel's rewrite resolver can reject Render targets
+with `DNS_HOSTNAME_RESOLVED_PRIVATE`.
 
 ## Key Scripts
 

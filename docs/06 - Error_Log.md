@@ -37,14 +37,24 @@
 
 ## Log
 
+### ERR-032 — Vercel rejected the Render external rewrite with `DNS_HOSTNAME_RESOLVED_PRIVATE`
+
+- **Date found:** 2026-08-25
+- **Found during:** Production verification after TASK-107; remediated by TASK-108
+- **Symptom:** `GET https://ohmypos.vercel.app/api/v1/health` returned Vercel's plain-text 404 rather than the API health response. The response carried `x-vercel-error: DNS_HOSTNAME_RESOLVED_PRIVATE`, and login requests failed at the same routing layer.
+- **Root cause:** TASK-107 correctly made browser traffic same-origin, but implemented the forwarding as an external Next.js rewrite to `https://ohmypos-api.onrender.com/api/v1`. Vercel's rewrite SSRF guard classified the resolved Render destination as private/inaccessible and rejected it before NestJS ran. Public DNS inspection returning Render's public IPv4 addresses did not change Vercel's platform-specific resolver verdict.
+- **Resolution:** Removed the external rewrite and added the Node.js catch-all BFF Route Handler at `app/api/v1/[...path]/route.ts`. Its transport streams requests and responses through server-side `fetch`, preserves method/query/body/multipart boundaries, forwards auth and tracing headers, emits multiple `Set-Cookie` headers separately, removes hop-by-hop/encoded-length headers, returns a traceable 502 for upstream network failures, and rejects foreign-origin unsafe requests.
+- **Prevention:** Five `api-proxy.test.ts` cases cover JSON/query/cookie forwarding, multipart streaming, separate auth cookies with status/error preservation, cross-origin rejection, and sanitized 502 handling. Production build output must list `/api/v1/[...path]`, and the generated rewrite manifest must contain no external Render rewrite.
+- **Severity:** High — the initial same-origin remediation deployed successfully but every proxied production API request still failed before reaching the backend.
+
 ### ERR-031 — Cross-host auth cookies were invisible to Vercel route gating after login
 
 - **Date found:** 2026-08-24
 - **Found during:** TASK-107 — same-origin authentication proxy remediation
 - **Symptom:** A production login against the Render API returned successfully, but the subsequent Next.js navigation landed back on `/login`. The browser exposed a React Flight payload beginning with `$Sreact.fragment` instead of reaching the role landing page.
 - **Root cause:** Browser API calls went directly from the Vercel frontend to the unrelated Render origin. The API correctly issued host-only HttpOnly cookies, but those cookies belonged to the Render host. `apps/web/proxy.ts` and `apps/web/lib/session.ts` run on the Vercel host, so neither could see the `access_token`; route gating therefore treated every authenticated navigation as signed out. `SameSite=None` permits cross-site requests to carry a cookie back to its issuing host, but does not make that cookie readable on a different host.
-- **Resolution:** Browser API calls now use same-origin `/api/v1`. A Next.js rewrite proxies that path to the server-only backend target, so `Set-Cookie` is received through the web origin and is visible to route gating and Server Components. Direct server calls continue to use `INTERNAL_API_BASE_URL`. Docker Compose now points that variable at the `api` service hostname.
-- **Prevention:** `api-url.test.ts` locks the browser base to `/api/v1`, verifies backend URL normalization and server-only precedence, and rejects relative backend targets. `api.test.ts` asserts that a real browser-side API call uses `/api/v1/...`; the production build route manifest was also checked for the external rewrite.
+- **Resolution:** Browser API calls now use same-origin `/api/v1`, so `Set-Cookie` is received through the web origin and is visible to route gating and Server Components. TASK-107's first transport used an external rewrite; production exposed ERR-032, so TASK-108 replaced that transport with a Node.js BFF Route Handler. Direct server calls continue to use `INTERNAL_API_BASE_URL`. Docker Compose points that variable at the `api` service hostname.
+- **Prevention:** `api-url.test.ts` locks the browser base to `/api/v1`, verifies backend URL normalization and server-only precedence, and rejects relative backend targets. `api.test.ts` asserts that a real browser-side API call uses `/api/v1/...`; `api-proxy.test.ts` now covers the BFF transport introduced after the failed rewrite attempt.
 - **Severity:** High — successful credentials could not produce a usable authenticated session in the split-host production deployment.
 
 ### ERR-030 — `SalesHistoryTable.test.tsx` failed with `No QueryClient set` after `SaleReceiptDialog` introduced `useBusinessProfile()`
