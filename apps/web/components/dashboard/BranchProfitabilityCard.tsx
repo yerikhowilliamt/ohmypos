@@ -13,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@ohmypos/ui/components/card';
-import { Badge } from '@ohmypos/ui/components/badge';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import { formatCurrency } from '@/lib/formatters';
 import { Building2, ArrowRight } from 'lucide-react';
@@ -88,7 +87,7 @@ export function BranchProfitabilityCard({
           <div className="flex items-center gap-2">
             <Building2 className="size-4 text-brand-primary" />
             <CardTitle className="text-sm font-semibold text-text-primary">
-              Profitabilitas Cabang
+              Penjualan per Cabang
             </CardTitle>
           </div>
           <Link
@@ -120,33 +119,15 @@ export function BranchProfitabilityCard({
               );
 
               return (
-                <div key={item.branchId} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
+                <div key={item.branchId} className="p-1.5 flex flex-col gap-2">
+                  <div className="flex justify-between text-xs">
+                    <div className="flex justify-between items-center gap-2">
                       <span className="font-medium text-text-primary">
                         {item.name}
                       </span>
-                      {item.isProfitable ? (
-                        <Badge
-                          variant="secondary"
-                          className="h-5 px-2 text-[10px] font-semibold bg-status-success/10 text-status-success border-status-success/30"
-                        >
-                          Profit
-                        </Badge>
-                      ) : (
-                        <Badge
-                          variant="destructive"
-                          className="h-5 px-2 text-[10px] font-semibold"
-                        >
-                          Tidak Profit
-                        </Badge>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-1.5 font-mono">
-                      <span className="text-[11px] text-text-tertiary">
-                        Omset:
-                      </span>
                       <span className="font-semibold text-text-primary">
                         {formatCurrency(item.revenue)}
                       </span>
