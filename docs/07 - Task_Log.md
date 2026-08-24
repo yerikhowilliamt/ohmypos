@@ -41,6 +41,17 @@
 
 ## Log
 
+### TASK-107 — Same-origin authentication proxy for split-host deployment
+
+- **Date:** 2026-08-24
+- **Module / Phase:** `apps/web` deployment routing and authentication
+- **Objective:** Fix production login looping back to `/login` when the Next.js frontend is deployed on Vercel and the NestJS API is deployed on Render.
+- **Relevant docs:** System Design §5, §9, §10; ADR-002; ADR-011; ERR-031
+- **What was done:** Added `lib/api-url.ts` to separate the browser's fixed same-origin `/api/v1` base from the server-only backend origin. Added a Next.js rewrite from `/api/v1/:path*` to the normalized backend API target. Updated `lib/api.ts`, Docker Compose, `.env.example`, README deployment guidance, and System Design §10. Added four URL-routing unit tests and strengthened `api.test.ts` with a concrete same-origin request assertion.
+- **Decisions made during this task:** Used a framework rewrite rather than a custom BFF Route Handler because the application needs transparent REST, upload, response-header, and `Set-Cookie` forwarding without duplicating proxy logic. `INTERNAL_API_BASE_URL` is the preferred deployment variable; `BACKEND_API_URL` and the legacy public variable remain server-side fallbacks for compatibility, but browser code no longer consumes any external API origin.
+- **Status:** Done
+- **Handoff notes:** In Vercel, set `INTERNAL_API_BASE_URL` to the Render API URL including `/api/v1` and redeploy. `NEXT_PUBLIC_API_BASE_URL` is no longer needed for browser routing and should be removed after the new variable is present. The full monorepo lint/typecheck/test gate passed (13/13 tasks; API 170 tests, web 445 tests). A production webpack build passed and its generated route manifest contains the `/api/v1/:path*` rewrite. Default Turbopack build could not run inside the agent sandbox because Turbopack attempted an internally bound port and received `EPERM`; this was an environment restriction, while the official webpack production build completed successfully. Existing lint and test warnings were unchanged and unrelated.
+
 ### UI/UX Polish — Luxury Split-Screen Editorial Login Page
 
 - **Date:** 2026-08-24

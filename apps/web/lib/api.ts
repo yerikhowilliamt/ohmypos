@@ -1,17 +1,9 @@
-function resolveApiBaseUrl(): string {
-  if (typeof window !== 'undefined') {
-    return (
-      process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4015/api/v1'
-    );
-  }
-  const rawBackend =
-    process.env.INTERNAL_API_BASE_URL ||
-    process.env.BACKEND_API_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    'http://localhost:4015/api/v1';
+import { BROWSER_API_BASE_URL, resolveBackendApiBaseUrl } from './api-url';
 
-  const clean = rawBackend.replace(/\/+$/, '');
-  return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`;
+function resolveApiBaseUrl(): string {
+  return typeof window !== 'undefined'
+    ? BROWSER_API_BASE_URL
+    : resolveBackendApiBaseUrl();
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
