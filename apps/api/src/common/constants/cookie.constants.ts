@@ -2,11 +2,16 @@ export const ACCESS_TOKEN_COOKIE = 'access_token';
 export const REFRESH_TOKEN_COOKIE = 'refresh_token';
 export const DEVICE_COOKIE = 'ohmypos_device';
 
-/** Ported from Kasync. HttpOnly keeps the token out of reach of any script. */
+const isProduction = process.env.NODE_ENV === 'production';
+
+/**
+ * Ported from Kasync. HttpOnly keeps the token out of reach of any script.
+ * In production (cross-origin between Vercel FE and Render BE), sameSite must be 'none' with secure: true.
+ */
 export const COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict' as const,
+  secure: isProduction,
+  sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax' | 'strict',
   path: '/',
 };
 
