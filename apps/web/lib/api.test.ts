@@ -32,6 +32,10 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/whoami')).resolves.toEqual({ ok: true });
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/whoami',
+      expect.objectContaining({ credentials: 'include' }),
+    );
   });
 
   it('refreshes once and retries after a single 401', async () => {

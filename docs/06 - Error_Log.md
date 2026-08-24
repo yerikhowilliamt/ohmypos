@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-031 — Cross-host auth cookies were invisible to Vercel route gating after login
+
+- **Date found:** 2026-08-24
+- **Found during:** TASK-107 — same-origin authentication proxy remediation
+- **Symptom:** A production login against the Render API returned successfully, but the subsequent Next.js navigation landed back on `/login`. The browser exposed a React Flight payload beginning with `$Sreact.fragment` instead of reaching the role landing page.
+- **Root cause:** Browser API calls went directly from the Vercel frontend to the unrelated Render origin. The API correctly issued host-only HttpOnly cookies, but those cookies belonged to the Render host. `apps/web/proxy.ts` and `apps/web/lib/session.ts` run on the Vercel host, so neither could see the `access_token`; route gating therefore treated every authenticated navigation as signed out. `SameSite=None` permits cross-site requests to carry a cookie back to its issuing host, but does not make that cookie readable on a different host.
+- **Resolution:** Browser API calls now use same-origin `/api/v1`. A Next.js rewrite proxies that path to the server-only backend target, so `Set-Cookie` is received through the web origin and is visible to route gating and Server Components. Direct server calls continue to use `INTERNAL_API_BASE_URL`. Docker Compose now points that variable at the `api` service hostname.
+- **Prevention:** `api-url.test.ts` locks the browser base to `/api/v1`, verifies backend URL normalization and server-only precedence, and rejects relative backend targets. `api.test.ts` asserts that a real browser-side API call uses `/api/v1/...`; the production build route manifest was also checked for the external rewrite.
+- **Severity:** High — successful credentials could not produce a usable authenticated session in the split-host production deployment.
+
 ### ERR-030 — `SalesHistoryTable.test.tsx` failed with `No QueryClient set` after `SaleReceiptDialog` introduced `useBusinessProfile()`
 
 - **Date found:** 2026-08-24

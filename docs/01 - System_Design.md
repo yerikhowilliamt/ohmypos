@@ -155,6 +155,14 @@ Per the confirmed branch policy and the three-role model:
 
 Three containers via `docker-compose`: `web` (Next.js), `api` (NestJS), and `postgres` — still deliberately simple, no orchestration platform, no separate services beyond what the frontend/backend split itself requires. `web` and `api` are independently deployable from the same monorepo (Turborepo builds each app's own image), but there is no separate deployment split for the POS/cashier-facing routes vs. the back-office routes — those are both part of the one `web` app, gated by role (Section 5).
 
+In split-host production deployments (for example Vercel for `web` and Render
+for `api`), browser REST calls remain same-origin at `/api/v1`. The Next.js
+deployment reverse-proxies that path to the server-only
+`INTERNAL_API_BASE_URL`. This is required for the HttpOnly access and refresh
+cookies to belong to the web host, where Next.js route gating and Server
+Components can read and forward them; the browser must not call the unrelated
+backend host directly.
+
 ## 11. Risks / Things to Revisit
 
 - **Stock concurrency at scale**: the row-lock approach on `RawMaterial` during sale creation is fine at small transaction volume, but if multiple branches ring up sales for the same raw material at high frequency, lock contention could become a bottleneck. Not a v1 concern given the business's actual scale, but worth flagging for the ADR record.

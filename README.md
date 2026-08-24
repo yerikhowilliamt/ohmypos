@@ -43,7 +43,7 @@ Core principle to keep in mind while working in this repo: **any operation that 
 ## Setup
 
 1. `pnpm install` at the repo root — installs all workspaces.
-2. Copy `.env.example` to `.env` in `apps/api` (database URL, JWT secrets) and `apps/web` (API base URL).
+2. Copy `.env.example` to `.env` in `apps/api` (database URL, JWT secrets) and `apps/web` (server-only API target).
 3. `docker compose up -d postgres` — starts the database (see the port note below).
 4. `pnpm --filter api prisma migrate dev` — applies migrations and generates the Prisma client. _(Phase 1 onward — Prisma is not installed yet.)_
 5. `pnpm --filter api db:seed` — loads synthetic seed data (see [Synthetic Data Safety](#synthetic-data-safety) below).
@@ -59,6 +59,15 @@ Core principle to keep in mind while working in this repo: **any operation that 
 
 `docker compose up` brings up all three as containers. The faster daily loop is
 `docker compose up -d postgres` plus a host-side `pnpm dev`.
+
+### Web/API deployment
+
+Browser requests use the web origin's `/api/v1` path. Next.js reverse-proxies
+that path to `INTERNAL_API_BASE_URL`, which keeps HttpOnly authentication
+cookies first-party and visible to Next.js route gating. On Vercel, set
+`INTERNAL_API_BASE_URL` to the Render API URL including `/api/v1`, for example
+`https://your-api.onrender.com/api/v1`. Do not set the browser API base to the
+Render origin.
 
 ## Key Scripts
 
