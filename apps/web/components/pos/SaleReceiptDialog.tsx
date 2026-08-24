@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
 import { formatCurrency, formatQuantity } from '@/lib/formatters';
+import { useBusinessProfile } from '@/hooks/useBusinessProfile';
 import { Printer } from 'lucide-react';
 
 interface SaleReceiptDialogProps {
@@ -32,8 +33,15 @@ export function SaleReceiptDialog({
   sale,
   open,
   onOpenChange,
-  businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME || 'OhMyPos',
+  businessName,
 }: SaleReceiptDialogProps) {
+  const { data: profile } = useBusinessProfile();
+  const activeBusinessName =
+    businessName ??
+    profile?.name ??
+    process.env.NEXT_PUBLIC_BUSINESS_NAME ??
+    'OhMyPos';
+
   const handlePrint = () => {
     window.print();
   };
@@ -46,7 +54,7 @@ export function SaleReceiptDialog({
         <DialogHeader className="text-center sm:text-center print:text-center border-b border-border-default pb-3">
           <div className="space-y-0.5">
             <h2 className="text-xl font-black tracking-tight text-text-primary uppercase">
-              {businessName}
+              {activeBusinessName}
             </h2>
             {sale.branchName && (
               <p className="text-xs font-semibold text-text-secondary">

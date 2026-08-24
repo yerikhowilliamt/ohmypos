@@ -873,5 +873,17 @@ model LeaveRequest {
   @@map("leave_requests")
 }
 
+/// Business profile configuration — single record for business name, logo, and address.
+model BusinessProfile {
+  id        String   @id @default(uuid())
+  name      String   @default("OhMyPos")
+  logoUrl   String?  @map("logo_url")
+  address   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("business_profiles")
+}
+
 
 

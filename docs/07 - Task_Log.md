@@ -41,6 +41,43 @@
 
 ## Log
 
+### Phase 2, 3, 4 — Dynamic Business Profile on Sales Receipt & Nav Consolidation
+
+- **Date:** 2026-08-24
+- **Module / Phase:** `apps/web` (POS components, nav-config, routing), Business Profile Integration
+- **Objective:** Dynamic business name from database on sales receipt dialogs and nav restructuring under `/business/*`.
+- **Relevant docs:** DESIGN.md, ADR-010, ADR-011, PRD v1.1
+- **What was done:**
+  - `apps/web/components/pos/SaleReceiptDialog.tsx` & `SaleSuccessDialog.tsx`: Integrated `useBusinessProfile()` hook to display dynamic business name fetched from `/business-profile` endpoint with fallback cascade (`prop` → `profile?.name` → `env NEXT_PUBLIC_BUSINESS_NAME` → `'OhMyPos'`).
+  - `apps/web/lib/nav-config.ts`: Consolidated OWNER sidebar menu items (Pengguna, Cabang, Perangkat, Log Absensi, Cuti) as children under parent `Bisnis` (`/business`). Updated KASIR leave requests URL to `/business/leave-requests`.
+  - `apps/web/next.config.ts`: Configured permanent redirects from old URLs (`/users`, `/branches`, `/devices`, `/devices/attendance`, `/leave-requests`) to new `/business/*` routes.
+  - `apps/web/components/pos/SalesHistoryTable.test.tsx` & `SalesHistoryClient.search.test.tsx`: Wrapped table rendering in `renderWithClient` to supply `QueryClient` context needed by `useBusinessProfile`.
+- **Decisions made during this task:** Kept `leave-requests` in `(shared)` route group to preserve access for `KASIR` role while aliasing route and breadcrumbs under `/business/leave-requests`.
+- **Status:** Done
+- **Handoff notes:** `turbo run lint typecheck test` all 13 tasks passed green (441 web unit tests, 170 api unit tests).
+
+### Phase 4 — BusinessProfile Frontend & React Query Hook
+
+- **Date:** 2026-08-24
+- **Module / Phase:** `apps/web`, BusinessProfile Phase 4
+- **Objective:** Create `useBusinessProfile` hook and `BusinessProfileClient` page component in `apps/web`.
+- **Relevant docs:** DESIGN.md, ADR-010, ADR-011
+- **What was done:** Created `apps/web/hooks/useBusinessProfile.ts` and `useBusinessProfile.test.ts`; created `apps/web/app/(back-office)/business/BusinessProfileClient.tsx`; updated `apps/web/app/(back-office)/business/page.tsx`.
+- **Decisions made during this task:** None.
+- **Status:** Done
+- **Handoff notes:** BusinessProfile frontend feature is complete and verified with strict TypeScript typechecks and unit tests.
+
+### Phase 1 — BusinessProfile backend
+
+- **Date:** 2026-08-24
+- **Module / Phase:** `apps/api` and `packages/api-contracts`, BusinessProfile Phase 1
+- **Objective:** Add singleton business profile persistence, contracts, authenticated read, OWNER-only profile and logo updates.
+- **Relevant docs:** ADR-010, ADR-011, Engineering Playbook §4 and §8
+- **What was done:** Added `BusinessProfile` Prisma model and migration `20260824030233_add_business_profile`; generated Prisma client; added shared response/update schemas; added NestJS DTO, service, Cloudinary logo upload, controller, module, and service unit tests; registered module in `AppModule`.
+- **Decisions made during this task:** Profile lazily initializes with `OhMyPos`; deterministic Cloudinary path `ohmypos/business/logo/logo` overwrites prior logo.
+- **Status:** Done
+- **Handoff notes:** Contracts build passed, 4/4 module unit tests passed, API typecheck passed. Existing unrelated working-tree changes left untouched.
+
 ### TASK-106 to TASK-112 — Void Sale frontend, button contrast fix, Sentry APM, Playwright CI, DEBT-047 mitigation, backup runbook
 
 - **Date:** 2026-08-23

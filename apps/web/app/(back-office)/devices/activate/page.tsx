@@ -1,22 +1,14 @@
-import type { Metadata } from 'next';
-import { requireRole } from '@/lib/session';
-import { ActivateDeviceClient } from './ActivateDeviceClient';
-
-export const metadata: Metadata = {
-  title: 'Aktivasi Perangkat — OhMyPos',
-};
+import { redirect } from 'next/navigation';
 
 export default async function Page({
   searchParams,
 }: {
   searchParams: Promise<{ code?: string }>;
 }) {
-  await requireRole(['OWNER']);
   const { code } = await searchParams;
-
-  return (
-    <main className="flex flex-1 items-center justify-center p-4">
-      <ActivateDeviceClient code={code ?? ''} />
-    </main>
+  redirect(
+    code
+      ? `/business/devices/activate?code=${encodeURIComponent(code)}`
+      : '/business/devices/activate',
   );
 }

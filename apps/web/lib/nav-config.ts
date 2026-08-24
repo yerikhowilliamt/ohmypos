@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Boxes,
+  Building2,
   CalendarDays,
   ChartColumn,
   CircleHelp,
@@ -9,9 +10,6 @@ import {
   Receipt,
   Scale,
   ShoppingCart,
-  Store,
-  Tablet,
-  Users,
   Wallet,
 } from 'lucide-react';
 import type { UserRole } from '@ohmypos/api-contracts';
@@ -56,7 +54,7 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
         { href: '/sales/history', label: 'Riwayat Transaksi' },
       ],
     },
-    { href: '/leave-requests', label: 'Cuti', icon: CalendarDays },
+    { href: '/business/leave-requests', label: 'Cuti', icon: CalendarDays },
     { href: '/help', label: 'Bantuan', icon: CircleHelp },
   ],
   ADMIN: [
@@ -128,18 +126,19 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
         { href: '/reports/daily', label: 'Pendapatan Harian' },
       ],
     },
-    { href: '/users', label: 'Pengguna', icon: Users },
-    { href: '/branches', label: 'Cabang', icon: Store },
     {
-      href: '/devices',
-      label: 'Perangkat',
-      icon: Tablet,
+      href: '/business',
+      label: 'Bisnis',
+      icon: Building2,
       children: [
-        { href: '/devices', label: 'Daftar Perangkat' },
-        { href: '/devices/attendance', label: 'Log Absensi' },
+        { href: '/business', label: 'Profil Bisnis' },
+        { href: '/business/users', label: 'Pengguna' },
+        { href: '/business/branches', label: 'Cabang' },
+        { href: '/business/devices', label: 'Perangkat' },
+        { href: '/business/devices/attendance', label: 'Log Absensi' },
+        { href: '/business/leave-requests', label: 'Cuti' },
       ],
     },
-    { href: '/leave-requests', label: 'Cuti', icon: CalendarDays },
     { href: '/help', label: 'Bantuan', icon: CircleHelp },
   ],
 };
