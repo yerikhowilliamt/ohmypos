@@ -221,8 +221,8 @@ export function DashboardClient() {
         isLoading={isKpiLoading}
       />
 
-      {/* Branch Profitability Breakdown */}
-      <BranchProfitabilityCard range={monthRange} />
+      {/* Branch Profitability Breakdown
+      <BranchProfitabilityCard range={monthRange} /> */}
 
       {/* Primary Analytics Grid: Trend Line & Payment Methods Donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -353,7 +353,10 @@ export function DashboardClient() {
       </div>
 
       {/* Secondary Operational Panels: Top Products, Recent Sales, Action Required */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Branch Profitability Breakdown */}
+        <BranchProfitabilityCard range={monthRange} />
+
         {/* Top 5 Produk Terlaris */}
         <Card className="p-4 shadow-1 bg-surface-raised border-border-default">
           <CardHeader className="px-0 pb-2">

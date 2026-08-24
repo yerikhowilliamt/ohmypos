@@ -41,6 +41,24 @@
 
 ## Log
 
+### UI/UX Polish — Luxury Split-Screen Editorial Login Page
+
+- **Date:** 2026-08-24
+- **Module / Phase:** `apps/web` (Authentication / Login UI)
+- **Objective:** Redesign halaman login (`/login`) menjadi tampilan luxury, premium, elegan high-class sesuai DESIGN.md untuk bisnis F&B / hospitality mewah dan institusi keuangan.
+- **Relevant docs:** DESIGN.md §2 (Design North Star), §3 (Product Character & Aesthetic Pillars), §5 (Typography), §6 (Color Tokens), §8 (Micro-Radius & Elevation), §22 (WCAG 2.2 AA), §23 (Touch Interaction), ADR-010.
+- **What was done:**
+  - `apps/web/app/login/page.tsx`:
+    - Mengimplementasikan layout *Split-Screen Editorial* yang aktif pada layar tablet dan desktop (`md:` / 768px+).
+    - Kolom kiri (Obsidian Slate `#12151B`): tipografi editorial *Cormorant Garamond*, aksen emas Champagne (`#C5A880`), micro-ambient gold glow, pilar operasional (*Real-Time Reconciliation*, *Multi-Branch Vault*, *High-Precision Ledger*, *End-to-End Compliance*), dan badge keamanan *Banking-Grade Security Standard*.
+    - Kolom kanan: Form elegan berlatar Warm Alabaster/Porcelain dengan hairline border arsitektural (`#EAE4DC`), input dengan focus ring champagne halo, tombol submit berstandar touch target minimal 44px (`h-11`), peringatan absensi luar perangkat terintegrasi, dan enkripsi 256-bit security footer.
+    - Tampilan mobile (<768px): Kolom tunggal terpusat dengan subtle ambient glow emas dan badge sistem *Quiet Luxury. Precise Operations*.
+- **Decisions made during this task:**
+  - Menolak penambahan background foto realistis + efek glassmorphism/transparansi berlebih untuk menjaga kepatuhan DESIGN.md §3.1 & §25 serta standar kontras teks WCAG 2.2 AA.
+  - Memperluas split-screen ke breakpoint tablet (`md:` / 768px+) dengan grid pilar vertikal 1 kolom agar layar tablet tidak terasa kosong tanpa mengorbankan keterbacaan form.
+- **Status:** Done
+- **Handoff notes:** `pnpm --filter web typecheck` and `pnpm --filter web test` (441 unit tests) pass green without regressions. Auth flow, validation Zod schema, and HttpOnly cookie behavior intact.
+
 ### CLI Tool — Owner Provisioning Script (Option 2)
 
 - **Date:** 2026-08-24
