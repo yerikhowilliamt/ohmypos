@@ -1,12 +1,10 @@
 const API_BASE_URL =
   typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? '/api/v1')
+    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4015/api/v1')
     : (process.env.INTERNAL_API_BASE_URL ??
       process.env.BACKEND_API_URL ??
-      (process.env.NODE_ENV === 'production'
-        ? 'https://ohmypos-api.onrender.com/api/v1'
-        : (process.env.NEXT_PUBLIC_API_BASE_URL ??
-          'http://localhost:4015/api/v1')));
+      process.env.NEXT_PUBLIC_API_BASE_URL ??
+      'http://localhost:4015/api/v1');
 
 /** Thrown by `apiFetch` for any non-2xx response; carries the HTTP status so
  * callers — and the refresh-on-401 logic below — can branch on it.
