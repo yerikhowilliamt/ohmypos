@@ -77,6 +77,19 @@ const nextConfig: NextConfig = {
       new URL('https://res.cloudinary.com/erz2stvz/image/upload/**'),
     ],
   },
+  async rewrites() {
+    const backendUrl =
+      process.env.BACKEND_API_URL ||
+      (process.env.NODE_ENV === 'production'
+        ? 'https://ohmypos-api.onrender.com'
+        : 'http://localhost:4015');
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${backendUrl}/api/v1/:path*`,
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {

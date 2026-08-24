@@ -50,7 +50,7 @@ export default function LoginPage() {
         setAttendanceWarning(true);
         return;
       }
-      router.replace('/');
+      router.push('/');
       router.refresh();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Login failed');
@@ -230,7 +230,7 @@ export default function LoginPage() {
                       size="sm"
                       className="mt-3 min-h-[36px] w-full border-border-strong text-xs font-medium"
                       onClick={() => {
-                        router.replace('/');
+                        router.push('/');
                         router.refresh();
                       }}
                     >
