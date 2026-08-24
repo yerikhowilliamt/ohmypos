@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -112,10 +113,12 @@ function LogoSection({ currentLogoUrl }: { currentLogoUrl: string | null }) {
       <CardContent className="flex items-center gap-4">
         <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border-default bg-surface-muted">
           {displayLogo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={displayLogo}
               alt="Logo Bisnis"
+              width={80}
+              height={80}
+              unoptimized
               className="size-full object-cover"
             />
           ) : (

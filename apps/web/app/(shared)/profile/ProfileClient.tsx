@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -127,10 +128,12 @@ function PhotoForm({ currentPhotoUrl }: { currentPhotoUrl: string | null }) {
       <CardContent className="flex items-center gap-4">
         <div className="size-16 shrink-0 overflow-hidden rounded-full bg-surface-muted">
           {displayPhoto ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={displayPhoto}
               alt="Foto profil"
+              width={64}
+              height={64}
+              unoptimized
               className="size-full object-cover"
             />
           ) : null}
