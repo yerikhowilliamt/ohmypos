@@ -73,8 +73,8 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      # Browser-side calls resolve on the host, not the compose network.
-      NEXT_PUBLIC_API_BASE_URL: 'http://localhost:4015/api/v1'
+      # Next proxies browser-side /api/v1 calls through the Compose network.
+      INTERNAL_API_BASE_URL: 'http://api:4015/api/v1'
     ports:
       - '3001:3001'
     volumes:
