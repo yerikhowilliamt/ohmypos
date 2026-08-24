@@ -27,6 +27,27 @@ import { DeleteMyAccountDialog } from './DeleteMyAccountDialog';
 
 const ROLE_LABELS = { KASIR: 'Kasir', ADMIN: 'Admin', OWNER: 'Owner' } as const;
 
+function safeImageSrc(src: string | null): string | null {
+  if (!src) return null;
+  try {
+    const url = new URL(src);
+    if (
+      url.protocol === 'blob:' ||
+      url.protocol === 'https:' ||
+      url.protocol === 'http:'
+    ) {
+      return src;
+    }
+    if (url.protocol === 'data:') {
+      const mimeMatch = src.match(/^data:([^;,]+)/);
+      if (mimeMatch && mimeMatch[1]?.startsWith('image/')) return src;
+    }
+  } catch {
+    if (src.startsWith('/')) return src;
+  }
+  return null;
+}
+
 export function ProfileClient() {
   const router = useRouter();
   const { data: user, isLoading } = useCurrentUser();
@@ -72,7 +93,7 @@ function PhotoForm({ currentPhotoUrl }: { currentPhotoUrl: string | null }) {
   const [serverError, setServerError] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const displayPhoto = localPreview ?? currentPhotoUrl;
+  const displayPhoto = safeImageSrc(localPreview ?? currentPhotoUrl);
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,

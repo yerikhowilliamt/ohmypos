@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { randomUUID } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '../src/generated/prisma/client';
 
@@ -47,7 +47,7 @@ if (!Number.isInteger(MONTHS) || MONTHS < 1 || MONTHS > 60) {
 const BATCH_SIZE = 5000;
 
 function randInt(min: number, max: number): number {
-  return min + Math.floor(Math.random() * (max - min + 1));
+  return randomInt(min, max + 1);
 }
 
 function pick<T>(items: T[]): T {
