@@ -24,6 +24,27 @@ import {
 } from '@/hooks/useBusinessProfile';
 import { Building2, Upload } from 'lucide-react';
 
+function safeImageSrc(src: string | null): string | null {
+  if (!src) return null;
+  try {
+    const url = new URL(src);
+    if (
+      url.protocol === 'blob:' ||
+      url.protocol === 'https:' ||
+      url.protocol === 'http:'
+    ) {
+      return src;
+    }
+    if (url.protocol === 'data:') {
+      const mimeMatch = src.match(/^data:([^;,]+)/);
+      if (mimeMatch && mimeMatch[1]?.startsWith('image/')) return src;
+    }
+  } catch {
+    if (src.startsWith('/')) return src;
+  }
+  return null;
+}
+
 export function BusinessProfileClient() {
   const { data: profile, isLoading } = useBusinessProfile();
 
@@ -55,7 +76,7 @@ function LogoSection({ currentLogoUrl }: { currentLogoUrl: string | null }) {
   const [serverError, setServerError] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const displayLogo = localPreview ?? currentLogoUrl;
+  const displayLogo = safeImageSrc(localPreview ?? currentLogoUrl);
 
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
