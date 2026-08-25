@@ -13,6 +13,14 @@ export const CENTRAL_BRANCH_NAME = 'Pusat (Dapur Sentral)';
 export const PURCHASE_CATEGORY_NAME = 'Pembelian Bahan Baku';
 /** ADR-015, plan §10.3 step 9 — the income LedgerEntry a Sale generates. */
 export const SALE_CATEGORY_NAME = 'Penjualan';
+export const SYSTEM_CATEGORY_NAMES = [
+  PURCHASE_CATEGORY_NAME,
+  SALE_CATEGORY_NAME,
+] as const;
+
+export function isSystemCategoryName(name: string): boolean {
+  return SYSTEM_CATEGORY_NAMES.some((systemName) => systemName === name);
+}
 
 export async function resolveLedgerBranchId(
   tx: Prisma.TransactionClient,

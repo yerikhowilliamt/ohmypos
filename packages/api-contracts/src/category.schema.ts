@@ -15,6 +15,7 @@ export const CategoryResponseSchema = z.object({
   id: UuidString,
   name: z.string(),
   type: TransactionType,
+  isSystem: z.boolean(),
   createdAt: z.date().or(z.string()),
   updatedAt: z.date().or(z.string()),
 });

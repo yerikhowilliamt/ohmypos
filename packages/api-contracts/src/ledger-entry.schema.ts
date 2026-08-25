@@ -10,8 +10,12 @@ import {
 export const CreateLedgerEntrySchema = z.object({
   accountId: UuidString,
   categoryId: UuidString,
-  /** Required — every entry is attributed to a branch (ADR-004). */
-  branchId: UuidString,
+  /**
+   * Required-nullable: a UUID targets a branch; null asks the backend to
+   * attribute the entry to the seeded central-operation branch. The persisted
+   * LedgerEntry.branchId remains non-null (ADR-004, ADR-014).
+   */
+  branchId: UuidString.nullable(),
   entryDate: DateTimeString,
   amount: MoneyString,
   type: TransactionType,
