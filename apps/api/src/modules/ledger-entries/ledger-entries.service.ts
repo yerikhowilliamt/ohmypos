@@ -14,6 +14,7 @@ import type {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 import type { JwtPayload } from '../../common/types/jwt-payload.interface';
+import { resolveLedgerBranchId } from '../../common/system-refs';
 
 /**
  * Ported from Kasync with the ERD v3 extensions: `accountId` (required),
@@ -57,23 +58,27 @@ export class LedgerEntriesService {
   }
 
   async create(dto: CreateLedgerEntry) {
-    await this.assertReferencesExist(
-      dto.accountId,
-      dto.categoryId,
-      dto.branchId,
-    );
+    return this.prisma.$transaction(async (tx) => {
+      const branchId = await resolveLedgerBranchId(tx, dto.branchId);
+      await this.assertReferencesExist(
+        tx,
+        dto.accountId,
+        dto.categoryId,
+        branchId,
+      );
 
-    return this.prisma.ledgerEntry.create({
-      data: {
-        accountId: dto.accountId,
-        categoryId: dto.categoryId,
-        branchId: dto.branchId,
-        entryDate: new Date(dto.entryDate),
-        amount: new Prisma.Decimal(dto.amount),
-        type: dto.type,
-        note: dto.note ?? null,
-        sourceType: 'MANUAL',
-      },
+      return tx.ledgerEntry.create({
+        data: {
+          accountId: dto.accountId,
+          categoryId: dto.categoryId,
+          branchId,
+          entryDate: new Date(dto.entryDate),
+          amount: new Prisma.Decimal(dto.amount),
+          type: dto.type,
+          note: dto.note ?? null,
+          sourceType: 'MANUAL',
+        },
+      });
     });
   }
 
@@ -140,25 +145,36 @@ export class LedgerEntriesService {
       );
     }
 
-    await this.assertReferencesExist(
-      dto.accountId,
-      dto.categoryId,
-      dto.branchId,
-    );
+    return this.prisma.$transaction(async (tx) => {
+      const branchId =
+        dto.branchId !== undefined
+          ? await resolveLedgerBranchId(tx, dto.branchId)
+          : undefined;
+      await this.assertReferencesExist(
+        tx,
+        dto.accountId,
+        dto.categoryId,
+        branchId,
+      );
 
-    return this.prisma.ledgerEntry.update({
-      where: { id },
-      data: {
-        ...(dto.accountId && { accountId: dto.accountId }),
-        ...(dto.categoryId && { categoryId: dto.categoryId }),
-        ...(dto.branchId && { branchId: dto.branchId }),
-        ...(dto.entryDate && { entryDate: new Date(dto.entryDate) }),
-        ...(dto.amount !== undefined && {
-          amount: new Prisma.Decimal(dto.amount),
-        }),
-        ...(dto.type && { type: dto.type }),
-        ...(dto.note !== undefined && { note: dto.note ?? null }),
-      },
+      return tx.ledgerEntry.update({
+        where: { id },
+        data: {
+          ...(dto.accountId !== undefined && { accountId: dto.accountId }),
+          ...(dto.categoryId !== undefined && {
+            categoryId: dto.categoryId,
+          }),
+          ...(branchId !== undefined && { branchId }),
+          ...(dto.entryDate !== undefined && {
+            entryDate: new Date(dto.entryDate),
+          }),
+          ...(dto.amount !== undefined && {
+            amount: new Prisma.Decimal(dto.amount),
+          }),
+          ...(dto.type !== undefined && { type: dto.type }),
+          ...(dto.note !== undefined && { note: dto.note ?? null }),
+        },
+      });
     });
   }
 
@@ -179,20 +195,15 @@ export class LedgerEntriesService {
 
   /** Fails fast with a 404 rather than letting Prisma raise a foreign-key error. */
   private async assertReferencesExist(
+    tx: Prisma.TransactionClient,
     accountId?: string,
     categoryId?: string,
     branchId?: string,
   ) {
     const [account, category, branch] = await Promise.all([
-      accountId
-        ? this.prisma.account.findUnique({ where: { id: accountId } })
-        : null,
-      categoryId
-        ? this.prisma.category.findUnique({ where: { id: categoryId } })
-        : null,
-      branchId
-        ? this.prisma.branch.findUnique({ where: { id: branchId } })
-        : null,
+      accountId ? tx.account.findUnique({ where: { id: accountId } }) : null,
+      categoryId ? tx.category.findUnique({ where: { id: categoryId } }) : null,
+      branchId ? tx.branch.findUnique({ where: { id: branchId } }) : null,
     ]);
 
     if (accountId && !account) {

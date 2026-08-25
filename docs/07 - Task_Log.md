@@ -41,6 +41,39 @@
 
 ## Log
 
+### TASK-111 — Preserve the original branch across central-location toggles
+
+- **Date:** 2026-08-25
+- **Module / Phase:** POS feedback remediation — Phase 2 follow-up (`GeneralExpenseFormDialog`)
+- **Objective:** Fix the Chrome-smoke finding where an edited expense lost its original branch after the user temporarily selected `Pusat` and returned to `Cabang`.
+- **Relevant docs:** ADR-004; ADR-010; ERR-034; `docs/handoff/2026-08-25-general-expense-branch-preservation-fix.md`
+- **What was done:** Added dialog-local preservation of the last valid ordinary branch, restored that branch when returning from central mode, and kept the fallback to the first branch only for forms with no valid prior selection. Expanded the test fixture to two branches and added a PATCH-payload regression test. No API, schema, migration, dependency, or persisted data changed.
+- **Decisions made during this task:** A `useRef` retains the branch only for the lifetime of the dialog and does not introduce a second rendered state source. The preserved ID is checked against the current selectable branch list before reuse, so a removed or central-system branch cannot be restored accidentally.
+- **Status:** Done
+- **Handoff notes:** Targeted dialog tests pass 6/6; web lint and typecheck pass; the complete web suite passes 457/457. A first full-suite run executed concurrently with lint/typecheck produced one unrelated `RecipeEditorDialog` timeout; that test passed 5/5 in isolation and the full suite passed sequentially without code changes. Chrome verification confirmed the original branch remains `Cabang Melati` after `Cabang → Pusat → Cabang`; the dialog was cancelled, so no database record changed. No commit or push was performed.
+
+### TASK-110 — POS feedback Phase 2: central or branch general expenses
+
+- **Date:** 2026-08-25
+- **Module / Phase:** POS feedback remediation — Phase 2 (`LedgerEntry`, general-expense UI)
+- **Objective:** Allow a manual general expense to originate from either the central operation or a branch, including moving an existing manual entry between those locations.
+- **Relevant docs:** ADR-004; ADR-010; ADR-011; ADR-014; Engineering Playbook §4, §7, §8, §10; ERR-033; `docs/handoff/2026-08-25-pos-feedback-phase-2.md`
+- **What was done:** Changed `CreateLedgerEntry.branchId` to required-nullable, with `null` resolved inside the backend to the seeded `Pusat (Dapur Sentral)` branch while the persisted FK stays non-null. Wrapped manual ledger create/update writes and reference validation in Postgres transactions. Added create/update HTTP coverage proving KASIR central writes are rejected, ADMIN/OWNER central writes resolve correctly, and OWNER can move a manual entry from branch to center. Added a Cabang/Pusat control to the general-expense form, excluded the central system branch from the ordinary branch picker, added manual-entry edit support, hid edit for automatic entries, displayed location in the table, and added location to exports. No Prisma schema, migration, or dependency changed.
+- **Decisions made during this task:** `branchId: null` is an API command, not persisted state; responses continue returning the resolved non-null branch UUID. New forms default to branch mode with no silently selected branch. Automatic PURCHASE/PAYABLE entries remain non-editable. Location labels are resolved from the existing branch reference query and central is presented as `Pusat`.
+- **Status:** Done
+- **Handoff notes:** Full gate passed (`pnpm turbo run lint typecheck test`, 13/13 tasks; API 175/175; web 456/456). Targeted API e2e passed 41/41 outside the filesystem/network sandbox. Browser smoke could not run because no browser was connected; the missing project-specific E2E skill was also noted, so component tests and HTTP e2e are the available verification. No commit or push was performed.
+
+### TASK-109 — POS feedback Phase 1: expense-category master data
+
+- **Date:** 2026-08-25
+- **Module / Phase:** POS feedback remediation — Phase 1 (`Category`, Data Master UI)
+- **Objective:** Give ADMIN/OWNER an explicit place to manage general-expense categories while protecting categories required by automatic sale and purchase ledger flows.
+- **Relevant docs:** ADR-010; ADR-011; ADR-012; Engineering Playbook §4, §6, §8, §10; `docs/handoff/2026-08-25-pos-feedback-phase-1.md`
+- **What was done:** Extended `CategoryResponse` with computed `isSystem`; centralized the protected names `Penjualan` and `Pembelian Bahan Baku` in `system-refs.ts`; added named duplicate, protected-system, and in-use exceptions; mapped every category response and rejected update/delete of system categories in the service. Added category CRUD React Query mutations, an ADMIN/OWNER route at `/master-data/expense-categories`, navigation/breadcrumb integration, an OUTFLOW-only searchable table, system badges, create/edit form, delete confirmation, and loading/empty/error handling. No Prisma schema, migration, package dependency, or Git write was required.
+- **Decisions made during this task:** System status is derived from the canonical seeded category names rather than persisted as a new column, avoiding a migration and keeping the existing automatic-ledger references authoritative. `Operasional` remains editable ordinary data. The category query key is shared with the general-expense form so successful CRUD invalidates and refreshes that picker automatically.
+- **Status:** Done
+- **Handoff notes:** Phase 1 targeted verification is green: API category service 5/5, web suite 453/453, API and web typechecks pass. The API contract package must be rebuilt after changes because consumers resolve its generated `dist` declarations. Phase 2 may now change manual ledger-entry location semantics; it must not weaken the category protections introduced here.
+
 ### TASK-108 — Replace rejected Vercel external rewrite with a same-origin BFF Route Handler
 
 - **Date:** 2026-08-25

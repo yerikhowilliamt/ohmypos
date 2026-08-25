@@ -37,6 +37,26 @@
 
 ## Log
 
+### ERR-034 — Switching an edited expense from center back to branch discarded the original branch
+
+- **Date found:** 2026-08-25
+- **Found during:** Chrome smoke verification after TASK-110; resolved by TASK-111
+- **Symptom:** Editing a `Cabang Melati` manual expense and toggling its location `Cabang → Pusat → Cabang` changed the branch picker to `Cabang Kenanga`, the first selectable branch. Saving at that point would silently attribute the expense to the wrong branch.
+- **Root cause:** The `Cabang` radio handler always assigned `selectableBranches[0].id`. Setting `branchId` to `null` for central mode removed the only form-state copy of the user's previous branch, so there was nothing to restore.
+- **Resolution:** `GeneralExpenseFormDialog` now retains the last valid non-central branch ID in a dialog-local ref, updates it when the branch picker changes, and restores it when branch mode is reselected. It falls back to the first selectable branch only when no preserved valid branch exists.
+- **Prevention:** The dialog test fixture now contains two ordinary branches, and a regression test toggles an existing `Cabang Melati` entry through central mode, submits, and asserts the PATCH payload still contains the `Cabang Melati` UUID. Chrome verification independently confirmed `Cabang Melati → Pusat → Cabang Melati` without saving.
+- **Severity:** Medium — the form remained usable but could silently persist a valid expense against the wrong branch.
+
+### ERR-033 — Late branch-reference loading reset a user's central selection in the expense edit form
+
+- **Date found:** 2026-08-25
+- **Found during:** TASK-110, `GeneralExpenseFormDialog` edit-mode component test
+- **Symptom:** After an existing branch expense was switched to `Pusat`, the submitted PATCH payload still contained the original branch UUID instead of `branchId: null`.
+- **Root cause:** The form-reset effect depended on `centralBranch.id`. When the asynchronous branch query completed after the user clicked `Pusat`, that dependency changed and reran the entire edit initializer, overwriting the user's new selection with the entry's original branch.
+- **Resolution:** Restricted the full form-reset effect to dialog/entry initialization and moved central-entry normalization into a separate effect that only sets `null` when the stored entry already belongs to the central system branch. Reference-data arrival can no longer replay the entire form initializer.
+- **Prevention:** `GeneralExpenseFormDialog.test.tsx` now opens an existing branch expense, switches it to `Pusat`, submits, and asserts the PATCH body contains `branchId: null`. The complete web suite passes 456/456.
+- **Severity:** Medium — it would have made the UI report a successful edit while preserving the wrong location; caught before release.
+
 ### ERR-032 — Vercel rejected the Render external rewrite with `DNS_HOSTNAME_RESOLVED_PRIVATE`
 
 - **Date found:** 2026-08-25
