@@ -65,6 +65,10 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
       children: [
         { href: '/master-data', label: 'Produk & Resep' },
         { href: '/master-data/raw-materials', label: 'Bahan Baku' },
+        {
+          href: '/master-data/expense-categories',
+          label: 'Kategori Pengeluaran',
+        },
       ],
     },
     { href: '/accounts', label: 'Metode Pembayaran', icon: Wallet },
@@ -88,6 +92,10 @@ const NAV_ITEMS: Record<UserRole, NavItem[]> = {
       children: [
         { href: '/master-data', label: 'Produk & Resep' },
         { href: '/master-data/raw-materials', label: 'Bahan Baku' },
+        {
+          href: '/master-data/expense-categories',
+          label: 'Kategori Pengeluaran',
+        },
       ],
     },
     { href: '/accounts', label: 'Metode Pembayaran', icon: Wallet },

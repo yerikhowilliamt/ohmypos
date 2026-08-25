@@ -59,6 +59,17 @@ const mockEntries: LedgerEntryResponse[] = [
  */
 function mockLedger(metaOverride?: Partial<PaginationMeta>) {
   vi.mocked(apiModule.apiFetch).mockImplementation((path: string) => {
+    if (path === '/branches') {
+      return Promise.resolve([
+        {
+          id: mockEntries[0].branchId,
+          name: 'Pusat (Dapur Sentral)',
+          address: null,
+          createdAt: '2026-08-16T00:00:00.000Z',
+          updatedAt: '2026-08-16T00:00:00.000Z',
+        },
+      ]);
+    }
     if (path.startsWith('/ledger-entries')) {
       // Echo the requested page/limit back, the way the real endpoint does —
       // the page-size control reads its value from `meta.limit`.
@@ -102,6 +113,19 @@ describe('GeneralExpenseTab', () => {
     expect(lastLedgerPath()).toContain('sortBy=entryDate');
     expect(lastLedgerPath()).toContain('sortOrder=desc');
     expect(lastLedgerPath()).toContain('type=OUTFLOW');
+    expect(screen.getAllByText('Pusat')).not.toHaveLength(0);
+  });
+
+  it('offers edit only for manual expenses', async () => {
+    mockLedger();
+    renderWithClient(<GeneralExpenseTab />);
+
+    await screen.findByText('Listrik Agustus');
+
+    expect(
+      screen.getAllByRole('button', { name: 'Edit pengeluaran' }),
+    ).toHaveLength(1);
+    expect(screen.getByText('Otomatis')).toBeDefined();
   });
 
   it('renders the pagination footer, which the screen previously had none of', async () => {

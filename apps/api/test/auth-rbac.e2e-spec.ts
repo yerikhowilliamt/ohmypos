@@ -23,6 +23,7 @@ describe('Auth & role-based access control (e2e)', () => {
 
   let branchA: string;
   let branchB: string;
+  let centralBranchId: string;
   let accountId: string;
   let categoryId: string;
 
@@ -51,6 +52,12 @@ describe('Auth & role-based access control (e2e)', () => {
     ]);
     branchA = a.id;
     branchB = b.id;
+    const centralBranch = await prisma.branch.upsert({
+      where: { name: 'Pusat (Dapur Sentral)' },
+      create: { name: 'Pusat (Dapur Sentral)' },
+      update: {},
+    });
+    centralBranchId = centralBranch.id;
 
     const account = await prisma.account.create({
       data: { name: 'RBAC Account', type: 'BANK' },
@@ -304,6 +311,68 @@ describe('Auth & role-based access control (e2e)', () => {
           type: 'INFLOW',
         })
         .expect(201);
+    });
+
+    it('rejects a KASIR writing a central ledger entry', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/ledger-entries')
+        .set('Cookie', kasir.cookies)
+        .send({
+          accountId,
+          categoryId,
+          branchId: null,
+          entryDate: '2026-03-01',
+          amount: '10.00',
+          type: 'INFLOW',
+        })
+        .expect(403);
+    });
+
+    it.each([
+      ['ADMIN', () => admin.cookies],
+      ['OWNER', () => owner.cookies],
+    ])(
+      'maps a null branchId from %s to the central system branch',
+      async (_role, getCookies) => {
+        const res = await request(app.getHttpServer())
+          .post('/api/v1/ledger-entries')
+          .set('Cookie', getCookies())
+          .send({
+            accountId,
+            categoryId,
+            branchId: null,
+            entryDate: '2026-03-01',
+            amount: '10.00',
+            type: 'INFLOW',
+          })
+          .expect(201);
+
+        expect((res.body as { branchId: string }).branchId).toBe(
+          centralBranchId,
+        );
+      },
+    );
+
+    it('lets an OWNER move a manual entry from a branch to the center', async () => {
+      const entry = await prisma.ledgerEntry.create({
+        data: {
+          accountId,
+          categoryId,
+          branchId: branchA,
+          entryDate: new Date('2026-03-01'),
+          amount: '10.00',
+          type: 'INFLOW',
+          sourceType: 'MANUAL',
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/ledger-entries/${entry.id}`)
+        .set('Cookie', owner.cookies)
+        .send({ branchId: null })
+        .expect(200);
+
+      expect((res.body as { branchId: string }).branchId).toBe(centralBranchId);
     });
 
     it('rejects a KASIR reading another branch explicitly', async () => {

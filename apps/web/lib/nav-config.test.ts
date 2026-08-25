@@ -27,6 +27,10 @@ describe('getNavItems', () => {
     ).toEqual([
       { href: '/master-data', label: 'Produk & Resep' },
       { href: '/master-data/raw-materials', label: 'Bahan Baku' },
+      {
+        href: '/master-data/expense-categories',
+        label: 'Kategori Pengeluaran',
+      },
     ]);
   });
 
@@ -55,6 +59,10 @@ describe('getNavItems', () => {
     ).toEqual([
       { href: '/master-data', label: 'Produk & Resep' },
       { href: '/master-data/raw-materials', label: 'Bahan Baku' },
+      {
+        href: '/master-data/expense-categories',
+        label: 'Kategori Pengeluaran',
+      },
     ]);
     expect(items.find((item) => item.href === '/expenses')?.children).toEqual([
       { href: '/expenses', label: 'Pengeluaran Umum' },

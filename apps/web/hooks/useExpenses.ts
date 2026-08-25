@@ -10,6 +10,7 @@ import type {
   AccountResponse,
   BranchResponse,
   CategoryResponse,
+  CreateCategory,
   CreateLedgerEntry,
   CreatePayableSettlement,
   CreateSupplier,
@@ -26,6 +27,8 @@ import type {
   SupplierPurchaseResponse,
   SupplierPurchaseSortBy,
   SupplierResponse,
+  UpdateCategory,
+  UpdateLedgerEntry,
 } from '@ohmypos/api-contracts';
 import { apiFetch } from '@/lib/api';
 
@@ -55,6 +58,53 @@ export function useCategories() {
   return useQuery({
     queryKey: EXPENSES_QUERY_KEYS.categories,
     queryFn: () => apiFetch<CategoryResponse[]>('/categories'),
+  });
+}
+
+export function useCreateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateCategory) =>
+      apiFetch<CategoryResponse>('/categories', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: EXPENSES_QUERY_KEYS.categories,
+      });
+    },
+  });
+}
+
+export function useUpdateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateCategory }) =>
+      apiFetch<CategoryResponse>(`/categories/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: EXPENSES_QUERY_KEYS.categories,
+      });
+    },
+  });
+}
+
+export function useDeleteCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<CategoryResponse>(`/categories/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: EXPENSES_QUERY_KEYS.categories,
+      });
+    },
   });
 }
 
@@ -130,6 +180,22 @@ export function useCreateLedgerEntry() {
     mutationFn: (data: CreateLedgerEntry) =>
       apiFetch<LedgerEntryResponse>('/ledger-entries', {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: EXPENSES_QUERY_KEYS.ledgerEntries,
+      });
+    },
+  });
+}
+
+export function useUpdateLedgerEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateLedgerEntry }) =>
+      apiFetch<LedgerEntryResponse>(`/ledger-entries/${id}`, {
+        method: 'PATCH',
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
