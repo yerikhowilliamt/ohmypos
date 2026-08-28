@@ -23,7 +23,9 @@ import {
   SelectValue,
 } from '@ohmypos/ui/components/select';
 import { useBranches } from '@/hooks/useBranches';
+import { useCurrentUser } from '@/hooks/useProfile';
 import { useCreateUser } from '@/hooks/useUsers';
+import { domainOf, suggestStaffEmail } from '@/lib/staff-email';
 
 interface CreateUserDialogProps {
   open: boolean;
@@ -42,7 +44,16 @@ export function CreateUserDialog({
 }: CreateUserDialogProps) {
   const [serverError, setServerError] = React.useState<string | null>(null);
   const { data: branches = [] } = useBranches();
+  const { data: currentUser } = useCurrentUser();
   const createMutation = useCreateUser();
+  /**
+   * Set the moment the Owner types in the email field, so a later edit to the
+   * name never overwrites an address they chose themselves. State rather than
+   * a ref because the hint below the field renders off it — a ref flips
+   * silently and the hint would keep claiming the address is automatic.
+   */
+  const [emailEdited, setEmailEdited] = React.useState(false);
+  const ownerDomain = currentUser?.email ? domainOf(currentUser.email) : null;
 
   const {
     register,
@@ -74,6 +85,7 @@ export function CreateUserDialog({
         role: 'KASIR',
         branchId: null,
       });
+      setEmailEdited(false);
       setServerError(null);
     }
   }, [open, reset]);
@@ -123,7 +135,25 @@ export function CreateUserDialog({
                 placeholder="Nama lengkap staf"
                 autoComplete="off"
                 aria-invalid={Boolean(errors.name)}
-                {...register('name')}
+                {...register('name', {
+                  // Derived on change rather than in an effect: the repo's
+                  // react-hooks/set-state-in-effect rule rejects the effect
+                  // form, and this keeps the two fields in step with no
+                  // second source of truth.
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                    if (emailEdited) return;
+                    const suggestion = suggestStaffEmail(
+                      e.target.value,
+                      currentUser?.email,
+                    );
+                    // null when the name folds to nothing or the Owner's
+                    // address has no domain — leave the field alone rather
+                    // than write a guess into it.
+                    if (suggestion !== null) {
+                      setValue('email', suggestion, { shouldValidate: false });
+                    }
+                  },
+                })}
               />
               {errors.name && (
                 <p role="alert" className="text-xs text-status-danger">
@@ -137,11 +167,24 @@ export function CreateUserDialog({
               <Input
                 id="user-email"
                 type="email"
-                placeholder="nama@contoh.com"
+                placeholder={
+                  ownerDomain ? `nama@${ownerDomain}` : 'nama@contoh.com'
+                }
                 autoComplete="off"
                 aria-invalid={Boolean(errors.email)}
-                {...register('email')}
+                {...register('email', {
+                  onChange: () => {
+                    // Guarded so only the first keystroke re-renders.
+                    if (!emailEdited) setEmailEdited(true);
+                  },
+                })}
               />
+              {ownerDomain && !emailEdited && (
+                <p className="text-xs text-text-tertiary">
+                  Terisi otomatis dari domain <strong>{ownerDomain}</strong>.
+                  Bisa diubah.
+                </p>
+              )}
               {errors.email && (
                 <p role="alert" className="text-xs text-status-danger">
                   {errors.email.message}
