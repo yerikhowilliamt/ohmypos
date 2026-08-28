@@ -37,6 +37,17 @@
 
 ## Log
 
+### ERR-036 — CI's Playwright suite broke because ADR-024 added a required field the E2E spec never filled
+
+- **Date found:** 2026-08-28
+- **Found during:** PR #79 CI — "Web E2E Tests (Playwright)" failed on both runs while API E2E, lint, typecheck, unit tests and build all passed
+- **Symptom:** `raw-material-crud.spec.ts` timed out on `expect(page.locator('text=PW Bahan <ts>')).toBeVisible()` — "element(s) not found". The row never appeared because the material was never created.
+- **Root cause:** ADR-024 (TASK-112) added `purchaseUnit` to `CreateRawMaterialSchema` as **required with no default**, and `RawMaterialFormDialog` initialises it to `''`. The Playwright spec filled only `#rm-name`, `#rm-unit`, `#rm-cost` and `#rm-threshold`, so the zod resolver rejected the submit client-side and the dialog silently stayed open. Nothing errored — the assertion just never became true. (`conversionFactor` was fine: it defaults to `'1'`.)
+  - Why the other suites stayed green: the API e2e suites build their payloads from the contract types, so the compiler forced them to be updated during TASK-112. The Playwright spec drives the DOM by CSS id, which the compiler cannot check — so it was the one place the new required field could be forgotten.
+- **Resolution:** The spec now fills `#rm-purchase-unit` and `#rm-conversion`, and uses a real conversion (stock `gram`, purchase `kg`, factor `1000`) instead of a degenerate 1:1 one, so it exercises the feature that broke it. The final assertion was tightened from a bare text match to the table row, and additionally asserts the row shows `1 kg =` — the created material now has to keep its conversion, not just its name.
+- **Prevention:** The assertion is row-scoped and checks the conversion, so dropping either new field fails the spec instead of passing on the name alone. Verified locally: the full Playwright suite passes 8/8 against a live dev server.
+- **Severity:** Low — CI-only, caught before merge, no product defect. Worth logging because of the class: **a required field added to a form is invisible to the type-checker in DOM-driven E2E specs.** When a contract gains a required field, grep `apps/web/e2e/` for the form's input ids as part of the change.
+
 ### ERR-035 — The opening-stock worksheet seeded its count field with an id-ID formatted number, so "5000" was resubmitted as five
 
 - **Date found:** 2026-08-28
