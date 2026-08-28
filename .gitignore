@@ -53,6 +53,7 @@ apps/web/e2e/.auth/*.json
 docs/e-statement/
 
 .agents/
+docs/portfolio/
 
 # db dump files — never commit (see docs/runbooks/backup-restore.md)
 backups/

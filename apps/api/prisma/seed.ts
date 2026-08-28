@@ -200,6 +200,12 @@ async function main() {
     create: {
       name: 'Gula',
       unit: 'kg',
+      // Bought and stocked in the same unit — the 1:1 case every pre-ADR-024
+      // material was backfilled to. Deliberately left at 1 so the seeded HPP
+      // (0,25 kg × 12.000 + 0,018 kg × 85.000 = 4.530) that the Phase 4/5 e2e
+      // suites assert on does not move.
+      purchaseUnit: 'kg',
+      conversionFactor: '1.0000',
       unitCost: '12000.00',
       currentStock: '10.0000',
       lowStockThreshold: '2.0000',
@@ -212,9 +218,31 @@ async function main() {
     create: {
       name: 'Kopi',
       unit: 'kg',
+      purchaseUnit: 'kg',
+      conversionFactor: '1.0000',
       unitCost: '85000.00',
       currentStock: '5.0000',
       lowStockThreshold: '1.0000',
+    },
+  });
+
+  // ADR-024 fixture — the material that actually exercises the purchase/stock
+  // unit split, so `db:seed` produces a database where the feature is visible.
+  // Bought per ekor, stocked and cooked per pcs, 1 ekor = 10 pcs. Deliberately
+  // has NO recipe and NO stock movement: it must not shift any figure the
+  // existing e2e suites assert on.
+  await prisma.rawMaterial.upsert({
+    where: { name: 'Ayam' },
+    update: {},
+    create: {
+      name: 'Ayam',
+      unit: 'pcs',
+      purchaseUnit: 'ekor',
+      conversionFactor: '10.0000',
+      // Rp45.000 per ekor ÷ 10 pcs — the handoff's worked example.
+      unitCost: '4500.000000',
+      currentStock: '0.0000',
+      lowStockThreshold: '5.0000',
     },
   });
 
@@ -342,13 +370,13 @@ async function main() {
       items: [
         {
           rawMaterialId: kopi.id,
-          quantity: '2.0000',
-          unitCost: '85000.00',
+          purchaseQuantity: '2.0000',
+          lineTotal: '170000.00',
         },
         {
           rawMaterialId: gula.id,
-          quantity: '10.0000',
-          unitCost: '12000.00',
+          purchaseQuantity: '10.0000',
+          lineTotal: '120000.00',
         },
       ],
     });
@@ -375,8 +403,8 @@ async function main() {
       items: [
         {
           rawMaterialId: gula.id,
-          quantity: '5.0000',
-          unitCost: '12000.00',
+          purchaseQuantity: '5.0000',
+          lineTotal: '60000.00',
         },
       ],
     });

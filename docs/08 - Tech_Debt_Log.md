@@ -572,7 +572,7 @@
 - **Trigger condition:** The business owner reports that live HPP is stale relative to actual purchase prices.
 - **Proposed resolution:** Decide the costing method explicitly in an ADR superseding or extending ADR-005 (e.g. weighted moving average or last purchase cost).
 - **Priority:** Low
-- **Status:** Open
+- **Status:** **Resolved 2026-08-28 (TASK-113, ADR-024).** The business chose the latest purchase price, explicitly not a weighted average. `SupplierPurchasesService.create` step 8b now writes the normalized cost of the latest applicable purchase to `RawMaterial.unitCost`, inside the same transaction and under the same `FOR UPDATE` locks as the stock movement. The residual risk this entry named — the final cost depending on request completion order — is closed by recomputing the winner from table state (`ORDER BY purchase_date DESC, created_at DESC, id DESC LIMIT 1`) rather than comparing against the row being inserted: a backdated purchase inserts, loses the ordering, and rewrites the cost to the value it already had. Covered by `purchasing-payables.e2e-spec.ts` → "ADR-024 conversion & latest-cost write-back".
 
 ### DEBT-007 — No DB-level trigger enforcing payable settlement sum constraint
 
@@ -852,3 +852,17 @@
 - **Proposed resolution:** Either map shadcn's semantic tokens onto DESIGN.md's palette in `globals.css` (e.g. `--color-primary: var(--color-brand-primary)`, `--color-destructive: var(--color-status-danger)`, etc.), or rewrite `Button`/`Card`/`Input` to reference DESIGN.md tokens directly, matching the pattern used by `dropdown-menu.tsx`.
 - **Priority:** Medium
 - **Status:** Resolved (2026-08-17) — Defined the complete DESIGN.md token palette (`#16A34A` success, `#00B894` inflow, `#2563EB` outflow/info, correct surfaces, radius, and shadows) and full semantic shadcn `@theme` color mappings in `packages/ui/src/styles/globals.css`. Rewrote `button.tsx`, `card.tsx`, `input.tsx`, and `label.tsx` to reference DESIGN.md semantic tokens directly. Verified with zero missing utilities and full test suite passing.
+
+---
+
+### DEBT-062 — No conversion migration for changing a raw material's base stock unit
+
+- **Date logged:** 2026-08-28
+- **Found during:** ADR-024 implementation (POS feedback Phase 3)
+- **Description:** `RawMaterial.unit` — the stock/recipe base unit — becomes immutable once the material has any `StockMovement`. `PATCH /raw-materials/:id` rejects a change with 400 `RawMaterialUnitLockedException`. There is no supported way to correct a base unit that was genuinely chosen wrong (e.g. a material created as `kg` that should have been `gram`) other than creating a new material and retiring the old one.
+- **Why deferred:** A correct conversion would have to re-scale `currentStock`, every `RecipeItem.quantityUsed`, every `OpeningStock.quantity`, and every historical `StockMovement.quantity` in one transaction. `StockMovement` is append-only by design (ERD §3, `schema.prisma` "Append-only — no updatedAt"), so the migration would contradict a schema-level invariant, and the alternative — leaving history in the old unit — makes every historical figure silently wrong.
+- **Impact if unaddressed:** Correcting a mistyped base unit costs the user a new material plus a manual stock-opname, and the old material's history stays under its old name.
+- **Trigger condition:** The business reports needing to re-base a material's stock unit more than once, or asks for the old material's history to survive the correction.
+- **Proposed resolution:** A dedicated, explicitly-audited conversion workflow that writes a compensating `OPENING`-style movement rather than mutating history, plus an ADR revisiting the append-only rule for this one case.
+- **Priority:** Low
+- **Status:** Open

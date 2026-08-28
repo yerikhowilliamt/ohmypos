@@ -13,6 +13,7 @@ import type {
   CreateDevice,
   DeviceResponse,
   SortOrder,
+  UpdateDevice,
 } from '@ohmypos/api-contracts';
 import { apiFetch } from '@/lib/api';
 
@@ -98,6 +99,34 @@ export function useCreateDevice() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DEVICES_QUERY_KEYS.devices });
+    },
+  });
+}
+
+export function useUpdateDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateDevice }) =>
+      apiFetch<DeviceResponse>(`/devices/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DEVICES_QUERY_KEYS.devices });
+      // A renamed device changes `deviceLabel` on every row of the log.
+      queryClient.invalidateQueries({ queryKey: ['devices', 'attendance'] });
+    },
+  });
+}
+
+export function useDeleteDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<DeviceResponse>(`/devices/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DEVICES_QUERY_KEYS.devices });
+      queryClient.invalidateQueries({ queryKey: ['devices', 'attendance'] });
     },
   });
 }

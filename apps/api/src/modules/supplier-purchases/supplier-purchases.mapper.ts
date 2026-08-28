@@ -38,9 +38,17 @@ export function toSupplierPurchaseResponse(
       id: item.id,
       rawMaterialId: item.rawMaterialId,
       rawMaterialName: item.rawMaterial.name,
+      // The material's CURRENT stock unit. Safe to read live: the stock unit is
+      // immutable once movements exist (ADR-024), and a purchase line always
+      // implies a movement — so this can never disagree with `quantity`.
       unit: item.rawMaterial.unit,
+      // The purchase side comes from the LINE's own snapshot, never from the
+      // material — repackaging must not rewrite what an old nota said.
+      purchaseQuantity: item.purchaseQuantity.toFixed(4),
+      purchaseUnit: item.purchaseUnit,
+      conversionFactor: item.conversionFactor.toFixed(4),
       quantity: item.quantity.toFixed(4),
-      unitCost: item.unitCost.toFixed(2),
+      unitCost: item.unitCost.toFixed(6),
       lineTotal: item.lineTotal.toFixed(2),
     })),
     createdAt: purchase.createdAt.toISOString(),

@@ -232,7 +232,7 @@ export class OpeningStockService {
             rawMaterialName: material.name,
             periodMonth: formatPeriodDate(row.periodMonth),
             quantity: row.quantity.toFixed(4),
-            unitPrice: row.unitPrice === null ? null : row.unitPrice.toFixed(2),
+            unitPrice: row.unitPrice === null ? null : row.unitPrice.toFixed(6),
             appliedDelta: delta.delta.toFixed(4),
             createdAt: row.createdAt.toISOString(),
             updatedAt: row.updatedAt.toISOString(),
@@ -319,9 +319,15 @@ export class OpeningStockService {
           declaredUnitPrice:
             declaration === undefined || declaration.unitPrice === null
               ? null
-              : declaration.unitPrice.toFixed(2),
+              : declaration.unitPrice.toFixed(6),
           requiresUnitPrice: !materialIdsWithPurchase.has(material.id),
-          currentUnitCost: material.unitCost.toFixed(2),
+          currentUnitCost: material.unitCost.toFixed(6),
+          // Display only (ADR-024). The declared count is ALWAYS in `unit`; these
+          // let the worksheet print "1 kg = 1.000 gram" beside the field so the
+          // person counting can convert in their head without the form ever
+          // accepting a purchase-unit value.
+          purchaseUnit: material.purchaseUnit,
+          conversionFactor: material.conversionFactor.toFixed(4),
         };
       }),
     };

@@ -12,6 +12,8 @@ function product(
 ): ProductWithHppResponse {
   return {
     sellPrice: '20000.00',
+    wastePercent: '0.00',
+    baseHpp: '8000.00',
     isActive: true,
     hpp: '8000.00',
     hasRecipe: true,

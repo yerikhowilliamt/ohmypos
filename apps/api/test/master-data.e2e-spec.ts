@@ -138,7 +138,12 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
       await request(app.getHttpServer())
         .post('/api/v1/raw-materials')
         .set('Cookie', kasir.cookies)
-        .send({ name: 'Forbidden RM', unit: 'kg', unitCost: '1000.00' })
+        .send({
+          name: 'Forbidden RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '1000.00',
+        })
         .expect(403);
 
       await request(app.getHttpServer())
@@ -152,7 +157,12 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
       const rmRes = await request(app.getHttpServer())
         .post('/api/v1/raw-materials')
         .set('Cookie', admin.cookies)
-        .send({ name: 'Tepung Admin', unit: 'kg', unitCost: '15000.00' })
+        .send({
+          name: 'Tepung Admin',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '15000.00',
+        })
         .expect(201);
 
       const rmBody = rmRes.body as RawMaterialResponse;
@@ -170,15 +180,49 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
   });
 
   describe('Validation & Edge Cases', () => {
-    it('rejects over-precise money (3dp) and quantity (5dp) at the edge', async () => {
+    it('rejects over-precise unit cost (7dp), money (3dp) and quantity (5dp) at the edge', async () => {
+      // ADR-024 widened `unitCost` from 2dp to 6dp — it is a per-unit RATE, not
+      // an amount. 7dp is still over-precise for the Decimal(18,6) column.
       await request(app.getHttpServer())
         .post('/api/v1/raw-materials')
         .set('Cookie', owner.cookies)
-        .send({ name: 'Bad Decimal RM', unit: 'kg', unitCost: '15000.123' })
+        .send({
+          name: 'Bad Decimal RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '15000.1234567',
+        })
+        .expect(400);
+
+      // 3dp is now ACCEPTED on unitCost, and that is the point of the widening:
+      // a normalized cost like Rp3,333333/gram must survive the edge intact.
+      await request(app.getHttpServer())
+        .post('/api/v1/raw-materials')
+        .set('Cookie', owner.cookies)
+        .send({
+          name: 'Fractional Rate RM',
+          unit: 'gram',
+          purchaseUnit: 'kg',
+          conversionFactor: '1000',
+          unitCost: '3.333333',
+        })
+        .expect(201);
+
+      // Money that reaches the ledger is still 2dp — sellPrice proves the
+      // widening did not leak out of the unit-cost columns.
+      await request(app.getHttpServer())
+        .post('/api/v1/products')
+        .set('Cookie', owner.cookies)
+        .send({ name: 'Bad Decimal Product', sellPrice: '20000.123' })
         .expect(400);
 
       const rm = await prisma.rawMaterial.create({
-        data: { name: 'Valid RM', unit: 'kg', unitCost: '10000.00' },
+        data: {
+          name: 'Valid RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '10000.00',
+        },
       });
 
       const prod = await prisma.product.create({
@@ -196,7 +240,12 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
     it('rejects duplicate rawMaterialId in the same replace recipe payload', async () => {
       const rm = await prisma.rawMaterial.create({
-        data: { name: 'Dup Test RM', unit: 'kg', unitCost: '10000.00' },
+        data: {
+          name: 'Dup Test RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '10000.00',
+        },
       });
       const prod = await prisma.product.create({
         data: { name: 'Dup Test Prod', sellPrice: '20000.00' },
@@ -216,13 +265,23 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
     it('returns 409 Conflict when creating a raw material or product with a duplicate name', async () => {
       await prisma.rawMaterial.create({
-        data: { name: 'Unique RM', unit: 'kg', unitCost: '10000.00' },
+        data: {
+          name: 'Unique RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '10000.00',
+        },
       });
 
       await request(app.getHttpServer())
         .post('/api/v1/raw-materials')
         .set('Cookie', owner.cookies)
-        .send({ name: 'Unique RM', unit: 'kg', unitCost: '12000.00' })
+        .send({
+          name: 'Unique RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '12000.00',
+        })
         .expect(409);
 
       await prisma.product.create({
@@ -238,7 +297,12 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
     it('blocks raw material deletion with 409 Conflict if used by a recipe', async () => {
       const rm = await prisma.rawMaterial.create({
-        data: { name: 'Used RM', unit: 'kg', unitCost: '10000.00' },
+        data: {
+          name: 'Used RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '10000.00',
+        },
       });
       const prod = await prisma.product.create({
         data: { name: 'Using Prod', sellPrice: '20000.00' },
@@ -259,7 +323,12 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
     it('cascades recipe items when product is deleted', async () => {
       const rm = await prisma.rawMaterial.create({
-        data: { name: 'Cascade RM', unit: 'kg', unitCost: '10000.00' },
+        data: {
+          name: 'Cascade RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '10000.00',
+        },
       });
       const prod = await prisma.product.create({
         data: { name: 'Cascade Prod', sellPrice: '20000.00' },
@@ -305,7 +374,9 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
       expect(body.recipe).toEqual({
         productId: prod.id,
         items: [],
+        baseHpp: null,
         hpp: null,
+        wastePercent: '0.00',
         hasRecipe: false,
       });
       expect(body.product.hpp).toBeNull();
@@ -319,6 +390,7 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
         data: {
           name: 'HPP Gula',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '12000.00',
           currentStock: '10.0000',
         },
@@ -327,6 +399,7 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
         data: {
           name: 'HPP Kopi',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '85000.00',
           currentStock: '5.0000',
         },
@@ -381,7 +454,12 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
     it('updates live HPP immediately when RawMaterial unitCost is updated without mutating products table', async () => {
       const rm = await prisma.rawMaterial.create({
-        data: { name: 'Dynamic RM', unit: 'kg', unitCost: '10000.00' },
+        data: {
+          name: 'Dynamic RM',
+          unit: 'kg',
+          purchaseUnit: 'kg',
+          unitCost: '10000.00',
+        },
       });
       const prod = await prisma.product.create({
         data: { name: 'Dynamic Prod', sellPrice: '30000.00' },

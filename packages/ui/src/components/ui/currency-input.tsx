@@ -16,6 +16,11 @@ export interface CurrencyInputProps extends Omit<
 /**
  * Formats a raw number string into Indonesian thousand-separated display format with dots.
  * e.g. "20000" -> "20.000", "1500000" -> "1.500.000"
+ *
+ * An all-zero decimal part is dropped whatever its length, so a per-unit cost
+ * stored at `Decimal(18,6)` (ADR-024) reads as "10.000" rather than
+ * "10.000,000000". Only zeros are trimmed — a real fraction is shown in full
+ * ("3,333333"), and a partially typed one is left exactly as typed.
  */
 export function formatThousands(
   value: string | number | null | undefined,
@@ -30,12 +35,7 @@ export function formatThousands(
   if (!cleanInt) return '';
 
   const formattedInt = cleanInt.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  if (
-    decPart !== undefined &&
-    decPart !== '00' &&
-    decPart !== '0' &&
-    decPart !== ''
-  ) {
+  if (decPart !== undefined && decPart !== '' && !/^0+$/.test(decPart)) {
     return `${formattedInt},${decPart}`;
   }
   return formattedInt;

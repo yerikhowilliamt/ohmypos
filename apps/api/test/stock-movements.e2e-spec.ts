@@ -247,6 +247,7 @@ describe('StockMovements read endpoint (e2e)', () => {
       data: {
         name,
         unit,
+        purchaseUnit: unit,
         unitCost: '10000.00',
         currentStock: '0.0000',
         lowStockThreshold: '0.0000',

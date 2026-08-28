@@ -15,6 +15,9 @@ const mockRawMaterials: RawMaterialResponse[] = [
     id: '11111111-1111-4111-8111-111111111111',
     name: 'Biji Kopi Espresso',
     unit: 'kg',
+    purchaseUnit: 'kg',
+    conversionFactor: '1.0000',
+    isBaseUnitLocked: false,
     unitCost: '150000.00',
     currentStock: '1.0000',
     lowStockThreshold: '2.0000', // Low stock!
@@ -25,6 +28,9 @@ const mockRawMaterials: RawMaterialResponse[] = [
     id: '22222222-2222-4222-8222-222222222222',
     name: 'Susu UHT Fresh',
     unit: 'liter',
+    purchaseUnit: 'liter',
+    conversionFactor: '1.0000',
+    isBaseUnitLocked: false,
     unitCost: '20000.00',
     currentStock: '0.0000', // Out of stock!
     lowStockThreshold: '2.0000',
@@ -35,6 +41,9 @@ const mockRawMaterials: RawMaterialResponse[] = [
     id: '33333333-3333-4333-8333-333333333333',
     name: 'Sirup Karamel',
     unit: 'liter',
+    purchaseUnit: 'liter',
+    conversionFactor: '1.0000',
+    isBaseUnitLocked: false,
     unitCost: '45000.00',
     currentStock: '10.0000', // OK stock!
     lowStockThreshold: '1.0000',
@@ -91,5 +100,27 @@ describe('RawMaterialsTable', () => {
     expect(
       screen.getByRole('heading', { name: 'Tambah Bahan Baku' }),
     ).toBeDefined();
+  });
+
+  it('shows the purchase-to-stock conversion beside the stock unit', () => {
+    // The purchase form asks for the PURCHASE unit, so the conversion belongs
+    // on the list rather than hidden inside the edit dialog (ADR-024).
+    renderWithClient(
+      <RawMaterialsTable
+        materials={[
+          {
+            ...mockRawMaterials[0],
+            unit: 'gram',
+            purchaseUnit: 'kg',
+            conversionFactor: '1000.0000',
+          },
+        ]}
+        isLoading={false}
+      />,
+    );
+
+    expect(
+      screen.getByTestId(`rm-conversion-${mockRawMaterials[0].id}`).textContent,
+    ).toContain('1 kg =');
   });
 });

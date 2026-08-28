@@ -4,6 +4,7 @@ import {
   IdempotencyKey,
   MoneyString,
   QuantityString,
+  UnitCostString,
   UuidString,
 } from './primitives';
 import { PaymentStatus, PurchasePaymentStatusInput } from './enums';
@@ -14,13 +15,32 @@ import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
  */
 export const SupplierPurchaseItemInputSchema = z.object({
   rawMaterialId: UuidString,
-  // Strictly positive: a zero-quantity purchase line is meaningless and would
-  // write a no-op StockMovement (mirrors RecipeItemInputSchema's rule).
-  quantity: QuantityString.refine(
+  /**
+   * Quantity in the material's PURCHASE unit — "2" for 2 liter (ADR-024).
+   *
+   * Strictly positive: a zero-quantity purchase line is meaningless, would
+   * write a no-op StockMovement (mirrors RecipeItemInputSchema's rule), and
+   * would make the normalized unit cost a division by zero.
+   */
+  purchaseQuantity: QuantityString.refine(
     (v) => Number(v) > 0,
     'must be greater than zero',
   ),
-  unitCost: MoneyString,
+  /**
+   * The TOTAL price paid for the whole `purchaseQuantity` — Rp45.000 for
+   * 2 liter, NOT Rp45.000 per liter (ADR-024). This is the number written on
+   * the supplier's nota, which is the point: the user should never have to
+   * divide anything by hand.
+   *
+   * `quantity` and `unitCost` are deliberately NOT accepted here. The server
+   * derives both from this total and the material's stored conversion factor,
+   * for the same reason `totalAmount` is absent below — a client-supplied cost
+   * is a money-correctness hole.
+   */
+  lineTotal: MoneyString.refine(
+    (v) => Number(v) > 0,
+    'must be greater than zero',
+  ),
 });
 export type SupplierPurchaseItemInput = z.infer<
   typeof SupplierPurchaseItemInputSchema
@@ -71,12 +91,14 @@ export const CreateSupplierPurchaseSchema = z
     let purchaseTotal = 0;
     const seen = new Set<string>();
     dto.items.forEach((item, index) => {
-      const lineTotal = Number(item.quantity) * Number(item.unitCost);
+      // No multiplication any more (ADR-024): the line total IS the input, so
+      // the only overflow left to guard is the sum across lines.
+      const lineTotal = Number(item.lineTotal);
       purchaseTotal += lineTotal;
       if (lineTotal > MAX_LINE_TOTAL) {
         ctx.addIssue({
           code: 'custom',
-          path: ['items', index, 'unitCost'],
+          path: ['items', index, 'lineTotal'],
           message:
             'total baris melebihi nilai maksimum yang bisa disimpan (Decimal(18,2))',
         });
@@ -108,9 +130,17 @@ export const SupplierPurchaseItemResponseSchema = z.object({
   id: UuidString,
   rawMaterialId: UuidString,
   rawMaterialName: z.string(),
+  /** The material's STOCK unit, which `quantity` and `unitCost` are in. */
   unit: z.string(),
+  /** WHAT WAS BOUGHT — snapshot, frozen at recording time (ADR-024). */
+  purchaseQuantity: QuantityString,
+  purchaseUnit: z.string(),
+  conversionFactor: QuantityString,
+  /** WHAT STOCK RECEIVED — purchaseQuantity × conversionFactor, in `unit`. */
   quantity: QuantityString,
-  unitCost: MoneyString,
+  /** Normalized cost per stock unit — lineTotal ÷ quantity (ADR-024). */
+  unitCost: UnitCostString,
+  /** The total price the user entered for this line. */
   lineTotal: MoneyString,
 });
 export type SupplierPurchaseItemResponse = z.infer<

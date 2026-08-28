@@ -63,6 +63,8 @@ const products: ProductWithHppResponse[] = [
     id: KOPI_SUSU,
     name: 'Es Kopi Susu',
     sellPrice: '20000.00',
+    wastePercent: '0.00',
+    baseHpp: '0.00',
     isActive: true,
     hpp: '0.00',
     // `canAddProduct` (lib/pos/availability.ts) refuses any product with

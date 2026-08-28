@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
   DateTimeString,
-  MoneyString,
   QuantityString,
+  UnitCostString,
   UuidString,
 } from './primitives';
 import { StockDirection, StockReferenceType } from './enums';
@@ -36,7 +36,8 @@ export const StockMovementResponseSchema = z.object({
   quantity: QuantityString,
   referenceType: StockReferenceType,
   referenceId: z.string().nullable(),
-  unitCostAtMovement: MoneyString,
+  /** Per-unit rate at the moment of the movement — `Decimal(18,6)` (ADR-024). */
+  unitCostAtMovement: UnitCostString,
   movementDate: DateTimeString,
   createdAt: DateTimeString,
 });

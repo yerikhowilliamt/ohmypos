@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CreateSupplierPurchaseSchema,
   type CreateSupplierPurchase,
+  type RawMaterialResponse,
   type SupplierResponse,
 } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
@@ -33,6 +34,7 @@ import { AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import {
   addFixed,
+  divFixed,
   formatFixed,
   mulFixed,
   parseFixed,
@@ -59,7 +61,12 @@ interface PurchaseEntryFormDialogProps {
 
 const todayIsoDate = () => new Date().toISOString().slice(0, 10);
 
-const EMPTY_ITEM = { rawMaterialId: '', quantity: '', unitCost: '' };
+const EMPTY_ITEM = { rawMaterialId: '', purchaseQuantity: '', lineTotal: '' };
+
+/** Scale of `UnitCostString` — Decimal(18,6) per ADR-024. */
+const UNIT_COST_SCALE = 6;
+
+const DECIMAL_INPUT = /^\d+(\.\d+)?$/;
 
 const DEFAULT_VALUES: CreateSupplierPurchase = {
   supplierId: '',
@@ -73,25 +80,83 @@ const DEFAULT_VALUES: CreateSupplierPurchase = {
 
 /**
  * Cosmetic running total only — the server computes `totalAmount` from the
- * items and a client-sent total would be a money-correctness hole (the
- * schema deliberately has no `totalAmount` field). Mirrors the same
- * round-per-line-then-sum rule `SupplierPurchaseItem.lineTotal` uses server
- * side, using the same `lib/decimal.ts` fixed-point helpers `lib/pos/cart-totals.ts`
- * uses for the identical problem on the Sale side — no new math, no new dependency.
+ * items and a client-sent total would be a money-correctness hole (the schema
+ * deliberately has no `totalAmount` field).
+ *
+ * Since ADR-024 the user enters the line TOTAL directly, so this no longer
+ * multiplies anything: the estimate is simply the sum of what was typed, which
+ * is exactly what the server will store.
  */
-function computePurchaseTotal(
-  items: { quantity?: string; unitCost?: string }[],
-): string {
+function computePurchaseTotal(items: { lineTotal?: string }[]): string {
   const total = items.reduce((sum, item) => {
-    if (!item.quantity || !item.unitCost) return sum;
-    if (!/^\d+(\.\d+)?$/.test(item.quantity)) return sum;
-    if (!/^\d+(\.\d+)?$/.test(item.unitCost)) return sum;
-    const quantity = parseFixed(item.quantity, QUANTITY_SCALE);
-    const unitCost = parseFixed(item.unitCost, MONEY_SCALE);
-    const lineTotal = roundHalfUp(mulFixed(quantity, unitCost), MONEY_SCALE);
-    return addFixed(sum, lineTotal);
+    if (!item.lineTotal || !DECIMAL_INPUT.test(item.lineTotal)) return sum;
+    return addFixed(sum, parseFixed(item.lineTotal, MONEY_SCALE));
   }, zero(MONEY_SCALE));
   return formatFixed(total, MONEY_SCALE);
+}
+
+interface LinePreview {
+  /** e.g. "2 liter = 2.000 ml" */
+  conversion: string;
+  /** e.g. "Rp22,50/ml" — null while the numbers cannot be divided yet. */
+  unitCost: string | null;
+  /** e.g. "Stok +2.000 ml" */
+  stockDelta: string;
+}
+
+/**
+ * Mirrors the server's `normalizePurchaseLine` (ADR-024) purely to SHOW the
+ * user what their nota converts to before they submit. The stored figures are
+ * always the server's — this preview exists so "2 liter for Rp45.000" is
+ * visibly "2.000 ml at Rp22,50/ml" at entry time, not a surprise afterwards.
+ */
+function computeLinePreview(
+  material: RawMaterialResponse | undefined,
+  purchaseQuantity: string | undefined,
+  lineTotal: string | undefined,
+): LinePreview | null {
+  if (!material || !purchaseQuantity) return null;
+  if (!DECIMAL_INPUT.test(purchaseQuantity)) return null;
+
+  const quantity = parseFixed(purchaseQuantity, QUANTITY_SCALE);
+  const factor = parseFixed(material.conversionFactor, QUANTITY_SCALE);
+  const stockQuantity = roundHalfUp(mulFixed(quantity, factor), QUANTITY_SCALE);
+  if (stockQuantity.units === 0n) return null;
+
+  const stockAmount = formatQuantity(
+    formatFixed(stockQuantity, QUANTITY_SCALE),
+  );
+  const conversion = `${formatQuantity(purchaseQuantity)} ${material.purchaseUnit} = ${stockAmount} ${material.unit}`;
+
+  let unitCost: string | null = null;
+  if (lineTotal && DECIMAL_INPUT.test(lineTotal)) {
+    const derived = divFixed(
+      parseFixed(lineTotal, MONEY_SCALE),
+      stockQuantity,
+      UNIT_COST_SCALE,
+    );
+    if (derived) {
+      // Trailing zeros trimmed: Rp22,50/ml reads better than Rp22,500000/ml,
+      // and the six stored decimals are the server's business, not the user's.
+      unitCost = `${formatCurrency(formatFixed(derived, UNIT_COST_SCALE))}/${material.unit}`;
+    }
+  }
+
+  return {
+    conversion,
+    unitCost,
+    stockDelta: `Stok +${stockAmount} ${material.unit}`,
+  };
+}
+
+/** Trims a fixed-scale decimal string down to what is worth reading. */
+function formatQuantity(value: string): string {
+  const trimmed = value.includes('.')
+    ? value.replace(/0+$/, '').replace(/\.$/, '')
+    : value;
+  const [intPart, fracPart] = trimmed.split('.');
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return fracPart ? `${grouped},${fracPart}` : grouped;
 }
 
 export function PurchaseEntryFormDialog({
@@ -195,8 +260,9 @@ export function PurchaseEntryFormDialog({
             <DialogHeader>
               <DialogTitle>Catat Pembelian Bahan Baku</DialogTitle>
               <DialogDescription>
-                Masukkan rincian nota pembelian dari pemasok. Stok bahan baku
-                akan otomatis bertambah.
+                Masukkan rincian nota pembelian dari pemasok: jumlah dalam
+                satuan beli dan total harga yang dibayar. Konversi ke satuan
+                stok dan biaya per satuan dihitung otomatis.
               </DialogDescription>
             </DialogHeader>
 
@@ -421,6 +487,15 @@ export function PurchaseEntryFormDialog({
                   <div className="space-y-2.5">
                     {fields.map((field, index) => {
                       const rowError = errors.items?.[index];
+                      const row = watchedItems?.[index];
+                      const material = rawMaterials.find(
+                        (rm) => rm.id === row?.rawMaterialId,
+                      );
+                      const preview = computeLinePreview(
+                        material,
+                        row?.purchaseQuantity,
+                        row?.lineTotal,
+                      );
                       return (
                         <div
                           key={field.id}
@@ -458,7 +533,7 @@ export function PurchaseEntryFormDialog({
                                     <SelectContent>
                                       {rawMaterials.map((rm) => (
                                         <SelectItem key={rm.id} value={rm.id}>
-                                          {rm.name} ({rm.unit})
+                                          {rm.name} (beli: {rm.purchaseUnit})
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
@@ -477,46 +552,53 @@ export function PurchaseEntryFormDialog({
 
                             <div className="col-span-5 sm:col-span-3 space-y-1">
                               <Label
-                                htmlFor={`items.${index}.quantity`}
+                                htmlFor={`items.${index}.purchaseQuantity`}
                                 className="text-[11px] font-medium text-text-secondary block"
                               >
-                                Kuantitas
+                                Jumlah Beli
+                                {material && (
+                                  <span className="ml-1 font-normal text-text-tertiary">
+                                    ({material.purchaseUnit})
+                                  </span>
+                                )}
                               </Label>
                               <Input
-                                id={`items.${index}.quantity`}
+                                id={`items.${index}.purchaseQuantity`}
                                 data-testid={`purchase-quantity-input-${index}`}
                                 type="text"
                                 inputMode="decimal"
-                                placeholder="10"
+                                placeholder="2"
                                 className="numeric font-mono h-9 text-sm"
-                                aria-invalid={Boolean(rowError?.quantity)}
-                                {...register(`items.${index}.quantity`)}
+                                aria-invalid={Boolean(
+                                  rowError?.purchaseQuantity,
+                                )}
+                                {...register(`items.${index}.purchaseQuantity`)}
                               />
-                              {rowError?.quantity && (
+                              {rowError?.purchaseQuantity && (
                                 <p
                                   role="alert"
                                   className="text-[11px] text-status-danger"
                                 >
-                                  {rowError.quantity.message}
+                                  {rowError.purchaseQuantity.message}
                                 </p>
                               )}
                             </div>
 
                             <div className="col-span-5 sm:col-span-3 space-y-1">
                               <Label
-                                htmlFor={`items.${index}.unitCost`}
+                                htmlFor={`items.${index}.lineTotal`}
                                 className="text-[11px] font-medium text-text-secondary block"
                               >
-                                Harga Satuan
+                                Total Harga
                               </Label>
                               <Controller
-                                name={`items.${index}.unitCost`}
+                                name={`items.${index}.lineTotal`}
                                 control={control}
                                 render={({ field }) => (
                                   <CurrencyInput
-                                    id={`items.${index}.unitCost`}
-                                    data-testid={`purchase-unit-cost-input-${index}`}
-                                    aria-invalid={Boolean(rowError?.unitCost)}
+                                    id={`items.${index}.lineTotal`}
+                                    data-testid={`purchase-line-total-input-${index}`}
+                                    aria-invalid={Boolean(rowError?.lineTotal)}
                                     value={field.value}
                                     onChange={field.onChange}
                                     onBlur={field.onBlur}
@@ -525,12 +607,12 @@ export function PurchaseEntryFormDialog({
                                   />
                                 )}
                               />
-                              {rowError?.unitCost && (
+                              {rowError?.lineTotal && (
                                 <p
                                   role="alert"
                                   className="text-[11px] text-status-danger"
                                 >
-                                  {rowError.unitCost.message}
+                                  {rowError.lineTotal.message}
                                 </p>
                               )}
                             </div>
@@ -547,6 +629,36 @@ export function PurchaseEntryFormDialog({
                               <span className="sr-only">Hapus baris</span>
                             </Button>
                           </div>
+
+                          {/* ADR-024 conversion preview — what the nota becomes
+                              in stock units, shown before submit so the derived
+                              cost is never a surprise afterwards. */}
+                          {preview && (
+                            <div
+                              data-testid={`purchase-conversion-preview-${index}`}
+                              className="mt-1.5 w-full rounded-sm bg-surface-muted/60 px-2 py-1.5 text-[11px] text-text-secondary"
+                            >
+                              <span className="numeric font-mono">
+                                {preview.conversion}
+                              </span>
+                              {preview.unitCost && (
+                                <>
+                                  <span className="mx-1.5 text-text-tertiary">
+                                    ·
+                                  </span>
+                                  <span className="numeric font-mono">
+                                    {preview.unitCost}
+                                  </span>
+                                </>
+                              )}
+                              <span className="mx-1.5 text-text-tertiary">
+                                ·
+                              </span>
+                              <span className="numeric font-mono text-status-success">
+                                {preview.stockDelta}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

@@ -214,6 +214,11 @@ export class SalesService {
                 quantityUsed: ri.quantityUsed,
                 unitCost: materialById.get(ri.rawMaterialId)!.unitCost,
               })),
+              // The product's waste allowance MUST be passed here too (ADR-024).
+              // Omitting it would snapshot a pre-waste cost while the master
+              // data screen shows the post-waste one — exactly the live/snapshot
+              // drift ADR-005 forbids.
+              product.wastePercent,
             )!;
 
             return {

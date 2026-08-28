@@ -197,6 +197,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       data: {
         name: 'Kopi',
         unit: 'kg',
+        purchaseUnit: 'kg',
         unitCost: '120000.00',
         lowStockThreshold: '1.0000',
       },
@@ -205,6 +206,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       data: {
         name: 'Susu',
         unit: 'liter',
+        purchaseUnit: 'liter',
         unitCost: '18000.00',
         lowStockThreshold: '2.0000',
       },
@@ -213,6 +215,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       data: {
         name: 'Gula',
         unit: 'kg',
+        purchaseUnit: 'kg',
         unitCost: '14000.00',
         lowStockThreshold: '1.0000',
       },
@@ -222,8 +225,15 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
     gulaId = gula.id;
 
     // ── Products & recipes ──
-    // HPP: Kopi Susu = 0.02*120000 + 0.15*18000 + 0.015*14000 = 5310.00
-    //      Teh Manis = 0.025*14000 = 350.00
+    // HPP at creation: Kopi Susu = 0.02*120000 + 0.15*18000 + 0.015*14000 = 5310.00
+    //                 Teh Manis = 0.025*14000 = 350.00
+    //
+    // Stage 2's purchases reprice every material before Stage 4's sales run
+    // (ADR-024: a purchase writes its normalized unit cost back to the raw
+    // material), so the HPP snapshotted onto each SaleItem is the POST-purchase
+    // one: kopi 125000, susu 18500, gula 15500 →
+    //   Kopi Susu = 0.02*125000 + 0.15*18500 + 0.015*15500 = 5507.50
+    //   Teh Manis = 0.025*15500 = 387.50
     const kopiSusu = await prisma.product.create({
       data: { name: 'Kopi Susu', sellPrice: '25000.00' },
     });
@@ -337,13 +347,13 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
           items: [
             {
               rawMaterialId: kopiId,
-              quantity: '3.0000',
-              unitCost: '125000.00',
+              purchaseQuantity: '3.0000',
+              lineTotal: '375000.00',
             },
             {
               rawMaterialId: susuId,
-              quantity: '10.0000',
-              unitCost: '18500.00',
+              purchaseQuantity: '10.0000',
+              lineTotal: '185000.00',
             },
           ],
         })
@@ -376,7 +386,11 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
           purchaseDate: '2026-07-12T03:00:00.000Z',
           paymentStatus: 'UNPAID',
           items: [
-            { rawMaterialId: gulaId, quantity: '8.0000', unitCost: '15000.00' },
+            {
+              rawMaterialId: gulaId,
+              purchaseQuantity: '8.0000',
+              lineTotal: '120000.00',
+            },
           ],
         })
         .expect(201);
@@ -406,7 +420,11 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
           paymentStatus: 'PAID',
           accountId: bankBcaId,
           items: [
-            { rawMaterialId: gulaId, quantity: '2.0000', unitCost: '15500.00' },
+            {
+              rawMaterialId: gulaId,
+              purchaseQuantity: '2.0000',
+              lineTotal: '31000.00',
+            },
           ],
         })
         .expect(201);
@@ -793,11 +811,12 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       expect(body.salesRevenue).toBe('233000.00');
       expect(body.otherIncome).toBe('0.00');
       expect(body.totalIncome).toBe('233000.00');
-      expect(body.cogs).toBe('39620.00');
-      expect(body.grossProfit).toBe('193380.00');
+      // 7 * 5507.50 + 7 * 387.50 — post-purchase HPP, see the recipe note above.
+      expect(body.cogs).toBe('41265.00');
+      expect(body.grossProfit).toBe('191735.00');
       expect(body.operatingExpenses).toBe('190000.00');
-      expect(body.netProfit).toBe('3380.00');
-      expect(body.netMarginPct).toBe(1.45);
+      expect(body.netProfit).toBe('1735.00');
+      expect(body.netMarginPct).toBe(0.74);
       expect(body.cash.totalInflow).toBe('233000.00');
       expect(body.cash.totalOutflow).toBe('901000.00');
       expect(body.cash.materialCashOutflow).toBe('711000.00');
@@ -837,14 +856,14 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       const kopiSusuRow = byProduct.get('Kopi Susu')!;
       expect(kopiSusuRow.quantitySold).toBe('7.0000');
       expect(kopiSusuRow.revenue).toBe('163000.00');
-      expect(kopiSusuRow.cogs).toBe('37170.00');
-      expect(kopiSusuRow.grossProfit).toBe('125830.00');
+      expect(kopiSusuRow.cogs).toBe('38552.50'); // 7 * 5507.50
+      expect(kopiSusuRow.grossProfit).toBe('124447.50');
 
       const tehManisRow = byProduct.get('Teh Manis')!;
       expect(tehManisRow.quantitySold).toBe('7.0000');
       expect(tehManisRow.revenue).toBe('70000.00');
-      expect(tehManisRow.cogs).toBe('2450.00');
-      expect(tehManisRow.grossProfit).toBe('67550.00');
+      expect(tehManisRow.cogs).toBe('2712.50'); // 7 * 387.50
+      expect(tehManisRow.grossProfit).toBe('67287.50');
     });
 
     it('top-products by quantity: a genuine 7-vs-7 tie resolves Kopi Susu, then Teh Manis (name ASC)', async () => {
@@ -1029,13 +1048,13 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
       expect(plRes.body).toEqual(stage7ProfitLoss);
       expect(ppRes.body).toEqual(stage7ProductProfit);
 
-      // But the LIVE HPP has moved: 0.02*200000 + 0.15*18000 + 0.015*14000 = 6910.00
+      // But the LIVE HPP has moved: 0.02*200000 + 0.15*18500 + 0.015*15500 = 7007.50
       const productRes = await request(app.getHttpServer())
         .get(`/api/v1/products/${kopiSusuId}`)
         .set('Cookie', ownerCookies)
         .expect(200);
       const product = productRes.body as ProductWithHppResponse;
-      expect(product.hpp).toBe('6910.00');
+      expect(product.hpp).toBe('7007.50');
 
       const material = (
         await request(app.getHttpServer())
@@ -1043,7 +1062,8 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
           .set('Cookie', ownerCookies)
           .expect(200)
       ).body as RawMaterialResponse;
-      expect(material.unitCost).toBe('200000.00');
+      // 6dp on the wire since ADR-024 — a per-unit cost is a rate, not an amount.
+      expect(material.unitCost).toBe('200000.000000');
     });
   });
 

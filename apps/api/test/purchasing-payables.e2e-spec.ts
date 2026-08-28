@@ -129,6 +129,7 @@ describe('Purchasing & Payables (e2e)', () => {
       data: {
         name: 'PP Gula Pasir',
         unit: 'kg',
+        purchaseUnit: 'kg',
         unitCost: '12000.00',
         currentStock: '10.0000',
         lowStockThreshold: '2.0000',
@@ -140,6 +141,7 @@ describe('Purchasing & Payables (e2e)', () => {
       data: {
         name: 'PP Kopi Arabika',
         unit: 'kg',
+        purchaseUnit: 'kg',
         unitCost: '85000.00',
         currentStock: '5.0000',
         lowStockThreshold: '1.0000',
@@ -244,8 +246,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialKopiId,
-              quantity: '2.0000',
-              unitCost: '85000.00',
+              purchaseQuantity: '2.0000',
+              lineTotal: '170000.00',
             },
           ],
         })
@@ -305,8 +307,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '5.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '5.0000',
+              lineTotal: '60000.00',
             },
           ],
         })
@@ -362,13 +364,13 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialKopiId,
-              quantity: '1.5000',
-              unitCost: '85000.00',
+              purchaseQuantity: '1.5000',
+              lineTotal: '127500.00',
             },
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '3.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '3.0000',
+              lineTotal: '36000.00',
             },
           ],
         })
@@ -403,6 +405,218 @@ describe('Purchasing & Payables (e2e)', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // ADR-024 — purchase unit conversion and latest-cost write-back (DEBT-006)
+  // ---------------------------------------------------------------------------
+  describe('ADR-024 conversion & latest-cost write-back', () => {
+    let ayamId: string;
+
+    beforeAll(async () => {
+      // Bought per ekor, stocked per pcs — the handoff's worked example.
+      const ayam = await prisma.rawMaterial.create({
+        data: {
+          name: 'PP Ayam Potong',
+          unit: 'pcs',
+          purchaseUnit: 'ekor',
+          conversionFactor: '10.0000',
+          unitCost: '0.000000',
+          currentStock: '0.0000',
+        },
+      });
+      ayamId = ayam.id;
+    });
+
+    async function buyAyam(
+      purchaseQuantity: string,
+      lineTotal: string,
+      purchaseDate: string,
+      paymentStatus: 'PAID' | 'UNPAID' = 'PAID',
+    ) {
+      return request(app.getHttpServer())
+        .post('/api/v1/supplier-purchases')
+        .set('Cookie', owner.cookies)
+        .send({
+          supplierId: supplierAId,
+          branchId: null,
+          purchaseDate,
+          paymentStatus,
+          ...(paymentStatus === 'PAID' ? { accountId: defaultAccountId } : {}),
+          note: 'PP Test ADR-024',
+          items: [{ rawMaterialId: ayamId, purchaseQuantity, lineTotal }],
+        })
+        .expect(201);
+    }
+
+    it('converts purchase units to stock units and derives the unit cost', async () => {
+      const res = await buyAyam('1', '45000.00', '2026-08-10T10:00:00.000Z');
+      const body = res.body as SupplierPurchaseResponse;
+
+      // What was bought, snapshotted verbatim…
+      expect(body.items[0].purchaseQuantity).toBe('1.0000');
+      expect(body.items[0].purchaseUnit).toBe('ekor');
+      expect(body.items[0].conversionFactor).toBe('10.0000');
+      expect(body.items[0].lineTotal).toBe('45000.00');
+      // …and what stock received, derived server-side.
+      expect(body.items[0].quantity).toBe('10.0000');
+      expect(body.items[0].unitCost).toBe('4500.000000');
+      expect(body.totalAmount).toBe('45000.00');
+
+      const material = await prisma.rawMaterial.findUniqueOrThrow({
+        where: { id: ayamId },
+      });
+      expect(material.currentStock.toFixed(4)).toBe('10.0000');
+      // DEBT-006 closed: the purchase now sets the live cost.
+      expect(material.unitCost.toFixed(6)).toBe('4500.000000');
+    });
+
+    it('takes the LATEST purchase cost, not a weighted average', async () => {
+      await buyAyam('1', '50000.00', '2026-08-11T10:00:00.000Z');
+
+      const material = await prisma.rawMaterial.findUniqueOrThrow({
+        where: { id: ayamId },
+      });
+      expect(material.currentStock.toFixed(4)).toBe('20.0000');
+      // A weighted average would be 4.750; the business chose latest (ADR-024).
+      expect(material.unitCost.toFixed(6)).toBe('5000.000000');
+    });
+
+    it('ignores a BACKDATED purchase when deciding the latest cost', async () => {
+      // Recorded last, dated first — it must lose the ordering, so the live
+      // cost stays at the 2026-08-11 purchase's rate. This is the property that
+      // makes the outcome independent of request completion order.
+      await buyAyam('1', '10000.00', '2026-08-01T10:00:00.000Z');
+
+      const material = await prisma.rawMaterial.findUniqueOrThrow({
+        where: { id: ayamId },
+      });
+      // Stock still moved — the goods arrived (ADR-006).
+      expect(material.currentStock.toFixed(4)).toBe('30.0000');
+      // …but the cost did not regress to the backdated rate.
+      expect(material.unitCost.toFixed(6)).toBe('5000.000000');
+    });
+
+    it('updates stock AND live cost for an UNPAID purchase too (ADR-006)', async () => {
+      const res = await buyAyam(
+        '2',
+        '120000.00',
+        '2026-08-12T10:00:00.000Z',
+        'UNPAID',
+      );
+      const body = res.body as SupplierPurchaseResponse;
+      expect(body.payableId).not.toBeNull();
+      expect(body.ledgerEntryId).toBeNull();
+
+      const material = await prisma.rawMaterial.findUniqueOrThrow({
+        where: { id: ayamId },
+      });
+      expect(material.currentStock.toFixed(4)).toBe('50.0000');
+      // 120.000 ÷ 20 pcs = 6.000/pcs. Payment status gates MONEY, not stock or
+      // cost — the goods arrived either way.
+      expect(material.unitCost.toFixed(6)).toBe('6000.000000');
+    });
+
+    it('freezes historical lines when the packaging later changes', async () => {
+      const before = await prisma.supplierPurchaseItem.findMany({
+        where: { rawMaterialId: ayamId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      // The supplier switches to 20-pcs boxes.
+      await request(app.getHttpServer())
+        .patch(`/api/v1/raw-materials/${ayamId}`)
+        .set('Cookie', owner.cookies)
+        .send({ purchaseUnit: 'box', conversionFactor: '20' })
+        .expect(200);
+
+      const after = await prisma.supplierPurchaseItem.findMany({
+        where: { rawMaterialId: ayamId },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      expect(after).toHaveLength(before.length);
+      after.forEach((row, i) => {
+        expect(row.purchaseUnit).toBe(before[i].purchaseUnit);
+        expect(row.conversionFactor.toFixed(4)).toBe(
+          before[i].conversionFactor.toFixed(4),
+        );
+        expect(row.quantity.toFixed(4)).toBe(before[i].quantity.toFixed(4));
+        expect(row.unitCost.toFixed(6)).toBe(before[i].unitCost.toFixed(6));
+      });
+
+      // The NEXT purchase uses the new packaging: 1 box = 20 pcs.
+      const res = await buyAyam('1', '140000.00', '2026-08-13T10:00:00.000Z');
+      const body = res.body as SupplierPurchaseResponse;
+      expect(body.items[0].purchaseUnit).toBe('box');
+      expect(body.items[0].quantity).toBe('20.0000');
+      expect(body.items[0].unitCost).toBe('7000.000000');
+    });
+
+    it('refuses to change the stock base unit once movements exist', async () => {
+      await request(app.getHttpServer())
+        .patch(`/api/v1/raw-materials/${ayamId}`)
+        .set('Cookie', owner.cookies)
+        .send({ unit: 'gram' })
+        .expect(400);
+
+      const material = await prisma.rawMaterial.findUniqueOrThrow({
+        where: { id: ayamId },
+      });
+      expect(material.unit).toBe('pcs');
+    });
+
+    it('rejects a zero or negative conversion factor at the edge', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/raw-materials')
+        .set('Cookie', owner.cookies)
+        .send({
+          name: 'PP Bad Conversion',
+          unit: 'gram',
+          purchaseUnit: 'kg',
+          conversionFactor: '0',
+          unitCost: '1000.00',
+        })
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/raw-materials')
+        .set('Cookie', owner.cookies)
+        .send({
+          name: 'PP Bad Conversion 2',
+          unit: 'gram',
+          purchaseUnit: 'kg',
+          conversionFactor: '-5',
+          unitCost: '1000.00',
+        })
+        .expect(400);
+    });
+
+    it('rejects a zero purchase quantity or zero line total at the edge', async () => {
+      for (const items of [
+        [
+          {
+            rawMaterialId: ayamId,
+            purchaseQuantity: '0',
+            lineTotal: '1000.00',
+          },
+        ],
+        [{ rawMaterialId: ayamId, purchaseQuantity: '1', lineTotal: '0' }],
+      ]) {
+        await request(app.getHttpServer())
+          .post('/api/v1/supplier-purchases')
+          .set('Cookie', owner.cookies)
+          .send({
+            supplierId: supplierAId,
+            branchId: null,
+            purchaseDate: '2026-08-14T10:00:00.000Z',
+            paymentStatus: 'PAID',
+            accountId: defaultAccountId,
+            items,
+          })
+          .expect(400);
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // 2. Settlement Flow & Concurrency
   // ---------------------------------------------------------------------------
   describe('Settlement Flow & Concurrency', () => {
@@ -423,8 +637,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '5.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '5.0000',
+              lineTotal: '60000.00',
             },
           ],
         })
@@ -623,13 +837,13 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '10.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '10.0000',
+              lineTotal: '120000.00',
             },
             {
               rawMaterialId: fakeMaterialId,
-              quantity: '5.0000',
-              unitCost: '10000.00',
+              purchaseQuantity: '5.0000',
+              lineTotal: '50000.00',
             },
           ],
         })
@@ -667,8 +881,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialKopiId,
-              quantity: '1.0000',
-              unitCost: '85000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '85000.00',
             },
           ],
         })
@@ -691,8 +905,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -710,8 +924,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -730,8 +944,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -753,8 +967,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -778,8 +992,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -800,8 +1014,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -918,8 +1132,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         });
@@ -944,8 +1158,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -967,8 +1181,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -993,7 +1207,11 @@ describe('Purchasing & Payables (e2e)', () => {
         expect(p.totalAmount).toMatch(/^\d+\.\d{2}$/);
         for (const item of p.items) {
           expect(item.quantity).toMatch(/^\d+\.\d{4}$/);
-          expect(item.unitCost).toMatch(/^\d+\.\d{2}$/);
+          expect(item.purchaseQuantity).toMatch(/^\d+\.\d{4}$/);
+          expect(item.conversionFactor).toMatch(/^\d+\.\d{4}$/);
+          // Per-unit cost is a rate, not a ledger amount — ADR-024 widened it
+          // to Decimal(18,6) so gram/ml materials don't lose ~0.1% of HPP.
+          expect(item.unitCost).toMatch(/^\d+\.\d{6}$/);
           expect(item.lineTotal).toMatch(/^\d+\.\d{2}$/);
         }
       }
@@ -1011,8 +1229,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -1033,8 +1251,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -1053,8 +1271,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -1074,13 +1292,13 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '2.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '2.0000',
+              lineTotal: '24000.00',
             },
           ],
         })
@@ -1098,8 +1316,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '0.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '0.0000',
+              lineTotal: '0.00',
             },
           ],
         })
@@ -1132,8 +1350,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '2.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '2.0000',
+              lineTotal: '24000.00',
             },
           ],
         })
@@ -1203,8 +1421,8 @@ describe('Purchasing & Payables (e2e)', () => {
           items: [
             {
               rawMaterialId: rawMaterialGulaId,
-              quantity: '1.0000',
-              unitCost: '12000.00',
+              purchaseQuantity: '1.0000',
+              lineTotal: '12000.00',
             },
           ],
         })
@@ -1400,8 +1618,12 @@ describe('Purchasing & Payables (e2e)', () => {
             items: [
               {
                 rawMaterialId: rawMaterialGulaId,
-                quantity,
-                unitCost: '12000.00',
+                // conversionFactor is 1 on this fixture, so the purchase
+                // quantity IS the stock quantity (ADR-024).
+                purchaseQuantity: quantity,
+                lineTotal: new Prisma.Decimal(quantity)
+                  .times('12000.00')
+                  .toFixed(2),
               },
             ],
           })

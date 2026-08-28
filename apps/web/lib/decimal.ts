@@ -119,6 +119,39 @@ export function divFloorToInt(a: Fixed, b: Fixed): number | null {
   return Number(numerator / denominator);
 }
 
+/**
+ * Exact division at an explicit result scale, rounded HALF_UP — the client-side
+ * mirror of the API's `lineTotal ÷ quantity` normalization (ADR-024). Used only
+ * to PREVIEW the derived per-stock-unit cost in the purchase form; the value
+ * that is stored is always the one the server derives.
+ *
+ * Returns `null` when `b` is zero, for the same reason `divFloorToInt` does: a
+ * zero divisor is rejected at the contract edge, so reaching it here means the
+ * form is mid-typing, not that a cost of Infinity should be rendered.
+ */
+export function divFixed(a: Fixed, b: Fixed, scale: number): Fixed | null {
+  if (b.units === 0n) return null;
+
+  // Scale the numerator up by the target scale (plus one guard digit) BEFORE
+  // dividing, so the integer division keeps the digits the result needs instead
+  // of truncating them away.
+  const common = Math.max(a.scale, b.scale);
+  const numerator = rescale(a, common).units * pow10(scale + 1);
+  const denominator = rescale(b, common).units;
+
+  const negative = numerator < 0n !== denominator < 0n;
+  const magnitude =
+    (numerator < 0n ? -numerator : numerator) /
+    (denominator < 0n ? -denominator : denominator);
+
+  // One guard digit was added above; rounding it off is what makes this
+  // HALF_UP rather than truncating.
+  return roundHalfUp(
+    { units: negative ? -magnitude : magnitude, scale: scale + 1 },
+    scale,
+  );
+}
+
 export function isNegative(value: Fixed): boolean {
   return value.units < 0n;
 }

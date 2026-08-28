@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CreateRawMaterialSchema,
@@ -53,10 +53,21 @@ export function RawMaterialFormDialog({
     defaultValues: {
       name: '',
       unit: '',
+      purchaseUnit: '',
+      conversionFactor: '1',
       unitCost: '',
       lowStockThreshold: '0',
     },
   });
+
+  const watchedUnit = useWatch({ control, name: 'unit' });
+  const watchedPurchaseUnit = useWatch({ control, name: 'purchaseUnit' });
+  const watchedFactor = useWatch({ control, name: 'conversionFactor' });
+
+  // ADR-024: the stock unit is immutable once the material has movement
+  // history. The server rejects the change with a 400; disabling the field is
+  // what stops the user from typing a change they cannot save.
+  const isBaseUnitLocked = Boolean(material?.isBaseUnitLocked);
 
   React.useEffect(() => {
     if (open) {
@@ -64,6 +75,8 @@ export function RawMaterialFormDialog({
         reset({
           name: material.name,
           unit: material.unit,
+          purchaseUnit: material.purchaseUnit,
+          conversionFactor: String(material.conversionFactor),
           unitCost: String(material.unitCost),
           lowStockThreshold: String(material.lowStockThreshold),
         });
@@ -71,6 +84,8 @@ export function RawMaterialFormDialog({
         reset({
           name: '',
           unit: '',
+          purchaseUnit: '',
+          conversionFactor: '1',
           unitCost: '',
           lowStockThreshold: '0',
         });
@@ -141,13 +156,24 @@ export function RawMaterialFormDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="rm-unit">Satuan (Unit)</Label>
+                <Label htmlFor="rm-unit">Satuan Stok / Resep</Label>
                 <Input
                   id="rm-unit"
-                  placeholder="kg, liter, gr, shot, pcs"
+                  placeholder="gram, ml, pcs"
+                  disabled={isBaseUnitLocked}
+                  title={
+                    isBaseUnitLocked
+                      ? 'Tidak bisa diubah — bahan ini sudah punya riwayat stok.'
+                      : undefined
+                  }
                   aria-invalid={Boolean(errors.unit)}
                   {...register('unit')}
                 />
+                <p className="text-xs text-text-tertiary">
+                  {isBaseUnitLocked
+                    ? 'Terkunci karena sudah ada riwayat stok. Ubah satuan beli di sebelah jika kemasan pemasok berubah.'
+                    : 'Satuan terkecil untuk stok, resep, dan stok opname.'}
+                </p>
                 {errors.unit && (
                   <p role="alert" className="text-xs text-status-danger">
                     {errors.unit.message}
@@ -156,7 +182,56 @@ export function RawMaterialFormDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="rm-cost">Biaya per Satuan (Rp)</Label>
+                <Label htmlFor="rm-purchase-unit">Satuan Beli</Label>
+                <Input
+                  id="rm-purchase-unit"
+                  placeholder="kg, liter, ekor, pack"
+                  aria-invalid={Boolean(errors.purchaseUnit)}
+                  {...register('purchaseUnit')}
+                />
+                <p className="text-xs text-text-tertiary">
+                  Satuan saat membeli dari pemasok.
+                </p>
+                {errors.purchaseUnit && (
+                  <p role="alert" className="text-xs text-status-danger">
+                    {errors.purchaseUnit.message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="rm-conversion">Isi per Satuan Beli</Label>
+                <Input
+                  id="rm-conversion"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="1000"
+                  className="numeric font-mono"
+                  aria-invalid={Boolean(errors.conversionFactor)}
+                  {...register('conversionFactor')}
+                />
+                <p
+                  data-testid="rm-conversion-hint"
+                  className="text-xs text-text-tertiary"
+                >
+                  {watchedPurchaseUnit && watchedUnit && watchedFactor
+                    ? `1 ${watchedPurchaseUnit} = ${watchedFactor} ${watchedUnit}`
+                    : 'Contoh: 1 kg = 1000 gram, 1 ekor = 10 pcs.'}
+                </p>
+                {errors.conversionFactor && (
+                  <p role="alert" className="text-xs text-status-danger">
+                    {errors.conversionFactor.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="rm-cost">
+                  Biaya per Satuan Stok (Rp)
+                  {watchedUnit ? ` / ${watchedUnit}` : ''}
+                </Label>
                 <Controller
                   name="unitCost"
                   control={control}
@@ -173,6 +248,9 @@ export function RawMaterialFormDialog({
                     />
                   )}
                 />
+                <p className="text-xs text-text-tertiary">
+                  Diperbarui otomatis oleh pembelian terakhir.
+                </p>
                 {errors.unitCost && (
                   <p role="alert" className="text-xs text-status-danger">
                     {errors.unitCost.message}
@@ -193,8 +271,9 @@ export function RawMaterialFormDialog({
                 {...register('lowStockThreshold')}
               />
               <p className="text-xs text-text-tertiary">
-                Sistem akan menampilkan peringatan jika stok berada di bawah
-                jumlah ini.
+                Dalam satuan stok
+                {watchedUnit ? ` (${watchedUnit})` : ''}. Sistem akan
+                menampilkan peringatan jika stok berada di bawah jumlah ini.
               </p>
               {errors.lowStockThreshold && (
                 <p role="alert" className="text-xs text-status-danger">

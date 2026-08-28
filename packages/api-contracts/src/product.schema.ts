@@ -5,11 +5,24 @@
  * and makeable quantity is derived on read queries (ADR-013).
  */
 import { z } from 'zod';
-import { MoneyString, QuantityString, UuidString } from './primitives';
+import {
+  MoneyString,
+  QuantityString,
+  UuidString,
+  WastePercentString,
+} from './primitives';
 
 export const CreateProductSchema = z.object({
   name: z.string().trim().min(1).max(120),
   sellPrice: MoneyString,
+  /**
+   * Waste/susut allowance for this product, 0–100 percent (ADR-024).
+   *
+   * An HPP allowance ONLY: it is applied after the recipe sum and never changes
+   * how much stock a sale deducts. Defaults to '0', so a product created by a
+   * client that predates this field behaves exactly as before.
+   */
+  wastePercent: WastePercentString.default('0'),
   isActive: z.boolean().default(true),
 });
 export type CreateProduct = z.infer<typeof CreateProductSchema>;
@@ -21,6 +34,8 @@ export const ProductResponseSchema = z.object({
   id: UuidString,
   name: z.string(),
   sellPrice: MoneyString,
+  /** Percent, 0–100 (ADR-024). Serialized at 2dp like the column. */
+  wastePercent: MoneyString,
   isActive: z.boolean(),
   photoUrl: z.string().nullable().optional(),
   createdAt: z.date().or(z.string()),
@@ -44,6 +59,13 @@ export const ProductRecipeItemSchema = z.object({
 export type ProductRecipeItem = z.infer<typeof ProductRecipeItemSchema>;
 
 export const ProductWithHppResponseSchema = ProductResponseSchema.extend({
+  /**
+   * The recipe sum BEFORE the waste allowance. Returned alongside `hpp` so the
+   * UI can show the uplift instead of a single number the user cannot check
+   * against the recipe lines (ADR-024).
+   */
+  baseHpp: MoneyString.nullable(),
+  /** baseHpp × (1 + wastePercent/100), rounded once, HALF_UP (ADR-005). */
   hpp: MoneyString.nullable(),
   hasRecipe: z.boolean(),
   margin: MoneyString.nullable(),

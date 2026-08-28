@@ -339,12 +339,40 @@ model RawMaterial {
   id String @id @default(uuid())
 
   name String @unique
-  /// satuan — kg, liter, pcs. Free text (ERD §3), not an enum.
+
+  /// STOCK/RECIPE base unit — ml, gram, pcs. Free text (ERD §3), not an enum.
+  ///
+  /// Everything quantity-shaped in this system is in THIS unit: `currentStock`,
+  /// `lowStockThreshold`, `RecipeItem.quantityUsed`, `StockMovement.quantity`,
+  /// `OpeningStock.quantity`, and stock opname (ADR-024).
+  ///
+  /// IMMUTABLE once any StockMovement exists for this material — changing it
+  /// would silently re-scale the running balance, every recipe line, and the
+  /// append-only movement history. Enforced in RawMaterialsService.update.
   unit String
 
-  /// Current cost per unit. Editing this changes every dependent product's
-  /// live HPP by design (ADR-005), and never rewrites history (SaleItem.hppAtSale).
-  unitCost Decimal @map("unit_cost") @db.Decimal(18, 2)
+  /// PURCHASE unit — the pack the supplier actually sells (ekor, liter, kg,
+  /// pack). Exactly one active purchase form per material in v1 (ADR-024); it
+  /// may be edited when packaging changes, and historical purchase lines keep
+  /// their own snapshot so nothing already recorded moves.
+  purchaseUnit String @map("purchase_unit")
+
+  /// How many `unit` are in one `purchaseUnit`: 1 ekor = 10 pcs → 10.
+  /// Strictly positive (enforced in Zod). Default 1 means "bought in the stock
+  /// unit", which is what every row backfilled by the ADR-024 migration says.
+  conversionFactor Decimal @default(1) @map("conversion_factor") @db.Decimal(18, 4)
+
+  /// Current cost per STOCK unit. Written by the latest applicable purchase —
+  /// newest `purchaseDate`, `createdAt`/`id` as tie-breakers — inside the
+  /// purchase transaction (ADR-024, closes DEBT-006). Editing it changes every
+  /// dependent product's live HPP by design (ADR-005), and never rewrites
+  /// history (SaleItem.hppAtSale).
+  ///
+  /// Decimal(18,6), not (18,2): this is a RATE, not an amount. Normalizing a
+  /// total purchase price over a stock quantity (Rp10.000 / 3.000 gram) does
+  /// not land on 2dp, and rounding it there understates HPP on every gram/ml
+  /// material (ADR-024). Amounts that reach the ledger stay Decimal(18,2).
+  unitCost Decimal @map("unit_cost") @db.Decimal(18, 6)
 
   /// Denormalized running balance, only ever written inside the same transaction
   /// as the StockMovement that justifies it, under FOR UPDATE (ADR-007, ERD §6).
@@ -373,6 +401,14 @@ model Product {
   name      String  @unique
   sellPrice Decimal @map("sell_price") @db.Decimal(18, 2)
   isActive  Boolean @default(true) @map("is_active")
+
+  /// Waste/susut allowance for THIS product, in percent (0–100, enforced in
+  /// Zod). An HPP allowance ONLY (ADR-024): it is applied after the recipe sum,
+  ///   hpp = round2(Σ(quantityUsed × unitCost) × (1 + wastePercent / 100))
+  /// and never increases physical stock deduction — `RecipeItem.quantityUsed`
+  /// is what a sale consumes, and this column does not touch it.
+  /// Default 0 keeps every pre-ADR-024 product's HPP byte-identical.
+  wastePercent Decimal @default(0) @map("waste_percent") @db.Decimal(5, 2)
 
   photoUrl String? @map("photo_url")
 
@@ -602,8 +638,25 @@ model SupplierPurchaseItem {
   supplierPurchaseId String @map("supplier_purchase_id")
   rawMaterialId      String @map("raw_material_id")
 
+  /// WHAT THE USER BOUGHT — quantity in the material's purchase unit at the
+  /// time of recording ("2" for 2 liter). Snapshotted alongside the unit and
+  /// factor below so a later packaging edit cannot move this row (ADR-024).
+  purchaseQuantity Decimal @map("purchase_quantity") @db.Decimal(18, 4)
+  /// Snapshot of RawMaterial.purchaseUnit as it was when this line was recorded.
+  purchaseUnit     String  @map("purchase_unit")
+  /// Snapshot of RawMaterial.conversionFactor as it was when this line was recorded.
+  conversionFactor Decimal @map("conversion_factor") @db.Decimal(18, 4)
+
+  /// WHAT STOCK RECEIVED — the normalized quantity in the material's STOCK
+  /// unit: purchaseQuantity × conversionFactor. This is the figure applyInbound
+  /// increments and StockMovement.quantity records; its meaning is unchanged
+  /// from before ADR-024.
   quantity  Decimal @db.Decimal(18, 4)
-  unitCost  Decimal @map("unit_cost") @db.Decimal(18, 2)
+  /// Normalized cost per STOCK unit: lineTotal ÷ quantity. Decimal(18,6) for
+  /// the same reason as RawMaterial.unitCost — it is a rate, not an amount.
+  unitCost  Decimal @map("unit_cost") @db.Decimal(18, 6)
+  /// TOTAL price paid for this line. Entered by the user (ADR-024), no longer
+  /// derived from quantity × unitCost; it is the input the other two come from.
   lineTotal Decimal @map("line_total") @db.Decimal(18, 2)
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -704,7 +757,8 @@ model StockMovement {
   /// exactly like LedgerEntry.sourceId (ERD §2).
   referenceId String? @map("reference_id")
 
-  unitCostAtMovement Decimal  @map("unit_cost_at_movement") @db.Decimal(18, 2)
+  /// Decimal(18,6) — a per-unit rate, matching RawMaterial.unitCost (ADR-024).
+  unitCostAtMovement Decimal  @map("unit_cost_at_movement") @db.Decimal(18, 6)
   movementDate       DateTime @map("movement_date")
 
   /// Append-only — no updatedAt (ERD §3).
@@ -751,7 +805,7 @@ model OpeningStock {
   /// for this material in this period (PRD §5.5, plan §5); null otherwise, in
   /// which case RawMaterial.unitCost is snapshotted onto the OPENING movement's
   /// unitCostAtMovement instead. Nullable deviates from ERD v3 §3 — plan §10.4.
-  unitPrice Decimal? @map("unit_price") @db.Decimal(18, 2)
+  unitPrice Decimal? @map("unit_price") @db.Decimal(18, 6)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

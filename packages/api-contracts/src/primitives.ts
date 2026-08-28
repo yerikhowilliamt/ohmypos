@@ -60,6 +60,48 @@ export type MoneyString = z.infer<typeof MoneyString>;
 export const QuantityString = decimalString({ scale: 4 });
 export type QuantityString = z.infer<typeof QuantityString>;
 
+/**
+ * A per-unit COST — `Decimal(18,6)` (ADR-024).
+ *
+ * A RATE, not an amount, which is why it is not `MoneyString`. Normalizing a
+ * total purchase price over a stock quantity (Rp10.000 over 3.000 gram) does
+ * not land on two decimals, and rounding it there understates HPP by ~0,1% on
+ * every gram/ml material. Amounts that actually reach the ledger — line totals,
+ * purchase totals, sell prices, `hppAtSale` — stay `MoneyString`.
+ *
+ * The UI displays this at 2dp; the extra digits exist so the arithmetic that
+ * feeds HPP is not lossy, not so a cashier reads six decimals.
+ */
+export const UnitCostString = decimalString({ scale: 6 });
+export type UnitCostString = z.infer<typeof UnitCostString>;
+
+/**
+ * How many stock units are in one purchase unit — `Decimal(18,4)`, strictly
+ * positive (ADR-024). `1 ekor = 10 pcs` is `"10"`.
+ *
+ * Zero is rejected here rather than server-side because it is the one value
+ * that makes the normalized unit cost a division by zero.
+ */
+export const ConversionFactorString = decimalString({ scale: 4 }).refine(
+  (v) => Number(v) > 0,
+  'must be greater than zero',
+);
+export type ConversionFactorString = z.infer<typeof ConversionFactorString>;
+
+/**
+ * A waste/susut allowance in percent — `Decimal(5,2)`, 0 to 100 inclusive
+ * (ADR-024).
+ *
+ * Bounded at 100 deliberately: an allowance above 100% means the recipe is
+ * wrong, not that the allowance is large, and rejecting a typo'd `500` at the
+ * edge is far cheaper than finding it in a P&L.
+ */
+export const WastePercentString = decimalString({ scale: 2 }).refine(
+  (v) => Number(v) >= 0 && Number(v) <= 100,
+  'must be between 0 and 100',
+);
+export type WastePercentString = z.infer<typeof WastePercentString>;
+
 /** Every primary key in the schema is a UUID (ERD §2, §3). */
 export const UuidString = z.uuid();
 export type UuidString = z.infer<typeof UuidString>;

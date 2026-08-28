@@ -169,8 +169,8 @@ describe('useExpenses hooks', () => {
       items: [
         {
           rawMaterialId: 'rm-1',
-          quantity: '5',
-          unitCost: '100000',
+          purchaseQuantity: '5',
+          lineTotal: '500000',
         },
       ],
     };
