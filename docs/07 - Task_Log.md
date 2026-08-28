@@ -41,6 +41,21 @@
 
 ## Log
 
+### TASK-118 — Suggest a new staff member's email from the Owner's own domain
+
+- **Date:** 2026-08-29
+- **Module / Phase:** Users (`CreateUserDialog`) — frontend only
+- **Objective:** An Owner at `venty@lospollos.id` creating staff "Novi" should get `novi@lospollos.id` filled in automatically, instead of retyping the domain for every account.
+- **Relevant docs:** ADR-011 (user creation is OWNER-only, so "the creator's domain" is unambiguous); `docs/plannings/2026-08-28-staff-email-from-owner-domain.md`
+- **What was done:** New `apps/web/lib/staff-email.ts` (`toEmailLocalPart`, `domainOf`, `suggestStaffEmail`). `CreateUserDialog` derives the address on the name field's `onChange`, and the email field's placeholder now shows the Owner's own domain. A hint under the field says the address is automatic and editable, and disappears once the Owner overwrites it.
+- **Decisions made during this task:**
+  1. **Suggestion, not a rule.** No server-side domain constraint was added. It would need a contract + service change, and it would permanently forbid a legitimate outside account (a bookkeeper on their own domain) with no escape hatch — a one-way constraint that is easy to add later and painful to remove once accounts exist under it.
+  2. **First name only** (`Novi Andriani` → `novi@`), the literal reading of the request. Diacritics are folded (`José` → `jose`) and anything not `[a-z0-9]` is dropped (`O'Brien` → `obrien`).
+  3. **No collision suffix.** A second Novi gets the plain suggestion and the server's duplicate-email error; the Owner edits it. Auto-suffixing was offered and declined.
+  4. **Never clobber a manual edit,** and **no suggestion rather than a wrong one** — `suggestStaffEmail` returns `null` when the Owner's address has no domain or the name folds to nothing (e.g. no ASCII letters), and the field is then left alone.
+- **Status:** Done.
+- **Handoff notes:** 10 unit tests + 6 component tests. The component test for "the Owner's own edit survives a later name change" is the one that earned its keep: `emailEdited` was first written as a `useRef` (as planned), and the test caught that a ref flips without re-rendering, so the "Terisi otomatis" hint kept claiming the address was automatic after the Owner had replaced it. Now `useState`. Verified `GET /auth/me` really returns `email`, since the component tests mock `useCurrentUser`. Gate: turbo 13/13, web 492 tests. `EditUserDialog` deliberately untouched — renaming an existing person must not silently move their login.
+
 ### TASK-117 — Edit and delete actions on the Perangkat page
 
 - **Date:** 2026-08-28
