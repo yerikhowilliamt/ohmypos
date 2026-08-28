@@ -285,6 +285,7 @@ describe('Inventory (e2e)', () => {
       data: {
         name,
         unit,
+        purchaseUnit: unit,
         unitCost,
         currentStock: '0.0000',
         lowStockThreshold,
@@ -308,6 +309,12 @@ describe('Inventory (e2e)', () => {
     });
   }
 
+  /**
+   * ADR-024: the API now takes the purchase quantity and the TOTAL price for
+   * it. These fixtures all use materials with conversionFactor 1, so
+   * `quantity` doubles as the purchase quantity and the derived per-unit cost
+   * comes back out as `unitCost` — every downstream assertion is unchanged.
+   */
   async function postPurchase(
     cookies: string[],
     rawMaterialId: string,
@@ -315,6 +322,7 @@ describe('Inventory (e2e)', () => {
     unitCost: string,
     purchaseDate: string,
   ) {
+    const lineTotal = new Prisma.Decimal(quantity).times(unitCost).toFixed(2);
     return request(app.getHttpServer())
       .post('/api/v1/supplier-purchases')
       .set('Cookie', cookies)
@@ -324,7 +332,7 @@ describe('Inventory (e2e)', () => {
         purchaseDate,
         paymentStatus: 'PAID',
         accountId,
-        items: [{ rawMaterialId, quantity, unitCost }],
+        items: [{ rawMaterialId, purchaseQuantity: quantity, lineTotal }],
       });
   }
 

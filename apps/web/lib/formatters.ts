@@ -53,6 +53,31 @@ export function formatQuantity(
 }
 
 /**
+ * Trims a decimal string for use as a FORM VALUE — "5000.0000" -> "5000",
+ * "0.5000" -> "0.5". Deliberately locale-free.
+ *
+ * `formatQuantity` must NEVER seed an editable field. It renders id-ID, where
+ * the thousands separator is a dot, so "5000.0000" becomes "5.000" — and that
+ * string is submitted verbatim as a `QuantityString`, which the API reads back
+ * as five. Displaying a number and editing one are different jobs.
+ */
+export function toQuantityInputValue(
+  quantity: string | null | undefined,
+): string {
+  if (quantity === null || quantity === undefined || quantity === '') {
+    return '';
+  }
+  // Anything that is not a plain decimal is handed back untouched rather than
+  // mangled — the field's own validation should be the one to complain.
+  if (!/^-?\d+(\.\d+)?$/.test(quantity)) {
+    return quantity;
+  }
+  return quantity.includes('.')
+    ? quantity.replace(/0+$/, '').replace(/\.$/, '')
+    : quantity;
+}
+
+/**
  * Computes and formats the gross profit margin percentage: ((sellPrice - hpp) / sellPrice) * 100.
  * Returns null if HPP is not available or sell price is non-positive.
  */

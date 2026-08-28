@@ -72,6 +72,7 @@ describe('Idempotency Keys (e2e)', () => {
       data: {
         name: 'Biji Kopi Arabika',
         unit: 'kg',
+        purchaseUnit: 'kg',
         currentStock: '100.0000',
         unitCost: '1000.00',
       },
@@ -144,7 +145,13 @@ describe('Idempotency Keys (e2e)', () => {
           branchId,
           purchaseDate: new Date().toISOString(),
           paymentStatus: 'UNPAID',
-          items: [{ rawMaterialId, quantity: '100.0000', unitCost: '1000.00' }],
+          items: [
+            {
+              rawMaterialId,
+              purchaseQuantity: '100.0000',
+              lineTotal: '100000.00',
+            },
+          ],
         })
         .expect(201);
 
@@ -223,7 +230,9 @@ describe('Idempotency Keys (e2e)', () => {
         paymentStatus: 'PAID',
         accountId,
         idempotencyKey,
-        items: [{ rawMaterialId, quantity: '10.0000', unitCost: '1000.00' }],
+        items: [
+          { rawMaterialId, purchaseQuantity: '10.0000', lineTotal: '10000.00' },
+        ],
       };
 
       const [res1, res2] = await Promise.all([

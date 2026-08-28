@@ -3,6 +3,7 @@ import {
   AttendanceQuerySchema,
   CreateDeviceSchema,
   UpdateAttendanceStatusSchema,
+  UpdateDeviceSchema,
 } from '@ohmypos/api-contracts';
 import { createZodDto } from 'nestjs-zod';
 
@@ -12,3 +13,4 @@ export class AttendanceQueryDto extends createZodDto(AttendanceQuerySchema) {}
 export class UpdateAttendanceStatusDto extends createZodDto(
   UpdateAttendanceStatusSchema,
 ) {}
+export class UpdateDeviceDto extends createZodDto(UpdateDeviceSchema) {}

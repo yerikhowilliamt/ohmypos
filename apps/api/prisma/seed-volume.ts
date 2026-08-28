@@ -167,6 +167,10 @@ async function ensureMasterData() {
         create: {
           name: m.name,
           unit: m.unit,
+          // Volume fixtures buy in their stock unit (ADR-024) — this seed exists
+          // to measure query performance, not to exercise unit conversion.
+          purchaseUnit: m.unit,
+          conversionFactor: '1.0000',
           unitCost: money(m.unitCost),
           currentStock: '999999.0000',
         },

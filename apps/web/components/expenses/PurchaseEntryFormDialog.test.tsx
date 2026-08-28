@@ -53,6 +53,9 @@ const mockRawMaterials: RawMaterialResponse[] = [
     id: 'dddddddd-1111-4111-8111-111111111111',
     name: 'Biji Kopi Espresso',
     unit: 'kg',
+    purchaseUnit: 'kg',
+    conversionFactor: '1.0000',
+    isBaseUnitLocked: false,
     unitCost: '150000.00',
     currentStock: '5.0000',
     lowStockThreshold: '1.0000',
@@ -60,11 +63,16 @@ const mockRawMaterials: RawMaterialResponse[] = [
     updatedAt: '2026-08-16T00:00:00.000Z',
   },
   {
+    // ADR-024 fixture: bought per liter, stocked per ml — the handoff's own
+    // worked example, so the preview assertion below is hand-checkable.
     id: 'eeeeeeee-2222-4222-8222-222222222222',
     name: 'Susu UHT Fresh',
-    unit: 'liter',
-    unitCost: '20000.00',
-    currentStock: '10.0000',
+    unit: 'ml',
+    purchaseUnit: 'liter',
+    conversionFactor: '1000.0000',
+    isBaseUnitLocked: false,
+    unitCost: '20.000000',
+    currentStock: '10000.0000',
     lowStockThreshold: '2.0000',
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',
@@ -157,11 +165,12 @@ describe('PurchaseEntryFormDialog', () => {
     fireEvent.change(screen.getByTestId('purchase-quantity-input-0'), {
       target: { value: '2' },
     });
-    fireEvent.change(screen.getByTestId('purchase-unit-cost-input-0'), {
-      target: { value: '150000' },
+    fireEvent.change(screen.getByTestId('purchase-line-total-input-0'), {
+      target: { value: '300000' },
     });
 
-    // 2 × 150.000 = 300.000
+    // ADR-024: the user types the TOTAL, so the estimate is the sum of the
+    // typed totals rather than a quantity × unit-price product.
     await waitFor(() => {
       expect(screen.getByTestId('purchase-running-total')).toHaveTextContent(
         /Rp\s*300\.000/,
@@ -177,11 +186,11 @@ describe('PurchaseEntryFormDialog', () => {
     fireEvent.change(screen.getByTestId('purchase-quantity-input-1'), {
       target: { value: '3' },
     });
-    fireEvent.change(screen.getByTestId('purchase-unit-cost-input-1'), {
-      target: { value: '20000' },
+    fireEvent.change(screen.getByTestId('purchase-line-total-input-1'), {
+      target: { value: '60000' },
     });
 
-    // 300.000 + (3 × 20.000 = 60.000) = 360.000
+    // 300.000 + 60.000 = 360.000
     await waitFor(() => {
       expect(screen.getByTestId('purchase-running-total')).toHaveTextContent(
         /Rp\s*360\.000/,
@@ -221,14 +230,14 @@ describe('PurchaseEntryFormDialog', () => {
     const rm0Trigger = screen.getByTestId('purchase-raw-material-select-0');
     fireEvent.click(rm0Trigger);
     const rm0Option = await screen.findByRole('option', {
-      name: 'Biji Kopi Espresso (kg)',
+      name: 'Biji Kopi Espresso (beli: kg)',
     });
     fireEvent.click(rm0Option);
 
     fireEvent.change(screen.getByTestId('purchase-quantity-input-0'), {
       target: { value: '1' },
     });
-    fireEvent.change(screen.getByTestId('purchase-unit-cost-input-0'), {
+    fireEvent.change(screen.getByTestId('purchase-line-total-input-0'), {
       target: { value: '1000' },
     });
 
@@ -236,14 +245,14 @@ describe('PurchaseEntryFormDialog', () => {
     const rm1Trigger = screen.getByTestId('purchase-raw-material-select-1');
     fireEvent.click(rm1Trigger);
     const rm1Option = await screen.findByRole('option', {
-      name: 'Biji Kopi Espresso (kg)',
+      name: 'Biji Kopi Espresso (beli: kg)',
     });
     fireEvent.click(rm1Option);
 
     fireEvent.change(screen.getByTestId('purchase-quantity-input-1'), {
       target: { value: '1' },
     });
-    fireEvent.change(screen.getByTestId('purchase-unit-cost-input-1'), {
+    fireEvent.change(screen.getByTestId('purchase-line-total-input-1'), {
       target: { value: '1000' },
     });
 
@@ -284,14 +293,14 @@ describe('PurchaseEntryFormDialog', () => {
     const rm0Trigger = screen.getByTestId('purchase-raw-material-select-0');
     fireEvent.click(rm0Trigger);
     const rm0Option = await screen.findByRole('option', {
-      name: 'Biji Kopi Espresso (kg)',
+      name: 'Biji Kopi Espresso (beli: kg)',
     });
     fireEvent.click(rm0Option);
 
     fireEvent.change(screen.getByTestId('purchase-quantity-input-0'), {
       target: { value: '10' },
     });
-    fireEvent.change(screen.getByTestId('purchase-unit-cost-input-0'), {
+    fireEvent.change(screen.getByTestId('purchase-line-total-input-0'), {
       target: { value: '150000' },
     });
 
@@ -303,5 +312,43 @@ describe('PurchaseEntryFormDialog', () => {
       );
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('previews the unit conversion and derived cost before submit', async () => {
+    // "2 liter for Rp45.000" must visibly become "2.000 ml at Rp22,50/ml"
+    // BEFORE the user submits — the derived cost is what will be stored, so it
+    // must not be a surprise afterwards (ADR-024).
+    mockReferenceData();
+
+    renderWithClient(
+      <PurchaseEntryFormDialog open={true} onOpenChange={vi.fn()} />,
+    );
+
+    await screen.findByText('CV Sumber Rasa');
+    fireEvent.click(
+      screen.getByRole('button', { name: /tambah bahan pertama/i }),
+    );
+
+    const trigger = screen.getByTestId('purchase-raw-material-select-0');
+    fireEvent.click(trigger);
+    fireEvent.click(
+      await screen.findByRole('option', {
+        name: 'Susu UHT Fresh (beli: liter)',
+      }),
+    );
+
+    fireEvent.change(screen.getByTestId('purchase-quantity-input-0'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByTestId('purchase-line-total-input-0'), {
+      target: { value: '45000' },
+    });
+
+    await waitFor(() => {
+      const preview = screen.getByTestId('purchase-conversion-preview-0');
+      expect(preview).toHaveTextContent('2 liter = 2.000 ml');
+      expect(preview).toHaveTextContent('/ml');
+      expect(preview).toHaveTextContent('Stok +2.000 ml');
+    });
   });
 });

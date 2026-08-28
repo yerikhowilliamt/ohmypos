@@ -3,24 +3,49 @@
 import * as React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { DeviceResponse } from '@ohmypos/api-contracts';
-import { PowerOff, Copy, Check } from 'lucide-react';
+import { PowerOff, Copy, Check, Edit2, Trash2 } from 'lucide-react';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { Button } from '@ohmypos/ui/components/button';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import { DeleteConfirmDialog } from '@/components/master-data/DeleteConfirmDialog';
 import { useBranches } from '@/hooks/useBranches';
 import {
   useCreateDevice,
   useDeactivateDevice,
+  useDeleteDevice,
   useDevices,
+  useUpdateDevice,
 } from '@/hooks/useDevices';
-import { AddDeviceDialog } from './AddDeviceDialog';
+import { DeviceFormDialog } from './DeviceFormDialog';
 
 export function DevicesClient() {
   const { data: devices = [], isLoading } = useDevices();
   const { data: branches = [] } = useBranches();
   const createMutation = useCreateDevice();
+  const updateMutation = useUpdateDevice();
   const deactivateMutation = useDeactivateDevice();
+  const deleteMutation = useDeleteDevice();
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editingDevice, setEditingDevice] =
+    React.useState<DeviceResponse | null>(null);
+  const [deletingDevice, setDeletingDevice] =
+    React.useState<DeviceResponse | null>(null);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+
+  const handleDelete = async () => {
+    if (!deletingDevice) return;
+    setDeleteError(null);
+    try {
+      await deleteMutation.mutateAsync(deletingDevice.id);
+      setDeletingDevice(null);
+    } catch (error) {
+      // The API refuses a device that already has logins. Show its own wording
+      // — it is the one that tells the Owner to deactivate instead.
+      setDeleteError(
+        error instanceof Error ? error.message : 'Gagal menghapus perangkat.',
+      );
+    }
+  };
 
   const branchName = React.useCallback(
     (branchId: string) =>
@@ -75,23 +100,55 @@ export function DevicesClient() {
         id: 'actions',
         header: () => <span className="sr-only">Aksi</span>,
         meta: { align: 'right' },
-        cell: ({ row }) =>
-          row.original.isActive ? (
-            <div className="flex justify-end">
+        // No longer gated on isActive: a device awaiting activation used to
+        // have no action at all, which is exactly the one most likely to have
+        // been created by mistake.
+        cell: ({ row }) => {
+          const device = row.original;
+          return (
+            <div className="flex items-center justify-end gap-1">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                title="Nonaktifkan perangkat"
-                aria-label="Nonaktifkan perangkat"
-                disabled={deactivateMutation.isPending}
-                onClick={() => deactivateMutation.mutate(row.original.id)}
+                title="Edit perangkat"
+                onClick={() => setEditingDevice(device)}
+                className="size-7"
+              >
+                <Edit2 className="size-3.5" />
+                <span className="sr-only">Edit {device.label}</span>
+              </Button>
+              {device.isActive && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Nonaktifkan perangkat"
+                  disabled={deactivateMutation.isPending}
+                  onClick={() => deactivateMutation.mutate(device.id)}
+                  className="size-7 text-status-danger hover:bg-status-danger/10"
+                >
+                  <PowerOff className="size-3.5" />
+                  <span className="sr-only">Nonaktifkan {device.label}</span>
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                title="Hapus perangkat"
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeletingDevice(device);
+                }}
                 className="size-7 text-status-danger hover:bg-status-danger/10"
               >
-                <PowerOff className="size-3.5" />
+                <Trash2 className="size-3.5" />
+                <span className="sr-only">Hapus {device.label}</span>
               </Button>
             </div>
-          ) : null,
+          );
+        },
       },
     ],
     [branchName, deactivateMutation],
@@ -145,11 +202,42 @@ export function DevicesClient() {
         emptyMessage="Belum ada perangkat terdaftar."
       />
 
-      <AddDeviceDialog
+      <DeviceFormDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         branches={branches}
         onSubmit={(data) => createMutation.mutateAsync(data)}
+      />
+
+      <DeviceFormDialog
+        // Remounts per device so the form re-seeds its defaults without an
+        // effect that would setState during render.
+        key={editingDevice?.id ?? 'no-device'}
+        open={Boolean(editingDevice)}
+        onOpenChange={(open) => {
+          if (!open) setEditingDevice(null);
+        }}
+        branches={branches}
+        device={editingDevice}
+        onSubmit={(data) =>
+          updateMutation.mutateAsync({ id: editingDevice!.id, data })
+        }
+      />
+
+      <DeleteConfirmDialog
+        open={Boolean(deletingDevice)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeletingDevice(null);
+            setDeleteError(null);
+          }
+        }}
+        title="Hapus Perangkat"
+        description="Hanya perangkat yang belum pernah dipakai login yang bisa dihapus. Kalau sudah ada riwayat absensi, nonaktifkan saja — supaya log lamanya tetap menunjukkan perangkat asalnya."
+        itemName={deletingDevice?.label}
+        isDeleting={deleteMutation.isPending}
+        errorMessage={deleteError}
+        onConfirm={handleDelete}
       />
     </div>
   );

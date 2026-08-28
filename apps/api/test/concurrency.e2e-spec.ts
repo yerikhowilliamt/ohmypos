@@ -208,6 +208,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         data: {
           name: 'Concur Gula',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '10000.00',
           currentStock: '2.0000',
         },
@@ -289,6 +290,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         data: {
           name: 'Concur Kopi',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '50000.00',
           currentStock: '0.0000',
         },
@@ -306,8 +308,8 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
           items: [
             {
               rawMaterialId: kopiMaterial.id,
-              unitCost: '50000.00',
-              quantity: '8.0000',
+              purchaseQuantity: '8.0000',
+              lineTotal: '400000.00',
             },
           ],
         })
@@ -442,6 +444,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         data: {
           name: 'Lock A',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '1000.00',
           currentStock: '1000.0000',
         },
@@ -450,6 +453,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         data: {
           name: 'Lock B',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '1000.00',
           currentStock: '1000.0000',
         },
@@ -542,6 +546,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         data: {
           name: 'Oversub Gula',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '10000.00',
           currentStock: '18.0000',
         },
@@ -633,6 +638,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         data: {
           name: 'Mixed Race Material',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '5000.00',
           currentStock: '1.0000',
         },
@@ -675,8 +681,8 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
               items: [
                 {
                   rawMaterialId: material.id,
-                  quantity: '1.0000',
-                  unitCost: '5000.00',
+                  purchaseQuantity: '1.0000',
+                  lineTotal: '5000.00',
                 },
               ],
             }),
@@ -740,6 +746,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         data: {
           name: 'B4 Material',
           unit: 'kg',
+          purchaseUnit: 'kg',
           unitCost: '10000.00',
           currentStock: '0.0000',
         },
@@ -755,8 +762,8 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
           items: [
             {
               rawMaterialId: material.id,
-              unitCost: '10000.00',
-              quantity: '30.0000',
+              purchaseQuantity: '30.0000',
+              lineTotal: '300000.00',
             },
           ],
         })

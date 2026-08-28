@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -29,6 +30,7 @@ import {
   AttendanceQueryDto,
   CreateDeviceDto,
   UpdateAttendanceStatusDto,
+  UpdateDeviceDto,
 } from './devices.dto';
 
 /**
@@ -109,5 +111,32 @@ export class DevicesController {
   @ApiOperation({ summary: 'Revoke a terminal (OWNER only)' })
   deactivate(@Param('id', ParseUUIDPipe) id: string) {
     return this.devicesService.deactivate(id);
+  }
+
+  // Both bare-`:id` routes are declared LAST so they cannot shadow the literal
+  // paths above them — `attendance/:id`, `activate`, `:id/deactivate`.
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Rename a terminal, or re-point an inactive one (OWNER only)',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Branch change attempted on an active device',
+  })
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDeviceDto) {
+    return this.devicesService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete a terminal that has never been used (OWNER only)',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Device has attendance history — deactivate instead',
+  })
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.devicesService.remove(id);
   }
 }

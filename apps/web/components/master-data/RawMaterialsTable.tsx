@@ -57,18 +57,35 @@ export function RawMaterialsTable({
     },
     {
       accessorKey: 'unit',
-      header: ({ column }) => <SortableHeader label="Satuan" column={column} />,
+      header: ({ column }) => (
+        <SortableHeader label="Satuan Stok" column={column} />
+      ),
       cell: ({ row }) => (
-        <span className="inline-flex rounded-xs bg-surface-muted px-2 py-0.5 text-xs text-text-secondary font-mono">
-          {row.original.unit}
-        </span>
+        <div className="space-y-0.5">
+          <span className="inline-flex rounded-xs bg-surface-muted px-2 py-0.5 text-xs text-text-secondary font-mono">
+            {row.original.unit}
+          </span>
+          {/* The purchase form asks for THIS unit, so it belongs beside the
+              stock unit rather than hidden in the edit dialog (ADR-024). */}
+          <p
+            data-testid={`rm-conversion-${row.original.id}`}
+            className="text-[11px] text-text-tertiary font-mono"
+          >
+            1 {row.original.purchaseUnit} ={' '}
+            {formatQuantity(row.original.conversionFactor, row.original.unit)}
+          </p>
+        </div>
       ),
     },
     {
       accessorFn: (row) => Number(row.unitCost),
       id: 'unitCost',
       header: ({ column }) => (
-        <SortableHeader label="Biaya Satuan" column={column} align="right" />
+        <SortableHeader
+          label="Biaya / Satuan Stok"
+          column={column}
+          align="right"
+        />
       ),
       cell: ({ row }) => (
         <span className="numeric font-mono text-text-primary">

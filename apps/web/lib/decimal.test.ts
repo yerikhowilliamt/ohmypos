@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addFixed,
   compareFixed,
+  divFixed,
   divFloorToInt,
   formatFixed,
   fromInt,
@@ -147,5 +148,48 @@ describe('compareFixed', () => {
     expect(compareFixed(parseFixed('1.49', 2), parseFixed('1.5000', 4))).toBe(
       -1,
     );
+  });
+
+  describe('divFixed', () => {
+    it('mirrors the API normalization: Rp45.000 over 2.000 ml = Rp22,50/ml', () => {
+      const result = divFixed(
+        parseFixed('45000.00', MONEY_SCALE),
+        parseFixed('2000.0000', QUANTITY_SCALE),
+        6,
+      );
+      expect(result).not.toBeNull();
+      expect(formatFixed(result!, 6)).toBe('22.500000');
+    });
+
+    it('keeps a repeating rate at six decimals instead of collapsing it', () => {
+      // Rp10.000 over 3.000 gram. At two decimals this would be 3,33 and a
+      // 3.000-gram recipe would cost Rp9.990 instead of Rp10.000 (ADR-024).
+      const result = divFixed(
+        parseFixed('10000.00', MONEY_SCALE),
+        parseFixed('3000.0000', QUANTITY_SCALE),
+        6,
+      );
+      expect(formatFixed(result!, 6)).toBe('3.333333');
+    });
+
+    it('rounds HALF_UP at the requested scale', () => {
+      // 1 / 8 = 0,125 → 0,13 at two decimals.
+      const result = divFixed(
+        parseFixed('1.00', MONEY_SCALE),
+        parseFixed('8.0000', QUANTITY_SCALE),
+        2,
+      );
+      expect(formatFixed(result!, 2)).toBe('0.13');
+    });
+
+    it('returns null on a zero divisor rather than Infinity', () => {
+      expect(
+        divFixed(
+          parseFixed('45000.00', MONEY_SCALE),
+          parseFixed('0.0000', QUANTITY_SCALE),
+          6,
+        ),
+      ).toBeNull();
+    });
   });
 });

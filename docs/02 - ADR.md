@@ -631,3 +631,49 @@ PRD §9's success criterion — "one full monthly cycle end-to-end without manua
 - *Reports adopt UTC, superseding ADR-018* (Phase 14 plan §3.1 Option 2): rejected — reverses a deliberate, documented decision for a business that operates entirely in WIB; a "daily income" report whose day starts at 07:00 local is wrong for the user.
 - *Document the divergence, change nothing* (Phase 14 plan §3.1 Option 3): rejected — PRD §9's "no manual correction" criterion cannot be met while a single sale's COGS and stock-out disagree by construction.
 - *Use `periodStart` directly for `OpeningStock.periodMonth` and accept the one-day drift*: rejected once the truncation behavior was measured — it does not just look different, it breaks the unique-key lookup for every pre-existing row, which is a correctness bug, not a cosmetic one.
+
+---
+
+## ADR-024: Purchases are entered in the supplier's pack unit at a total price; the latest purchase sets the live material cost; waste is a per-product HPP allowance
+
+**Status:** Accepted
+
+**Context:** Three defects in the same area were reported together by the business (see `docs/handoff/2026-08-28-pos-feedback-confirmed-requirements-phases-3-7.md`), and they cannot be fixed independently because they all read the same two columns.
+
+1. **One `unit` for three different jobs.** `RawMaterial.unit` was simultaneously the purchase unit, the stock unit, and the recipe unit. The business buys ayam per *ekor* and cooks per *pcs*; buys minyak per *liter* and measures per *ml*. With one column, the user had to divide by hand on every nota — `Rp45.000 / 2 liter` typed in as `Rp22,50` against a quantity of `2000` — and the system stored no record of what was actually bought.
+2. **`RawMaterial.unitCost` was never updated by a purchase** (DEBT-006). It was deliberately deferred pending a costing-method decision, so live HPP went stale the moment a supplier's price moved. The business has now chosen: **latest purchase price**, explicitly not a weighted average.
+3. **No waste allowance.** The reference spreadsheet applies a per-product percentage to the recipe total; the schema had nowhere to put it.
+
+A fourth issue surfaced during implementation and is not in the handoff: **a per-unit cost is not a 2-decimal amount.** `Rp10.000 ÷ 3.000 gram` is `3,333333/gram`. Stored as `Decimal(18,2)` it becomes `3,33`, and a 3.000-gram recipe then costs `Rp9.990` instead of `Rp10.000` — a permanent ~0,1% HPP understatement on every gram- and ml-scale material. The handoff's own two worked examples both happen to divide exactly (`22,50/ml`, `4.500/pcs`), which is why the problem is invisible from the requirements alone.
+
+**Decision:**
+
+1. **`RawMaterial` carries two units and a factor.** `unit` keeps its exact previous meaning and is now named as what it always was — the **STOCK/RECIPE base unit**, which `currentStock`, `lowStockThreshold`, `RecipeItem.quantityUsed`, `StockMovement.quantity`, and `OpeningStock.quantity` are all measured in. `purchaseUnit` and `conversionFactor` (`1 ekor = 10 pcs` → `10`) are new. Exactly **one** active purchase form per material; no package variants, no supplier-specific packaging, no general conversion graph.
+2. **The purchase API takes what the nota says.** `SupplierPurchaseItemInputSchema` drops `quantity` and `unitCost` and takes `purchaseQuantity` (in the purchase unit) plus `lineTotal` (the TOTAL price for that quantity). The server derives `quantity = purchaseQuantity × conversionFactor` and `unitCost = lineTotal ÷ quantity`. A client-supplied unit cost would be the same money-correctness hole that `CreateSupplierPurchaseSchema`'s missing `totalAmount` field already closes.
+3. **Each purchase line snapshots both sides.** `purchaseQuantity`, `purchaseUnit`, and `conversionFactor` record what was bought; `quantity`, `unitCost`, and `lineTotal` record what stock received and what was paid. Packaging may be edited freely afterwards — historical lines are frozen because they carry their own copy.
+4. **The latest applicable purchase sets `RawMaterial.unitCost`,** inside the purchase transaction, while `applyInbound`'s `FOR UPDATE` (ADR-016) is held. "Latest" is recomputed **from table state** — `ORDER BY purchase_date DESC, created_at DESC, id DESC LIMIT 1` — not compared against the row being inserted. A backdated purchase therefore inserts, loses the ordering, and rewrites the cost to the value it already had: the outcome depends on `purchaseDate` ordering only, never on which concurrent request finishes last. This closes DEBT-006.
+5. **The STOCK base unit is immutable once any `StockMovement` exists** (400 `RawMaterialUnitLockedException`). Changing it would silently re-scale `currentStock`, every recipe line, every `OpeningStock` row, and the append-only movement log. The escape hatch is a new material; `purchaseUnit`/`conversionFactor` remain editable, which is the packaging-change path the business actually needs.
+6. **`Product.wastePercent` (`Decimal(5,2)`, 0–100) is an HPP allowance only.** `hpp = round2(Σ(quantityUsed × unitCost) × (1 + wastePercent/100))`, applied after the recipe sum and rounded **once**. It never increases physical stock deduction — `RecipeItem.quantityUsed` is what a sale consumes and this column does not touch it. It is edited on the product form, not the recipe editor: the recipe editor is a full-replace payload, and a cost parameter must not ride along with "save recipe". Default `0` keeps every existing product's HPP byte-identical.
+7. **Per-unit COST columns widen to `Decimal(18,6)`** — `RawMaterial.unitCost`, `SupplierPurchaseItem.unitCost`, `StockMovement.unitCostAtMovement`, `OpeningStock.unitPrice` — carried by a new `UnitCostString` contract primitive. A unit cost is a **rate**, not an amount. Every value that reaches the ledger (`lineTotal`, `totalAmount`, `LedgerEntry.amount`, `sellPrice`, `SaleItem.hppAtSale`) stays `Decimal(18,2)`, and the UI still displays costs at 2dp.
+8. **The migration is additive and value-preserving.** `purchase_unit := unit`, `conversion_factor := 1`, `purchase_quantity := quantity`, `waste_percent := 0`; widening a numeric scale in Postgres does not change a stored value. Every pre-existing row means exactly what it meant before.
+
+**Consequences:**
+- (+) The user enters the nota as written; the system does the division, and records both what was bought and what stock received.
+- (+) Live HPP tracks the latest supplier price (DEBT-006 closed), deterministically under backdating and concurrency.
+- (+) Historical `SupplierPurchaseItem`, `StockMovement`, and `SaleItem.hppAtSale` values are unaffected by packaging edits, later purchases, or waste changes (ADR-005 preserved).
+- (+) The 6dp unit cost removes a systematic HPP understatement on gram/ml materials that nobody had noticed.
+- (−) **Breaking API change.** `POST /supplier-purchases` no longer accepts `quantity`/`unitCost` per line. API and web must ship together; any external caller breaks.
+- (−) `RawMaterial` now has two unit columns, and a reader who skips the doc comments could confuse them. Mitigated by explicit `///` comments, distinct UI labels ("Satuan Stok / Resep" vs "Satuan Beli"), and the base-unit lock.
+- (−) One extra indexed query per material per purchase for the latest-cost lookup. Acceptable at v1 volume; it uses indexes that already exist.
+- (−) Correcting a genuinely wrong base unit now requires creating a new material — see DEBT-062.
+
+**Alternatives considered:**
+- *A `RawMaterialPurchaseUnit` child table with an active row plus history*: rejected — it builds the schema for multiple simultaneous package variants, which the business explicitly declined for v1, and adds an "exactly one active row" invariant Postgres can only express with a partial unique index, plus a join on every raw-material read.
+- *Convert in the frontend and leave the backend alone*: rejected — the server would trust a client-derived unit cost, the conversion would live nowhere (so it would be re-typed on every nota), and the purchase record would still not say what was bought. It also defers nothing, since the latest-cost write-back needs a server-side normalized cost regardless.
+- *Weighted moving average / FIFO / batch costing*: rejected — the business explicitly chose the latest purchase price.
+- *Compare the new purchase's date against a stored `lastPurchaseDate` column*: rejected — it needs a new column and is wrong the moment a purchase is deleted or a line edited. Recomputing the winner from table state is self-healing by construction.
+- *Keep unit costs at `Decimal(18,2)`*: rejected once measured — see Context, item 4.
+- *Store the normalized cost as a `(total, quantity)` pair and divide at HPP time*: exact, but it restructures every cost read (HPP calculator, sale snapshot, reports, inventory) to remove a rounding error that six decimals already reduces below one micro-rupiah per unit.
+- *Allow the base unit to change via a conversion migration that re-scales every dependent quantity*: rejected for v1 — it mutates `StockMovement` rows, which are append-only by design (ERD §3). Recorded as DEBT-062.
+- *Waste as a global percentage, or per recipe ingredient*: rejected — the reference spreadsheet applies it per product, after the recipe total.
+- *Waste also increasing physical stock deduction*: rejected — the spreadsheet applies the percentage to cost only, and inflating consumption would make stock-outs disagree with the physical count.

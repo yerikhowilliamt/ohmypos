@@ -315,7 +315,14 @@ describe('Sales (e2e)', () => {
     currentStock: string,
   ) {
     const material = await prisma.rawMaterial.create({
-      data: { name, unit, unitCost, currentStock, lowStockThreshold: '0' },
+      data: {
+        name,
+        unit,
+        purchaseUnit: unit,
+        unitCost,
+        currentStock,
+        lowStockThreshold: '0',
+      },
     });
     openingStock.set(material.id, new Prisma.Decimal(currentStock));
     return material;

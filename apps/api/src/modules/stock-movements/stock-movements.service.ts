@@ -49,7 +49,7 @@ function toStockMovementResponse(
     quantity: m.quantity.toString(),
     referenceType: m.referenceType,
     referenceId: m.referenceId,
-    unitCostAtMovement: m.unitCostAtMovement.toString(),
+    unitCostAtMovement: m.unitCostAtMovement.toFixed(6),
     movementDate: m.movementDate.toISOString(),
     createdAt: m.createdAt.toISOString(),
   };
@@ -258,9 +258,12 @@ export class StockMovementsService {
         data: { currentStock: { increment: line.quantity } },
       });
 
-      // Deliberately NOT updating rawMaterial.unitCost — see plan §5 / DEBT-006.
-      // Writing the purchase price back here would change every product's live
-      // HPP (ADR-005) and is a costing-method decision with no ADR behind it.
+      // The unitCost write-back deliberately does NOT happen here, even for an
+      // inbound purchase movement. A stock movement is not a pricing event —
+      // this same method also reverses a voided sale — so repricing from here
+      // would let a void change every product's live HPP. Only a purchase
+      // reprices a material, and SupplierPurchasesService owns that write, in
+      // this same transaction (ADR-024, step 8b; closes DEBT-006).
     }
   }
 
@@ -328,8 +331,8 @@ export class StockMovementsService {
         data: { currentStock: { decrement: line.quantity } },
       });
 
-      // Deliberately NOT updating rawMaterial.unitCost — same omission and same
-      // reason as applyInbound (plan §5 / DEBT-006).
+      // Not updating rawMaterial.unitCost — a sale consumes stock, it does not
+      // reprice it. Same rule as applyInbound above (ADR-024).
     }
   }
 
@@ -390,8 +393,10 @@ export class StockMovementsService {
         data: { currentStock: { increment: line.delta } },
       });
 
-      // Deliberately NOT updating rawMaterial.unitCost — same omission and same
-      // reason as applyInbound and applyOutbound (DEBT-006).
+      // Not updating rawMaterial.unitCost — a stock-take corrects the COUNT, not
+      // the price. `OpeningStock.unitPrice` values THIS movement and nothing
+      // else; letting it reprice the material would make a count silently
+      // rewrite live HPP (ADR-024).
     }
   }
 }

@@ -14,6 +14,8 @@ const PRODUCT_A: ProductWithHppResponse = {
   id: 'pppppppp-1111-4111-8111-111111111111',
   name: 'Es Kopi Susu',
   sellPrice: '20000.00',
+  wastePercent: '0.00',
+  baseHpp: '8000.00',
   isActive: true,
   hpp: '8000.00',
   hasRecipe: true,
