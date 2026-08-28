@@ -37,6 +37,29 @@
 
 ## Log
 
+### ERR-036 — CI's Playwright suite broke because ADR-024 added a required field the E2E spec never filled
+
+- **Date found:** 2026-08-28
+- **Found during:** PR #79 CI — "Web E2E Tests (Playwright)" failed on both runs while API E2E, lint, typecheck, unit tests and build all passed
+- **Symptom:** `raw-material-crud.spec.ts` timed out on `expect(page.locator('text=PW Bahan <ts>')).toBeVisible()` — "element(s) not found". The row never appeared because the material was never created.
+- **Root cause:** ADR-024 (TASK-112) added `purchaseUnit` to `CreateRawMaterialSchema` as **required with no default**, and `RawMaterialFormDialog` initialises it to `''`. The Playwright spec filled only `#rm-name`, `#rm-unit`, `#rm-cost` and `#rm-threshold`, so the zod resolver rejected the submit client-side and the dialog silently stayed open. Nothing errored — the assertion just never became true. (`conversionFactor` was fine: it defaults to `'1'`.)
+  - Why the other suites stayed green: the API e2e suites build their payloads from the contract types, so the compiler forced them to be updated during TASK-112. The Playwright spec drives the DOM by CSS id, which the compiler cannot check — so it was the one place the new required field could be forgotten.
+- **Resolution:** The spec now fills `#rm-purchase-unit` and `#rm-conversion`, and uses a real conversion (stock `gram`, purchase `kg`, factor `1000`) instead of a degenerate 1:1 one, so it exercises the feature that broke it. The final assertion was tightened from a bare text match to the table row, and additionally asserts the row shows `1 kg =` — the created material now has to keep its conversion, not just its name.
+- **Prevention:** The assertion is row-scoped and checks the conversion, so dropping either new field fails the spec instead of passing on the name alone. Verified locally: the full Playwright suite passes 8/8 against a live dev server.
+- **Severity:** Low — CI-only, caught before merge, no product defect. Worth logging because of the class: **a required field added to a form is invisible to the type-checker in DOM-driven E2E specs.** When a contract gains a required field, grep `apps/web/e2e/` for the form's input ids as part of the change.
+
+### ERR-035 — The opening-stock worksheet seeded its count field with an id-ID formatted number, so "5000" was resubmitted as five
+
+- **Date found:** 2026-08-28
+- **Found during:** Owner saving the Stok Awal worksheet for 2026-08 after the ADR-024 migration landed
+- **Symptom:** `PUT /inventory/opening-stock` rejected the whole worksheet with `OpeningStockWouldGoNegativeException` naming ten materials at once — `Garam (koreksi -969.0000, hasil -57.0000)`, `Patty daging sapi (koreksi -146860.0000, hasil -4940.0000)`, and so on. Every offending material was one whose declared quantity was 1000 or more.
+- **Root cause:** `OpeningStockWorksheetTable` seeded the editable count field with `formatQuantity(row.declaredQuantity)`. `formatQuantity` is a **display** formatter built on `Intl.NumberFormat('id-ID')`, where the thousands separator is a dot — so `"5000.0000"` became the string `"5.000"`. The field is bound straight to the form value and submitted verbatim as a `QuantityString`, which the API parses as **five**. The delta calculator then computed `5 − (carryForward + existingOpeningDelta)`, a correction of roughly minus the entire stock, and the negative-stock guard correctly refused the transaction. Nothing was written — the guard runs before the write phase, inside the transaction.
+  - Not a regression from ADR-024: the prefill predates it. ADR-024 only made it visible, because the migration was the reason to open this screen again.
+  - The same round trip breaks fractions in the other direction: `"0.5000"` renders as `"0,5"`, which fails `QuantityString`'s regex outright.
+- **Resolution:** Added `toQuantityInputValue` in `apps/web/lib/formatters.ts` — a locale-free trim (`"5000.0000" → "5000"`, `"0.5000" → "0.5"`) whose doc comment states plainly that `formatQuantity` must never seed an editable field. The worksheet's prefill now uses it. The count field's placeholder, which was also locale-formatted, now goes through `carryForwardPlaceholder`, which additionally refuses to suggest a negative carry-forward as a physical count — the "Sisa Periode Lalu" column still reports it verbatim, because there the sign is the information.
+- **Prevention:** Two regression tests in `OpeningStockWorksheetTable.test.tsx`: one asserts a `5000.0000` row prefills as `5000` and submits `"5000"` (and `0.5000` as `"0.5"`), one asserts a `-300.0000` carry-forward yields placeholder `"0"`. Both were confirmed to fail against the old prefill before the fix. **Every pre-existing fixture in that file used quantities below 1000, which is exactly why this shipped** — a formatter bug that only bites at four digits needs a four-digit fixture.
+- **Severity:** High — the operator saw no warning, and a save would have silently rewritten every stock level to a thousandth of the counted value had the negative-stock guard not caught it. It caught it only because the resulting numbers went below zero; a business with genuinely large stock levels could have absorbed the same corruption silently.
+
 ### ERR-034 — Switching an edited expense from center back to branch discarded the original branch
 
 - **Date found:** 2026-08-25

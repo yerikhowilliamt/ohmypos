@@ -34,6 +34,9 @@ export class ProductsService {
         data: {
           name: dto.name,
           sellPrice: new Prisma.Decimal(dto.sellPrice),
+          // Waste allowance, ADR-024. Defaults to 0 so a client that predates
+          // the field creates a product whose HPP is exactly the recipe sum.
+          wastePercent: new Prisma.Decimal(dto.wastePercent ?? '0'),
           isActive: dto.isActive ?? true,
         },
         include: this.productWithRecipeInclude,
@@ -87,6 +90,9 @@ export class ProductsService {
           ...(dto.name !== undefined && { name: dto.name }),
           ...(dto.sellPrice !== undefined && {
             sellPrice: new Prisma.Decimal(dto.sellPrice),
+          }),
+          ...(dto.wastePercent !== undefined && {
+            wastePercent: new Prisma.Decimal(dto.wastePercent),
           }),
           ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         },

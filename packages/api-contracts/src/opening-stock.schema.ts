@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import {
   DateTimeString,
-  MoneyString,
   QuantityString,
   SignedQuantityString,
+  UnitCostString,
   UuidString,
 } from './primitives';
 import { PeriodMonthString, PeriodResponseSchema } from './period.schema';
@@ -28,7 +28,7 @@ export const OpeningStockEntryInputSchema = z.object({
    * material is also a 400. `GET /inventory/opening-stock` exposes
    * `requiresUnitPrice` per material so the form never has to guess.
    */
-  unitPrice: MoneyString.optional(),
+  unitPrice: UnitCostString.optional(),
 });
 export type OpeningStockEntryInput = z.infer<
   typeof OpeningStockEntryInputSchema
@@ -71,7 +71,7 @@ export const OpeningStockResponseSchema = z.object({
   /** The stored `@db.Date`, serialized as `YYYY-MM-01`. */
   periodMonth: z.string(),
   quantity: QuantityString,
-  unitPrice: MoneyString.nullable(),
+  unitPrice: UnitCostString.nullable(),
   /**
    * The SIGNED movement this declaration wrote to the ledger — negative when
    * the count came in below what the ledger carried. Returned so the caller can
@@ -99,16 +99,25 @@ export type UpsertOpeningStockResponse = z.infer<
 export const OpeningStockWorksheetRowSchema = z.object({
   rawMaterialId: UuidString,
   name: z.string(),
+  /** The STOCK unit — what this row's quantity is counted in (ADR-024). */
   unit: z.string(),
   /** What the movement ledger carried into the period, before any declaration. */
   carryForwardQuantity: SignedQuantityString,
   /** null when this material has not been declared for this period yet. */
   declaredQuantity: QuantityString.nullable(),
-  declaredUnitPrice: MoneyString.nullable(),
+  /** Same 6dp scale as `currentUnitCost` — it is the price that was declared FOR this row (ADR-024). */
+  declaredUnitPrice: UnitCostString.nullable(),
   /** The PRD §5.5 rule, decided server-side — do not recompute it client-side. */
   requiresUnitPrice: z.boolean(),
   /** RawMaterial.unitCost, so the form can prefill the price field. */
-  currentUnitCost: MoneyString,
+  currentUnitCost: UnitCostString,
+  /**
+   * Display only (ADR-024). The count is ALWAYS entered and persisted in `unit`
+   * — these two exist so the worksheet can show "1 kg = 1.000 gram" beside the
+   * field, not so a mixed-unit value can be submitted.
+   */
+  purchaseUnit: z.string(),
+  conversionFactor: QuantityString,
 });
 export type OpeningStockWorksheetRow = z.infer<
   typeof OpeningStockWorksheetRowSchema

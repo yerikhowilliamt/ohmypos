@@ -176,6 +176,21 @@ export function RecipeEditorDialog({
                     ? formatCurrency(recipeEnvelope.recipe.hpp)
                     : '— (Belum Ada Resep)'}
                 </span>
+                {/* Subtotal → susut → HPP, so the per-line costs below visibly
+                    add up to a number the user can check (ADR-024). Waste is
+                    edited on the product form, not here: this dialog does a
+                    full recipe replace, and a cost parameter must not ride
+                    along with it. */}
+                {recipeEnvelope.recipe.baseHpp &&
+                  Number(recipeEnvelope.recipe.wastePercent) > 0 && (
+                    <span
+                      data-testid="recipe-waste-breakdown"
+                      className="block text-[11px] text-text-tertiary font-mono"
+                    >
+                      Subtotal {formatCurrency(recipeEnvelope.recipe.baseHpp)} +
+                      susut {recipeEnvelope.recipe.wastePercent}%
+                    </span>
+                  )}
               </div>
               <div>
                 <span className="block text-[11px] text-text-tertiary">

@@ -38,6 +38,7 @@ import {
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { Prisma } from '../src/generated/prisma/client';
 
 describe('Reports — Dashboard 3 (e2e)', () => {
   let app: INestApplication<App>;
@@ -280,6 +281,7 @@ describe('Reports — Dashboard 3 (e2e)', () => {
       data: {
         name,
         unit,
+        purchaseUnit: unit,
         unitCost,
         currentStock: '1000.0000',
         lowStockThreshold: '0',
@@ -362,8 +364,13 @@ describe('Reports — Dashboard 3 (e2e)', () => {
         items: [
           {
             rawMaterialId: input.rawMaterialId,
-            quantity: input.quantity,
-            unitCost: input.unitCost,
+            // ADR-024: purchase quantity + TOTAL price. These fixtures use
+            // conversionFactor 1, so the derived per-unit cost comes back out
+            // as `input.unitCost` and every downstream figure is unchanged.
+            purchaseQuantity: input.quantity,
+            lineTotal: new Prisma.Decimal(input.quantity)
+              .times(input.unitCost)
+              .toFixed(2),
           },
         ],
       })

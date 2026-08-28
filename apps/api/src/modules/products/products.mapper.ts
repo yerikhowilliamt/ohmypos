@@ -7,7 +7,7 @@
  * scale truncation (§9.3).
  */
 import { Prisma } from '../../generated/prisma/client';
-import { calculateHpp } from './hpp.calculator';
+import { calculateBaseHpp, calculateHpp } from './hpp.calculator';
 import type {
   ProductWithHppResponse,
   RecipeEnvelopeResponse,
@@ -20,20 +20,28 @@ export type ProductWithRecipe = Prisma.ProductGetPayload<{
 export function toProductWithHppResponse(
   product: ProductWithRecipe,
 ): ProductWithHppResponse {
-  const hpp = calculateHpp(
-    product.recipeItems.map((ri) => ({
-      quantityUsed: ri.quantityUsed,
-      unitCost: ri.rawMaterial.unitCost,
-    })),
-  );
+  const lines = product.recipeItems.map((ri) => ({
+    quantityUsed: ri.quantityUsed,
+    unitCost: ri.rawMaterial.unitCost,
+  }));
+  // Both figures come from the same lines, so the uplift the UI shows is always
+  // exactly hpp − baseHpp (ADR-024).
+  const baseHpp = calculateBaseHpp(lines);
+  const hpp = calculateHpp(lines, product.wastePercent);
   const hasRecipe = product.recipeItems.length > 0;
 
   return {
     id: product.id,
     name: product.name,
     sellPrice: product.sellPrice.toFixed(2),
+    wastePercent: product.wastePercent.toFixed(2),
     isActive: product.isActive,
     photoUrl: product.photoUrl ?? null,
+    // baseHpp is rounded for display only; the unrounded value is what fed the
+    // waste multiplication inside calculateHpp.
+    baseHpp: baseHpp
+      ? baseHpp.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP).toFixed(2)
+      : null,
     hpp: hpp ? hpp.toFixed(2) : null,
     hasRecipe,
     margin: hpp ? product.sellPrice.minus(hpp).toFixed(2) : null,
@@ -76,13 +84,18 @@ export function toRecipeEnvelope(
         rawMaterialName: ri.rawMaterial.name,
         unit: ri.rawMaterial.unit,
         quantityUsed: ri.quantityUsed.toFixed(4),
-        unitCost: ri.rawMaterial.unitCost.toFixed(2),
+        unitCost: ri.rawMaterial.unitCost.toFixed(6),
         // Display only — never summed to produce HPP (§9.7a).
         lineCost: ri.quantityUsed
           .times(ri.rawMaterial.unitCost)
           .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
           .toFixed(2),
       })),
+      // Pre-waste subtotal, the product's waste, then the final HPP — so the
+      // per-line `lineCost` values visibly add up to `baseHpp`, and the uplift
+      // to `hpp` is shown rather than silently folded in (ADR-024).
+      baseHpp: productResponse.baseHpp,
+      wastePercent: productResponse.wastePercent,
       hpp: productResponse.hpp,
       hasRecipe: productResponse.hasRecipe,
     },

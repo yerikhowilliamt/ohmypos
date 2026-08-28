@@ -12,6 +12,16 @@ export const CreateDeviceSchema = z.object({
 });
 export type CreateDevice = z.infer<typeof CreateDeviceSchema>;
 
+/**
+ * `branchId` is accepted here but the API refuses it on an ACTIVE device: a
+ * device's branch is an access-control input — `AuthService` matches a
+ * cashier's branch against it — so re-pointing a live terminal would change
+ * who may log in from it without the physical re-activation ceremony ADR-021
+ * is built around. Deactivate first, move, re-activate at the terminal.
+ */
+export const UpdateDeviceSchema = CreateDeviceSchema.partial();
+export type UpdateDevice = z.infer<typeof UpdateDeviceSchema>;
+
 export const ActivateDeviceSchema = z.object({
   code: z.string().min(1),
 });

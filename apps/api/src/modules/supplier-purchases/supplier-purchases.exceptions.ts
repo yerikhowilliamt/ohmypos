@@ -44,3 +44,18 @@ export class BackdatedPurchaseException extends BadRequestException {
     this.name = 'BackdatedPurchaseException';
   }
 }
+
+/**
+ * ADR-024. Unreachable through the API — `purchaseQuantity` and
+ * `conversionFactor` are both refused at zero by Zod — but the normalized stock
+ * quantity is a divisor, and a divisor that reaches zero must fail loudly
+ * rather than write `Infinity` into a Decimal column.
+ */
+export class ZeroNormalizedQuantityException extends BadRequestException {
+  constructor() {
+    super(
+      'Kuantitas stok hasil konversi bernilai nol — periksa jumlah beli dan isi per satuan beli bahan baku ini.',
+    );
+    this.name = 'ZeroNormalizedQuantityException';
+  }
+}

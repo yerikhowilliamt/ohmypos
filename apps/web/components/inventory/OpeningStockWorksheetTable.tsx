@@ -20,7 +20,7 @@ import { Input } from '@ohmypos/ui/components/input';
 import { Button } from '@ohmypos/ui/components/button';
 import { Badge } from '@ohmypos/ui/components/badge';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
-import { formatQuantity } from '@/lib/formatters';
+import { formatQuantity, toQuantityInputValue } from '@/lib/formatters';
 import { Lock, Save, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface OpeningStockWorksheetTableProps {
@@ -28,6 +28,18 @@ interface OpeningStockWorksheetTableProps {
   rows: OpeningStockWorksheetRow[];
   onSubmit: (data: UpsertOpeningStock) => Promise<void>;
   isSubmitting?: boolean;
+}
+
+/**
+ * What to suggest in the physical-count field. The ledger's carry-forward is
+ * only a sensible suggestion when it is positive — a negative one means goods
+ * left before anything arrived (see "Sisa Periode Lalu", which still shows it
+ * verbatim), and a physical count can never be negative.
+ */
+function carryForwardPlaceholder(carryForward: string | undefined): string {
+  const plain = toQuantityInputValue(carryForward);
+  if (plain === '' || plain.startsWith('-')) return '0';
+  return plain;
 }
 
 export function OpeningStockWorksheetTable({
@@ -62,9 +74,10 @@ export function OpeningStockWorksheetTable({
       periodMonth,
       entries: rows.map((row) => ({
         rawMaterialId: row.rawMaterialId,
-        quantity: row.declaredQuantity
-          ? formatQuantity(row.declaredQuantity)
-          : '',
+        // toQuantityInputValue, NOT formatQuantity — this seeds an editable
+        // field that is submitted verbatim, and formatQuantity would render
+        // "5000.0000" as the id-ID "5.000", which the API reads back as five.
+        quantity: toQuantityInputValue(row.declaredQuantity),
         unitPrice: row.requiresUnitPrice
           ? (row.declaredUnitPrice ?? row.currentUnitCost)
           : undefined,
@@ -147,13 +160,14 @@ export function OpeningStockWorksheetTable({
                   Bahan Baku
                 </TableHead>
                 <TableHead className="font-semibold text-text-primary w-[12%] min-w-[80px]">
-                  Satuan
+                  Satuan Stok
                 </TableHead>
                 <TableHead className="font-semibold text-text-primary text-right w-[18%] min-w-[140px]">
                   Sisa Periode Lalu
                 </TableHead>
                 <TableHead className="font-semibold text-text-primary w-[20%] min-w-[150px]">
-                  Stok Fisik Awal <span className="text-status-danger">*</span>
+                  Stok Fisik Awal (satuan stok){' '}
+                  <span className="text-status-danger">*</span>
                 </TableHead>
                 <TableHead className="font-semibold text-text-primary w-[20%] min-w-[160px]">
                   Harga Satuan
@@ -195,9 +209,22 @@ export function OpeningStockWorksheetTable({
                         </div>
                       </TableCell>
 
-                      {/* 2. Satuan */}
+                      {/* 2. Satuan stok — ALWAYS what the count is entered in.
+                          The conversion hint below is a reading aid only; the
+                          form never accepts a purchase-unit value (ADR-024). */}
                       <TableCell className="text-text-secondary text-sm">
-                        {meta?.unit ?? '—'}
+                        <div>
+                          <span>{meta?.unit ?? '—'}</span>
+                          {meta && meta.purchaseUnit !== meta.unit && (
+                            <div
+                              data-testid={`opname-conversion-${field.rawMaterialId}`}
+                              className="text-[11px] text-text-tertiary font-mono mt-0.5"
+                            >
+                              1 {meta.purchaseUnit} ={' '}
+                              {formatQuantity(meta.conversionFactor, meta.unit)}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
 
                       {/* 3. Sisa Periode Lalu (Carry Forward) */}
@@ -216,11 +243,13 @@ export function OpeningStockWorksheetTable({
                                 {...inputField}
                                 type="text"
                                 inputMode="decimal"
-                                placeholder={
-                                  meta?.carryForwardQuantity
-                                    ? formatQuantity(meta.carryForwardQuantity)
-                                    : '0'
-                                }
+                                // A plain, typeable number: the operator may
+                                // copy it into the field. A negative
+                                // carry-forward is never a physical count, so
+                                // it is not offered as one.
+                                placeholder={carryForwardPlaceholder(
+                                  meta?.carryForwardQuantity,
+                                )}
                                 className="font-mono text-sm h-9"
                                 aria-label={`Stok fisik ${meta?.name}`}
                                 aria-invalid={Boolean(rowError?.quantity)}

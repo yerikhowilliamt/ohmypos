@@ -104,10 +104,15 @@ Triggered when a cashier completes a sale at a branch (via `apps/web`'s POS scre
 
 Triggered when a purchase from a supplier is logged (centrally or per-branch, per the confirmed branch policy):
 
-1. Create the `SupplierPurchase` record, tagged `branchId = null` (central) or a specific branch.
-2. Write a `StockMovement` (direction IN) and increment `RawMaterial.currentStock` — this always happens immediately, regardless of payment status, because the physical stock has arrived.
-3. **If paid immediately:** create an expense `LedgerEntry` now.
-4. **If unpaid (utang):** create/increment a `Payable` record instead. No `LedgerEntry` is created yet — this is the deliberate choice from the PRD so cash reports aren't distorted by money that hasn't left the account.
+The client sends what the supplier's nota says: a quantity in the material's **purchase unit** and the **total price** paid for it (ADR-024). It never sends a normalized quantity or a unit cost — those are derived server-side, for the same reason `totalAmount` is.
+
+1. **Convert each line.** `quantity = purchaseQuantity × conversionFactor` (stock units, 4dp) and `unitCost = lineTotal ÷ quantity` (per stock unit, 6dp), using the material's factor as it is *now*, which the line then snapshots along with `purchaseUnit` and `purchaseQuantity`.
+2. Create the `SupplierPurchase` record, tagged `branchId = null` (central) or a specific branch.
+3. Write a `StockMovement` (direction IN) and increment `RawMaterial.currentStock` — this always happens immediately, regardless of payment status, because the physical stock has arrived. Locks are taken here, before any line row exists (ADR-016).
+4. Create the `SupplierPurchaseItem` rows, carrying both the bought and the received figures.
+5. **Write back the latest cost.** Still inside the transaction and under the same `FOR UPDATE` locks, set `RawMaterial.unitCost` to the normalized cost of the latest applicable purchase, found by `ORDER BY purchase_date DESC, created_at DESC, id DESC LIMIT 1` over that material's lines. Recomputing the winner from table state — rather than comparing against the row just inserted — is what makes a **backdated** purchase behave: it inserts, loses the ordering, and rewrites the cost to the value it already had. The result never depends on which concurrent request finished last (ADR-024, closes DEBT-006).
+6. **If paid immediately:** create an expense `LedgerEntry` now.
+7. **If unpaid (utang):** create/increment a `Payable` record instead. No `LedgerEntry` is created yet — this is the deliberate choice from the PRD so cash reports aren't distorted by money that hasn't left the account. Note that steps 3 and 5 happen either way: payment status gates **money**, not stock or cost.
 
 ### 6.3 Payable Settlement
 
@@ -115,7 +120,7 @@ When a supplier debt is paid off (in full or in part): create a `PayableSettleme
 
 ### 6.4 Monthly Opening Stock
 
-A scheduled or manually-triggered action at the start of each month: for each raw material, record an `OpeningStock` entry (quantity, and unit price if no purchase has happened yet that month), and write a corresponding `StockMovement` (direction IN, reference = OPENING) so it flows into the same balance calculation as any other movement.
+A scheduled or manually-triggered action at the start of each month: for each raw material, record an `OpeningStock` entry (quantity **in the stock/recipe unit** — never the purchase unit, ADR-024 — and unit price if no purchase has happened yet that month), and write a corresponding `StockMovement` (direction IN, reference = OPENING) so it flows into the same balance calculation as any other movement.
 
 ### 6.5 Reconciliation
 
@@ -130,6 +135,7 @@ Computed at query time from `LedgerEntry`, `SaleItem`, and `StockMovement` — n
 - All monetary and quantity values use `Decimal`, never floating point (unchanged from Kasync).
 - `RawMaterial.currentStock` is a stored, trigger-or-transaction-synced denormalized field (same pattern as `BankTransaction.status` in Kasync) — the source of truth is the `StockMovement` log, but the balance is kept as a fast-read column rather than summed on every read.
 - Every operation that touches both financial state and inventory state (Sale, Purchase) is one database transaction — never two separate calls from the application layer.
+- A material's `unit` is the stock/recipe unit and the only unit any stored quantity is in; `purchaseUnit`/`conversionFactor` affect purchase ENTRY only (ADR-024). Per-unit costs are `Decimal(18,6)` because they are rates; every ledger-facing amount stays `Decimal(18,2)`.
 - HPP is computed live on `Product` (master data view) but always snapshotted on `SaleItem` (historical accuracy) — this distinction is load-bearing for report correctness and should not be "simplified" later without revisiting Dashboard 3's accuracy guarantee.
 
 ## 8. Branch Scoping & Role Enforcement in the Schema (ADR-011)

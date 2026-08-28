@@ -1,6 +1,13 @@
 /**
  * OhMyPos — SupplierPurchases service (ERD §3, System Design §6.2, ADR-004, ADR-006, ADR-007).
  *
+ * Summary of ADR-024 (what a purchase line means since the POS-feedback work):
+ * The client sends what the supplier's nota says — a quantity in the material's
+ * PURCHASE unit and the TOTAL price paid for it. This service derives the
+ * normalized stock quantity and the cost per stock unit, snapshots both the
+ * bought and the received figures on the line, and writes the latest applicable
+ * normalized cost back to `RawMaterial.unitCost` (closing DEBT-006).
+ *
  * Summary of ADR-006:
  * Stock always moves; money sometimes does. A purchase increments `RawMaterial.currentStock`
  * unconditionally, because the goods have physically arrived. It creates a `LedgerEntry`
@@ -28,7 +35,10 @@ import {
   CentralBranchNotAssignableException,
   PurchaseItemMaterialNotFoundException,
 } from './supplier-purchases.exceptions';
-import { calculateLineTotal, calculatePurchaseTotal } from './purchase-totals';
+import {
+  calculatePurchaseTotal,
+  normalizePurchaseLine,
+} from './purchase-totals';
 import {
   SupplierPurchaseWithRelations,
   toSupplierPurchaseResponse,
@@ -132,16 +142,28 @@ export class SupplierPurchasesService {
           throw new PurchaseItemMaterialNotFoundException(missingIds);
         }
 
-        // 5. Compute line totals and purchase total amount (pure calculator, §9.3)
+        // 5. Convert each line from purchase units to stock units and derive the
+        //    normalized cost (pure calculator, ADR-024). Reuses the `materials`
+        //    read from step 4 — the conversion factor is already in hand, so
+        //    there is no extra query and no window between reading the factor
+        //    and using it.
+        const materialById = new Map(materials.map((m) => [m.id, m]));
+
         const lines = dto.items.map((item) => {
-          const quantity = new Prisma.Decimal(item.quantity);
-          const unitCost = new Prisma.Decimal(item.unitCost);
-          const lineTotal = calculateLineTotal({ quantity, unitCost });
+          // Non-null: step 4 already threw if any id was missing.
+          const material = materialById.get(item.rawMaterialId)!;
+          const normalized = normalizePurchaseLine({
+            purchaseQuantity: new Prisma.Decimal(item.purchaseQuantity),
+            // Snapshot the packaging AS IT IS NOW. A later edit to the
+            // material's purchaseUnit/conversionFactor must not move this row —
+            // that is the whole reason the line carries its own copy (ADR-024).
+            conversionFactor: material.conversionFactor,
+            lineTotal: new Prisma.Decimal(item.lineTotal),
+          });
           return {
             rawMaterialId: item.rawMaterialId,
-            quantity,
-            unitCost,
-            lineTotal,
+            purchaseUnit: material.purchaseUnit,
+            ...normalized,
           };
         });
         const totalAmount = calculatePurchaseTotal(
@@ -193,11 +215,60 @@ export class SupplierPurchasesService {
           data: lines.map((l) => ({
             supplierPurchaseId: purchase.id,
             rawMaterialId: l.rawMaterialId,
+            // What was bought — frozen (ADR-024).
+            purchaseQuantity: l.purchaseQuantity,
+            purchaseUnit: l.purchaseUnit,
+            conversionFactor: l.conversionFactor,
+            // What stock received — the normalized pair.
             quantity: l.quantity,
             unitCost: l.unitCost,
             lineTotal: l.lineTotal,
           })),
         });
+
+        // 8b. LATEST-COST WRITE-BACK (ADR-024, closes DEBT-006).
+        //
+        // Runs here, after the lines exist and while applyInbound's FOR UPDATE
+        // (step 7, ADR-016) is still held on every material in this purchase.
+        //
+        // The winner is RECOMPUTED FROM TABLE STATE rather than compared
+        // against the row just inserted. That is what makes a backdated
+        // purchase behave: it inserts, loses the ORDER BY to the newer row, and
+        // this rewrites `unitCost` to the value it already had. The outcome
+        // therefore depends on `purchaseDate` ordering only — never on which
+        // concurrent HTTP request happened to finish last, which is precisely
+        // the residual risk DEBT-006 named.
+        //
+        // `createdAt` then `id` are the tie-breakers, so two purchases sharing
+        // a date still resolve to one deterministic winner on every evaluation.
+        //
+        // Ascending rawMaterialId, same as every other lock-ordered loop in
+        // this codebase (ADR-016) — the locks are already held, but keeping the
+        // order uniform is what stops a future edit from reintroducing a cycle.
+        const touchedMaterialIds = [
+          ...new Set(lines.map((l) => l.rawMaterialId)),
+        ].sort((a, b) => a.localeCompare(b));
+
+        for (const rawMaterialId of touchedMaterialIds) {
+          const latest = await tx.$queryRaw<{ unit_cost: Prisma.Decimal }[]>`
+            SELECT spi.unit_cost
+              FROM supplier_purchase_items spi
+              JOIN supplier_purchases sp ON sp.id = spi.supplier_purchase_id
+             WHERE spi.raw_material_id = ${rawMaterialId}
+             ORDER BY sp.purchase_date DESC, sp.created_at DESC, sp.id DESC
+             LIMIT 1
+          `;
+
+          // Always non-empty here — this transaction just inserted a line for
+          // this material — but an empty result must not become an undefined
+          // write, so it is guarded rather than asserted.
+          if (latest.length > 0) {
+            await tx.rawMaterial.update({
+              where: { id: rawMaterialId },
+              data: { unitCost: latest[0].unit_cost },
+            });
+          }
+        }
 
         // 9. THE ADR-006 BRANCH — the only `if` on paymentStatus in this repo
         if (dto.paymentStatus === 'PAID') {

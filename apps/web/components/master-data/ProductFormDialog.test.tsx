@@ -15,6 +15,8 @@ const mockProduct: ProductWithHppResponse = {
   id: 'aaaaaaaa-1111-4111-8111-111111111111',
   name: 'Caramel Macchiato',
   sellPrice: '28000.00',
+  wastePercent: '0.00',
+  baseHpp: '12000.00',
   isActive: true,
   hpp: '12000.00',
   hasRecipe: true,
@@ -63,6 +65,7 @@ describe('ProductFormDialog', () => {
           body: JSON.stringify({
             name: 'Caramel Macchiato',
             sellPrice: '28000',
+            wastePercent: '0',
             isActive: true,
           }),
         }),
@@ -110,6 +113,7 @@ describe('ProductFormDialog', () => {
           body: JSON.stringify({
             name: mockProduct.name,
             sellPrice: '30000',
+            wastePercent: '0.00',
             isActive: true,
           }),
         }),

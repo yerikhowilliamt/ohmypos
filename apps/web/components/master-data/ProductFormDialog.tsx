@@ -62,6 +62,7 @@ export function ProductFormDialog({
     defaultValues: {
       name: '',
       sellPrice: '',
+      wastePercent: '0',
       isActive: true,
     },
   });
@@ -72,12 +73,14 @@ export function ProductFormDialog({
         reset({
           name: product.name,
           sellPrice: String(product.sellPrice),
+          wastePercent: String(product.wastePercent),
           isActive: product.isActive,
         });
       } else {
         reset({
           name: '',
           sellPrice: '',
+          wastePercent: '0',
           isActive: true,
         });
       }
@@ -236,6 +239,28 @@ export function ProductFormDialog({
               )}
             </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="product-waste">Waste / Susut (%)</Label>
+              <Input
+                id="product-waste"
+                type="text"
+                inputMode="decimal"
+                placeholder="0"
+                className="numeric font-mono"
+                aria-invalid={Boolean(errors.wastePercent)}
+                {...register('wastePercent')}
+              />
+              <p className="text-xs text-text-tertiary">
+                Menambah HPP produk ini saja. Tidak menambah pemakaian stok —
+                jumlah bahan yang dipotong saat penjualan tetap sesuai resep.
+              </p>
+              {errors.wastePercent && (
+                <p role="alert" className="text-xs text-status-danger">
+                  {errors.wastePercent.message}
+                </p>
+              )}
+            </div>
+
             <div className="flex items-center gap-2 pt-1">
               <Checkbox id="product-active" {...register('isActive')} />
               <Label
@@ -263,6 +288,17 @@ export function ProductFormDialog({
                     <span className="font-mono font-medium text-text-primary">
                       {product.hpp ? formatCurrency(product.hpp) : '—'}
                     </span>
+                    {/* The uplift is shown, not folded in silently — the user
+                        must be able to see what the waste setting cost. */}
+                    {product.baseHpp && Number(product.wastePercent) > 0 && (
+                      <span
+                        data-testid="product-waste-breakdown"
+                        className="block text-[11px] text-text-tertiary font-mono"
+                      >
+                        {formatCurrency(product.baseHpp)} +{' '}
+                        {product.wastePercent}%
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="block text-[11px] text-text-tertiary">

@@ -201,7 +201,12 @@ describe('Attendance list (e2e)', () => {
     });
     await prisma.user.deleteMany({ where: { email: { in: emails } } });
     await prisma.device.deleteMany({
-      where: { label: 'Attendance Terminal A' },
+      where: {
+        OR: [
+          { label: 'Attendance Terminal A' },
+          { label: { startsWith: 'CRUD Terminal' } },
+        ],
+      },
     });
     await prisma.branch.deleteMany({
       where: { name: { in: ['Attendance Branch A', 'Attendance Branch B'] } },
@@ -539,6 +544,150 @@ describe('Attendance list (e2e)', () => {
 
     it('rejects an unknown sortBy rather than ignoring it', async () => {
       await get('?sortBy=ipAddress', owner.cookies).expect(400);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // PATCH /devices/:id and DELETE /devices/:id
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('device edit & delete', () => {
+    async function makeDevice(label: string, isActive: boolean) {
+      const device = await prisma.device.create({
+        data: {
+          branchId: branchAId,
+          label: `CRUD Terminal ${label}`,
+          isActive,
+        },
+      });
+      return device.id;
+    }
+
+    describe('access control', () => {
+      it('forbids ADMIN and KASIR on both routes', async () => {
+        const id = await makeDevice('acl', false);
+        for (const actor of [admin.cookies, kasir.cookies]) {
+          await request(app.getHttpServer())
+            .patch(`/api/v1/devices/${id}`)
+            .set('Cookie', actor)
+            .send({ label: 'nope' })
+            .expect(403);
+          await request(app.getHttpServer())
+            .delete(`/api/v1/devices/${id}`)
+            .set('Cookie', actor)
+            .expect(403);
+        }
+      });
+    });
+
+    describe('PATCH', () => {
+      it('renames an active device', async () => {
+        const id = await makeDevice('rename', true);
+        const res = await request(app.getHttpServer())
+          .patch(`/api/v1/devices/${id}`)
+          .set('Cookie', owner.cookies)
+          .send({ label: 'CRUD Terminal renamed' })
+          .expect(200);
+        expect((res.body as { label: string }).label).toBe(
+          'CRUD Terminal renamed',
+        );
+      });
+
+      it('refuses to move an ACTIVE device to another branch', async () => {
+        const id = await makeDevice('locked', true);
+        await request(app.getHttpServer())
+          .patch(`/api/v1/devices/${id}`)
+          .set('Cookie', owner.cookies)
+          .send({ branchId: branchBId })
+          .expect(400);
+
+        const unchanged = await prisma.device.findUniqueOrThrow({
+          where: { id },
+        });
+        expect(unchanged.branchId).toBe(branchAId);
+      });
+
+      it('allows resubmitting the SAME branchId on an active device', async () => {
+        // Otherwise the edit form breaks the moment a device is activated: it
+        // always sends both fields, including the branch it already has.
+        const id = await makeDevice('same-branch', true);
+        await request(app.getHttpServer())
+          .patch(`/api/v1/devices/${id}`)
+          .set('Cookie', owner.cookies)
+          .send({ branchId: branchAId, label: 'CRUD Terminal same-branch 2' })
+          .expect(200);
+      });
+
+      it('moves an INACTIVE device to another branch', async () => {
+        const id = await makeDevice('movable', false);
+        const res = await request(app.getHttpServer())
+          .patch(`/api/v1/devices/${id}`)
+          .set('Cookie', owner.cookies)
+          .send({ branchId: branchBId })
+          .expect(200);
+        expect((res.body as { branchId: string }).branchId).toBe(branchBId);
+      });
+
+      it('404s on an unknown device and on an unknown branch', async () => {
+        const id = await makeDevice('unknown-branch', false);
+        await request(app.getHttpServer())
+          .patch('/api/v1/devices/2c5f5a7e-0000-4000-8000-000000000000')
+          .set('Cookie', owner.cookies)
+          .send({ label: 'x' })
+          .expect(404);
+        await request(app.getHttpServer())
+          .patch(`/api/v1/devices/${id}`)
+          .set('Cookie', owner.cookies)
+          .send({ branchId: '2c5f5a7e-0000-4000-8000-000000000001' })
+          .expect(404);
+      });
+    });
+
+    describe('DELETE', () => {
+      it('deletes a device that has never been used', async () => {
+        const id = await makeDevice('deletable', false);
+        await request(app.getHttpServer())
+          .delete(`/api/v1/devices/${id}`)
+          .set('Cookie', owner.cookies)
+          .expect(200);
+        expect(await prisma.device.findUnique({ where: { id } })).toBeNull();
+      });
+
+      it('refuses a device with attendance history, and the log keeps its label', async () => {
+        // The whole point of the guard: AttendanceRecord.device is
+        // `onDelete: SetNull`, so a successful delete would blank deviceId on
+        // every past login, and the log renders a blank as "Perangkat Luar" —
+        // relabelling legitimate in-store attendance as an outside login.
+        const id = await makeDevice('used', true);
+        await prisma.attendanceRecord.create({
+          data: {
+            userId: kasir.id,
+            deviceId: id,
+            loginAt: new Date('2027-04-12T02:00:00.000Z'),
+            isValid: true,
+          },
+        });
+
+        await request(app.getHttpServer())
+          .delete(`/api/v1/devices/${id}`)
+          .set('Cookie', owner.cookies)
+          .expect(400);
+
+        expect(
+          await prisma.device.findUnique({ where: { id } }),
+        ).not.toBeNull();
+
+        const record = await prisma.attendanceRecord.findFirstOrThrow({
+          where: { deviceId: id },
+        });
+        expect(record.deviceId).toBe(id);
+      });
+
+      it('404s on an unknown device', async () => {
+        await request(app.getHttpServer())
+          .delete('/api/v1/devices/2c5f5a7e-0000-4000-8000-000000000000')
+          .set('Cookie', owner.cookies)
+          .expect(404);
+      });
     });
   });
 });

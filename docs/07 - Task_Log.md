@@ -41,6 +41,77 @@
 
 ## Log
 
+### TASK-117 — Edit and delete actions on the Perangkat page
+
+- **Date:** 2026-08-28
+- **Module / Phase:** Devices (`/business/devices`) — API + web
+- **Objective:** Give the Owner Edit and Hapus buttons for devices already registered. Previously the only action was Nonaktifkan, and it appeared only on ACTIVE devices — a device still awaiting activation, the one most likely to have been created by mistake, had no action at all.
+- **Relevant docs:** ADR-021 (device activation ceremony); `docs/plannings/2026-08-28-device-edit-delete-actions.md` (Option A + D1 approved by the owner)
+- **What was done:** Added `UpdateDeviceSchema` (additive — nothing existing changed shape), `PATCH /devices/:id` and `DELETE /devices/:id`, both inheriting the controller's `@Roles('OWNER')`. Both bare-`:id` routes are declared last so they cannot shadow `attendance/:id`, `activate`, or `:id/deactivate`. `AddDeviceDialog` was generalized into `DeviceFormDialog`, which takes an optional `device` and is keyed by device id by the caller so it re-seeds its defaults on mount instead of syncing in an effect. `DevicesClient` gained Edit/Hapus buttons and reuses the shared `DeleteConfirmDialog`.
+- **Decisions made during this task:**
+  1. **Delete is a real delete, refused once the device has logins.** `AttendanceRecord.device` is `onDelete: SetNull`, so deleting a used device would neither fail nor cascade — it would blank `deviceId` on every past login, and `AttendanceLogTable` renders a blank as **"Perangkat Luar"**, the same wording it uses for a login from an *unregistered* device. Months of legitimate in-store attendance would silently start reading as violations. The service therefore counts attendance rows first and throws `DeviceHasAttendanceHistoryException` (400) pointing at Nonaktifkan. Soft delete (`deletedAt`) was considered and rejected: it needs a migration, and `isActive = false` already *is* this system's retirement flag.
+  2. **`branchId` is editable only while the device is inactive.** A device's branch is an access-control input — `AuthService` matches a cashier's branch against it — so re-pointing a live terminal would change who may log in from it without the physical ceremony ADR-021 is built on. Only a *real* change is rejected; resubmitting the same `branchId` stays legal, or the edit form would break the moment a device is activated. The dialog disables the picker and says why, rather than letting the Owner discover it through a 400.
+  3. Delete button is shown on every row and the refusal is surfaced from the server, rather than adding an `attendanceCount` to `DeviceResponse` to hide it client-side. Noted as a deferred polish in the plan.
+- **Status:** Done.
+- **Handoff notes:** 12 new e2e cases in `attendance.e2e-spec.ts` (`device edit & delete`) and 6 web cases in the new `DevicesClient.test.tsx`. The e2e case that matters most asserts the refused delete leaves `attendanceRecord.deviceId` intact — that is the regression the guard exists for. `cleanup()` was extended to drop `CRUD Terminal%` devices so the suite leaves nothing behind. Gate: turbo 13/13, web 476 tests, api e2e 445/445 stable over three consecutive runs.
+
+### TASK-116 — POS feedback Phase 7: cross-feature verification and documentation
+
+- **Date:** 2026-08-28
+- **Module / Phase:** POS feedback remediation — Phase 7 (docs, regression)
+- **Objective:** Verify the Phase 3–6 chain end to end and record the decisions.
+- **Relevant docs:** ADR-024; DEBT-006 (Resolved); DEBT-062; `docs/plannings/2026-08-28-pos-feedback-phases-3-7.md`
+- **What was done:** Added ADR-024. Marked DEBT-006 **Resolved** with the mechanism that closes its residual concurrency risk, and logged DEBT-062 for the missing base-unit conversion workflow. Updated `docs/03 - ERD.md` §3/§7 and `docs/01 - System_Design.md` §6.2 for the new columns and the purchase transaction's step 8b. Confirmed no BEP feature or placeholder exists anywhere in `apps/`, `packages/`, or `docs/DESIGN.md`.
+- **Decisions made during this task:** None beyond ADR-024.
+- **Status:** Done — migration applied and the e2e suite is green. Only the browser smoke list (plan §9.5) is outstanding.
+- **Handoff notes:** The database came up later the same day and `prisma migrate deploy` applied `20260828043000_add_purchase_units_and_product_waste` to both `ohmypos_db` and `ohmypos_e2e` — one pending migration, no drift, existing rows backfilled (`purchase_unit = unit`, `conversion_factor = 1`, `waste_percent = 0`) and dev data preserved. `deploy` rather than `dev` precisely because `dev` can offer a reset and there was nothing to diff. `pnpm --filter api test:e2e` → **436/436 across 18 suites**, stable over three consecutive runs; api + web lint/typecheck/test clean.
+
+  Three e2e specs held stale pre-ADR-024 expectations and were corrected after hand-verifying the new figures: `master-data` (the recipe envelope now also returns `baseHpp` and `wastePercent`), `purchasing-payables` Case 20 (`unitCost` is 6dp on the wire; the case now also asserts `purchaseQuantity`/`conversionFactor` scale), and `monthly-cycle` Stages 7/9. The last one is the interesting one: Stage 2's purchases now write their normalized cost back to the materials (kopi 120000→125000, susu 18000→18500, gula 14000→15500) *before* Stage 4's sales, so the HPP snapshotted onto each `SaleItem` moves 5310.00 → 5507.50 (Teh Manis 350.00 → 387.50), cascading to cogs 39620.00 → 41265.00, netProfit 3380.00 → 1735.00, netMarginPct 1.45 → 0.74. Those old figures only held because a purchase never repriced its material — the movement **is** the DEBT-006 closure, not a regression.
+
+### TASK-115 — POS feedback Phase 6: stock opname and inventory unit consistency
+
+- **Date:** 2026-08-28
+- **Module / Phase:** POS feedback remediation — Phase 6 (inventory UI)
+- **Objective:** Make it unambiguous that stock opname and every inventory display are in the stock unit.
+- **Relevant docs:** ADR-024; PRD §5.5; System Design §6.4
+- **What was done:** Confirmed by reading the code that opname, movement history, low-stock thresholds, makeable quantity, and sale deduction **already** used `RawMaterial.unit`, which Phase 3 defines as the stock unit — so this phase is labelling, not a data migration. `OpeningStockWorksheetRow` gained display-only `purchaseUnit`/`conversionFactor`; `OpeningStockWorksheetTable` now heads the count column "Stok Fisik Awal (satuan stok)" and prints a `1 kg = 1.000 gram` hint beside materials whose purchase unit differs. The persisted value is still always the stock quantity — no unit picker, no mixed-unit persistence.
+- **Decisions made during this task:** The conversion hint is rendered only when `purchaseUnit !== unit`; showing "1 kg = 1 kg" is noise.
+- **Status:** Done
+- **Handoff notes:** Two new tests in `OpeningStockWorksheetTable.test.tsx` cover the hint being present for a converting material and absent for a 1:1 one.
+
+### TASK-114 — POS feedback Phase 5: product-level waste allowance
+
+- **Date:** 2026-08-28
+- **Module / Phase:** POS feedback remediation — Phase 5 (`Product`, HPP)
+- **Objective:** Add a per-product waste percentage that raises HPP without changing stock consumption.
+- **Relevant docs:** ADR-005; ADR-013; ADR-024
+- **What was done:** `Product.wastePercent Decimal(5,2) @default(0)`. `calculateHpp` takes an optional `wastePercent` (defaulting to zero, so untouched call sites are unchanged) and multiplies the recipe sum by `1 + wastePercent/100` **before** its single `ROUND_HALF_UP`; a new `calculateBaseHpp` exposes the pre-waste sum. Both call sites that matter — `products.mapper.ts` (live HPP) and `sales.service.ts` (`SaleItem.hppAtSale`) — pass it explicitly, so the live figure and the snapshot cannot drift (ADR-005). Responses gained `wastePercent` and `baseHpp`; the product form got the field and the recipe editor a "Subtotal … + susut …%" line.
+- **Decisions made during this task:** Waste is edited on the product form, not the recipe editor — the recipe editor does a full replace, and a cost parameter must not ride along with "save recipe". Bounded 0–100 at the contract edge: above 100% the recipe is wrong, not the allowance.
+- **Status:** Done
+- **Handoff notes:** `hpp.calculator.spec.ts` covers 0% (byte-identical to before), the handoff's `Rp7.923 @ 5% → Rp8.319,15` example, fractional waste, waste-after-sum independence from how a recipe is split, round-once-after-waste, and `null` on an empty recipe regardless of waste.
+
+### TASK-113 — POS feedback Phase 4: purchase conversion and latest-cost write-back (closes DEBT-006)
+
+- **Date:** 2026-08-28
+- **Module / Phase:** POS feedback remediation — Phase 4 (`SupplierPurchase`, `RawMaterial.unitCost`)
+- **Objective:** Take the nota as written — pack quantity plus total price — and make the latest purchase set the live material cost.
+- **Relevant docs:** ADR-006; ADR-016; ADR-024; DEBT-006
+- **What was done:** `SupplierPurchaseItemInputSchema` now takes `purchaseQuantity` + `lineTotal` and no longer accepts `quantity`/`unitCost` (**breaking API change**). `purchase-totals.ts` replaces `calculateLineTotal` with `normalizePurchaseLine` (quantity at 4dp, unit cost at 6dp, both HALF_UP) and `calculatePurchaseTotal` now simply sums the entered totals. `SupplierPurchasesService.create` step 5 converts using the material read it already had, step 8 snapshots the purchase side on the line, and a new step 8b writes the latest applicable normalized cost back to `RawMaterial.unitCost`. The three "deliberately NOT updating unitCost" comments in `StockMovementsService` were replaced with a pointer to why repricing does not belong in a stock movement. The purchase form now asks "Jumlah Beli" + "Total Harga" and previews `2 liter = 2.000 ml · Rp22,50/ml · Stok +2.000 ml` before submit.
+- **Decisions made during this task:** "Latest" is recomputed from table state inside the existing `FOR UPDATE`, ordered `purchase_date DESC, created_at DESC, id DESC` — see ADR-024 §4 for why this makes backdating and concurrency deterministic. `divFixed` was added to `apps/web/lib/decimal.ts` for the preview only; the stored figures are always the server's.
+- **Status:** Done — closes DEBT-006, verified against the live database (see TASK-116).
+- **Handoff notes:** New e2e block "ADR-024 conversion & latest-cost write-back" in `purchasing-payables.e2e-spec.ts` covers conversion, latest-not-average, backdating, UNPAID also repricing, packaging-change immutability, the base-unit lock, and the zero-value edges. Every existing e2e purchase payload was mechanically converted; all those fixtures use `conversionFactor = 1`, so their totals and stock figures are unchanged by construction.
+
+### TASK-112 — POS feedback Phase 3: raw-material purchase/stock unit model
+
+- **Date:** 2026-08-28
+- **Module / Phase:** POS feedback remediation — Phase 3 (`RawMaterial`, contracts, master data UI)
+- **Objective:** Separate the supplier's pack unit from the stock/recipe unit, with a stored conversion factor.
+- **Relevant docs:** ADR-024; ERD §3; `docs/plannings/2026-08-28-pos-feedback-phases-3-7.md`
+- **What was done:** Added `RawMaterial.purchaseUnit` and `conversionFactor`, `SupplierPurchaseItem.purchaseQuantity`/`purchaseUnit`/`conversionFactor`, `Product.wastePercent`, and widened the four per-unit COST columns to `Decimal(18,6)` — one additive migration whose backfill leaves every existing row semantically identical. New contract primitives `UnitCostString` (scale 6), `ConversionFactorString` (>0), `WastePercentString` (0–100). `RawMaterialsService` exposes `isBaseUnitLocked` from a `_count` on the same query and rejects a real base-unit change once movements exist. The master-data form now shows four fields with a live `1 kg = 1.000 gram` hint and disables the stock unit when locked.
+- **Decisions made during this task:** Per-unit cost widened to 6dp because it is a **rate**, not an amount — `Rp10.000 ÷ 3.000 gram` at 2dp understates HPP by ~0,1% on every gram/ml material, permanently. This was not in the handoff; both its worked examples happen to divide exactly. Ledger-facing money stays 2dp. A PATCH that resubmits the *same* base unit is allowed even when locked, or the edit form would break the moment stock exists.
+- **Status:** Done
+- **Handoff notes:** New `raw-materials.service.spec.ts` (8 cases) covers the lock, the repackaging path, and the response scales. Seeded `Ayam` (ekor → pcs, factor 10) exercises the feature; `Gula`/`Kopi` were deliberately left at factor 1 so the seeded HPP of `4.530,00` that the Phase 4/5 e2e suites assert on does not move.
+
 ### TASK-111 — Preserve the original branch across central-location toggles
 
 - **Date:** 2026-08-25

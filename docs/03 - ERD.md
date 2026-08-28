@@ -125,10 +125,13 @@ Access rules (ADR-011): only `OWNER` may create/deactivate `User` records — no
 | id | uuid (PK) | |
 | name | string | |
 | sellPrice | Decimal | |
+| wastePercent | Decimal(5,2) | waste/susut allowance, 0–100, default 0 (ADR-024) |
 | isActive | boolean | |
 | createdAt / updatedAt | DateTime | |
 
 Note: no `hpp` column — HPP is computed live from `RecipeItem` + `RawMaterial.unitCost` per ADR-005, never stored on `Product`.
+
+`wastePercent` is an **HPP allowance only** (ADR-024): `hpp = round2(Σ(quantityUsed × unitCost) × (1 + wastePercent/100))`, applied after the recipe sum and rounded once. It never increases physical stock deduction — `RecipeItem.quantityUsed` is what a sale consumes.
 
 ### `RecipeItem` (bill of materials)
 | Field | Type | Notes |
@@ -136,7 +139,7 @@ Note: no `hpp` column — HPP is computed live from `RecipeItem` + `RawMaterial.
 | id | uuid (PK) | |
 | productId | uuid (FK → Product) | |
 | rawMaterialId | uuid (FK → RawMaterial) | |
-| quantityUsed | Decimal | |
+| quantityUsed | Decimal | in `RawMaterial.unit`, i.e. the STOCK/RECIPE unit (ADR-024) |
 | createdAt / updatedAt | DateTime | |
 
 Constraint: unique(`productId`, `rawMaterialId`).
@@ -146,11 +149,17 @@ Constraint: unique(`productId`, `rawMaterialId`).
 |---|---|---|
 | id | uuid (PK) | |
 | name | string | |
-| unit | string | satuan (kg, liter, pcs, etc.) |
-| unitCost | Decimal | current cost per unit |
-| currentStock | Decimal | denormalized running balance, synced from `StockMovement` (ADR-007) |
-| lowStockThreshold | Decimal | drives the automatic stock status badge |
+| unit | string | **STOCK/RECIPE base unit** — gram, ml, pcs. Immutable once any `StockMovement` exists (ADR-024) |
+| purchaseUnit | string | the pack the supplier sells — kg, liter, ekor, pack. Editable (ADR-024) |
+| conversionFactor | Decimal(18,4) | how many `unit` in one `purchaseUnit`; `1 ekor = 10 pcs` → 10. Default 1 |
+| unitCost | Decimal(18,6) | current cost per **stock** unit; written by the latest applicable purchase (ADR-024) |
+| currentStock | Decimal | denormalized running balance in `unit`, synced from `StockMovement` (ADR-007) |
+| lowStockThreshold | Decimal | in `unit`; drives the automatic stock status badge |
 | createdAt / updatedAt | DateTime | |
+
+Everything quantity-shaped in the system is in `unit`: `currentStock`, `lowStockThreshold`, `RecipeItem.quantityUsed`, `SupplierPurchaseItem.quantity`, `StockMovement.quantity`, `OpeningStock.quantity`, and stock opname. `purchaseUnit`/`conversionFactor` exist only so purchase ENTRY can be in the pack the supplier actually sells.
+
+`unitCost` is `Decimal(18,6)`, not `(18,2)`, because it is a **rate** and not an amount: `Rp10.000 ÷ 3.000 gram` is `3,333333/gram`, and storing `3,33` understates HPP by ~0,1% on every gram/ml material forever (ADR-024). The same widening applies to `SupplierPurchaseItem.unitCost`, `StockMovement.unitCostAtMovement`, and `OpeningStock.unitPrice`. Every value that reaches the ledger stays `Decimal(18,2)`.
 
 ### `Sale`
 | Field | Type | Notes |
@@ -203,9 +212,14 @@ Constraint: unique(`productId`, `rawMaterialId`).
 | id | uuid (PK) | |
 | supplierPurchaseId | uuid (FK → SupplierPurchase) | |
 | rawMaterialId | uuid (FK → RawMaterial) | |
-| quantity | Decimal | |
-| unitCost | Decimal | |
-| lineTotal | Decimal | |
+| purchaseQuantity | Decimal(18,4) | WHAT WAS BOUGHT — quantity in the purchase unit, as entered (ADR-024) |
+| purchaseUnit | string | snapshot of `RawMaterial.purchaseUnit` at recording time |
+| conversionFactor | Decimal(18,4) | snapshot of `RawMaterial.conversionFactor` at recording time |
+| quantity | Decimal(18,4) | WHAT STOCK RECEIVED — `purchaseQuantity × conversionFactor`, in the stock unit |
+| unitCost | Decimal(18,6) | derived — `lineTotal ÷ quantity`, per stock unit |
+| lineTotal | Decimal(18,2) | the TOTAL price entered for this line; the input the other two derive from |
+
+The three snapshot columns are why editing a material's packaging is safe: a historical line carries its own copy, so it never moves (ADR-024). `SupplierPurchase.totalAmount` is the sum of the `lineTotal` values actually stored.
 
 ### `Payable`
 | Field | Type | Notes |
@@ -239,7 +253,7 @@ Constraint: unique(`productId`, `rawMaterialId`).
 | quantity | Decimal | |
 | referenceType | enum(SALE, PURCHASE, OPENING, ADJUSTMENT) | |
 | referenceId | uuid, nullable | points to the `Sale`, `SupplierPurchase`, or `OpeningStock` row that caused this movement |
-| unitCostAtMovement | Decimal | snapshot, for historical costing accuracy |
+| unitCostAtMovement | Decimal(18,6) | snapshot, per **stock** unit, for historical costing accuracy |
 | movementDate | DateTime | |
 | createdAt | DateTime | append-only — no `updatedAt` |
 
@@ -249,8 +263,8 @@ Constraint: unique(`productId`, `rawMaterialId`).
 | id | uuid (PK) | |
 | rawMaterialId | uuid (FK → RawMaterial) | |
 | periodMonth | Date | first day of the month this applies to |
-| quantity | Decimal | |
-| unitPrice | Decimal, nullable | required if no purchase has happened in the period; must be omitted/null if a purchase already exists (PRD §5.5, Phase 6) |
+| quantity | Decimal | the declared physical count, in `RawMaterial.unit` (ADR-024) |
+| unitPrice | Decimal(18,6), nullable | required if no purchase has happened in the period; must be omitted/null if a purchase already exists (PRD §5.5, Phase 6) |
 | createdAt / updatedAt | DateTime | |
 
 Constraint: unique(`rawMaterialId`, `periodMonth`).
