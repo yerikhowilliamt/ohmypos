@@ -17,11 +17,12 @@ const branchRule = <
 ) =>
   schema
     .refine((v) => v.role !== 'KASIR' || Boolean(v.branchId), {
-      message: 'branchId is required when role is KASIR',
+      message: 'Cabang wajib dipilih untuk peran Kasir',
       path: ['branchId'],
     })
     .refine((v) => v.role === 'KASIR' || !v.branchId, {
-      message: 'branchId must be null when role is ADMIN or OWNER',
+      message:
+        'Admin dan Owner tidak ditugaskan ke satu cabang, jadi cabang harus dikosongkan',
       path: ['branchId'],
     });
 

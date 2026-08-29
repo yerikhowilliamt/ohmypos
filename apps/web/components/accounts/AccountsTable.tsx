@@ -136,7 +136,7 @@ export function AccountsTable({
         isLoading={isLoading}
         searchColumns={['name']}
         searchPlaceholder="Cari nama atau tipe metode pembayaran…"
-        emptyMessage="Belum ada rekening atau kas yang didaftarkan."
+        emptyMessage="Belum ada rekening atau kas. Tambahkan minimal satu agar kasir punya pilihan metode pembayaran."
       />
 
       <AccountFormDialog

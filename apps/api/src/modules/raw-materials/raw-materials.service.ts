@@ -101,7 +101,9 @@ export class RawMaterialsService {
       include: WITH_MOVEMENT_COUNT,
     });
     if (!material) {
-      throw new NotFoundException(`Raw material with ID ${id} not found`);
+      throw new NotFoundException(
+        'Bahan baku tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     return this.toResponse(material);
   }
@@ -169,7 +171,7 @@ export class RawMaterialsService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2003'
       ) {
-        throw new RawMaterialInUseException(id);
+        throw new RawMaterialInUseException();
       }
       throw error;
     }

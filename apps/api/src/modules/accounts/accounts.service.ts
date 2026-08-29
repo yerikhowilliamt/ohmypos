@@ -44,7 +44,9 @@ export class AccountsService {
   async findOne(id: string) {
     const account = await this.prisma.account.findUnique({ where: { id } });
     if (!account) {
-      throw new NotFoundException(`Account with ID ${id} not found`);
+      throw new NotFoundException(
+        'Akun pembayaran tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     return account;
   }

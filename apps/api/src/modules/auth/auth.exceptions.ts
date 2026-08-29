@@ -13,7 +13,7 @@ import { BadRequestException } from '@nestjs/common';
 export class LastActiveOwnerException extends BadRequestException {
   constructor() {
     super(
-      'You are the last active OWNER and cannot deactivate your own account',
+      'Anda satu-satunya Owner yang masih aktif, jadi akun ini tidak bisa dinonaktifkan. Angkat Owner lain terlebih dahulu.',
     );
     this.name = 'LastActiveOwnerException';
   }

@@ -50,7 +50,9 @@ export class CategoriesService {
   async findOne(id: string) {
     const category = await this.prisma.category.findUnique({ where: { id } });
     if (!category) {
-      throw new NotFoundException(`Category with ID ${id} not found`);
+      throw new NotFoundException(
+        'Kategori tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     return toCategoryResponse(category);
   }
@@ -58,7 +60,9 @@ export class CategoriesService {
   async update(id: string, dto: UpdateCategory) {
     const category = await this.prisma.category.findUnique({ where: { id } });
     if (!category) {
-      throw new NotFoundException(`Category with ID ${id} not found`);
+      throw new NotFoundException(
+        'Kategori tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     if (isSystemCategoryName(category.name)) {
       throw new SystemCategoryProtectedException(category.name);
@@ -83,7 +87,9 @@ export class CategoriesService {
   async remove(id: string) {
     const category = await this.prisma.category.findUnique({ where: { id } });
     if (!category) {
-      throw new NotFoundException(`Category with ID ${id} not found`);
+      throw new NotFoundException(
+        'Kategori tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     if (isSystemCategoryName(category.name)) {
       throw new SystemCategoryProtectedException(category.name);
@@ -96,7 +102,7 @@ export class CategoriesService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2003'
       ) {
-        throw new CategoryInUseException(id);
+        throw new CategoryInUseException();
       }
       throw error;
     }

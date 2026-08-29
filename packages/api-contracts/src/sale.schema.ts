@@ -17,7 +17,7 @@ export const SaleItemInputSchema = z.object({
   // zero lineTotal (mirrors SupplierPurchaseItemInputSchema).
   quantity: QuantityString.refine(
     (v) => Number(v) > 0,
-    'must be greater than zero',
+    'Harus lebih besar dari 0',
   ),
   /**
    * Per-line price override — PRD §5.2's mechanism for "discounts or negotiated

@@ -246,7 +246,7 @@ export function GeneralExpenseTab() {
           },
           itemNoun: 'pengeluaran',
         }}
-        emptyMessage="Belum ada pengeluaran tercatat."
+        emptyMessage="Belum ada pengeluaran tercatat. Klik Tambah untuk mencatat biaya operasional pertama."
         exportColumns={exportColumns}
         exportFilename={`pengeluaran-umum_${new Date().toISOString().slice(0, 10)}.xlsx`}
         exportAll={exportAll}

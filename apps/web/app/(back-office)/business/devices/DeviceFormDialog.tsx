@@ -94,8 +94,8 @@ export function DeviceFormDialog({
         error instanceof Error
           ? error.message
           : isEdit
-            ? 'Gagal menyimpan perubahan.'
-            : 'Gagal menambah perangkat.',
+            ? 'Perubahan belum tersimpan. Periksa koneksi lalu coba lagi.'
+            : 'Perangkat belum tersimpan. Periksa koneksi lalu coba lagi.',
       );
     }
   };

@@ -12,15 +12,15 @@ import { ConflictException } from '@nestjs/common';
 
 export class SupplierNameTakenException extends ConflictException {
   constructor(name: string) {
-    super(`Supplier with name "${name}" already exists`);
+    super(`Pemasok "${name}" sudah ada. Pakai nama lain.`);
     this.name = 'SupplierNameTakenException';
   }
 }
 
 export class SupplierInUseException extends ConflictException {
-  constructor(id: string) {
+  constructor() {
     super(
-      `Supplier with ID ${id} cannot be deleted because it is referenced by existing purchases or payables`,
+      'Pemasok ini tidak bisa dihapus karena masih terkait dengan pembelian atau utang yang tercatat.',
     );
     this.name = 'SupplierInUseException';
   }

@@ -35,7 +35,7 @@ export function decimalString(options: DecimalStringOptions) {
   return z
     .string()
     .trim()
-    .regex(DECIMAL_PATTERN, 'must be a decimal number written as a string')
+    .regex(DECIMAL_PATTERN, 'Masukkan angka yang valid')
     .transform((val) => val.replace(',', '.'))
     .refine(
       (value) => (value.split('.')[1]?.length ?? 0) <= scale,
@@ -48,7 +48,7 @@ export function decimalString(options: DecimalStringOptions) {
     )
     .refine(
       (value) => !nonNegative || !value.startsWith('-'),
-      'must not be negative',
+      'Tidak boleh bernilai negatif',
     );
 }
 
@@ -84,7 +84,7 @@ export type UnitCostString = z.infer<typeof UnitCostString>;
  */
 export const ConversionFactorString = decimalString({ scale: 4 }).refine(
   (v) => Number(v) > 0,
-  'must be greater than zero',
+  'Harus lebih besar dari 0',
 );
 export type ConversionFactorString = z.infer<typeof ConversionFactorString>;
 

@@ -72,7 +72,9 @@ export class ProductsService {
       include: this.productWithRecipeInclude,
     });
     if (!product) {
-      throw new NotFoundException(`Product with ID ${id} not found`);
+      throw new NotFoundException(
+        'Produk tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     return toProductWithHppResponse(product);
   }
@@ -126,7 +128,7 @@ export class ProductsService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2003'
       ) {
-        throw new ProductInUseException(id);
+        throw new ProductInUseException();
       }
       throw error;
     }

@@ -90,7 +90,7 @@ export function Sidebar({ user }: { user: UserResponse }) {
       router.refresh();
     } catch {
       setIsLoggingOut(false);
-      setLogoutError('Gagal keluar. Coba lagi.');
+      setLogoutError('Belum berhasil keluar. Periksa koneksi lalu coba lagi.');
     }
   };
 

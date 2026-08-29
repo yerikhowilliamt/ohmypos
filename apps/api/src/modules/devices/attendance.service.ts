@@ -29,7 +29,9 @@ export class AttendanceService {
       where: { id },
     });
     if (!existing) {
-      throw new NotFoundException(`Attendance record with ID ${id} not found`);
+      throw new NotFoundException(
+        'Data absensi tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     const updated = await this.prisma.attendanceRecord.update({

@@ -14,7 +14,9 @@ import { CENTRAL_BRANCH_NAME } from '../../common/system-refs';
 
 export class PurchaseItemMaterialNotFoundException extends NotFoundException {
   constructor(missingIds: string[]) {
-    super(`Raw material(s) not found: ${missingIds.join(', ')}`);
+    super(
+      `Bahan baku berikut tidak ditemukan: ${missingIds.join(', ')}. Muat ulang halaman.`,
+    );
     this.name = 'PurchaseItemMaterialNotFoundException';
   }
 }
@@ -30,7 +32,7 @@ export class PurchaseItemMaterialNotFoundException extends NotFoundException {
 export class CentralBranchNotAssignableException extends BadRequestException {
   constructor() {
     super(
-      `A purchase cannot be assigned to the system branch "${CENTRAL_BRANCH_NAME}" — send branchId: null to record a central purchase (ADR-014)`,
+      `Pembelian tidak bisa dibebankan ke lokasi "${CENTRAL_BRANCH_NAME}" secara langsung. Pilih "Umum" pada Lokasi Pembelian untuk belanja terpusat.`,
     );
     this.name = 'CentralBranchNotAssignableException';
   }

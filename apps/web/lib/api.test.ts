@@ -126,3 +126,49 @@ describe('apiFetch', () => {
     });
   });
 });
+
+describe('error messages a user actually reads', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('replaces the browser’s English network error with Indonesian', async () => {
+    // Chrome throws "Failed to fetch", Safari "Load failed", Firefox
+    // "NetworkError when attempting to fetch resource" — three English
+    // sentences that used to reach the screen verbatim.
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(apiFetch('/anything')).rejects.toThrow(
+      /Tidak dapat terhubung ke server/,
+    );
+  });
+
+  it('prefers the field-level messages over the library’s English wrapper', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        statusCode: 400,
+        message: 'Validation failed',
+        errors: [{ message: 'Kata sandi wajib diisi' }],
+      }),
+    } as Response);
+
+    await expect(apiFetch('/auth/login', { method: 'POST' })).rejects.toThrow(
+      'Kata sandi wajib diisi',
+    );
+  });
+
+  it('falls back to Indonesian when the server sends no message at all', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => null,
+    } as unknown as Response);
+
+    await expect(apiFetch('/anything')).rejects.toThrow(
+      /Server sedang bermasalah/,
+    );
+  });
+});

@@ -41,6 +41,46 @@
 
 ## Log
 
+### TASK-122 — UI copy rewritten in Indonesian, from the source of each message
+
+- **Date:** 2026-08-29
+- **Module / Phase:** `apps/api` (exception messages + guards), `packages/api-contracts` (zod messages), `apps/web` (`lib/api.ts`, toasts, empty states)
+- **Objective:** Owner asked for the wording across the UI to be more human. An inventory of what users actually see showed the problem was not tone but language and dead ends.
+- **What was found:**
+  - **37 unique English messages** across 60 exception throws in `apps/api`, all reachable on screen because `apps/web/lib/api.ts` puts `body.message` straight into toasts and banners. The most visible: a wrong password produced **"Invalid credentials"**, a disabled account **"This account has been deactivated"** — English, in an otherwise entirely Indonesian product.
+  - **The browser's own network error reached the screen verbatim.** When `fetch` rejects there is no response to read a message from, so `"Failed to fetch"` (Chrome), `"Load failed"` (Safari), `"NetworkError when attempting to fetch resource"` (Firefox) travelled through every `catch (e) { e.message }` in the app — for the failure a user is *most* likely to hit.
+  - **`"Validation failed"`**, the `nestjs-zod` wrapper, was surfacing instead of the field messages underneath it, which were already the useful ones.
+  - **Zod messages named database columns:** `accountId is required when paymentStatus is PAID`, `branchId is required when role is KASIR`, `duplicate rawMaterialId in the same recipe`.
+  - **22 `"Gagal …"` toasts and 22 empty states** named the failure or the absence but never the way out of it.
+- **Why the fix went to the API and not to a translation layer at the boundary:** matching English strings in `lib/api.ts` would have been brittle — one reworded message and the translation silently misses. The codebase was also already inconsistent rather than deliberately English: the Mandiri PDF parser, `system-refs.ts`, and the backdated-sale and price-override guards were Indonesian long before this. Writing the rest in Indonesian follows the precedent that existed.
+- **What was done:**
+  - `apps/api/src/common/messages.ts` holds the shared lines (`SESSION_EXPIRED`, `ACCOUNT_DEACTIVATED`, `SERVER_MISCONFIGURED`, `OTHER_BRANCH_FORBIDDEN`) and states the two rules the rest of the API now follows: a user reads it, so it is Indonesian; and it ends with the action that unsticks them.
+  - All 37 messages rewritten, including the 16 `X with ID <uuid> not found` variants, which stopped printing an id at a reader who never typed one.
+  - **Operator detail no longer leaks:** a missing `JWT_SECRET` was answering an anonymous caller with the variable's name. It is now logged and answered with `SERVER_MISCONFIGURED`.
+  - **A stale session no longer claims bad credentials:** `changePassword`/`getProfile`/`updateProfile`/`deactivateSelf` threw `'Invalid credentials'` when the user row was simply gone. They now say the session ended.
+  - `lib/api.ts` converts a rejected `fetch` into an Indonesian `ApiError` (status 0), prefers `errors[].message` over the library wrapper, and has a status-keyed Indonesian fallback for a server that returns no message at all.
+- **Tests:** 3 new cases in `lib/api.test.ts` pin the three boundary behaviours. 13 assertions across 5 e2e specs and 1 unit spec were updated — all of them matched message prose, none matched behaviour, so no test was weakened. The `branchId: null` assertion in `purchasing-payables.e2e-spec.ts` now asserts the message names the UI control instead of a JSON field.
+- **Verified:** API e2e 20 suites / 460 tests, API unit 199, web 531, lint + typecheck clean across the workspace. Login checked against the running API: a wrong password now returns "Email atau kata sandi salah. Periksa kembali, atau minta Owner mengatur ulang kata sandi Anda."
+- **Handoff notes:** `nestjs-zod`'s `"Validation failed"` wrapper is still English in the raw response body. Nothing displays it any more — `lib/api.ts` reads the field errors instead — so it was left alone rather than swapping the global pipe. Any new API-consuming client would need the same preference, or the pipe replaced.
+
+### TASK-121 — Help page rebuilt around concepts, and a test that keeps it complete
+
+- **Date:** 2026-08-29
+- **Module / Phase:** `apps/web/lib/help-content.ts`, `apps/web/app/(shared)/help`, `apps/web/components/help`
+- **Objective:** Owner asked for a help page detailed enough that a user genuinely understands how the app works, and offered Playwright screenshots if useful.
+- **Relevant docs:** ADR-004 (centralised stock/cash), ADR-005 (HPP snapshot), ADR-006 (unpaid purchase → Payable), ADR-011 (roles), ADR-014 + amendment (the `Umum` location); ERR-039 follow-up
+- **What was done:**
+  - **Diagnosis.** The page held 9 topics against 35 routes, and every topic was a click-path. Both questions the Owner had actually asked (`why is Pusat missing from the POS`, `what is the difference between Umum and Semua Cabang`) were model questions that no click-path could have answered. Three of the 9 topics were also factually wrong: they named a button `Selesaikan Transaksi` that does not exist (the real one is `Bayar`), described Data Master as tabbed when it is three sidebar routes, and listed Supplier/Akun/Kategori as tabs inside it.
+  - **Content model.** `steps: string[]` became a discriminated union of `text | steps | note | terms | flow`, plus `summary`, `category`, `covers`, and `keywords` per section. Status words (`Lunas`, `Belum Bayar`, `Aman`, `Menipis`, `Habis`, payable statuses, account types) are interpolated from the shared `vocabulary` maps rather than retyped, so renaming one in `packages/api-contracts` renames it in the help text too.
+  - **Content.** 26 topics covering all 35 routes, opening with a `Konsep Dasar` group: the bahan → resep → produk → penjualan → laporan chain, HPP, `Umum` vs `Semua Cabang`, centralised stock/cash, when a purchase becomes utang, why historical reports never change, and who may do what.
+  - **Page.** Category grouping, a search box that reads the whole body (not just titles), and `type="multiple"` accordions so two topics can be compared side by side.
+  - **Screenshots: deliberately not used.** `Pusat (Dapur Sentral)` → `Umum` had renamed five files hours earlier; a screenshot taken the day before would already have been wrong with no lint, typecheck, or CI able to notice. Flow diagrams are rendered as DOM boxes and arrows instead — greppable, theme-aware, and impossible to leave stale as an image.
+- **Tests:** `lib/help-content.test.ts` (18) and `app/(shared)/help/HelpClient.test.tsx` (8). The load-bearing one asserts every sidebar route in `nav-config.ts` is claimed by a help topic **the same role can open** — documentation gaps are invisible to a compiler, and this makes them fail CI. It earned its keep immediately: it caught that the `sales-history` topic was offered to ADMIN, who cannot open `/sales/history` at all because the `(pos)` layout admits only KASIR and OWNER.
+- **Verified:** 24 files / 144 tests green; lint and typecheck clean; page checked in the browser in light and dark mode.
+- **Handoff notes:**
+  - **ADMIN has no `Bantuan` entry in the sidebar** (`nav-config.ts:60-76`), although `/help` admits ADMIN. The role can therefore never reach this page by navigating. One line to fix; left alone as out of scope, flagged to the Owner.
+  - **Voiding a sale is unreachable for ADMIN**, and rejected for KASIR. `POST /sales/:id/void` allows `ADMIN`/`OWNER`, but the button lives in `/sales/history`, inside the `(pos)` group that requires `KASIR`/`OWNER`. Effectively only OWNER can void. The help text now describes the observed behaviour; whether the roles should be reconciled is a product decision.
+
 ### TASK-120 — System-location identity, production bootstrap, and the Toko Utama designation
 
 - **Date:** 2026-08-29

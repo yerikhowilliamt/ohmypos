@@ -86,7 +86,7 @@ describe('RawMaterialsTable', () => {
   it('renders empty state when no raw materials exist', () => {
     renderWithClient(<RawMaterialsTable materials={[]} isLoading={false} />);
 
-    expect(screen.getByText('Belum ada bahan baku terdaftar.')).toBeDefined();
+    expect(screen.getByText(/Belum ada bahan baku/)).toBeDefined();
   });
 
   it('opens RawMaterialFormDialog when clicking Tambah Bahan Baku button', () => {

@@ -150,7 +150,7 @@ export function IncomeByPaymentMethodView({
         searchColumns={['accountName']}
         searchPlaceholder="Cari akun..."
         searchLabel="Cari akun"
-        emptyMessage="Tidak ada data pendapatan"
+        emptyMessage="Belum ada pendapatan pada rentang ini. Coba ubah tanggal atau cabangnya."
         emptyDescription="Belum ada transaksi pada rentang tanggal ini."
         exportColumns={exportColumns}
         exportFilename={`pendapatan-per-metode-bayar_${rangeSuffix(filters.startDate, filters.endDate)}.xlsx`}

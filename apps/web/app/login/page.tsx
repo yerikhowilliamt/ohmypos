@@ -53,7 +53,11 @@ export default function LoginPage() {
       router.push('/');
       router.refresh();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Login failed');
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Belum berhasil masuk. Periksa koneksi lalu coba lagi.',
+      );
     }
   };
 

@@ -48,16 +48,20 @@ export interface ReportRange {
 function wibMidnight(isoDate: string): Date {
   if (!DATE_PATTERN.test(isoDate)) {
     throw new InvalidReportRangeException(
-      `"${isoDate}" is not a YYYY-MM-DD date`,
+      `Tanggal "${isoDate}" tidak dikenali. Gunakan format YYYY-MM-DD.`,
     );
   }
   const instant = new Date(`${isoDate}T00:00:00.000${REPORT_UTC_OFFSET}`);
   if (Number.isNaN(instant.getTime())) {
-    throw new InvalidReportRangeException(`"${isoDate}" is not a real date`);
+    throw new InvalidReportRangeException(
+      `Tanggal "${isoDate}" tidak ada dalam kalender.`,
+    );
   }
   const utcMidnightOfWib = new Date(instant.getTime() + WIB_OFFSET_MS);
   if (utcMidnightOfWib.toISOString().slice(0, 10) !== isoDate) {
-    throw new InvalidReportRangeException(`"${isoDate}" is not a real date`);
+    throw new InvalidReportRangeException(
+      `Tanggal "${isoDate}" tidak ada dalam kalender.`,
+    );
   }
   return instant;
 }
@@ -84,7 +88,7 @@ export function resolveReportRange(
   const dayCount = Math.round((to.getTime() - from.getTime()) / MS_PER_DAY);
   if (dayCount > MAX_REPORT_RANGE_DAYS) {
     throw new InvalidReportRangeException(
-      `range spans ${dayCount} days, the maximum is ${MAX_REPORT_RANGE_DAYS}`,
+      `Rentang tanggal ${dayCount} hari terlalu panjang. Maksimal ${MAX_REPORT_RANGE_DAYS} hari — persempit rentangnya.`,
     );
   }
 

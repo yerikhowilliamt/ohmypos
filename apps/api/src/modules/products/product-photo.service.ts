@@ -21,7 +21,9 @@ export class ProductPhotoService {
       where: { id: productId },
     });
     if (!product) {
-      throw new NotFoundException(`Product with ID ${productId} not found`);
+      throw new NotFoundException(
+        'Produk tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     const secureUrl = await new Promise<string>((resolve, reject) => {

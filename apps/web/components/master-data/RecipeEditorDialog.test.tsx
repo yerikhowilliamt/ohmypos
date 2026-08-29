@@ -215,7 +215,7 @@ describe('RecipeEditorDialog', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/must be greater than zero/i)).toBeDefined();
+      expect(screen.getByText(/harus lebih besar dari 0/i)).toBeDefined();
     });
 
     expect(apiModule.apiFetch).toHaveBeenCalledTimes(1); // Only the initial GET
@@ -270,9 +270,7 @@ describe('RecipeEditorDialog', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/duplicate rawmaterialid in the same recipe/i),
-      ).toBeDefined();
+      expect(screen.getByText(/tercantum dua kali/i)).toBeDefined();
     });
   });
 

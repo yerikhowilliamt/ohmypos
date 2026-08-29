@@ -111,7 +111,7 @@ export function BranchProfitabilityCard({
           </div>
         ) : branchResults.length === 0 ? (
           <p className="text-xs text-text-secondary py-4 text-center">
-            Belum ada data transaksi cabang bulan ini.
+            Belum ada transaksi cabang bulan ini.
           </p>
         ) : (
           <div className="space-y-3.5">

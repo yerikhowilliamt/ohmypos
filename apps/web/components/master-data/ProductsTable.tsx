@@ -246,7 +246,7 @@ export function ProductsTable({
         isLoading={isLoading}
         searchColumns={['name']}
         searchPlaceholder="Cari nama produk / menu…"
-        emptyMessage="Belum ada produk jualan terdaftar."
+        emptyMessage="Belum ada produk. Klik Tambah untuk membuat menu jualan pertama Anda."
       />
 
       {/* Create / Edit Product Dialog */}

@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type {
   ChangePassword,
@@ -13,6 +18,11 @@ import { Prisma } from '../../generated/prisma/client';
 import type { JwtPayload } from '../../common/types/jwt-payload.interface';
 import { AttendanceService } from '../devices/attendance.service';
 import { LastActiveOwnerException } from './auth.exceptions';
+import {
+  ACCOUNT_DEACTIVATED,
+  SERVER_MISCONFIGURED,
+  SESSION_EXPIRED,
+} from '../../common/messages';
 
 export interface AuthTokens {
   accessToken: string;
@@ -30,6 +40,8 @@ const BCRYPT_ROUNDS = 10;
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -53,11 +65,16 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, hashToCompare);
 
     if (!user || !isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      // Deliberately does not say WHICH of the two is wrong — that would tell
+      // an attacker which emails exist, defeating the dummy-hash comparison
+      // above. It still tells a real user what to do next.
+      throw new UnauthorizedException(
+        'Email atau kata sandi salah. Periksa kembali, atau minta Owner mengatur ulang kata sandi Anda.',
+      );
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('This account has been deactivated');
+      throw new UnauthorizedException(ACCOUNT_DEACTIVATED);
     }
 
     const tokens = await this.generateTokens({
@@ -84,7 +101,7 @@ export class AuthService {
 
   async refreshTokens(refreshToken: string): Promise<AuthTokens> {
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token missing');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     let payload: JwtPayload;
@@ -93,7 +110,7 @@ export class AuthService {
         secret: this.getSecret('JWT_REFRESH_SECRET'),
       });
     } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     const user = await this.prisma.user.findUnique({
@@ -101,12 +118,12 @@ export class AuthService {
     });
 
     if (!user?.refreshTokenHash || !user.isActive) {
-      throw new UnauthorizedException('Access denied');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     const isValid = await bcrypt.compare(refreshToken, user.refreshTokenHash);
     if (!isValid) {
-      throw new UnauthorizedException('Access denied');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     // Rotation: the presented refresh token is replaced, so a stolen copy is
@@ -148,12 +165,14 @@ export class AuthService {
   ): Promise<{ message: string }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     const isValid = await bcrypt.compare(dto.oldPassword, user.passwordHash);
     if (!isValid) {
-      throw new UnauthorizedException('Current password is incorrect');
+      throw new UnauthorizedException(
+        'Kata sandi saat ini salah. Coba ketik ulang.',
+      );
     }
 
     await this.prisma.user.update({
@@ -166,13 +185,13 @@ export class AuthService {
       },
     });
 
-    return { message: 'Password updated successfully' };
+    return { message: 'Kata sandi berhasil diperbarui.' };
   }
 
   async getProfile(userId: string): Promise<UserResponse> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
     return this.toResponse(user);
   }
@@ -181,7 +200,7 @@ export class AuthService {
   async updateProfile(userId: string, dto: UpdateSelf): Promise<UserResponse> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     const updated = await this.prisma.user.update({
@@ -201,7 +220,7 @@ export class AuthService {
   async deactivateSelf(userId: string): Promise<{ message: string }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     if (user.role === 'OWNER') {
@@ -257,9 +276,8 @@ export class AuthService {
   private getSecret(key: string): string {
     const value = process.env[key];
     if (!value) {
-      throw new UnauthorizedException(
-        `Environment variable ${key} is required`,
-      );
+      this.logger.error(`Environment variable ${key} is required`);
+      throw new ServiceUnavailableException(SERVER_MISCONFIGURED);
     }
     return value;
   }

@@ -167,7 +167,7 @@ export function InventorySummaryTable({
       searchColumns={['name']}
       searchPlaceholder="Cari bahan baku..."
       searchLabel="Cari bahan baku"
-      emptyMessage="Tidak ada data stok"
+      emptyMessage="Belum ada data stok pada periode ini. Coba ubah rentang tanggalnya."
       emptyDescription="Belum ada bahan baku atau pergerakan stok pada periode ini."
       exportColumns={exportColumns}
       exportFilename={`ringkasan-stok_${period ?? new Date().toISOString().slice(0, 7)}.xlsx`}

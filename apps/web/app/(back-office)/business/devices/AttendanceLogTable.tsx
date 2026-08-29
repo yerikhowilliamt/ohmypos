@@ -486,7 +486,7 @@ export function AttendanceLogTable({ branches }: AttendanceLogTableProps) {
         serverSearch={{ value: searchInput, onChange: handleSearchChange }}
         searchPlaceholder="Cari karyawan, email, cabang, atau perangkat…"
         searchLabel="Cari log absensi"
-        emptyMessage="Belum ada riwayat absensi login kasir."
+        emptyMessage="Belum ada riwayat absensi. Absensi tercatat saat kasir masuk dari perangkat yang sudah diaktifkan."
         exportColumns={exportColumns}
         exportFilename={`log-absensi_${rangeSuffix(startDate, endDate)}.xlsx`}
         exportAll={exportAll}

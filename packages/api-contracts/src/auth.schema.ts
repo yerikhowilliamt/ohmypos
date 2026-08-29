@@ -8,7 +8,7 @@ import { UserResponseSchema } from './user.schema';
  */
 export const LoginSchema = z.object({
   email: z.email().toLowerCase(),
-  password: z.string().min(1, 'Password is required'),
+  password: z.string().min(1, 'Kata sandi wajib diisi'),
 });
 export type Login = z.infer<typeof LoginSchema>;
 

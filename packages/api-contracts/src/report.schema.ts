@@ -28,7 +28,7 @@ export const ReportRangeQuerySchema = z
     branchId: UuidString.optional(),
   })
   .refine((q) => q.startDate <= q.endDate, {
-    message: 'endDate must not precede startDate',
+    message: 'Tanggal selesai tidak boleh sebelum tanggal mulai',
     path: ['endDate'],
   });
 export type ReportRangeQuery = z.infer<typeof ReportRangeQuerySchema>;

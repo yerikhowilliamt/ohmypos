@@ -27,7 +27,7 @@ describe('Opening Stock Rules (opening-stock.rules.ts)', () => {
           [{ rawMaterialId: 'm1', name: 'Gula', unitPrice: undefined }],
           new Set(),
         ),
-      ).toThrow(/unitPrice is required/);
+      ).toThrow(/Isi harga satuan/);
     });
 
     it('accepts a missing price when a purchase already priced the material', () => {
@@ -45,7 +45,7 @@ describe('Opening Stock Rules (opening-stock.rules.ts)', () => {
           [{ rawMaterialId: 'm1', name: 'Gula', unitPrice: '12000.00' }],
           new Set(['m1']),
         ),
-      ).toThrow(/must be omitted/);
+      ).toThrow(/Harga satuan tidak perlu diisi/);
     });
 
     it('names EVERY offending material, not just the first', () => {

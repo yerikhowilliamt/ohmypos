@@ -19,7 +19,7 @@ export const CreateLeaveRequestSchema = z
     reason: z.string().trim().min(1).max(500),
   })
   .refine((v) => v.startDate <= v.endDate, {
-    message: 'endDate must not precede startDate',
+    message: 'Tanggal selesai tidak boleh sebelum tanggal mulai',
     path: ['endDate'],
   });
 export type CreateLeaveRequest = z.infer<typeof CreateLeaveRequestSchema>;

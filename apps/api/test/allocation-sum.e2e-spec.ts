@@ -151,7 +151,7 @@ describe('Allocation sum constraint (e2e)', () => {
       .expect(400);
 
     const body = res.body as { message: string };
-    expect(body.message).toMatch(/exceed/i);
+    expect(body.message).toMatch(/melebihi nilai mutasi bank/i);
     expect(await prisma.allocation.count()).toBe(0);
   });
 
@@ -351,7 +351,7 @@ describe('Allocation sum constraint (e2e)', () => {
       .expect(400);
 
     const body = res.body as { message: string };
-    expect(body.message).toMatch(/exceeds ledger entry amount/i);
+    expect(body.message).toMatch(/melebihi nilai catatan transaksi/i);
 
     const activeAllocations = await prisma.allocation.findMany({
       where: { ledgerEntryId: entry.id, status: 'ACTIVE' },

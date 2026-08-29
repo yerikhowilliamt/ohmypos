@@ -32,7 +32,9 @@ export class UsersService {
         where: { id: dto.branchId },
       });
       if (!branch) {
-        throw new NotFoundException(`Branch with ID ${dto.branchId} not found`);
+        throw new NotFoundException(
+          'Cabang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+        );
       }
     }
 
@@ -70,7 +72,9 @@ export class UsersService {
   async findOne(id: string): Promise<UserResponse> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException(
+        'Pengguna tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     return this.toResponse(user);
   }
@@ -93,7 +97,9 @@ export class UsersService {
         where: { id: dto.branchId },
       });
       if (!branch) {
-        throw new NotFoundException(`Branch with ID ${dto.branchId} not found`);
+        throw new NotFoundException(
+          'Cabang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+        );
       }
     }
 
@@ -144,12 +150,12 @@ export class UsersService {
   ) {
     if (role === 'KASIR' && !branchId) {
       throw new InvalidRoleBranchAssignmentException(
-        'branchId is required when role is KASIR',
+        'Cabang wajib dipilih untuk peran Kasir.',
       );
     }
     if (role !== 'KASIR' && branchId) {
       throw new InvalidRoleBranchAssignmentException(
-        'branchId must be null when role is ADMIN or OWNER',
+        'Admin dan Owner tidak ditugaskan ke satu cabang, jadi cabangnya harus dikosongkan.',
       );
     }
   }

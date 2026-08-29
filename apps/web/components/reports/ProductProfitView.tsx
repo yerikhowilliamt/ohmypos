@@ -207,7 +207,7 @@ export function ProductProfitView({
         searchColumns={['productName']}
         searchPlaceholder="Cari produk..."
         searchLabel="Cari produk"
-        emptyMessage="Tidak ada data laba produk"
+        emptyMessage="Belum ada penjualan pada rentang ini. Coba ubah tanggal atau cabangnya."
         emptyDescription="Belum ada penjualan pada rentang tanggal ini."
         exportColumns={exportColumns}
         exportFilename={`laba-per-produk_${rangeSuffix(filters.startDate, filters.endDate)}.xlsx`}
