@@ -37,6 +37,8 @@ const branches: BranchResponse[] = [
     id: MELATI,
     name: 'Cabang Melati',
     address: null,
+    isSystem: false,
+    isMainStore: true,
     createdAt: '2026-08-17T00:00:00.000Z',
     updatedAt: '2026-08-17T00:00:00.000Z',
   },
@@ -44,6 +46,8 @@ const branches: BranchResponse[] = [
     id: KENANGA,
     name: 'Cabang Kenanga',
     address: null,
+    isSystem: false,
+    isMainStore: false,
     createdAt: '2026-08-17T00:00:00.000Z',
     updatedAt: '2026-08-17T00:00:00.000Z',
   },
@@ -51,8 +55,10 @@ const branches: BranchResponse[] = [
   // rejects any Sale created against it.
   {
     id: PUSAT,
-    name: 'Pusat (Dapur Sentral)',
-    address: 'Dapur Sentral',
+    name: 'Umum',
+    address: null,
+    isSystem: true,
+    isMainStore: false,
     createdAt: '2026-08-17T00:00:00.000Z',
     updatedAt: '2026-08-17T00:00:00.000Z',
   },
@@ -199,7 +205,7 @@ describe('PosScreen — OWNER branch picker', () => {
     fireEvent.click(await screen.findByRole('combobox', { name: 'Cabang' }));
     expect(await screen.findByText('Cabang Melati')).toBeInTheDocument();
     expect(screen.getByText('Cabang Kenanga')).toBeInTheDocument();
-    expect(screen.queryByText('Pusat (Dapur Sentral)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Umum')).not.toBeInTheDocument();
   });
 
   it('reveals the grid/cart after picking a branch and submits with that branchId', async () => {

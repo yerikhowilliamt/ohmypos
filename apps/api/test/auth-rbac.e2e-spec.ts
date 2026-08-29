@@ -53,8 +53,8 @@ describe('Auth & role-based access control (e2e)', () => {
     branchA = a.id;
     branchB = b.id;
     const centralBranch = await prisma.branch.upsert({
-      where: { name: 'Pusat (Dapur Sentral)' },
-      create: { name: 'Pusat (Dapur Sentral)' },
+      where: { name: 'Umum' },
+      create: { name: 'Umum', isSystem: true },
       update: {},
     });
     centralBranchId = centralBranch.id;

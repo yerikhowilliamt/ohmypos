@@ -98,9 +98,9 @@ describe('Sales (e2e)', () => {
     await cleanup();
 
     const centralBranch = await prisma.branch.upsert({
-      where: { name: 'Pusat (Dapur Sentral)' },
+      where: { name: 'Umum' },
       update: {},
-      create: { name: 'Pusat (Dapur Sentral)', address: 'Dapur Sentral' },
+      create: { name: 'Umum', isSystem: true },
     });
     centralBranchId = centralBranch.id;
 

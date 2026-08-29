@@ -3,9 +3,18 @@
 import * as React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import type { BranchResponse } from '@ohmypos/api-contracts';
+import { Badge } from '@ohmypos/ui/components/badge';
 import { Button } from '@ohmypos/ui/components/button';
-import { Edit2, Plus, Trash2 } from 'lucide-react';
-import { useDeleteBranch } from '@/hooks/useBranches';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@ohmypos/ui/components/dialog';
+import { Edit2, Plus, Store, Trash2 } from 'lucide-react';
+import { useDeleteBranch, useSetMainStore } from '@/hooks/useBranches';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { BranchFormDialog } from './BranchFormDialog';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
@@ -26,7 +35,12 @@ export function BranchesTable({
     React.useState<BranchResponse | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
+  const [promotingBranch, setPromotingBranch] =
+    React.useState<BranchResponse | null>(null);
+  const [promoteError, setPromoteError] = React.useState<string | null>(null);
+
   const deleteMutation = useDeleteBranch();
+  const setMainStoreMutation = useSetMainStore();
 
   const columns: ColumnDef<BranchResponse>[] = [
     {
@@ -57,10 +71,40 @@ export function BranchesTable({
       ),
     },
     {
+      id: 'status',
+      header: 'Status',
+      cell: ({ row }) =>
+        row.original.isMainStore ? (
+          <Badge variant="outline" className="gap-1">
+            <Store className="size-3" />
+            Toko Utama
+          </Badge>
+        ) : (
+          <span className="text-sm text-text-secondary">Cabang</span>
+        ),
+    },
+    {
       header: 'Aksi',
       meta: { align: 'center' },
       cell: ({ row }) => (
         <div className="flex items-center justify-center gap-1">
+          {!row.original.isMainStore && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              title="Jadikan toko utama"
+              onClick={() => {
+                setPromoteError(null);
+                setPromotingBranch(row.original);
+              }}
+              className="size-7 text-text-secondary hover:text-text-primary"
+            >
+              <Store className="size-3.5" />
+              <span className="sr-only">
+                Jadikan toko utama {row.original.name}
+              </span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-xs"
@@ -88,6 +132,21 @@ export function BranchesTable({
       ),
     },
   ];
+
+  const handlePromoteConfirm = async () => {
+    if (!promotingBranch) return;
+    setPromoteError(null);
+    try {
+      await setMainStoreMutation.mutateAsync(promotingBranch.id);
+      setPromotingBranch(null);
+    } catch (error) {
+      setPromoteError(
+        error instanceof Error
+          ? error.message
+          : 'Toko utama tidak dapat dipindahkan.',
+      );
+    }
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deletingBranch) return;
@@ -151,6 +210,60 @@ export function BranchesTable({
         errorMessage={deleteError}
         onConfirm={handleDeleteConfirm}
       />
+
+      <Dialog
+        open={Boolean(promotingBranch)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPromotingBranch(null);
+            setPromoteError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Jadikan Toko Utama</DialogTitle>
+            <DialogDescription className="mt-2 text-text-secondary">
+              Penanda toko utama hanya ada satu, jadi penanda ini akan berpindah
+              dari toko yang memegangnya sekarang.
+              {promotingBranch && (
+                <span className="mt-2 block font-medium text-text-primary">
+                  &quot;{promotingBranch.name}&quot;
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {promoteError && (
+            <div
+              role="alert"
+              className="rounded-sm border border-status-danger/30 bg-status-danger/10 p-3 text-xs text-status-danger"
+            >
+              {promoteError}
+            </div>
+          )}
+
+          <DialogFooter className="mt-4 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={setMainStoreMutation.isPending}
+              onClick={() => setPromotingBranch(null)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              disabled={setMainStoreMutation.isPending}
+              onClick={handlePromoteConfirm}
+            >
+              {setMainStoreMutation.isPending
+                ? 'Menyimpan…'
+                : 'Jadikan Toko Utama'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

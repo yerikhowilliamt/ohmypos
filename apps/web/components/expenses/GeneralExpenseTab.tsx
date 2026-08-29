@@ -21,28 +21,35 @@ import { fetchAllPages } from '@/lib/fetchAllPages';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import type { ExportColumn } from '@/lib/export';
 import type {
+  BranchResponse,
   LedgerEntryResponse,
   LedgerEntrySortBy,
   SortOrder,
 } from '@ohmypos/api-contracts';
 import { GeneralExpenseFormDialog } from './GeneralExpenseFormDialog';
 
+/** The system location is a scope, not a place — shown as the short "Umum". */
+function locationLabel(
+  branch: BranchResponse | undefined,
+  fallback: string,
+): string {
+  if (!branch) return fallback;
+  return branch.isSystem ? 'Umum' : branch.name;
+}
+
 function buildColumns(
-  branchNameById: ReadonlyMap<string, string>,
+  branchById: ReadonlyMap<string, BranchResponse>,
   onEdit: (entry: LedgerEntryResponse) => void,
 ): ColumnDef<LedgerEntryResponse>[] {
   return [
     {
       accessorKey: 'branchId',
       header: 'Lokasi',
-      cell: ({ row }) => {
-        const name = branchNameById.get(row.original.branchId);
-        return (
-          <span className="text-text-secondary">
-            {name === 'Pusat (Dapur Sentral)' ? 'Pusat' : (name ?? '—')}
-          </span>
-        );
-      },
+      cell: ({ row }) => (
+        <span className="text-text-secondary">
+          {locationLabel(branchById.get(row.original.branchId), '—')}
+        </span>
+      ),
     },
     {
       accessorFn: (row) => new Date(row.entryDate).getTime(),
@@ -166,13 +173,13 @@ export function GeneralExpenseTab() {
   const { data: branches = [] } = useBranches();
   const entries = data?.data ?? [];
   const paginationMeta = data?.meta ?? { total: 0, page, limit, totalPages: 1 };
-  const branchNameById = React.useMemo(
-    () => new Map(branches.map((branch) => [branch.id, branch.name])),
+  const branchById = React.useMemo(
+    () => new Map(branches.map((branch) => [branch.id, branch])),
     [branches],
   );
   const columns = React.useMemo(
-    () => buildColumns(branchNameById, setEditingEntry),
-    [branchNameById],
+    () => buildColumns(branchById, setEditingEntry),
+    [branchById],
   );
   const exportColumns = React.useMemo<ExportColumn<LedgerEntryResponse>[]>(
     () => [
@@ -180,10 +187,7 @@ export function GeneralExpenseTab() {
       { header: 'Catatan', accessor: (row) => row.note ?? '' },
       {
         header: 'Lokasi',
-        accessor: (row) => {
-          const name = branchNameById.get(row.branchId);
-          return name === 'Pusat (Dapur Sentral)' ? 'Pusat' : (name ?? '');
-        },
+        accessor: (row) => locationLabel(branchById.get(row.branchId), ''),
       },
       {
         header: 'Sumber',
@@ -191,7 +195,7 @@ export function GeneralExpenseTab() {
       },
       { header: 'Jumlah (IDR)', accessor: (row) => Number(row.amount) },
     ],
-    [branchNameById],
+    [branchById],
   );
 
   const exportAll = React.useCallback(

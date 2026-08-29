@@ -26,9 +26,12 @@ export function BranchProfitabilityCard({
 }: BranchProfitabilityCardProps) {
   const { data: branches = [], isLoading: isBranchesLoading } = useBranches();
 
-  // Filter out Central / Pusat kitchen inventory pool
+  // The system location is a ledger scope with cost and no revenue — including
+  // it would make per-branch profit meaningless (ADR-023). This used to match on
+  // the name containing "pusat", which stopped matching the moment the row was
+  // relabelled `Umum`.
   const retailBranches = React.useMemo(
-    () => branches.filter((b) => !b.name.toLowerCase().includes('pusat')),
+    () => branches.filter((b) => !b.isSystem),
     [branches],
   );
 

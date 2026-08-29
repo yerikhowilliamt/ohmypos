@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { randomInt, randomUUID } from 'crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '../src/generated/prisma/client';
+import { ensureSystemRefs } from '../src/common/system-refs';
 
 /**
  * OhMyPos — Phase 14 Workstream C volume seeder (plan §6.1 Option 1).
@@ -70,11 +71,8 @@ interface ProductFixture {
 }
 
 async function ensureMasterData() {
-  await prisma.branch.upsert({
-    where: { name: 'Pusat (Dapur Sentral)' },
-    update: {},
-    create: { name: 'Pusat (Dapur Sentral)' },
-  });
+  // Same writer as the production bootstrap and the demo seed (ADR-014).
+  await ensureSystemRefs(prisma);
 
   const branchNames = ['Volume Cabang A', 'Volume Cabang B', 'Volume Cabang C'];
   const branches = await Promise.all(

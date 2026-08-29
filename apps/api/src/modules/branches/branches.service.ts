@@ -6,6 +6,10 @@ import {
 import type { CreateBranch, UpdateBranch } from '@ohmypos/api-contracts';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
+import {
+  MainStoreProtectedException,
+  SystemBranchProtectedException,
+} from './branches.exceptions';
 
 /** Ported from Kasync, with the `userId` scoping removed (ERD §7 porting note 1). */
 @Injectable()
@@ -14,8 +18,23 @@ export class BranchesService {
 
   async create(dto: CreateBranch) {
     try {
-      return await this.prisma.branch.create({
-        data: { name: dto.name, address: dto.address ?? null },
+      // The Owner's first store is the main store, with no switch to tick.
+      // Count and insert share one transaction so two concurrent creates cannot
+      // both read zero; `branches_single_main_store` is the backstop if they do.
+      return await this.prisma.$transaction(async (tx) => {
+        const mainStoreCount = await tx.branch.count({
+          where: { isMainStore: true },
+        });
+        return tx.branch.create({
+          data: {
+            name: dto.name,
+            address: dto.address ?? null,
+            // Never settable from a request: the system row is created only by
+            // `ensureSystemRefs`.
+            isSystem: false,
+            isMainStore: mainStoreCount === 0,
+          },
+        });
       });
     } catch (error) {
       if (
@@ -41,7 +60,10 @@ export class BranchesService {
   }
 
   async update(id: string, dto: UpdateBranch) {
-    await this.findOne(id);
+    const branch = await this.findOne(id);
+    if (branch.isSystem) {
+      throw new SystemBranchProtectedException();
+    }
     return this.prisma.branch.update({
       where: { id },
       data: {
@@ -51,8 +73,33 @@ export class BranchesService {
     });
   }
 
+  /**
+   * Moves the main-store designation. Release and re-assign must be one
+   * transaction: between the two writes `branches_single_main_store` is
+   * satisfied by zero rows, and a crash in between would leave no main store.
+   */
+  async setMainStore(id: string) {
+    const branch = await this.findOne(id);
+    if (branch.isSystem) {
+      throw new SystemBranchProtectedException();
+    }
+    if (branch.isMainStore) {
+      return branch;
+    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.branch.updateMany({
+        where: { isMainStore: true },
+        data: { isMainStore: false },
+      });
+      return tx.branch.update({ where: { id }, data: { isMainStore: true } });
+    });
+  }
+
   async remove(id: string) {
-    await this.findOne(id);
+    const branch = await this.findOne(id);
+    if (branch.isSystem) {
+      throw new SystemBranchProtectedException();
+    }
 
     const assignedUsers = await this.prisma.user.findMany({
       where: { branchId: id },
@@ -63,6 +110,21 @@ export class BranchesService {
       throw new BadRequestException(
         `Cannot delete branch referenced by assigned staff (${names})`,
       );
+    }
+
+    if (branch.isMainStore) {
+      // Checked AFTER the staff guard: the main store is usually the one with
+      // staff on it, and "reassign these people first" is the more actionable
+      // message of the two. Deleting the last store is legitimate (a fresh
+      // install correcting a typo); deleting the main store while others remain
+      // is not — it leaves a business with stores and no main store, and
+      // nothing in the UI explains the missing badge.
+      const otherStores = await this.prisma.branch.count({
+        where: { id: { not: id }, isSystem: false },
+      });
+      if (otherStores > 0) {
+        throw new MainStoreProtectedException(branch.name);
+      }
     }
 
     try {

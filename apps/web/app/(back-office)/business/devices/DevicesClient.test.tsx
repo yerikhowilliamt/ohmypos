@@ -23,6 +23,8 @@ const BRANCH_A: BranchResponse = {
   id: '11111111-1111-4111-8111-111111111111',
   name: 'Cabang Tebet',
   address: null,
+  isSystem: false,
+  isMainStore: false,
   createdAt: '2026-08-01T00:00:00.000Z',
   updatedAt: '2026-08-01T00:00:00.000Z',
 };

@@ -44,7 +44,7 @@ export class RecipeIncompleteException extends ConflictException {
 }
 
 /**
- * ADR-014/ADR-015: `Pusat (Dapur Sentral)` is a ledger-attribution row, not a
+ * ADR-014/ADR-015: the system location is a ledger-attribution row, not a
  * till — there is no such thing as a central sale (ADR-004). A sale attributed
  * to it would appear in branch reports as an outlet that never sold anything.
  */

@@ -157,7 +157,7 @@ export function DashboardClient() {
       id: `sale-${s.id}`,
       kind: 'sale',
       label: s.cashierName,
-      sublabel: s.branchName || 'Pusat',
+      sublabel: s.branchName || 'Umum',
       amount: s.totalAmount,
       date: s.soldAt,
       isInflow: true,

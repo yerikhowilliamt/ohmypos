@@ -32,6 +32,8 @@ const mockBranches: BranchResponse[] = [
     id: 'bbbbbbbb-1111-4111-8111-111111111111',
     name: 'Cabang Melati',
     address: null,
+    isSystem: false,
+    isMainStore: true,
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',
   },

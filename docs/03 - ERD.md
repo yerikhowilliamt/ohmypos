@@ -1,7 +1,9 @@
 # OhMyPos — ERD (Entity Relationship Design)
 
-**Status:** Draft v3
-**Depends on:** PRD v1.1, System Design v4, ADR-001 through ADR-012
+**Status:** Draft v4
+**Depends on:** PRD v1.1, System Design v5, ADR-001 through ADR-025
+
+**Changelog (v3 → v4):** §3a added — the v2 tenancy entities (`Tenant`, `PlatformAdmin`, `ImpersonationSession`) and the `tenantId` column that every business entity now carries (ADR-025). §4 gains the tenant relationships. Note the reversal this represents: §1 below still records that Kasync's multi-tenant `userId` FK was deliberately dropped during the port, and that decision now stands only as history.
 
 **Changelog (v2 → v3):** §2 (ported entities) rewritten against Kasync's literal `prisma/schema.prisma` per ADR-012 — this closes the open item v2 itself raised in §7. Corrections: `LedgerEntry.branchId` is **not** new (Kasync already has it, required); `LedgerEntry.accountId` **is** new and was missing from v2 entirely; the shared `TransactionType {INFLOW, OUTFLOW}` enum replaces v2's `enum(INCOME, EXPENSE)`; `TransactionStatus` restored to Kasync's four values; `BankTransaction` and `Allocation` regain the fields that carry import de-duplication and allocation idempotency. `User.isActive` added — ADR-011 §5 requires Owner-only deactivation, and v2 gave it nowhere to be stored. §6 gains Decimal precision rules and the inherited constraint list. §7 replaced with resolved porting notes. New entities (§3) are unchanged.
 
@@ -13,7 +15,7 @@
 
 Entities are grouped the same way as System Design Section 4: **ported** (adapted from Kasync, same responsibility) and **new** (built for OhMyPos).
 
-Per ADR-012, the ported entities below have been reconciled field-by-field against Kasync's literal `prisma/schema.prisma`. Rows marked **new** do not exist in Kasync and must be written for OhMyPos; every unmarked row can be copied across as-is. One field is removed rather than added: Kasync's multi-tenant `userId` FK is dropped from all four ported tables (ADR-011 — single business), which also removes the `userId` parameter from every ported service method.
+Per ADR-012, the ported entities below have been reconciled field-by-field against Kasync's literal `prisma/schema.prisma`. Rows marked **new** do not exist in Kasync and must be written for OhMyPos; every unmarked row can be copied across as-is. One field is removed rather than added: Kasync's multi-tenant `userId` FK is dropped from all four ported tables (ADR-011 — single business), which also removes the `userId` parameter from every ported service method. **(v2: ADR-025 reintroduces tenancy under a different name and a different shape — a `tenantId` FK to a first-class `Tenant` entity, resolved server-side rather than threaded through service signatures. See §3a.)**
 
 ## 2. Ported Entities
 
@@ -51,6 +53,8 @@ Per ADR-012, the ported entities below have been reconciled field-by-field again
 | id | uuid (PK) | |
 | name | string, unique | as above — `(userId, name)` collapses to `name` |
 | address | string, nullable | **new** |
+| isSystem | boolean, default false | **new** (TASK-120) — the ADR-014 ledger-attribution row, `Umum`. A *scope*, not a place: no POS screen, no staff, hidden from the store list. This flag, **not the name**, is the lookup key used by `resolveLedgerBranchId`. Partial unique index `branches_single_system` allows at most one |
+| isMainStore | boolean, default false | **new** (TASK-120) — the Owner's first store, set automatically on the first non-system branch. Currently a label with no functional meaning. Partial unique index `branches_single_main_store` allows at most one |
 | createdAt / updatedAt | DateTime | **new** — Kasync's `Branch` has no timestamps |
 
 ### `LedgerEntry` — **extended** from Kasync
@@ -269,6 +273,49 @@ The three snapshot columns are why editing a material's packaging is safe: a his
 
 Constraint: unique(`rawMaterialId`, `periodMonth`).
 
+## 3a. Tenancy Entities (v2 — ADR-025)
+
+### `Tenant`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | `String @id @default(uuid())` | `TEXT` in Postgres, matching every other id in this schema — no column here uses `@db.Uuid` |
+| `name` | `String` | |
+| `slug` | `String @unique` | Operator-facing handle. **Not** used for routing — tenancy is resolved from the `User` record, not the URL |
+| `status` | `TenantStatus` | `ACTIVE` \| `SUSPENDED` |
+| `createdAt` / `updatedAt` | `DateTime` | |
+
+`BusinessProfile` is **not** folded into `Tenant`. `Tenant` holds what the platform operator owns; `BusinessProfile` stays what the tenant edits about itself, linked by `tenantId @unique`.
+
+### `PlatformAdmin`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | `String @id @default(uuid())` | |
+| `name`, `email` | `String`, `String @unique` | |
+| `passwordHash` | `String` | bcrypt, 10 rounds, same as `User` |
+| `refreshTokenHash` | `String?` | |
+| `isActive` | `Boolean @default(true)` | |
+| `tokenValidFrom` | `DateTime` | Same revocation pattern as `User` (ADR-011 §3) |
+
+Deliberately **not** a row in `users` and **not** a `UserRole` member. That is what allows `User.tenantId` to be `NOT NULL` with no exceptions — see ADR-025 Decision 5.
+
+### `ImpersonationSession`
+| Field | Type | Notes |
+|---|---|---|
+| `id` | `String @id @default(uuid())` | |
+| `platformAdminId` | `String` | FK → `PlatformAdmin`, Restrict |
+| `tenantId` | `String` | FK → `Tenant`, Restrict |
+| `actingAsUserId` | `String` | The tenant `OWNER` whose identity was borrowed |
+| `reason` | `String` | Required |
+| `startedAt` / `endedAt` | `DateTime` / `DateTime?` | Append-only except `endedAt` |
+
+### `tenantId` on every business entity
+
+All 23 business entities gain `tenantId TEXT NOT NULL` with an FK to `Tenant` (`onDelete: Restrict`) — **including child tables** (`SaleItem`, `RecipeItem`, `SupplierPurchaseItem`, `Allocation`, `AttendanceRecord`) where it is redundant against the parent. The redundancy is deliberate: a uniform column is what lets the Prisma filter be one `$allModels` rule with no special cases.
+
+Consistency between a child's `tenantId` and its parent's is enforced by composite foreign keys — 13 parent tables carry `UNIQUE (id, tenant_id)`, and 35 child FKs reference `(id, tenant_id)`, all `DEFERRABLE INITIALLY DEFERRED` so they settle after the existing `CASCADE`/`SET NULL` actions. Two columns are outside this protection because they are polymorphic by design and carry no FK at all: `LedgerEntry.sourceId` and `StockMovement.referenceId`.
+
+Uniqueness moves to `@@unique([tenantId, name])` on `Category`, `Branch`, `RawMaterial`, `Product`, `Supplier`, and to `@@unique([tenantId, idempotencyKey])` on `Sale`, `SupplierPurchase`, `PayableSettlement`. Two stay globally unique on purpose: `User.email` (one email = one account = one tenant, which keeps the login flow untouched) and `Device.activationCode` (activation happens before any tenant context exists).
+
 ## 4. Relationships Summary
 
 - `Account` 1—* `LedgerEntry`, `Account` 1—* `BankTransaction`, `Account` 1—* `Sale`, `Account` 1—* `PayableSettlement`
@@ -282,6 +329,8 @@ Constraint: unique(`rawMaterialId`, `periodMonth`).
 - `Supplier` 1—* `SupplierPurchase`
 - `SupplierPurchase` 1—* `SupplierPurchaseItem`, `SupplierPurchase` 0..1—1 `Payable`, `SupplierPurchase` 0..1—1 `LedgerEntry`
 - `Payable` 1—* `PayableSettlement` *—1 `LedgerEntry`
+- **(v2)** `Tenant` 1—* every business entity listed above; `Tenant` 1—1 `BusinessProfile`
+- **(v2)** `PlatformAdmin` 1—* `ImpersonationSession` *—1 `Tenant`
 
 ## 5. Combined Diagram
 

@@ -17,6 +17,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useRawMaterials } from '@/hooks/useMasterData';
 import { useBranches } from '@/hooks/useBranches';
 import { StockMovementsTable } from './StockMovementsTable';
+import { ScopeHint } from '@/components/branches/ScopeHint';
 import { Button } from '@ohmypos/ui/components/button';
 import { DatePicker } from '@ohmypos/ui/components/date-picker';
 import {
@@ -156,6 +157,8 @@ export function StockMovementsClient() {
     totalPages: 1,
   };
 
+  const hasSystemBranch = (branches.data ?? []).some((b) => b.isSystem);
+
   const hasActiveFilter =
     Boolean(searchInput) ||
     rawMaterialId !== ALL ||
@@ -276,8 +279,8 @@ export function StockMovementsClient() {
           </SelectContent>
         </Select>
 
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 text-xs text-text-secondary">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+        <div className="flex sm:items-center gap-4 text-xs text-text-secondary w-full">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 w-full sm:w-auto">
             <span>Dari:</span>
             <DatePicker
               value={startDate}
@@ -289,7 +292,7 @@ export function StockMovementsClient() {
               className="h-6 text-xs w-full sm:w-40"
             />
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 w-full sm:w-auto">
             <span>Sampai:</span>
             <DatePicker
               value={endDate}
@@ -313,6 +316,21 @@ export function StockMovementsClient() {
           >
             Reset Filter
           </Button>
+        )}
+
+        {hasSystemBranch && (
+          <div className="w-full">
+            <ScopeHint>
+              Baris ber-cabang{' '}
+              <strong className="font-medium text-text-primary">Umum</strong>{' '}
+              adalah pergerakan stok yang tidak terikat satu cabang, misalnya
+              pembelian bahan terpusat.{' '}
+              <strong className="font-medium text-text-primary">
+                Semua Cabang
+              </strong>{' '}
+              mencakup seluruh cabang beserta Umum.
+            </ScopeHint>
+          </div>
         )}
       </div>
 

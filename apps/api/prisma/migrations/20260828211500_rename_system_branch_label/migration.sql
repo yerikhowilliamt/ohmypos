@@ -1,0 +1,11 @@
+-- Rename the ADR-014 system location from `Umum (Semua Cabang)` to `Umum`.
+--
+-- The longer label collided with "Semua Cabang", which is this product's
+-- established sentinel for "no branch filter" (ReportFilterBar, StockMovements,
+-- sales history, both attendance tables, Topbar). In the report filter the two
+-- sat side by side in one dropdown meaning nearly opposite things: "Semua
+-- Cabang" = every branch, "Umum (Semua Cabang)" = one specific row.
+--
+-- Only the label changes. `is_system` is the lookup key, so nothing resolves by
+-- this string — which is the whole point of the previous migration.
+UPDATE "branches" SET "name" = 'Umum' WHERE "is_system" = true;

@@ -37,6 +37,38 @@
 
 ## Log
 
+### ERR-039 — Renaming the system location to `Umum (Semua Cabang)` collided with this product's "no filter" label
+
+- **Date found:** 2026-08-29
+- **Found during:** Owner reading the P&L report filter immediately after TASK-120 shipped — "di laporan laba rugi ada semua cabang dan umum (semua cabang), apa bedanya?"
+- **Symptom:** The report branch filter listed **`Semua Cabang`** and **`Umum (Semua Cabang)`** in the same dropdown. They mean nearly opposite things: the first is the sentinel for *no branch filter at all* (every branch, including the system row); the second is *only* the ledger-attribution row.
+- **Root cause:** The new name was chosen for how it reads in isolation, without checking the labels already in use. `Semua Cabang` is this product's established "all / unfiltered" sentinel in six places — `ReportFilterBar.tsx:91`, `StockMovementsClient.tsx:228`, `SalesHistoryClient.tsx:151`, `AttendanceCalendarMatrix.tsx:291`, `AttendanceLogTable.tsx:409`, `Topbar.tsx:157`. A grep for the string would have caught it before the rename, and was not run.
+- **Resolution:** Migration `20260828211500_rename_system_branch_label` renames the row to **`Umum`** — one word, no overlap, and already the label every other surface displayed (`StockMovementsTable`, `PurchaseEntryTab`, `GeneralExpenseTab`, `DashboardClient`), so the row name and its displayed label are now the same string.
+- **Prevention:** `ReportFilterBar.test.tsx` renders the filter with a system branch present and asserts no branch name contains `Semua Cabang`. Cheap to fix at all because ERR-038's `isSystem` flag had already removed the name from the lookup path — this was a data-only migration, exactly the payoff that design was meant to buy.
+- **Severity:** Low — cosmetic, caught within minutes of shipping, no wrong numbers were produced. Logged because the lesson generalises: **before introducing a user-facing label, grep the UI for it — an established sentinel word is invisible from inside the module you are editing.**
+- **Follow-up (same day):** Renaming was necessary but not sufficient — the Owner still had to guess how `Umum` differs from `Semua Cabang`, because in ordinary Indonesian they are synonyms. `ScopeHint` (`apps/web/components/branches/ScopeHint.tsx`) now states the containment relationship in place: **Umum** = transactions charged to no single branch; **Semua Cabang** = the superset that already includes Umum (`ledgerScope` omits the branch predicate entirely when `branchId` is undefined — `report-filters.ts:21-25`). Rendered in `ReportFilterBar` only when a system branch is actually in the list, in `GeneralExpenseFormDialog` / `PurchaseEntryFormDialog` beside the Umum/Cabang radios, where the Owner *sets* the scope rather than reads it, and in `StockMovementsClient`, where the same pair sits one line apart — the `Semua Cabang` filter above a table whose Cabang column reads `Umum`.
+
+### ERR-038 — The Owner could assign a cashier to the ledger-attribution branch, stranding them on an empty POS
+
+- **Date found:** 2026-08-29
+- **Found during:** Tracing the Owner's report that `Pusat (Dapur Sentral)` appears in the branch list but not in the POS branch picker
+- **Symptom:** `CreateUserDialog.tsx:46` and `EditUserDialog.tsx:50` built the cashier branch picker from a raw `useBranches()`, so the ADR-014 ledger-attribution row was a selectable option. A `KASIR` assigned to it logs in, `PosScreen.tsx` excludes that branch from `sellableBranches` by design, and they land on a screen with no products, no cart and no explanation.
+- **Root cause:** Two different pieces of code held two different answers to "is this a real store": `PosScreen` excluded the row (correctly), the user dialogs did not. Neither could consult a shared answer, because none existed — "central" was encoded as a magic branch NAME, matched three different ways across the frontend (exact match twice, `.toLowerCase().includes('pusat')` once).
+- **Resolution:** `Branch.isSystem` (migration `20260828201617_add_branch_system_and_main_store`) makes the answer a single field on the contract. Both user dialogs, `BranchesClient`, `PosScreen` and `BranchProfitabilityCard` now filter on it. Covered by a `CreateUserDialog` test that opens the picker and asserts the system row is absent.
+- **Prevention:** Any new branch picker asks `!branch.isSystem` instead of pattern-matching a name. The three name comparisons are gone, so there is no longer a template to copy the bug from.
+- **Severity:** Medium — no data corruption, but the affected cashier is fully blocked and the cause is invisible from the screen they are looking at.
+
+### ERR-037 — A real installation could not record its first sale: `create-owner.ts` never provisioned the system references
+
+- **Date found:** 2026-08-29
+- **Found during:** Reviewing the "first store / branches" onboarding request — reading what a production install actually contains after bootstrap
+- **Symptom:** On a database provisioned the production way, the **first sale** and the **first central purchase** both fail with `503 "Konfigurasi sistem belum lengkap. Hubungi administrator."`
+- **Root cause:** `apps/api/scripts/create-owner.ts` — the only non-demo provisioning path — created one `User` row and nothing else. The system branch and the `Penjualan` / `Pembelian Bahan Baku` categories were created only by `prisma/seed.ts`, which is the **demo** seed (it also creates Cabang Melati, synthetic sales, reconciliation fixtures). `SalesService` calls `resolveSaleCategoryId` on every sale (`sales.service.ts:238`, `:479`) and `SupplierPurchasesService` calls `resolveLedgerBranchId` (`:275`); both throw `ServiceUnavailableException` when the row is missing.
+- **Why it was never caught:** every test suite and every dev session runs on top of `seed.ts`, which happens to create all three rows. No test ever exercised the production bootstrap path. The defect was therefore invisible to a green CI.
+- **Resolution:** `ensureSystemRefs(tx)` in `apps/api/src/common/system-refs.ts` — idempotent, and now the single writer used by `create-owner.ts`, `seed.ts` and `seed-volume.ts`, so the demo path and the production path cannot drift apart again. `create-owner.ts` also prints the remaining manual step (create at least one Account).
+- **Prevention:** `apps/api/test/bootstrap.e2e-spec.ts` runs `ensureSystemRefs` against an empty database and asserts all three rows, asserts a second run creates nothing, and asserts a run **after the system row has been renamed** still creates nothing. That last case was verified to fail against an upsert-by-name implementation (`Unique constraint failed on the fields: (is_system)`).
+- **Severity:** Critical for any new installation — the product is unusable from the first transaction. Zero impact on existing installations, which were all built from the demo seed.
+
 ### ERR-036 — CI's Playwright suite broke because ADR-024 added a required field the E2E spec never filled
 
 - **Date found:** 2026-08-28
