@@ -82,7 +82,7 @@ const exportColumns: ExportColumn<StockMovementResponse>[] = [
     header: 'Sumber',
     accessor: (row) => REFERENCE_TYPE_LABEL[row.referenceType],
   },
-  { header: 'Cabang', accessor: (row) => row.branchName ?? 'Pusat' },
+  { header: 'Cabang', accessor: (row) => row.branchName ?? 'Umum' },
 ];
 
 interface StockMovementsTableProps {
@@ -207,7 +207,7 @@ export function StockMovementsTable({
           // not missing data — most of this table, in fact. It reads "Pusat"
           // rather than leaving a blank cell the operator has to interpret.
           <span className="text-xs text-text-secondary">
-            {row.original.branchName ?? 'Pusat'}
+            {row.original.branchName ?? 'Umum'}
           </span>
         ),
       },

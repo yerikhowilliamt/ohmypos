@@ -111,7 +111,7 @@ function toSupplierPurchaseSortBy(
 const exportColumns: ExportColumn<SupplierPurchaseResponse>[] = [
   { header: 'Tanggal', accessor: (row) => new Date(row.purchaseDate) },
   { header: 'Pemasok', accessor: (row) => row.supplierName },
-  { header: 'Lokasi', accessor: (row) => row.branchId ?? 'Pusat' },
+  { header: 'Lokasi', accessor: (row) => row.branchId ?? 'Umum' },
   {
     header: 'Status',
     accessor: (row) => formatPaymentStatus(row.paymentStatus),

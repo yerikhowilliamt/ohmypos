@@ -3,6 +3,7 @@ import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import * as readline from 'readline';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { ensureSystemRefs } from '../src/common/system-refs';
 
 function askQuestion(query: string, hideText = false): Promise<string> {
   const rl = readline.createInterface({
@@ -128,6 +129,11 @@ async function main() {
       process.exit(1);
     }
 
+    // A fresh install has no system refs, and without them the first sale and
+    // the first central purchase both fail with a 503. Idempotent, so running
+    // this script again on a live database changes nothing.
+    await ensureSystemRefs(prisma);
+
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
@@ -146,6 +152,13 @@ async function main() {
     console.log(`- Nama  : ${user.name}`);
     console.log(`- Email : ${user.email}`);
     console.log(`- Role  : ${user.role}`);
+
+    console.log('\nData sistem siap:');
+    console.log('- Lokasi  : Umum');
+    console.log('- Kategori: Penjualan, Pembelian Bahan Baku');
+    console.log(
+      '\nLangkah berikutnya: buat minimal satu Akun (kas/bank) di halaman Akun, lalu buat toko pertama di halaman Cabang — toko pertama otomatis menjadi Toko Utama.',
+    );
   } catch (error) {
     console.error('Gagal membuat akun owner:', error);
     process.exit(1);

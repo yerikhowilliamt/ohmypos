@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@ohmypos/ui/components/select';
 import { AlertCircle } from 'lucide-react';
+import { ScopeHint } from '@/components/branches/ScopeHint';
 
 /** Sentinel Select value for "all branches" — Radix Select rejects an empty string value. */
 export const ALL_BRANCHES_VALUE = 'ALL';
@@ -45,6 +46,7 @@ export function ReportFilterBar({
   disabled = false,
 }: ReportFilterBarProps) {
   const isRangeInvalid = Boolean(startDate && endDate && startDate > endDate);
+  const hasSystemBranch = branches.some((b) => b.isSystem);
 
   return (
     <div className="rounded-md border border-border-default bg-surface-raised p-4">
@@ -98,6 +100,20 @@ export function ReportFilterBar({
           </Select>
         </div>
       </div>
+
+      {hasSystemBranch && (
+        <div className="mt-3">
+          <ScopeHint>
+            <strong className="font-medium text-text-primary">Umum</strong>{' '}
+            berisi transaksi yang tidak dibebankan ke satu cabang, misalnya
+            belanja bahan terpusat.{' '}
+            <strong className="font-medium text-text-primary">
+              Semua Cabang
+            </strong>{' '}
+            mencakup seluruh cabang beserta Umum.
+          </ScopeHint>
+        </div>
+      )}
 
       {isRangeInvalid && (
         <div

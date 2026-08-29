@@ -158,6 +158,16 @@ model Branch {
   /// OhMyPos.
   address String?
 
+  /// ADR-014 ledger-attribution row: a scope ("not tied to any one store"),
+  /// not a place. Exactly one row carries this, created only by
+  /// `ensureSystemRefs` — never from a request. It is the LOOKUP KEY, which is
+  /// why the row's name is free to change.
+  isSystem Boolean @default(false) @map("is_system")
+
+  /// The Owner's first store. Exactly one non-system branch carries this,
+  /// enforced by a partial unique index (see the migration).
+  isMainStore Boolean @default(false) @map("is_main_store")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

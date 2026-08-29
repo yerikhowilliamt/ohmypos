@@ -83,9 +83,9 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
     branchBId = branchB.id;
 
     await prisma.branch.upsert({
-      where: { name: 'Pusat (Dapur Sentral)' },
+      where: { name: 'Umum' },
       update: {},
-      create: { name: 'Pusat (Dapur Sentral)', address: 'Dapur Sentral' },
+      create: { name: 'Umum', isSystem: true },
     });
 
     await prisma.category.upsert({

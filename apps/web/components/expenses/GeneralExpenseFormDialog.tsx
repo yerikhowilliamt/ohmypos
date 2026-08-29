@@ -29,6 +29,7 @@ import { DatePicker } from '@ohmypos/ui/components/date-picker';
 import { CurrencyInput } from '@ohmypos/ui/components/currency-input';
 import { Label } from '@ohmypos/ui/components/label';
 import { RadioInput } from '@ohmypos/ui/components/radio-input';
+import { ScopeHint } from '@/components/branches/ScopeHint';
 import {
   useAccounts,
   useBranches,
@@ -61,12 +62,12 @@ export function GeneralExpenseFormDialog({
   const isEdit = Boolean(entry);
 
   const centralBranch = React.useMemo(
-    () => branches.find((branch) => branch.name === 'Pusat (Dapur Sentral)'),
+    () => branches.find((branch) => branch.isSystem),
     [branches],
   );
   const selectableBranches = React.useMemo(
-    () => branches.filter((branch) => branch.id !== centralBranch?.id),
-    [branches, centralBranch?.id],
+    () => branches.filter((branch) => !branch.isSystem),
+    [branches],
   );
 
   // Only expense (OUTFLOW) categories belong on this form — the ledger-entries
@@ -275,9 +276,15 @@ export function GeneralExpenseFormDialog({
                     checked={isCentral}
                     onChange={selectCentralMode}
                   />
-                  Pusat
+                  Umum
                 </Label>
               </div>
+              <ScopeHint>
+                Pilih{' '}
+                <strong className="font-medium text-text-primary">Umum</strong>{' '}
+                bila pengeluaran ini untuk kebutuhan bersama dan tidak
+                dibebankan ke satu cabang.
+              </ScopeHint>
               {!isCentral && (
                 <Controller
                   name="branchId"

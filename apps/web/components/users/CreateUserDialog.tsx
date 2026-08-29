@@ -43,7 +43,13 @@ export function CreateUserDialog({
   onOpenChange,
 }: CreateUserDialogProps) {
   const [serverError, setServerError] = React.useState<string | null>(null);
-  const { data: branches = [] } = useBranches();
+  const { data: allBranches = [] } = useBranches();
+  // A KASIR assigned to the system location would log in to a POS that excludes
+  // their own branch and land on an empty screen with no explanation.
+  const branches = React.useMemo(
+    () => allBranches.filter((branch) => !branch.isSystem),
+    [allBranches],
+  );
   const { data: currentUser } = useCurrentUser();
   const createMutation = useCreateUser();
   /**

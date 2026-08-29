@@ -40,6 +40,7 @@ docs/planning-prompts/
 
 # local phase plans and AI-review remediation specs — working documents, not repo content
 docs/plannings/
+docs/plannings-v2/
 docs/remediations/
 docs/reports/
 
@@ -54,6 +55,7 @@ docs/e-statement/
 
 .agents/
 docs/portfolio/
+docs/handoff/
 
 # db dump files — never commit (see docs/runbooks/backup-restore.md)
 backups/

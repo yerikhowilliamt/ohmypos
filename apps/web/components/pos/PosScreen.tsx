@@ -49,7 +49,6 @@ import { SaleSuccessDialog } from './SaleSuccessDialog';
 // (`CentralBranchNotSellableException`, apps/api/src/modules/sales/sales.service.ts).
 // Excluded from the OWNER branch picker so it can never be selected only to
 // fail at submit.
-const CENTRAL_BRANCH_NAME = 'Pusat (Dapur Sentral)';
 
 export function PosScreen({
   branchId,
@@ -174,8 +173,9 @@ function PosScreenInner({
     branchId,
   );
 
+  // The system location is a ledger scope, not a till (ADR-014/ADR-015).
   const sellableBranches = React.useMemo(
-    () => (branches.data ?? []).filter((b) => b.name !== CENTRAL_BRANCH_NAME),
+    () => (branches.data ?? []).filter((b) => !b.isSystem),
     [branches.data],
   );
 

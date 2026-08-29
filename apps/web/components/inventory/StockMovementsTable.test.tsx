@@ -52,7 +52,7 @@ describe('StockMovementsTable', () => {
     expect(screen.getByText('Penjualan')).toBeDefined();
   });
 
-  it('renders a central movement as "Pusat", not as a blank cell', () => {
+  it('renders a central movement as "Umum", not as a blank cell', () => {
     // branchId null is a central event (ADR-004) — a stock-take or a central
     // purchase — not missing data. Most of this table, in fact.
     render(
@@ -68,7 +68,7 @@ describe('StockMovementsTable', () => {
       />,
     );
 
-    expect(screen.getByText('Pusat')).toBeDefined();
+    expect(screen.getByText('Umum')).toBeDefined();
     expect(screen.getByText('Stok Awal')).toBeDefined();
   });
 

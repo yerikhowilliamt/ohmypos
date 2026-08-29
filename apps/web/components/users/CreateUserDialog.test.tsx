@@ -9,8 +9,9 @@ const currentUser = vi.fn();
 vi.mock('@/hooks/useProfile', () => ({
   useCurrentUser: () => currentUser(),
 }));
+const branches = vi.fn();
 vi.mock('@/hooks/useBranches', () => ({
-  useBranches: () => ({ data: [] }),
+  useBranches: () => branches(),
 }));
 vi.mock('@/hooks/useUsers', () => ({
   useCreateUser: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -28,9 +29,16 @@ function open() {
   };
 }
 
+const BRANCH_BASE = {
+  address: null,
+  createdAt: '2026-08-29T00:00:00.000Z',
+  updatedAt: '2026-08-29T00:00:00.000Z',
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   currentUser.mockReturnValue({ data: OWNER });
+  branches.mockReturnValue({ data: [] });
 });
 
 describe('CreateUserDialog — email suggested from the Owner’s domain', () => {
@@ -90,5 +98,41 @@ describe('CreateUserDialog — email suggested from the Owner’s domain', () =>
     const { name, email } = open();
     fireEvent.change(name, { target: { value: '李明' } });
     expect(email).toHaveValue('');
+  });
+});
+
+describe('CreateUserDialog — cashier branch picker', () => {
+  it('hides the system location, which has no POS screen to log in to', async () => {
+    branches.mockReturnValue({
+      data: [
+        {
+          ...BRANCH_BASE,
+          id: '00000000-0000-4000-8000-000000000001',
+          name: 'Umum',
+          isSystem: true,
+          isMainStore: false,
+        },
+        {
+          ...BRANCH_BASE,
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Toko Melati',
+          isSystem: false,
+          isMainStore: true,
+        },
+      ],
+    });
+
+    render(<CreateUserDialog open onOpenChange={vi.fn()} />);
+    // The role defaults to KASIR, so the branch picker is already on screen.
+    fireEvent.click(screen.getByLabelText('Cabang'));
+
+    expect(
+      await screen.findByRole('option', { name: 'Toko Melati' }),
+    ).toBeInTheDocument();
+    // A KASIR assigned here would log in to a POS that excludes their own
+    // branch and land on an empty screen with no explanation.
+    expect(
+      screen.queryByRole('option', { name: 'Umum' }),
+    ).not.toBeInTheDocument();
   });
 });

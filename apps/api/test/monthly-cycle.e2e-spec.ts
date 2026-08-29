@@ -119,7 +119,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
     // ── Branches (ADR-014 requires the central-purchase attribution branch
     //    to exist under this exact name — system-refs.ts's CENTRAL_BRANCH_NAME) ──
     const pusat = await prisma.branch.create({
-      data: { name: 'Pusat (Dapur Sentral)' },
+      data: { name: 'Umum', isSystem: true },
     });
     const kemang = await prisma.branch.create({
       data: { name: 'Cabang Kemang' },

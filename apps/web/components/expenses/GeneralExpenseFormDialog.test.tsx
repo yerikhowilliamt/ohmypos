@@ -49,8 +49,10 @@ const mockAccounts: AccountResponse[] = [
 const mockBranches: BranchResponse[] = [
   {
     id: 'ffffffff-1111-4111-8111-111111111111',
-    name: 'Pusat (Dapur Sentral)',
+    name: 'Umum',
     address: null,
+    isSystem: true,
+    isMainStore: false,
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',
   },
@@ -58,6 +60,8 @@ const mockBranches: BranchResponse[] = [
     id: 'eeeeeeee-2222-4222-8222-222222222222',
     name: 'Cabang Kenanga',
     address: null,
+    isSystem: false,
+    isMainStore: false,
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',
   },
@@ -65,6 +69,8 @@ const mockBranches: BranchResponse[] = [
     id: 'dddddddd-1111-4111-8111-111111111111',
     name: 'Cabang Melati',
     address: null,
+    isSystem: false,
+    isMainStore: true,
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',
   },
@@ -202,7 +208,7 @@ describe('GeneralExpenseFormDialog', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Sewa' }));
     fireEvent.click(screen.getByLabelText(/akun \/ kas/i));
     fireEvent.click(await screen.findByRole('option', { name: 'Kas Tunai' }));
-    fireEvent.click(screen.getByLabelText('Pusat'));
+    fireEvent.click(screen.getByLabelText('Umum'));
     fireEvent.change(screen.getByLabelText(/jumlah/i), {
       target: { value: '500000' },
     });
@@ -220,9 +226,7 @@ describe('GeneralExpenseFormDialog', () => {
 
     fireEvent.click(screen.getByLabelText('Cabang'));
     fireEvent.click(screen.getByLabelText('Pilih Cabang'));
-    expect(
-      screen.queryByRole('option', { name: 'Pusat (Dapur Sentral)' }),
-    ).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Umum' })).toBeNull();
   });
 
   it('can move an existing manual expense from a branch to the center', async () => {
@@ -249,7 +253,7 @@ describe('GeneralExpenseFormDialog', () => {
     );
     await screen.findByRole('heading', { name: 'Edit Biaya Operasional' });
 
-    fireEvent.click(screen.getByLabelText('Pusat'));
+    fireEvent.click(screen.getByLabelText('Umum'));
     fireEvent.click(screen.getByRole('button', { name: 'Simpan Perubahan' }));
 
     await waitFor(() => {
@@ -287,7 +291,7 @@ describe('GeneralExpenseFormDialog', () => {
     );
     await screen.findByRole('heading', { name: 'Edit Biaya Operasional' });
 
-    fireEvent.click(screen.getByLabelText('Pusat'));
+    fireEvent.click(screen.getByLabelText('Umum'));
     expect(screen.queryByLabelText('Pilih Cabang')).toBeNull();
 
     fireEvent.click(screen.getByLabelText('Cabang'));

@@ -45,6 +45,15 @@ export class BranchesController {
     return this.branchesService.findOne(id);
   }
 
+  // Declared BEFORE `@Patch(':id')` so the bare `:id` route cannot swallow it.
+  @Patch(':id/main-store')
+  @Roles('OWNER')
+  @ApiOperation({ summary: 'Designate a branch as the main store' })
+  @ApiResponse({ status: 409, description: 'branch is the system location' })
+  setMainStore(@Param('id', ParseUUIDPipe) id: string) {
+    return this.branchesService.setMainStore(id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update a branch' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateBranchDto) {

@@ -20,7 +20,7 @@ export class PurchaseItemMaterialNotFoundException extends NotFoundException {
 }
 
 /**
- * ADR-014: the `Pusat (Dapur Sentral)` branch exists only so a central
+ * ADR-014: the system location exists only so a central
  * purchase's generated `LedgerEntry` can satisfy `LedgerEntry.branchId`'s NOT
  * NULL. It is not a sales outlet, and a purchase attributed to it directly
  * would report `isCentral: false` for something that is in fact central —
