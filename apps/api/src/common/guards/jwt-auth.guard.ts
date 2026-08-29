@@ -10,6 +10,11 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JwtPayload } from '../types/jwt-payload.interface';
 import { ACCESS_TOKEN_COOKIE } from '../constants/cookie.constants';
+import {
+  ACCOUNT_DEACTIVATED,
+  SERVER_MISCONFIGURED,
+  SESSION_EXPIRED,
+} from '../messages';
 
 /**
  * Ported from Kasync. Registered globally, so every endpoint is authenticated
@@ -45,14 +50,14 @@ export class JwtAuthGuard implements CanActivate {
 
     const token = this.extractToken(request);
     if (!token) {
-      throw new UnauthorizedException('Authentication token missing');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      throw new UnauthorizedException(
-        'Environment variable JWT_SECRET is required',
-      );
+      // An operator's problem, not the caller's — and naming the variable
+      // to an anonymous caller leaks deployment detail.
+      throw new UnauthorizedException(SERVER_MISCONFIGURED);
     }
 
     let payload: JwtPayload;
@@ -61,9 +66,7 @@ export class JwtAuthGuard implements CanActivate {
         secret,
       });
     } catch {
-      throw new UnauthorizedException(
-        'Invalid or expired authentication token',
-      );
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     const user = await this.prisma.user.findUnique({
@@ -77,14 +80,12 @@ export class JwtAuthGuard implements CanActivate {
     });
 
     if (!user) {
-      throw new UnauthorizedException(
-        'Invalid or expired authentication token',
-      );
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     // A deactivated user's existing token must stop working immediately.
     if (!user.isActive) {
-      throw new UnauthorizedException('This account has been deactivated');
+      throw new UnauthorizedException(ACCOUNT_DEACTIVATED);
     }
 
     // Reject tokens issued before tokenValidFrom.
@@ -105,7 +106,7 @@ export class JwtAuthGuard implements CanActivate {
       payload.iat !== undefined &&
       payload.iat * 1000 + IAT_RESOLUTION_MS <= user.tokenValidFrom.getTime()
     ) {
-      throw new UnauthorizedException('Token has been revoked');
+      throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
     // Trust the database over the token for role and branch, so a change to

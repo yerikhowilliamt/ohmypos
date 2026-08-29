@@ -74,7 +74,9 @@ export function MyLeaveRequests() {
       reset({ startDate: '', endDate: '', reason: '' });
     } catch (error) {
       setServerError(
-        error instanceof Error ? error.message : 'Gagal mengajukan cuti.',
+        error instanceof Error
+          ? error.message
+          : 'Pengajuan cuti belum terkirim. Periksa koneksi lalu coba lagi.',
       );
     }
   };

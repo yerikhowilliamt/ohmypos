@@ -95,7 +95,7 @@ export class SupplierPurchasesService {
         });
         if (!supplier) {
           throw new NotFoundException(
-            `Supplier with ID ${dto.supplierId} not found`,
+            'Pemasok tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
           );
         }
 
@@ -106,7 +106,7 @@ export class SupplierPurchasesService {
           });
           if (!branch) {
             throw new NotFoundException(
-              `Branch with ID ${dto.branchId} not found`,
+              'Cabang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
             );
           }
           // ADR-014: the system location is a ledger-attribution row, not an
@@ -125,7 +125,7 @@ export class SupplierPurchasesService {
           });
           if (!account) {
             throw new NotFoundException(
-              `Account with ID ${dto.accountId} not found`,
+              'Akun pembayaran tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
             );
           }
         }
@@ -422,7 +422,9 @@ export class SupplierPurchasesService {
     });
 
     if (!purchase) {
-      throw new NotFoundException(`Supplier purchase with ID ${id} not found`);
+      throw new NotFoundException(
+        'Pembelian tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     return toSupplierPurchaseResponse(purchase);

@@ -56,7 +56,8 @@ export const UpsertOpeningStockSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['entries', index, 'rawMaterialId'],
-          message: 'duplicate rawMaterialId in the same period',
+          message:
+            'Bahan baku yang sama tercantum dua kali. Gabungkan menjadi satu baris.',
         });
       }
       seen.add(entry.rawMaterialId);

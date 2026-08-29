@@ -90,7 +90,9 @@ export class SuppliersService {
       where: { id },
     });
     if (!supplier) {
-      throw new NotFoundException(`Supplier with ID ${id} not found`);
+      throw new NotFoundException(
+        'Pemasok tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     return this.toResponse(supplier);
   }
@@ -130,7 +132,7 @@ export class SuppliersService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2003'
       ) {
-        throw new SupplierInUseException(id);
+        throw new SupplierInUseException();
       }
       throw error;
     }

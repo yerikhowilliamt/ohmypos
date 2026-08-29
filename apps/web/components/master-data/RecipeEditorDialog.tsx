@@ -124,7 +124,7 @@ export function RecipeEditorDialog({
       setServerError(
         error instanceof Error
           ? error.message
-          : 'Gagal memperbarui resep produk.',
+          : 'Resep belum tersimpan. Periksa koneksi lalu coba lagi.',
       );
     }
   };

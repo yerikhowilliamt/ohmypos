@@ -146,7 +146,7 @@ export function UsersTable({
                   setActionError(
                     error instanceof Error
                       ? error.message
-                      : 'Gagal mengaktifkan kembali pengguna.',
+                      : 'Pengguna belum diaktifkan kembali. Periksa koneksi lalu coba lagi.',
                   );
                 }
               }}
@@ -169,7 +169,9 @@ export function UsersTable({
       setDeactivatingUser(null);
     } catch (error) {
       setActionError(
-        error instanceof Error ? error.message : 'Gagal menghapus pengguna.',
+        error instanceof Error
+          ? error.message
+          : 'Pengguna belum dinonaktifkan. Periksa koneksi lalu coba lagi.',
       );
     }
   };
@@ -201,7 +203,7 @@ export function UsersTable({
         isLoading={isLoading}
         searchColumns={['name']}
         searchPlaceholder="Cari nama atau email…"
-        emptyMessage="Belum ada pengguna terdaftar."
+        emptyMessage="Belum ada pengguna lain. Klik Tambah untuk membuat akun kasir atau admin."
       />
 
       <CreateUserDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />

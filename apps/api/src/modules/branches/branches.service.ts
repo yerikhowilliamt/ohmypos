@@ -41,7 +41,9 @@ export class BranchesService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new BadRequestException(`Branch "${dto.name}" already exists`);
+        throw new BadRequestException(
+          `Cabang "${dto.name}" sudah ada. Pakai nama lain.`,
+        );
       }
       throw error;
     }
@@ -54,7 +56,9 @@ export class BranchesService {
   async findOne(id: string) {
     const branch = await this.prisma.branch.findUnique({ where: { id } });
     if (!branch) {
-      throw new NotFoundException(`Branch with ID ${id} not found`);
+      throw new NotFoundException(
+        'Cabang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     return branch;
   }
@@ -108,7 +112,7 @@ export class BranchesService {
     if (assignedUsers.length > 0) {
       const names = assignedUsers.map((u) => u.name || u.email).join(', ');
       throw new BadRequestException(
-        `Cannot delete branch referenced by assigned staff (${names})`,
+        `Cabang ini masih menjadi penugasan ${names}. Pindahkan dulu karyawan tersebut ke cabang lain.`,
       );
     }
 
@@ -135,7 +139,7 @@ export class BranchesService {
         error.code === 'P2003'
       ) {
         throw new BadRequestException(
-          'Cannot delete branch referenced by existing transactions or staff',
+          'Cabang ini tidak bisa dihapus karena masih terkait dengan transaksi atau karyawan yang tercatat.',
         );
       }
       throw error;

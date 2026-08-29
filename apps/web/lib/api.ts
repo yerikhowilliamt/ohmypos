@@ -26,6 +26,32 @@ export class ApiError extends Error {
   }
 }
 
+/** Shown when the request never reached a server. */
+const OFFLINE_MESSAGE =
+  'Tidak dapat terhubung ke server. Periksa koneksi internet Anda, lalu coba lagi.';
+
+/**
+ * Used only when the server returned an error with no message of its own — a
+ * gateway HTML page, say. Every message the API itself writes is already
+ * Indonesian (`apps/api/src/common/messages.ts`); this covers the gap where
+ * there is nothing to pass through.
+ */
+function fallbackMessageFor(status: number): string {
+  if (status === 401 || status === 403) {
+    return 'Sesi Anda sudah berakhir atau Anda tidak memiliki izin. Silakan masuk kembali.';
+  }
+  if (status === 404) {
+    return 'Data yang diminta tidak ditemukan. Muat ulang halaman.';
+  }
+  if (status === 413) {
+    return 'Berkas terlalu besar untuk diunggah.';
+  }
+  if (status >= 500) {
+    return 'Server sedang bermasalah. Coba lagi beberapa saat lagi.';
+  }
+  return 'Permintaan tidak dapat diproses. Coba lagi.';
+}
+
 async function doFetch<T>(path: string, init?: RequestInit): Promise<T> {
   // A FormData body must NOT carry an explicit Content-Type: the browser has to
   // set `multipart/form-data; boundary=…` itself, and an explicit header would
@@ -40,25 +66,47 @@ async function doFetch<T>(path: string, init?: RequestInit): Promise<T> {
   // (Phase 14 E-8) — the id itself is echoed back on the response (E-7).
   const correlationId = crypto.randomUUID();
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: isFormData
-      ? { 'x-correlation-id': correlationId, ...init?.headers }
-      : {
-          'Content-Type': 'application/json',
-          'x-correlation-id': correlationId,
-          ...init?.headers,
-        },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      credentials: 'include',
+      headers: isFormData
+        ? { 'x-correlation-id': correlationId, ...init?.headers }
+        : {
+            'Content-Type': 'application/json',
+            'x-correlation-id': correlationId,
+            ...init?.headers,
+          },
+    });
+  } catch (cause) {
+    // `fetch` rejects — no response at all — when the device is offline or the
+    // server is unreachable. The browser's own wording then travelled straight
+    // to the screen through every `catch (e) { e.message }` in the app:
+    // "Failed to fetch" in Chrome, "Load failed" in Safari,
+    // "NetworkError when attempting to fetch resource" in Firefox. Three
+    // different English sentences in an Indonesian product, for the one
+    // failure a user is most likely to hit.
+    throw new ApiError(OFFLINE_MESSAGE, 0, { cause });
+  }
 
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as {
       message?: string | string[];
+      errors?: { message?: string }[];
     } | null;
-    const message = Array.isArray(body?.message)
-      ? body.message.join(', ')
-      : (body?.message ?? `Request failed with status ${res.status}`);
+    // A schema rejection carries the useful text in `errors[].message` — each
+    // one names the field and what to do. `message` is only the library's
+    // English wrapper, "Validation failed", which tells the reader nothing.
+    const fieldErrors = (body?.errors ?? [])
+      .map((issue) => issue.message)
+      .filter((text): text is string => Boolean(text));
+    const message =
+      fieldErrors.length > 0
+        ? fieldErrors.join(' ')
+        : Array.isArray(body?.message)
+          ? body.message.join(', ')
+          : (body?.message ?? fallbackMessageFor(res.status));
     throw new ApiError(message, res.status, body);
   }
 

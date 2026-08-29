@@ -26,7 +26,9 @@ export class RecipesService {
       include: { recipeItems: { include: { rawMaterial: true } } },
     });
     if (!product) {
-      throw new NotFoundException(`Product with ID ${productId} not found`);
+      throw new NotFoundException(
+        'Produk tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     return toRecipeEnvelope(product);
   }
@@ -44,7 +46,9 @@ export class RecipesService {
         where: { id: productId },
       });
       if (!product) {
-        throw new NotFoundException(`Product with ID ${productId} not found`);
+        throw new NotFoundException(
+          'Produk tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+        );
       }
 
       const ids = dto.items.map((i) => i.rawMaterialId);

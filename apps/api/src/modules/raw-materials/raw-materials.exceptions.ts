@@ -5,15 +5,15 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 
 export class RawMaterialNameTakenException extends ConflictException {
   constructor(name: string) {
-    super(`Raw material with name "${name}" already exists`);
+    super(`Bahan baku "${name}" sudah ada. Pakai nama lain.`);
     this.name = 'RawMaterialNameTakenException';
   }
 }
 
 export class RawMaterialInUseException extends ConflictException {
-  constructor(id: string) {
+  constructor() {
     super(
-      `Raw material with ID ${id} cannot be deleted because it is used in one or more product recipes`,
+      'Bahan baku ini tidak bisa dihapus karena masih dipakai di resep produk. Keluarkan dulu dari resep yang memakainya.',
     );
     this.name = 'RawMaterialInUseException';
   }

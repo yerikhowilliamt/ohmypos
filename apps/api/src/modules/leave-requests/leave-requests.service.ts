@@ -143,7 +143,9 @@ export class LeaveRequestsService {
       where: { id },
     });
     if (!existing) {
-      throw new NotFoundException(`Leave request with ID ${id} not found`);
+      throw new NotFoundException(
+        'Pengajuan cuti tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     if (existing.status !== 'PENDING') {
       throw new LeaveRequestAlreadyReviewedException();

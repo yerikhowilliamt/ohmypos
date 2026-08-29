@@ -125,7 +125,7 @@ export function ExpenseCategoriesTable({
         isLoading={isLoading}
         searchColumns={['name']}
         searchPlaceholder="Cari kategori pengeluaran…"
-        emptyMessage="Belum ada kategori pengeluaran."
+        emptyMessage="Belum ada kategori. Klik Tambah untuk membuat kategori seperti Listrik, Sewa, atau Gaji."
       />
 
       <ExpenseCategoryFormDialog

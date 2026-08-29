@@ -229,7 +229,7 @@ function ExportButton<TData>({
       setError(
         err instanceof ExportTooLargeError
           ? 'Terlalu banyak baris — persempit filter dulu.'
-          : 'Export gagal. Coba lagi.',
+          : 'Ekspor belum selesai. Periksa koneksi lalu coba lagi.',
       );
     } finally {
       setIsExporting(false);

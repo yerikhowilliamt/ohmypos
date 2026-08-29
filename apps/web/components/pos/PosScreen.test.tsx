@@ -487,7 +487,7 @@ describe('PosScreen — submit failures', () => {
     fireEvent.click(screen.getByTestId('check-recent-sales'));
     await waitFor(() =>
       expect(
-        screen.getByText('Belum ada penjualan tercatat di cabang ini.'),
+        screen.getByText(/Belum ada penjualan tercatat di cabang ini/),
       ).toBeInTheDocument(),
     );
   });

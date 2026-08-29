@@ -5,7 +5,7 @@ import { ConflictException } from '@nestjs/common';
 
 export class ProductNameTakenException extends ConflictException {
   constructor(name: string) {
-    super(`Product with name "${name}" already exists`);
+    super(`Produk "${name}" sudah ada. Pakai nama lain.`);
     this.name = 'ProductNameTakenException';
   }
 }
@@ -17,9 +17,9 @@ export class ProductNameTakenException extends ConflictException {
  * ERR-004, this time anticipated instead of discovered.
  */
 export class ProductInUseException extends ConflictException {
-  constructor(id: string) {
+  constructor() {
     super(
-      `Product with ID ${id} cannot be deleted because it has been sold in one or more sales`,
+      'Produk ini tidak bisa dihapus karena sudah pernah terjual. Nonaktifkan saja, supaya hilang dari layar Penjualan tanpa merusak riwayat transaksi.',
     );
     this.name = 'ProductInUseException';
   }

@@ -134,13 +134,13 @@ export class MatchingService {
 
     if (!transaction) {
       throw new NotFoundException(
-        `Bank transaction with id ${bankTransactionId} not found`,
+        'Mutasi bank tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
       );
     }
 
     if (transaction.status !== 'PENDING_REVIEW') {
       throw new ConflictException(
-        `Bank transaction ${bankTransactionId} is not pending review (current status: ${transaction.status})`,
+        'Mutasi bank ini sudah tidak menunggu peninjauan. Muat ulang halaman untuk melihat statusnya yang terbaru.',
       );
     }
 

@@ -29,7 +29,9 @@ export class DevicesService {
       where: { id: dto.branchId },
     });
     if (!branch) {
-      throw new NotFoundException(`Branch with ID ${dto.branchId} not found`);
+      throw new NotFoundException(
+        'Cabang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     const device = await this.prisma.device.create({
@@ -93,7 +95,9 @@ export class DevicesService {
   async update(id: string, dto: UpdateDevice): Promise<DeviceResponse> {
     const existing = await this.prisma.device.findUnique({ where: { id } });
     if (!existing) {
-      throw new NotFoundException(`Device with ID ${id} not found`);
+      throw new NotFoundException(
+        'Perangkat tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     const movingBranch =
@@ -109,7 +113,9 @@ export class DevicesService {
         where: { id: dto.branchId },
       });
       if (!branch) {
-        throw new NotFoundException(`Branch with ID ${dto.branchId} not found`);
+        throw new NotFoundException(
+          'Cabang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+        );
       }
     }
 
@@ -132,7 +138,9 @@ export class DevicesService {
   async remove(id: string): Promise<DeviceResponse> {
     const existing = await this.prisma.device.findUnique({ where: { id } });
     if (!existing) {
-      throw new NotFoundException(`Device with ID ${id} not found`);
+      throw new NotFoundException(
+        'Perangkat tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     const attendanceCount = await this.prisma.attendanceRecord.count({
@@ -150,7 +158,9 @@ export class DevicesService {
   async deactivate(id: string): Promise<DeviceResponse> {
     const existing = await this.prisma.device.findUnique({ where: { id } });
     if (!existing) {
-      throw new NotFoundException(`Device with ID ${id} not found`);
+      throw new NotFoundException(
+        'Perangkat tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
     const device = await this.prisma.device.update({
       where: { id },

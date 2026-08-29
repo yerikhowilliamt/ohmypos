@@ -205,7 +205,7 @@ export function RawMaterialsTable({
         isLoading={isLoading}
         searchColumns={['name']}
         searchPlaceholder="Cari bahan baku atau satuan…"
-        emptyMessage="Belum ada bahan baku terdaftar."
+        emptyMessage="Belum ada bahan baku. Klik Tambah untuk mendaftarkan bahan pertama Anda."
       />
 
       {/* Create / Edit Dialog */}

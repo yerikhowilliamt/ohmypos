@@ -85,7 +85,8 @@ export function CartErrorBanner({
             <div className="rounded-sm border border-border-default bg-surface-raised p-2">
               {recentSales.data.length === 0 ? (
                 <p className="text-text-secondary">
-                  Belum ada penjualan tercatat di cabang ini.
+                  Belum ada penjualan tercatat di cabang ini — berarti transaksi
+                  Anda memang belum tersimpan. Silakan ulangi.
                 </p>
               ) : (
                 <ul className="flex flex-col gap-1">

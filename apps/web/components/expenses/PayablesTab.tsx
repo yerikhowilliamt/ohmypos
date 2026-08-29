@@ -346,7 +346,7 @@ export function PayablesTab() {
           },
           itemNoun: 'tagihan',
         }}
-        emptyMessage="Belum ada utang tercatat."
+        emptyMessage="Belum ada utang tercatat. Utang muncul di sini saat Anda mencatat pembelian dengan status Belum Bayar."
         exportColumns={exportColumns}
         // No date-range filter here on purpose: a payable is a state of today,
         // not a range, so the export-time date IS the right label (DEBT-025).

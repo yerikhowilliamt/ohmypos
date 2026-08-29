@@ -1428,8 +1428,12 @@ describe('Purchasing & Payables (e2e)', () => {
         })
         .expect(400);
 
+      // The message names the system location and points at the UI control
+      // that records a central purchase — it no longer instructs the reader to
+      // send a JSON field, which only a developer could act on.
+      expect((res.body as { message: string }).message).toContain('Umum');
       expect((res.body as { message: string }).message).toContain(
-        'branchId: null',
+        'Lokasi Pembelian',
       );
 
       // Rolled back: the rejection happens inside the transaction, so nothing

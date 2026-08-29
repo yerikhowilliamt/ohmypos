@@ -186,7 +186,9 @@ export function SplitAllocationDialog({
       setLines([newLine()]);
     } catch (caught) {
       setServerError(
-        caught instanceof Error ? caught.message : 'Gagal menyimpan alokasi.',
+        caught instanceof Error
+          ? caught.message
+          : 'Pencocokan belum tersimpan. Periksa koneksi lalu coba lagi.',
       );
     }
   };
@@ -197,7 +199,9 @@ export function SplitAllocationDialog({
       await revokeAllocation.mutateAsync(allocationId);
     } catch (caught) {
       setServerError(
-        caught instanceof Error ? caught.message : 'Gagal membatalkan alokasi.',
+        caught instanceof Error
+          ? caught.message
+          : 'Pencocokan belum dibatalkan. Periksa koneksi lalu coba lagi.',
       );
     }
   };

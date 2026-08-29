@@ -89,7 +89,7 @@ export function BankStatementImportCard({
       setError(
         caught instanceof Error
           ? caught.message
-          : 'Gagal mengimpor rekening koran.',
+          : 'Rekening koran belum terimpor. Periksa berkas dan koneksi Anda, lalu coba lagi.',
       );
     }
   };

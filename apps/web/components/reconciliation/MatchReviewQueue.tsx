@@ -109,7 +109,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
       setError(
         caught instanceof Error
           ? caught.message
-          : 'Gagal menjalankan pencocokan otomatis.',
+          : 'Pencocokan otomatis belum berjalan. Periksa koneksi lalu coba lagi.',
       );
     }
   };
@@ -138,7 +138,9 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
       // The backend is the authority on the allocation-sum invariant — show its
       // message verbatim rather than a paraphrase (Playbook §7).
       setError(
-        caught instanceof Error ? caught.message : 'Gagal menyimpan alokasi.',
+        caught instanceof Error
+          ? caught.message
+          : 'Pencocokan belum tersimpan. Periksa koneksi lalu coba lagi.',
       );
     }
   };
@@ -162,7 +164,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
       setError(
         caught instanceof Error
           ? caught.message
-          : 'Gagal mengabaikan usulan ini.',
+          : 'Usulan belum diabaikan. Periksa koneksi lalu coba lagi.',
       );
     }
   };
@@ -177,7 +179,9 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
       setConfirmingReset(false);
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : 'Gagal mereset status.',
+        caught instanceof Error
+          ? caught.message
+          : 'Status belum diubah. Periksa koneksi lalu coba lagi.',
       );
     }
   };

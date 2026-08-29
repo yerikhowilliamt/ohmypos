@@ -146,7 +146,8 @@ describe('proxyApiRequest', () => {
     expect(response.status).toBe(502);
     expect(response.headers.get('x-correlation-id')).toBe('correlation-3');
     await expect(response.json()).resolves.toEqual({
-      message: 'Backend API is temporarily unavailable',
+      message:
+        'Server sedang tidak dapat dihubungi. Coba lagi beberapa saat lagi.',
     });
   });
 });
