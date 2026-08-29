@@ -10,6 +10,7 @@ import {
   type BranchScopeSource,
 } from '../decorators/branch-scoped.decorator';
 import type { JwtPayload } from '../types/jwt-payload.interface';
+import { OTHER_BRANCH_FORBIDDEN, SESSION_EXPIRED } from '../messages';
 
 interface ScopedRequest {
   user?: JwtPayload;
@@ -46,7 +47,7 @@ export class BranchScopeGuard implements CanActivate {
     const user = request.user;
 
     if (!user) {
-      throw new ForbiddenException('Authentication required');
+      throw new ForbiddenException(SESSION_EXPIRED);
     }
 
     // ADMIN and OWNER are unscoped — the ADR draws no distinction between them
@@ -59,7 +60,7 @@ export class BranchScopeGuard implements CanActivate {
       // Should be impossible (ADR-011 §2), but a KASIR without a branch must
       // never fall through to unscoped access.
       throw new ForbiddenException(
-        'This cashier account has no branch assigned',
+        'Akun kasir ini belum ditugaskan ke cabang mana pun. Minta Owner menetapkan cabang Anda.',
       );
     }
 
@@ -76,14 +77,12 @@ export class BranchScopeGuard implements CanActivate {
       // did nothing and the request went through unscoped — a cashier could see
       // every branch. Requiring the value explicitly cannot fail that way.
       throw new ForbiddenException(
-        `${source} is required for this role — a cashier must state their branch explicitly`,
+        'Cabang wajib disertakan untuk peran Kasir.',
       );
     }
 
     if (requested !== user.branchId) {
-      throw new ForbiddenException(
-        'You do not have access to data for another branch',
-      );
+      throw new ForbiddenException(OTHER_BRANCH_FORBIDDEN);
     }
 
     return true;

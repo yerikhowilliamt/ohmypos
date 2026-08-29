@@ -12,9 +12,13 @@ export const CreateSupplierSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, 'Name is required')
-    .max(100, 'Name is too long'),
-  contact: z.string().trim().max(255, 'Contact is too long').optional(),
+    .min(1, 'Nama pemasok wajib diisi')
+    .max(100, 'Nama pemasok maksimal 100 karakter'),
+  contact: z
+    .string()
+    .trim()
+    .max(255, 'Kontak maksimal 255 karakter')
+    .optional(),
 });
 export type CreateSupplier = z.infer<typeof CreateSupplierSchema>;
 

@@ -888,7 +888,7 @@ describe('Inventory (e2e)', () => {
       ]);
       expect(res.status).toBe(400);
       expect((res.body as { message: string }).message).toMatch(
-        /unitPrice is required/,
+        /Isi harga satuan/,
       );
     });
 
@@ -899,7 +899,7 @@ describe('Inventory (e2e)', () => {
       ]);
       expect(res.status).toBe(400);
       expect((res.body as { message: string }).message).toMatch(
-        /must be omitted/,
+        /Harga satuan tidak perlu diisi/,
       );
     });
 
@@ -931,7 +931,9 @@ describe('Inventory (e2e)', () => {
         { rawMaterialId: mNegId, quantity: '0.0000', unitPrice: '10000.00' },
       ]);
       expect(res.status).toBe(409);
-      expect((res.body as { message: string }).message).toMatch(/negative/);
+      expect((res.body as { message: string }).message).toMatch(
+        /stok menjadi minus/,
+      );
 
       const afterMovements = await prisma.stockMovement.count({
         where: { rawMaterialId: mNegId },
@@ -959,7 +961,7 @@ describe('Inventory (e2e)', () => {
         { rawMaterialId: mAtom1Id, quantity: '20.0000', unitPrice: '10000.00' },
       ]);
       expect(res.status).toBe(400);
-      expect(JSON.stringify(res.body)).toMatch(/duplicate rawMaterialId/);
+      expect(JSON.stringify(res.body)).toMatch(/tercantum dua kali/);
     });
 
     it('V-6: malformed period (2026-13) returns 400 on GET and PUT', async () => {
@@ -984,7 +986,7 @@ describe('Inventory (e2e)', () => {
       ]);
       expect(res.status).toBe(400);
       expect((res.body as { message: string }).message).toMatch(
-        /has not started yet/,
+        /belum dimulai/,
       );
     });
 

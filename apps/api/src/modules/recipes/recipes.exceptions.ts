@@ -6,7 +6,7 @@ import { BadRequestException } from '@nestjs/common';
 export class UnknownRawMaterialException extends BadRequestException {
   constructor(missingIds: string[]) {
     super(
-      `The following rawMaterialId(s) do not exist: ${missingIds.join(', ')}`,
+      `Bahan baku berikut tidak ditemukan: ${missingIds.join(', ')}. Muat ulang halaman.`,
     );
     this.name = 'UnknownRawMaterialException';
   }

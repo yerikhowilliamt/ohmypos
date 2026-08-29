@@ -229,7 +229,7 @@ export function PurchaseEntryTab({ onGoToPayables }: PurchaseEntryTabProps) {
           },
           itemNoun: 'pembelian',
         }}
-        emptyMessage="Belum ada pembelian tercatat."
+        emptyMessage="Belum ada pembelian tercatat. Klik Tambah untuk mencatat belanja bahan ke pemasok."
         exportColumns={exportColumns}
         exportFilename={`pembelian-bahan-baku_${new Date().toISOString().slice(0, 10)}.xlsx`}
         exportAll={exportAll}

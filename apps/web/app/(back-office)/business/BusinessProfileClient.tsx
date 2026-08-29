@@ -95,7 +95,9 @@ function LogoSection({ currentLogoUrl }: { currentLogoUrl: string | null }) {
     } catch (error) {
       setLocalPreview(null);
       setServerError(
-        error instanceof Error ? error.message : 'Gagal mengunggah logo.',
+        error instanceof Error
+          ? error.message
+          : 'Logo belum terunggah. Periksa koneksi lalu coba lagi.',
       );
     } finally {
       URL.revokeObjectURL(objectUrl);
@@ -191,7 +193,7 @@ function InfoSection({
       setServerError(
         error instanceof Error
           ? error.message
-          : 'Gagal menyimpan profil bisnis.',
+          : 'Profil bisnis belum tersimpan. Periksa koneksi lalu coba lagi.',
       );
     }
   };

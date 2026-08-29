@@ -22,14 +22,18 @@ import { CENTRAL_BRANCH_NAME } from '../../common/system-refs';
 
 export class SaleProductNotFoundException extends NotFoundException {
   constructor(missingIds: string[]) {
-    super(`Product(s) not found: ${missingIds.join(', ')}`);
+    super(
+      `Produk berikut tidak ditemukan: ${missingIds.join(', ')}. Muat ulang halaman.`,
+    );
     this.name = 'SaleProductNotFoundException';
   }
 }
 
 export class InactiveProductException extends ConflictException {
   constructor(names: string[]) {
-    super(`Product(s) are inactive and cannot be sold: ${names.join(', ')}`);
+    super(
+      `Produk berikut sudah dinonaktifkan sehingga tidak bisa dijual: ${names.join(', ')}. Keluarkan dari pesanan, atau minta Owner mengaktifkannya kembali.`,
+    );
     this.name = 'InactiveProductException';
   }
 }
@@ -37,7 +41,7 @@ export class InactiveProductException extends ConflictException {
 export class RecipeIncompleteException extends ConflictException {
   constructor(names: string[]) {
     super(
-      `Product(s) have no recipe defined, so HPP cannot be computed: ${names.join(', ')}`,
+      `Produk berikut belum punya resep sehingga modalnya tidak bisa dihitung: ${names.join(', ')}. Minta Admin atau Owner melengkapi resepnya di Data Master.`,
     );
     this.name = 'RecipeIncompleteException';
   }
@@ -51,7 +55,7 @@ export class RecipeIncompleteException extends ConflictException {
 export class CentralBranchNotSellableException extends BadRequestException {
   constructor() {
     super(
-      `A sale cannot be recorded at the system branch "${CENTRAL_BRANCH_NAME}" — a sale always happens at a real outlet (ADR-015)`,
+      `Penjualan tidak bisa dicatat di lokasi "${CENTRAL_BRANCH_NAME}", karena itu bukan toko fisik. Pilih cabang tempat transaksi benar-benar terjadi.`,
     );
     this.name = 'CentralBranchNotSellableException';
   }
@@ -86,8 +90,8 @@ export class PriceOverrideNotAllowedException extends BadRequestException {
 /** DEBT-010 — a sale can only be voided once; the second attempt (including a
  * race against the first) is rejected, never silently accepted. */
 export class SaleAlreadyVoidedException extends BadRequestException {
-  constructor(id: string) {
-    super(`Sale ${id} is already voided`);
+  constructor() {
+    super('Transaksi ini sudah dibatalkan sebelumnya.');
     this.name = 'SaleAlreadyVoidedException';
   }
 }

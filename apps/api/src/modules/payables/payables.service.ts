@@ -69,7 +69,7 @@ export class PayablesService {
           });
           if (!payable) {
             throw new NotFoundException(
-              `Payable with ID ${payableId} not found`,
+              'Utang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
             );
           }
 
@@ -79,7 +79,7 @@ export class PayablesService {
           });
           if (!account) {
             throw new NotFoundException(
-              `Account with ID ${dto.accountId} not found`,
+              'Akun pembayaran tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
             );
           }
 
@@ -252,7 +252,9 @@ export class PayablesService {
     });
 
     if (!payable) {
-      throw new NotFoundException(`Payable with ID ${id} not found`);
+      throw new NotFoundException(
+        'Utang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     return toPayableResponse(payable);

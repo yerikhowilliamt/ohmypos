@@ -24,7 +24,7 @@ export const SupplierPurchaseItemInputSchema = z.object({
    */
   purchaseQuantity: QuantityString.refine(
     (v) => Number(v) > 0,
-    'must be greater than zero',
+    'Harus lebih besar dari 0',
   ),
   /**
    * The TOTAL price paid for the whole `purchaseQuantity` — Rp45.000 for
@@ -39,7 +39,7 @@ export const SupplierPurchaseItemInputSchema = z.object({
    */
   lineTotal: MoneyString.refine(
     (v) => Number(v) > 0,
-    'must be greater than zero',
+    'Harus lebih besar dari 0',
   ),
 });
 export type SupplierPurchaseItemInput = z.infer<
@@ -73,7 +73,7 @@ export const CreateSupplierPurchaseSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['accountId'],
-        message: 'accountId is required when paymentStatus is PAID',
+        message: 'Pilih akun sumber dana untuk pembelian yang sudah lunas',
       });
     }
     if (dto.paymentStatus === 'UNPAID' && dto.accountId) {
@@ -107,7 +107,8 @@ export const CreateSupplierPurchaseSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['items', index, 'rawMaterialId'],
-          message: 'duplicate rawMaterialId in the same purchase',
+          message:
+            'Bahan baku yang sama tercantum dua kali. Gabungkan menjadi satu baris.',
         });
       }
       seen.add(item.rawMaterialId);

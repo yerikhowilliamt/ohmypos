@@ -272,7 +272,7 @@ export function SalesHistoryTable({
           )}
           <AlertTitle>
             {voidFeedback.kind === 'error'
-              ? 'Gagal membatalkan'
+              ? 'Transaksi belum dibatalkan. Periksa koneksi lalu coba lagi.'
               : 'Penjualan dibatalkan'}
           </AlertTitle>
           <AlertDescription>{voidFeedback.message}</AlertDescription>
@@ -288,7 +288,7 @@ export function SalesHistoryTable({
         serverSearch={{ value: search, onChange: onSearchChange }}
         searchPlaceholder="Cari id, cabang, kasir, atau akun..."
         searchLabel="Cari riwayat penjualan"
-        emptyMessage="Belum ada data transaksi penjualan."
+        emptyMessage="Belum ada transaksi penjualan. Transaksi muncul di sini begitu kasir menyelesaikan penjualan."
         emptyDescription="Transaksi yang dibuat kasir akan muncul di riwayat ini."
       />
 

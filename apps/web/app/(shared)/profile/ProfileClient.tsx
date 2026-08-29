@@ -113,7 +113,9 @@ function PhotoForm({ currentPhotoUrl }: { currentPhotoUrl: string | null }) {
     } catch (error) {
       setLocalPreview(null);
       setServerError(
-        error instanceof Error ? error.message : 'Gagal mengunggah foto.',
+        error instanceof Error
+          ? error.message
+          : 'Foto belum terunggah. Periksa koneksi lalu coba lagi.',
       );
     } finally {
       URL.revokeObjectURL(objectUrl);
@@ -194,7 +196,9 @@ function NameForm({
       onSaved();
     } catch (error) {
       setServerError(
-        error instanceof Error ? error.message : 'Gagal menyimpan nama.',
+        error instanceof Error
+          ? error.message
+          : 'Nama belum tersimpan. Periksa koneksi lalu coba lagi.',
       );
     }
   };
@@ -281,7 +285,9 @@ function PasswordForm() {
       reset({ oldPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
       setServerError(
-        error instanceof Error ? error.message : 'Gagal mengubah kata sandi.',
+        error instanceof Error
+          ? error.message
+          : 'Kata sandi belum berubah. Periksa koneksi lalu coba lagi.',
       );
     }
   };
@@ -382,7 +388,9 @@ function DangerZone() {
       router.refresh();
     } catch (error) {
       setServerError(
-        error instanceof Error ? error.message : 'Gagal menghapus akun.',
+        error instanceof Error
+          ? error.message
+          : 'Akun belum terhapus. Periksa koneksi lalu coba lagi.',
       );
     }
   };

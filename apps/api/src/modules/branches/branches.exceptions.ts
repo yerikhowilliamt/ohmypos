@@ -8,7 +8,9 @@ import { ConflictException } from '@nestjs/common';
  */
 export class SystemBranchProtectedException extends ConflictException {
   constructor() {
-    super('The system location "Umum" cannot be renamed or deleted');
+    super(
+      'Lokasi sistem "Umum" tidak bisa diubah nama atau dihapus. Lokasi ini dipakai untuk mencatat transaksi yang tidak terikat satu cabang.',
+    );
     this.name = 'SystemBranchProtectedException';
   }
 }
@@ -16,7 +18,7 @@ export class SystemBranchProtectedException extends ConflictException {
 export class MainStoreProtectedException extends ConflictException {
   constructor(name: string) {
     super(
-      `Branch "${name}" is the main store and cannot be deleted while other stores exist`,
+      `"${name}" adalah Toko Utama, jadi tidak bisa dihapus selama masih ada toko lain. Jadikan toko lain sebagai Toko Utama terlebih dahulu.`,
     );
     this.name = 'MainStoreProtectedException';
   }

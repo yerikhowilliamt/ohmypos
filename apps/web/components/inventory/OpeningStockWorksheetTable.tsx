@@ -203,7 +203,7 @@ export function OpeningStockWorksheetTable({
                           <span>{meta?.name ?? field.rawMaterialId}</span>
                           {meta?.requiresUnitPrice && (
                             <div className="text-xs text-status-warning font-normal mt-0.5">
-                              Belum ada pembelian periode ini
+                              Belum ada pembelian pada periode ini
                             </div>
                           )}
                         </div>

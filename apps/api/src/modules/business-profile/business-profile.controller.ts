@@ -41,13 +41,19 @@ export class BusinessProfileController {
         if (['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
           cb(null, true);
         } else {
-          cb(new BadRequestException('Invalid image file'), false);
+          cb(
+            new BadRequestException(
+              'Format gambar tidak didukung. Gunakan JPG, PNG, atau WebP.',
+            ),
+            false,
+          );
         }
       },
     }),
   )
   async updateLogo(@UploadedFile() file?: Express.Multer.File) {
-    if (!file) throw new BadRequestException('Image file is required');
+    if (!file)
+      throw new BadRequestException('Pilih berkas gambar terlebih dahulu.');
     const logoUrl = await this.logoService.upload(file);
     return this.service.updateLogo(logoUrl);
   }

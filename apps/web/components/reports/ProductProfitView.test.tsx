@@ -80,6 +80,8 @@ describe('ProductProfitView component', () => {
     expect(
       screen.getByText('Tidak ada penjualan produk pada rentang ini.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Tidak ada data laba produk')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Belum ada penjualan pada rentang ini/),
+    ).toBeInTheDocument();
   });
 });

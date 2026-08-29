@@ -129,7 +129,10 @@ export async function proxyApiRequest(
     if (correlationId) headers.set('x-correlation-id', correlationId);
 
     return new Response(
-      JSON.stringify({ message: 'Backend API is temporarily unavailable' }),
+      JSON.stringify({
+        message:
+          'Server sedang tidak dapat dihubungi. Coba lagi beberapa saat lagi.',
+      }),
       { status: 502, headers },
     );
   }

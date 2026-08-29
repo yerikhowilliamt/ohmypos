@@ -218,7 +218,7 @@ export function TopProductsView({ filters, enabled }: TopProductsViewProps) {
           <DataTable
             columns={columns}
             data={data?.rows ?? []}
-            emptyMessage="Tidak ada data produk terlaris"
+            emptyMessage="Belum ada penjualan pada rentang ini, jadi belum ada produk terlaris."
             emptyDescription="Belum ada penjualan pada rentang tanggal ini."
             exportColumns={exportColumns}
             exportFilename={`produk-terlaris_${rangeSuffix(filters.startDate, filters.endDate)}.xlsx`}

@@ -42,7 +42,9 @@ export function DevicesClient() {
       // The API refuses a device that already has logins. Show its own wording
       // — it is the one that tells the Owner to deactivate instead.
       setDeleteError(
-        error instanceof Error ? error.message : 'Gagal menghapus perangkat.',
+        error instanceof Error
+          ? error.message
+          : 'Perangkat belum terhapus. Periksa koneksi lalu coba lagi.',
       );
     }
   };
@@ -199,7 +201,7 @@ export function DevicesClient() {
         isLoading={isLoading}
         searchPlaceholder="Cari perangkat…"
         searchColumns={['label', 'branchId']}
-        emptyMessage="Belum ada perangkat terdaftar."
+        emptyMessage="Belum ada perangkat. Klik Tambah Perangkat untuk mendaftarkan tablet kasir pertama."
       />
 
       <DeviceFormDialog

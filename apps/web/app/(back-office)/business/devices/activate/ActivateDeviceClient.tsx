@@ -22,7 +22,7 @@ export function ActivateDeviceClient({ code }: { code: string }) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : 'Gagal mengaktifkan perangkat.',
+          : 'Perangkat belum aktif. Periksa koneksi lalu coba lagi, atau minta Owner menyalin tautan aktivasi yang baru.',
       );
     }
   };

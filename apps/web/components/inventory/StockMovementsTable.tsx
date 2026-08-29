@@ -226,7 +226,7 @@ export function StockMovementsTable({
       serverSearch={{ value: search, onChange: onSearchChange }}
       searchPlaceholder="Cari bahan baku atau cabang..."
       searchLabel="Cari pergerakan stok"
-      emptyMessage="Belum ada pergerakan stok."
+      emptyMessage="Belum ada pergerakan stok pada rentang ini. Coba ubah filternya."
       emptyDescription="Setiap penjualan, pembelian, dan stok awal tercatat di sini."
       exportColumns={exportColumns}
       exportFilename={exportFilename}

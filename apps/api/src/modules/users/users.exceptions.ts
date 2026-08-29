@@ -15,7 +15,7 @@ export class InvalidRoleBranchAssignmentException extends BadRequestException {
 
 export class EmailAlreadyRegisteredException extends ConflictException {
   constructor(email: string) {
-    super(`Email ${email} is already registered`);
+    super(`Email ${email} sudah terdaftar. Pakai alamat email lain.`);
     this.name = 'EmailAlreadyRegisteredException';
   }
 }

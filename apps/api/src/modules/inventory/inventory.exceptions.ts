@@ -24,7 +24,9 @@ import { Prisma } from '../../generated/prisma/client';
 
 export class OpeningStockRawMaterialNotFoundException extends NotFoundException {
   constructor(missingIds: string[]) {
-    super(`Raw material(s) not found: ${missingIds.join(', ')}`);
+    super(
+      `Bahan baku berikut tidak ditemukan: ${missingIds.join(', ')}. Muat ulang halaman.`,
+    );
     this.name = 'OpeningStockRawMaterialNotFoundException';
   }
 }
@@ -32,7 +34,7 @@ export class OpeningStockRawMaterialNotFoundException extends NotFoundException 
 export class OpeningStockUnitPriceRequiredException extends BadRequestException {
   constructor(names: string[]) {
     super(
-      `unitPrice is required for material(s) with no purchase recorded in this period: ${names.join(', ')}`,
+      `Isi harga satuan untuk bahan berikut, karena belum ada pembelian tercatat pada periode ini: ${names.join(', ')}.`,
     );
     this.name = 'OpeningStockUnitPriceRequiredException';
   }
@@ -41,7 +43,7 @@ export class OpeningStockUnitPriceRequiredException extends BadRequestException 
 export class OpeningStockUnitPriceNotAllowedException extends BadRequestException {
   constructor(names: string[]) {
     super(
-      `unitPrice must be omitted for material(s) already purchased in this period: ${names.join(', ')}`,
+      `Harga satuan tidak perlu diisi untuk bahan yang sudah dibeli pada periode ini: ${names.join(', ')}. Harga diambil dari pembelian tersebut.`,
     );
     this.name = 'OpeningStockUnitPriceNotAllowedException';
   }
@@ -56,7 +58,7 @@ export class OpeningStockWouldGoNegativeException extends ConflictException {
     }[],
   ) {
     super(
-      `Opening stock would drive the stock pool negative: ${offenders
+      `Stok awal ini akan membuat stok menjadi minus: ${offenders
         .map(
           (offender) =>
             `${offender.name} (koreksi ${offender.delta.toFixed(4)}, hasil ${offender.resultingStock.toFixed(4)})`,
@@ -70,7 +72,7 @@ export class OpeningStockWouldGoNegativeException extends ConflictException {
 export class FuturePeriodNotAllowedException extends BadRequestException {
   constructor(month: string) {
     super(
-      `Period ${month} has not started yet — opening stock is recorded at the start of a month, never in advance`,
+      `Periode ${month} belum dimulai. Stok awal dicatat di awal bulan berjalan, bukan untuk bulan yang akan datang.`,
     );
     this.name = 'FuturePeriodNotAllowedException';
   }
@@ -78,7 +80,9 @@ export class FuturePeriodNotAllowedException extends BadRequestException {
 
 export class InvalidPeriodException extends BadRequestException {
   constructor(period: string) {
-    super(`Invalid period "${period}" — expected a calendar month as YYYY-MM`);
+    super(
+      `Periode "${period}" tidak dikenali. Gunakan format bulan YYYY-MM, misalnya 2026-08.`,
+    );
     this.name = 'InvalidPeriodException';
   }
 }

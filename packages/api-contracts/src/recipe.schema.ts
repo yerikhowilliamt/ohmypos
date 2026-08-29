@@ -21,7 +21,7 @@ export const RecipeItemInputSchema = z.object({
    */
   quantityUsed: QuantityString.refine(
     (v) => Number(v) > 0,
-    'must be greater than zero',
+    'Harus lebih besar dari 0',
   ),
 });
 export type RecipeItemInput = z.infer<typeof RecipeItemInputSchema>;
@@ -35,7 +35,8 @@ export const ReplaceRecipeSchema = z.object({
         ctx.addIssue({
           code: 'custom',
           path: [index, 'rawMaterialId'],
-          message: 'duplicate rawMaterialId in the same recipe',
+          message:
+            'Bahan baku yang sama tercantum dua kali. Gabungkan menjadi satu baris.',
         });
       }
       seen.add(item.rawMaterialId);

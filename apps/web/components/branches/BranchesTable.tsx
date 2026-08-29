@@ -181,7 +181,7 @@ export function BranchesTable({
         isLoading={isLoading}
         searchColumns={['name']}
         searchPlaceholder="Cari cabang atau alamat…"
-        emptyMessage="Belum ada cabang terdaftar."
+        emptyMessage="Belum ada cabang. Klik Tambah untuk mendaftarkan toko pertama Anda — toko pertama otomatis menjadi Toko Utama."
       />
 
       <BranchFormDialog

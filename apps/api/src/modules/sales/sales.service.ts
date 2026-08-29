@@ -93,7 +93,7 @@ export class SalesService {
           });
           if (!branch) {
             throw new NotFoundException(
-              `Branch with ID ${dto.branchId} not found`,
+              'Cabang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
             );
           }
           // ADR-014/ADR-015: the system location is a ledger-attribution row,
@@ -107,7 +107,7 @@ export class SalesService {
           });
           if (!account) {
             throw new NotFoundException(
-              `Account with ID ${dto.accountId} not found`,
+              'Akun pembayaran tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
             );
           }
 
@@ -379,7 +379,9 @@ export class SalesService {
     });
 
     if (!sale) {
-      throw new NotFoundException(`Sale with ID ${id} not found`);
+      throw new NotFoundException(
+        'Transaksi penjualan tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     return toSaleResponse(sale);
@@ -416,7 +418,9 @@ export class SalesService {
           },
         });
         if (!target) {
-          throw new NotFoundException(`Sale with ID ${id} not found`);
+          throw new NotFoundException(
+            'Transaksi penjualan tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+          );
         }
 
         // Lock the sale row before re-checking status — see the TOCTOU note
@@ -426,7 +430,7 @@ export class SalesService {
 
         const sale = await tx.sale.findUniqueOrThrow({ where: { id } });
         if (sale.status === 'VOIDED') {
-          throw new SaleAlreadyVoidedException(id);
+          throw new SaleAlreadyVoidedException();
         }
 
         const VOID_WINDOW_MINUTES = 30;

@@ -15,7 +15,9 @@ export class BankParserFactory {
       case 'MANDIRI_PDF':
         return new MandiriPdfParser();
       default:
-        throw new BadRequestException(`Unsupported format: ${format}`);
+        throw new BadRequestException(
+          `Format berkas "${format}" tidak didukung. Gunakan CSV, atau PDF e-statement Mandiri Livin.`,
+        );
     }
   }
 }

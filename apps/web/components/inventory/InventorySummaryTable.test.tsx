@@ -98,7 +98,9 @@ describe('InventorySummaryTable component', () => {
   it('shows the empty state when there are no rows', () => {
     render(<InventorySummaryTable rows={[]} />);
 
-    expect(screen.getByText('Tidak ada data stok')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Belum ada data stok pada periode ini/),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         'Belum ada bahan baku atau pergerakan stok pada periode ini.',

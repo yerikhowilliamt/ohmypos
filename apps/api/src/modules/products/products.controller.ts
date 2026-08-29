@@ -96,7 +96,7 @@ export class ProductsController {
         } else {
           cb(
             new BadRequestException(
-              'Invalid image file. Allowed formats: JPG, PNG, WebP, GIF.',
+              'Format gambar tidak didukung. Gunakan JPG, PNG, WebP, atau GIF.',
             ),
             false,
           );
@@ -122,7 +122,7 @@ export class ProductsController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (!file) {
-      throw new BadRequestException('Image file is required');
+      throw new BadRequestException('Pilih berkas gambar terlebih dahulu.');
     }
     const photoUrl = await this.photoService.upload(id, file);
     return { photoUrl };

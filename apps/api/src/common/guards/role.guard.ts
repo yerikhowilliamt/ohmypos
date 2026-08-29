@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import type { UserRole } from '@ohmypos/api-contracts';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import type { JwtPayload } from '../types/jwt-payload.interface';
+import { SESSION_EXPIRED } from '../messages';
 
 /**
  * Checks the caller's role against the endpoint's `@Roles(...)` declaration
@@ -35,12 +36,12 @@ export class RoleGuard implements CanActivate {
     const user = request.user;
 
     if (!user) {
-      throw new ForbiddenException('Authentication required');
+      throw new ForbiddenException(SESSION_EXPIRED);
     }
 
     if (!allowedRoles.includes(user.role)) {
       throw new ForbiddenException(
-        `Role ${user.role} is not permitted to perform this action`,
+        'Peran akun Anda tidak memiliki izin untuk tindakan ini. Hubungi Owner bila Anda memerlukan akses.',
       );
     }
 

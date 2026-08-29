@@ -4,14 +4,18 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 export class InvalidActivationCodeException extends NotFoundException {
   constructor() {
-    super('Activation code is invalid or has already been used');
+    super(
+      'Tautan aktivasi tidak berlaku atau sudah pernah dipakai. Minta Owner menyalin tautan yang baru.',
+    );
     this.name = 'InvalidActivationCodeException';
   }
 }
 
 export class ActivationCodeExpiredException extends BadRequestException {
   constructor() {
-    super('Activation code has expired — generate a new one');
+    super(
+      'Tautan aktivasi sudah kedaluwarsa. Minta Owner menyalin tautan yang baru.',
+    );
     this.name = 'ActivationCodeExpiredException';
   }
 }
@@ -27,8 +31,8 @@ export class ActivationCodeExpiredException extends BadRequestException {
 export class DeviceHasAttendanceHistoryException extends BadRequestException {
   constructor(count: number) {
     super(
-      `Cannot delete a device with ${count} attendance record(s) — deactivate it instead, ` +
-        'so its past logins keep showing the terminal they came from',
+      `Perangkat ini sudah punya ${count} catatan absensi, jadi tidak bisa dihapus. ` +
+        'Nonaktifkan saja, supaya riwayat absensi lama tetap menunjukkan perangkat asalnya.',
     );
     this.name = 'DeviceHasAttendanceHistoryException';
   }
@@ -37,8 +41,8 @@ export class DeviceHasAttendanceHistoryException extends BadRequestException {
 export class DeviceBranchLockedException extends BadRequestException {
   constructor() {
     super(
-      'Cannot move an active device to another branch — deactivate it first, ' +
-        'then re-activate it at the terminal after the change',
+      'Perangkat yang masih aktif tidak bisa dipindah ke cabang lain. ' +
+        'Nonaktifkan dulu, ubah cabangnya, lalu aktifkan kembali dari perangkat itu.',
     );
     this.name = 'DeviceBranchLockedException';
   }

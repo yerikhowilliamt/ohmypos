@@ -151,7 +151,7 @@ export function BankTransactionsTable({
       serverSearch={{ value: search, onChange: onSearchChange }}
       searchPlaceholder="Cari keterangan transaksi…"
       searchLabel="Cari transaksi bank"
-      emptyMessage="Belum ada transaksi bank."
+      emptyMessage="Belum ada mutasi bank. Impor rekening koran terlebih dahulu."
       emptyDescription="Impor rekening koran CSV untuk mulai merekonsiliasi."
       exportColumns={exportColumns}
       // No date-range filter on this screen, so the export-time date is the

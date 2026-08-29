@@ -30,7 +30,9 @@ export class ImportService {
     });
 
     if (!account) {
-      throw new NotFoundException(`Account ${accountId} not found`);
+      throw new NotFoundException(
+        'Akun pembayaran tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+      );
     }
 
     const parser = this.bankParserFactory.getParser(format);

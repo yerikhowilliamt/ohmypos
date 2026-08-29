@@ -60,7 +60,7 @@ export class ImportController {
     file: Express.Multer.File,
   ) {
     if (!format) {
-      throw new BadRequestException('Query parameter `format` is required');
+      throw new BadRequestException('Pilih format berkas terlebih dahulu.');
     }
     // Checked by signature rather than mimetype: a PDF fed to a CSV parser
     // would otherwise import zero rows and look like an empty statement.
@@ -109,7 +109,7 @@ export class ImportController {
     file: Express.Multer.File,
   ) {
     if (!format) {
-      throw new BadRequestException('Query parameter `format` is required');
+      throw new BadRequestException('Pilih format berkas terlebih dahulu.');
     }
     return this.importService.importStatement(
       accountId,

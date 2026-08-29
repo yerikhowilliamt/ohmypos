@@ -52,7 +52,7 @@ export class AllocationService {
 
         if (!bankTransaction) {
           throw new NotFoundException(
-            `BankTransaction with id ${txnId} not found`,
+            'Mutasi bank tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
           );
         }
 
@@ -93,7 +93,7 @@ export class AllocationService {
           const amount = new Decimal(item.amountPortion);
           if (amount.lte(0)) {
             throw new BadRequestException(
-              `amountPortion must be positive, got ${item.amountPortion}`,
+              `Jumlah alokasi harus lebih besar dari 0, bukan ${item.amountPortion}.`,
             );
           }
           return sum.plus(amount);
@@ -104,7 +104,7 @@ export class AllocationService {
 
         if (totalSum.gt(txnAmount)) {
           throw new BadRequestException(
-            `Total allocation (${totalSum.toString()}) exceeds transaction amount (${txnAmount.toString()}) for transaction ${txnId}`,
+            `Total alokasi ${totalSum.toString()} melebihi nilai mutasi bank ${txnAmount.toString()}. Kurangi jumlahnya.`,
           );
         }
 
@@ -122,13 +122,13 @@ export class AllocationService {
 
           if (!ledgerEntry) {
             throw new NotFoundException(
-              `LedgerEntry with id ${item.ledgerEntryId} not found`,
+              'Catatan transaksi tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
             );
           }
 
           if (bankTransaction.type !== ledgerEntry.type) {
             throw new BadRequestException(
-              `BankTransaction type (${bankTransaction.type}) does not match LedgerEntry type (${ledgerEntry.type})`,
+              'Arah mutasi bank dan catatan transaksi tidak cocok — uang masuk hanya bisa dipasangkan dengan uang masuk.',
             );
           }
 
@@ -157,7 +157,7 @@ export class AllocationService {
 
           if (wouldBe.gt(entryAmount)) {
             throw new BadRequestException(
-              `Total allocation (${wouldBe.toString()}) exceeds ledger entry amount (${entryAmount.toString()}) for entry ${item.ledgerEntryId}`,
+              `Total alokasi ${wouldBe.toString()} melebihi nilai catatan transaksi ${entryAmount.toString()}. Kurangi jumlahnya.`,
             );
           }
 
@@ -183,7 +183,9 @@ export class AllocationService {
     return this.prisma.$transaction(async (tx) => {
       const target = await tx.allocation.findUnique({ where: { id } });
       if (!target) {
-        throw new NotFoundException(`Allocation with id ${id} not found`);
+        throw new NotFoundException(
+          'Pencocokan tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+        );
       }
 
       // DEF-QA-02: lock the same parent rows `create()` locks, in the same
@@ -201,10 +203,14 @@ export class AllocationService {
 
       const allocation = await tx.allocation.findUnique({ where: { id } });
       if (!allocation) {
-        throw new NotFoundException(`Allocation with id ${id} not found`);
+        throw new NotFoundException(
+          'Pencocokan tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
+        );
       }
       if (allocation.status === 'REVOKED') {
-        throw new BadRequestException(`Allocation ${id} is already revoked`);
+        throw new BadRequestException(
+          'Pencocokan ini sudah dibatalkan sebelumnya.',
+        );
       }
 
       return tx.allocation.update({
@@ -245,6 +251,8 @@ export class AllocationService {
       ];
     }
 
-    throw new BadRequestException('No allocations provided');
+    throw new BadRequestException(
+      'Pilih minimal satu catatan transaksi untuk dicocokkan.',
+    );
   }
 }

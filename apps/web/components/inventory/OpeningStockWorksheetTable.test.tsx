@@ -52,7 +52,7 @@ describe('OpeningStockWorksheetTable component', () => {
     // Checked locked badge vs helper text
     expect(screen.getByText('Otomatis (Pembelian)')).toBeInTheDocument();
     expect(
-      screen.getByText('Belum ada pembelian periode ini'),
+      screen.getByText(/Belum ada pembelian pada periode ini/),
     ).toBeInTheDocument();
   });
 

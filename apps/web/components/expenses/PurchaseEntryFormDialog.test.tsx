@@ -260,7 +260,7 @@ describe('PurchaseEntryFormDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /simpan pembelian/i }));
 
-    expect(await screen.findByText(/duplicate rawmaterialid/i)).toBeDefined();
+    expect(await screen.findByText(/tercantum dua kali/i)).toBeDefined();
     expect(apiModule.apiFetch).not.toHaveBeenCalledWith(
       '/supplier-purchases',
       expect.anything(),

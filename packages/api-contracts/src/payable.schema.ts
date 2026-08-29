@@ -13,7 +13,7 @@ import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
  */
 export const CreatePayableSettlementSchema = z.object({
   accountId: UuidString, // the account the payment came from (ERD §3)
-  amount: MoneyString.refine((v) => Number(v) > 0, 'must be greater than zero'),
+  amount: MoneyString.refine((v) => Number(v) > 0, 'Harus lebih besar dari 0'),
   settledAt: DateTimeString,
   note: z.string().trim().max(500).optional(),
   idempotencyKey: IdempotencyKey.optional(),
