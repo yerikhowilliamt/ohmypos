@@ -35,7 +35,7 @@ const profitablePeriod: ProfitLossResponse = {
 
 const lossPeriod: ProfitLossResponse = {
   ...profitablePeriod,
-  period: { ...period, branchId: 'b-1', branchName: 'Pusat (Dapur Sentral)' },
+  period: { ...period, branchId: 'b-1', branchName: 'Umum' },
   totalIncome: '0.00',
   salesRevenue: '0.00',
   grossProfit: '-50000000.00',

@@ -61,9 +61,9 @@ describe('Purchasing & Payables (e2e)', () => {
 
     // Ensure system branches and categories exist
     const centralBranch = await prisma.branch.upsert({
-      where: { name: 'Pusat (Dapur Sentral)' },
+      where: { name: 'Umum' },
       update: {},
-      create: { name: 'Pusat (Dapur Sentral)', address: 'Dapur Sentral' },
+      create: { name: 'Umum', isSystem: true },
     });
     centralBranchId = centralBranch.id;
 
@@ -1401,12 +1401,12 @@ describe('Purchasing & Payables (e2e)', () => {
     });
 
     it('Case 28: assigning a purchase to the central kitchen branch is rejected with 400 (ADR-014)', async () => {
-      // `Pusat (Dapur Sentral)` exists only to satisfy LedgerEntry.branchId's
+      // `Umum` exists only to satisfy LedgerEntry.branchId's
       // NOT NULL. A purchase attributed to it directly would report
       // isCentral: false while being central — so the ADR's rule is enforced,
       // not merely documented. branchId: null stays the only way to say central.
       const centralBranch = await prisma.branch.findUniqueOrThrow({
-        where: { name: 'Pusat (Dapur Sentral)' },
+        where: { name: 'Umum' },
       });
 
       const res = await request(app.getHttpServer())

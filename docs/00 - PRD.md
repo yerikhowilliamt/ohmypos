@@ -36,7 +36,7 @@ The target business currently manages sales, expenses, raw material purchases, a
 
 ### Non-goals (v1)
 
-- Multi-tenant SaaS (selling OhMyPos to other businesses) — schema should not actively block this later, but no tenant-isolation work is done in v1.
+- Multi-tenant SaaS (selling OhMyPos to other businesses) — schema should not actively block this later, but no tenant-isolation work is done in v1. **(v2: reversed by ADR-025 — tenancy, a `PlatformAdmin` identity, and a super-admin dashboard are v2 scope. This bullet stands as the v1 record.)**
 - Native mobile app — web-based responsive UI only for v1.
 - Employee shift/payroll management. (ADR-021 partially reversed this: attendance tracking and leave requests shipped in v1; payroll computation itself remains out of scope.)
 - Customer loyalty / CRM features.

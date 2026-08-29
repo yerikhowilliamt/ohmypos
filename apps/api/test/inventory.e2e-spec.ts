@@ -86,9 +86,9 @@ describe('Inventory (e2e)', () => {
     await cleanup();
 
     await prisma.branch.upsert({
-      where: { name: 'Pusat (Dapur Sentral)' },
+      where: { name: 'Umum' },
       update: {},
-      create: { name: 'Pusat (Dapur Sentral)', address: 'Dapur Sentral' },
+      create: { name: 'Umum', isSystem: true },
     });
 
     const branch = await prisma.branch.create({

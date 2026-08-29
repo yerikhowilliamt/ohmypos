@@ -15,10 +15,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import {
-  CENTRAL_BRANCH_NAME,
-  resolveSaleCategoryId,
-} from '../../common/system-refs';
+import { resolveSaleCategoryId } from '../../common/system-refs';
 import { StockMovementsService } from '../stock-movements/stock-movements.service';
 import { LedgerEntriesService } from '../ledger-entries/ledger-entries.service';
 import { calculateHpp } from '../products/hpp.calculator';
@@ -99,9 +96,9 @@ export class SalesService {
               `Branch with ID ${dto.branchId} not found`,
             );
           }
-          // ADR-014/ADR-015: `Pusat (Dapur Sentral)` is a ledger-attribution row,
+          // ADR-014/ADR-015: the system location is a ledger-attribution row,
           // not a till — there is no central sale (ADR-004).
-          if (branch.name === CENTRAL_BRANCH_NAME) {
+          if (branch.isSystem) {
             throw new CentralBranchNotSellableException();
           }
 

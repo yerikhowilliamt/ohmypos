@@ -1,7 +1,9 @@
 # OhMyPos — Architecture Decision Records
 
-**Status:** Draft v2
+**Status:** Draft v3
 **Depends on:** PRD v1.1, System Design v4, ERD v3
+
+**Changelog (v2 → v3):** Added ADR-025, which turns OhMyPos into a multi-tenant system and adds a platform-operator identity. It partially supersedes ADR-011 — that ADR's rejection of a multi-tenant Business layer no longer holds, while everything else it decided does.
 
 **Changelog (v1 → v2):** Added ADR-012, recording the field-level baseline for the seven ported tables after Kasync's literal `schema.prisma` was read for the first time. No existing ADR is superseded — ADR-012 amends ERD v2 → v3, which ERD §7 had already flagged as needing exactly this cross-check.
 
@@ -209,7 +211,7 @@
 
 ## ADR-011: Authentication & Role-Based Access Control (Kasir / Admin / Owner)
 
-**Status:** Accepted
+**Status:** Accepted — **partially superseded by ADR-025** (only the "no multi-tenant Business layer" decision and its matching rejected alternative; the role model, `branchId` rule, JWT/`tokenValidFrom` pattern, and Owner-only user creation are unchanged)
 
 **Context:** OhMyPos is single-tenant (one business), but requires staff-level login with three distinct roles: Kasir, Admin, Owner. Kasync's own Auth module was audited via its state export (kasync-state-export.md) and found to have added multi-tenant user isolation late, outside its original PRD — a drift OhMyPos avoids by deciding Auth scope upfront as its own ADR, before implementation.
 
@@ -309,7 +311,7 @@ In OhMyPos, stock is centralized in `RawMaterial` (ADR-004) and decremented unde
 
 ## ADR-014: Central kitchen branch for central-purchase ledger entry attribution
 
-**Status:** Accepted
+**Status:** Accepted — **amended 2026-08-29 (TASK-120), see the Amendment section below.** The decision stands; how the row is identified and what it is called both changed.
 
 **Context:** ERD v3 §3 and ADR-004 establish that `SupplierPurchase.branchId` is nullable, where `branchId = null` is the canonical marker for a "central purchase" (bought centrally by the business for raw materials/packaging). However, `LedgerEntry.branchId` is a required (`NOT NULL`) column inherited from Kasync's schema baseline (ADR-012).
 
@@ -326,6 +328,18 @@ A central purchase paid up front (`paymentStatus = PAID`) or settled later via a
 - (+) Reconciliation and split-allocation work without special-case null-branch handling.
 - (−) Two representations of "central" exist (`SupplierPurchase.branchId = null` vs `LedgerEntry.branchId = <Pusat>`). Mitigated two ways: the attribution is generated only inside system-entry creation (`resolveLedgerBranchId`), and `SupplierPurchasesService.create` rejects a purchase whose `branchId` resolves to `Pusat (Dapur Sentral)` with `CentralBranchNotAssignableException` (400). The rejection is enforced, not merely documented — a purchase attributed to `Pusat` directly would report `isCentral: false` while being central, which is quietly wrong in every branch-grouped report. Covered by Case 28 in `test/purchasing-payables.e2e-spec.ts`.
 - (−) Database seed becomes load-bearing for central ledger entry creation; missing seed yields an explicit 500 error directing developer/admin to run `db:seed`.
+
+**Amendment (2026-08-29, TASK-120) — the row is identified by a flag, and renamed:**
+
+Two things in the original decision turned out to be wrong in practice.
+
+1. **Point 2 said the service "resolves the branch ID for `Pusat (Dapur Sentral)`" — by name.** That made the row's NAME load-bearing, and nothing guarded it. Renaming the row broke no foreign key, so `PATCH /branches/:id` returned 200; only the *next* central purchase failed, with a 503 that named nothing and pointed at nothing. `Branch.isSystem` (migration `20260828201617_add_branch_system_and_main_store`, partial unique index `branches_single_system`) is now the lookup key. `resolveLedgerBranchId` uses `findFirst({ where: { isSystem: true } })`, and the two rejection sites compare `branch.isSystem` rather than the name. The row's label is now free data.
+
+2. **The name itself was wrong.** "(+) Reflects real-world business operation: the central kitchen is an actual physical location (PRD §8.1)" does not hold for every business on this product — the Owner who raised it has no central kitchen at all. The row is a **scope** ("not tied to any one store"), not a place, and naming it like a flagship store made it read as one: it appeared in the Cabang list with Edit and Delete buttons while being absent from the POS branch picker, which is precisely how the confusion was reported. It is now **`Umum`**, and the corresponding UI control reads "Umum" rather than "Pusat".
+
+Consequently the row is hidden from the Cabang page and from both cashier branch pickers (ERR-038), while remaining visible in reports — where its cost genuinely belongs (ADR-023). It is protected from rename and delete by `SystemBranchProtectedException`.
+
+The last original consequence — "missing seed yields an explicit 500" — was true and worse than it read: the production bootstrap never created the row at all, so a real installation failed its first sale (ERR-037). `ensureSystemRefs` is now the single writer, shared by the bootstrap script and both seeds.
 
 **Alternatives considered:**
 - *Make `LedgerEntry.branchId` nullable*: rejected — changes ported table baseline (ADR-012), complicates query-time reporting aggregations with null buckets, and alters `BranchScopeGuard` semantics.
@@ -677,3 +691,54 @@ A fourth issue surfaced during implementation and is not in the handoff: **a per
 - *Allow the base unit to change via a conversion migration that re-scales every dependent quantity*: rejected for v1 — it mutates `StockMovement` rows, which are append-only by design (ERD §3). Recorded as DEBT-062.
 - *Waste as a global percentage, or per recipe ingredient*: rejected — the reference spreadsheet applies it per product, after the recipe total.
 - *Waste also increasing physical stock deduction*: rejected — the spreadsheet applies the percentage to cost only, and inflating consumption would make stock-outs disagree with the physical count.
+
+---
+
+## ADR-025: Multi-tenancy via a shared database with a `tenantId` discriminator, and a separate `PlatformAdmin` identity
+
+**Status:** Accepted
+
+**Supersedes:** ADR-011 in part — specifically its Decision that "no multi-tenant Business layer [is] needed" and its rejected alternative "Multi-tenant Business entity for future resale". ADR-011's role model (KASIR/ADMIN/OWNER), its `branchId` rule, its JWT + `tokenValidFrom` pattern, and its Owner-only user creation all stand unchanged.
+
+**Context:** v1 is a single-business system, by explicit decision. PRD §3 lists "Multi-tenant SaaS" as a non-goal while asking that the schema "not actively block this later," and ADR-011 rejected a Business entity on the grounds that OhMyPos was confirmed single-business and that building for a hypothetical need would repeat Kasync's own late-multi-tenancy drift in reverse. That need is no longer hypothetical: v2 sells OhMyPos to other businesses, and adds an operator-facing dashboard for managing them.
+
+Reading the code before deciding surfaced three facts that constrain the options:
+
+1. **Multi-tenancy was not merely absent — it was deliberately removed during the Kasync port.** `apps/api/prisma/schema.prisma:140` still carries the note: `/// Kasync's unique is (userId, name); with multi-tenancy dropped it collapses to name.` ERD §7 records the same thing as a porting trap. Not one of the 23 models carries a tenant column today.
+2. **Ten unique constraints are globally scoped** (`users.email`, `branches.name`, `categories.name`, `products.name`, `raw_materials.name`, `suppliers.name`, `devices.activation_code`, and three `idempotency_key` columns). Worse, `apps/api/src/common/system-refs.ts` resolves the central kitchen branch and the two system categories **by those globally unique names** — so a second tenant would not merely collide on insert, it would silently attach one tenant's ledger entries to another tenant's branch.
+3. **An ORM-level filter cannot be the only defence.** There are ~17 `$queryRaw`/`$executeRaw` call sites — the whole of `reports.service.ts` is raw SQL — plus three PL/pgSQL triggers, none of which a Prisma client extension can see.
+
+**Decision:**
+
+1. **Shared database, shared schema, `tenantId` discriminator.** One `Tenant` row per business. Every one of the 23 business models gets a `tenantId TEXT NOT NULL` (matching the existing `id String @default(uuid())` convention — no column in this schema uses `@db.Uuid`) — including child tables (`SaleItem`, `RecipeItem`, `Allocation`, …) where it is redundant against the parent. The redundancy is the point: a uniform column is what lets the query filter be written as a single `$allModels` rule with no special cases, and special cases are where isolation bugs live.
+2. **Tenant is resolved server-side, never supplied by the client.** `JwtAuthGuard` already reads the user row from the database on every request in order to trust the DB over the token for `role` and `branchId` (`jwt-auth.guard.ts:69`); `tenantId` is read in the same query and published to an `AsyncLocalStorage` context. No header, no subdomain, no path segment carries a tenant. There is therefore nothing for a client to spoof.
+3. **Three layers of enforcement, not one.** (a) A Prisma client extension injects `tenantId` into every query and **throws** rather than passing through when the context is empty — fail closed. (b) Composite foreign keys at the database level (`(branch_id, tenant_id) → branches(id, tenant_id)`) make a cross-tenant reference physically impossible, which is the property Row-Level Security would otherwise have provided. (c) A two-tenant `tenant-isolation.e2e-spec.ts` suite asserts non-leakage across every list, detail, and report endpoint.
+4. **No Postgres RLS.** The composite-FK layer buys most of RLS's guarantee without requiring `SET app.tenant_id` per connection, which would conflict with the `pg.Pool` driver-adapter setup in `prisma.service.ts` and complicate migrations and seeding. The residual gap — raw SQL — is closed by explicit `tenant_id` predicates plus the e2e suite, and is recorded as technical debt rather than pretended away.
+5. **The super admin is not a `User`.** A separate `PlatformAdmin` table, separate JWT secrets, separate cookies, and a separate `PlatformAuthGuard`. `UserRole` gains no `SUPER_ADMIN` member. The consequence that justifies the extra table: `User.tenantId` can be `NOT NULL` with no exceptions, so "tenantId is null, therefore see everything" — the single most common multi-tenant leak — is not expressible in this schema.
+6. **`users.email` stays globally unique**, by choice rather than by omission. Login then needs no tenant selector and `AuthService.login` keeps its `findUnique({ where: { email } })`. The price is that one person cannot be staff at two tenants under one email. `devices.activation_code` stays globally unique for a different reason: activation happens before any tenant context exists, and the lookup has only the code to go on. The other eight uniques become composite with `tenantId`.
+7. **Tenants are provisioned by a platform admin only.** No self-registration, no approval workflow — the same stance ADR-011 §5 takes for users, one level up. Creating a tenant also seeds its central branch and two system categories in the same transaction, because `system-refs.ts` makes a tenant without them unable to record its first sale.
+8. **Impersonation is read-only, logged, and short-lived.** A platform admin may mint a 30-minute tenant access token for that tenant's OWNER, with no refresh token and an `imp` claim that causes every non-`GET` request to be rejected. A reason string is required and every session is recorded in `impersonation_sessions`. Widening this to read-write is a separate decision, not an implementation detail.
+9. **The three existing triggers are left untouched.** `check_allocation_sum`, `check_ledger_allocation_sum`, and `sync_transaction_status` operate on `id`, not on names or scope, so composite FKs guaranteeing single-tenant rows are sufficient to keep them correct. No new `BEFORE` trigger may be added to `allocations`: migration `20260823120100` documents that lock ordering depends on Postgres firing `BEFORE` triggers in alphabetical name order, and a new name sorting between the two existing ones reintroduces the deadlock they were written to avoid.
+
+**Consequences:**
+
+- (+) One deployment, one migration run, one connection pool serves every tenant — the operating cost stays close to v1's.
+- (+) `User.tenantId NOT NULL` removes the nullable-tenant escape hatch entirely.
+- (+) Cross-tenant foreign keys become a database error rather than a code-review responsibility.
+- (+) Aggregate metrics across tenants are a plain `GROUP BY`, which a database-per-tenant design would have made genuinely hard.
+- (−) **The raw-SQL reporting layer must be filtered by hand.** `reports.service.ts` is not covered by the client extension, and nothing but tests will catch a missed predicate. Recorded in `08 - Tech_Debt_Log.md`.
+- (−) A `tenantId` column on child tables is denormalized and can, in principle, disagree with its parent. The composite FKs are what make that "in principle" only.
+- (−) One email belongs to one tenant forever; a staff member moving between tenants needs a new address.
+- (−) Platform controllers must be `@Public()` to bypass the global `JwtAuthGuard` before applying `PlatformAuthGuard` — an arrangement that fails open if the second guard is forgotten. Mitigated by an e2e suite that enumerates every `/platform/*` route and requires 401 without a platform token.
+- (−) All 18 existing e2e suites need tenant setup, and `prisma/seed.ts` — which drives real services so that denormalized balances keep a single writer — changes with their signatures.
+
+**Alternatives considered:**
+
+- *Schema-per-tenant*: rejected — migrations would run N times, Prisma has no good story for dynamically selecting a schema per request, and the operator dashboard's cross-tenant aggregates would become N queries stitched in application code.
+- *Database-per-tenant*: rejected — strongest isolation, but the infrastructure and operational cost is disproportionate to the current scale, and it makes exactly the aggregate reporting this v2 is meant to add the hardest thing to build.
+- *Shared database with Postgres RLS*: seriously considered, and it is the textbook answer. Rejected for v2's first phase because `SET LOCAL app.tenant_id` must be issued per connection, which fights the `pg.Pool` configuration in `prisma.service.ts` and complicates the seed (which instantiates services directly) and the migration path. Composite FKs deliver the structural half of RLS's guarantee with none of that. **Revisit this** if the raw-SQL surface grows or if a tenant ever demands contractual isolation.
+- *Adding `SUPER_ADMIN` to `UserRole`*: rejected — it is the smaller diff, but it forces `User.tenantId` to be nullable and forces the query extension to grow a "if null, do not filter" branch. That branch is the leak, and refusing to create it is worth an extra table.
+- *Reusing `branchId` as the tenant key*: rejected outright — `branchId` is nullable on `SupplierPurchase`, `StockMovement`, and `User`, where `null` already means "central" (ADR-004, ADR-014). Overloading it would make "central" and "all tenants" the same value.
+- *Merging `BusinessProfile` into `Tenant`*: rejected for this phase — conceptually tidier, but it would ripple through the business-profile module, its contracts, and its UI for no isolation benefit. `Tenant` holds what the operator owns (slug, status); `BusinessProfile` stays what the tenant edits about itself, with a `tenantId @unique`.
+- *Subdomain-per-tenant routing*: rejected for now, not on merit — it needs wildcard DNS and TLS, and changes cookie-domain and CORS handling plus `apps/web/lib/api-proxy.ts`. Because tenant resolution is server-side (Decision 2), subdomains can be layered on later without touching the data model.
+- *Plans, quotas, and billing in the same release*: rejected — deliberately out of scope. Shipping paid features on top of an isolation layer that has not yet proven itself in production inverts the risk order.

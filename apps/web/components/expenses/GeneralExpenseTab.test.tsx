@@ -63,7 +63,8 @@ function mockLedger(metaOverride?: Partial<PaginationMeta>) {
       return Promise.resolve([
         {
           id: mockEntries[0].branchId,
-          name: 'Pusat (Dapur Sentral)',
+          name: 'Umum',
+          isSystem: true,
           address: null,
           createdAt: '2026-08-16T00:00:00.000Z',
           updatedAt: '2026-08-16T00:00:00.000Z',
@@ -113,7 +114,7 @@ describe('GeneralExpenseTab', () => {
     expect(lastLedgerPath()).toContain('sortBy=entryDate');
     expect(lastLedgerPath()).toContain('sortOrder=desc');
     expect(lastLedgerPath()).toContain('type=OUTFLOW');
-    expect(screen.getAllByText('Pusat')).not.toHaveLength(0);
+    expect(screen.getAllByText('Umum')).not.toHaveLength(0);
   });
 
   it('offers edit only for manual expenses', async () => {

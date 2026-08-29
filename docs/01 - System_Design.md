@@ -1,8 +1,10 @@
 # OhMyPos — System Design
 
-**Status:** Draft v4
-**Depends on:** PRD v1.1, ADR-001–012, ERD v3
+**Status:** Draft v5
+**Depends on:** PRD v1.1, ADR-001–025, ERD v3
 **Related project:** Kasync (source of the ported financial/reconciliation modules, and precedent for the Next.js + NestJS split)
+
+**Changelog (v4 → v5):** Sections 5 and 8 updated for v2 multi-tenancy (ADR-025). A `(platform)` route group and a `PlatformAdmin` identity are added alongside the three tenant roles; tenant scoping is described as the layer beneath branch scoping, not a replacement for it.
 
 **Changelog (v3 → v4):** Section 4's module table now lists `Import` and `Reconciliation`, which were missing despite PRD §5.7 requiring CSV bank statement import and Section 6.5 below describing it. The `Auth`/`Users` row is reclassified from "Ported" to "Ported pattern, re-implemented" — ADR-011 designs that module fresh, and Kasync's version carries self-registration and self-deletion paths that contradict it (ERD v3 §7).
 
@@ -86,6 +88,7 @@ This was decided in the integration discussion (see PRD background): `Sale` crea
   - **`ADMIN`** → gets `(back-office)/master-data`, `(back-office)/reconciliation`, and `(back-office)/accounts` only — matching the backend restriction that `ADMIN` can perform reconciliation matching (ADR-011) and manage master data, but has no reason to access `(back-office)/users` (Owner-only, per ADR-011) or is not otherwise scoped into reports/inventory/expenses/devices/branches screens in v1. `(back-office)/accounts` (payment methods) is master-data-adjacent, which is why it's included here despite not being named in earlier drafts of this restriction. `ADMIN` does **not** get `(pos)/sales`.
   - **`OWNER`** → gets the full `(back-office)/*` route group (including `(back-office)/users`, `/dashboard`, `/devices`, `/branches`), unscoped by branch, plus the branch filter described in `DESIGN.md`.
   - This is a UX convenience only — the authoritative restriction is enforced backend-side via `RoleGuard`/`BranchScopeGuard` (Section 8), never trusted from routing alone.
+- **Platform operator (v2, ADR-025)** — a fourth route group `(platform)/*` (dashboard, tenants list, tenant detail) plus a public `/platform/login`, gated by `requirePlatformAdmin()` rather than `requireRole()`. Its occupant is a `PlatformAdmin`, **not** a `User`: `UserRole` gains no `SUPER_ADMIN` member, the group has its own cookie (`platform_access_token`) and its own JWT secret, and `apps/web/proxy.ts` checks that cookie for `/platform/*` paths. `PLATFORM_NAV_ITEMS` is a separate constant, deliberately not part of `NAV_ITEMS: Record<UserRole, NavItem[]>`.
 - Data fetching: server components / route handlers call `apps/api` over REST using types from `packages/api-contracts`; no direct database access from the frontend at any point.
 - Auth: reads the same JWT (HttpOnly cookie) issued by `apps/api`'s `Auth` module — session state is not duplicated or reimplemented on the frontend.
 
@@ -149,6 +152,17 @@ Per the confirmed branch policy and the three-role model:
   - **`KASIR`** — write operations (creating sales, branch-specific purchases) scoped to their own `branchId` via `BranchScopeGuard`. No access to `Allocation`, `User`, or reporting endpoints.
   - **`ADMIN`** — unscoped (all-branch) read/write on master data and reconciliation (`Allocation` create/revoke) via `RoleGuard`. Cannot create/deactivate `User` records.
   - **`OWNER`** — unscoped read/write across all modules, including `User` creation/deactivation — the only role permitted to do so.
+
+### Tenant scoping (v2, ADR-025)
+
+Tenant scoping sits **beneath** branch scoping and is independent of it. Branch scoping answers "which branch's rows may this KASIR touch"; tenant scoping answers "which business's rows exist at all for this request".
+
+- Every one of the 23 business models carries `tenantId TEXT NOT NULL`, child tables included. `User.tenantId` has no nullable case — that is the reason `PlatformAdmin` is a separate table.
+- The tenant is resolved server-side in `JwtAuthGuard`, from the same per-request `users` read that already refreshes `role` and `branchId`, and published through an `AsyncLocalStorage` scope. **No client input carries a tenant** — no header, no subdomain, no path segment.
+- Enforcement is three layers: a Prisma client extension that injects `tenantId` and throws on an empty scope (fail closed); composite foreign keys `(child_id, tenant_id) → parent(id, tenant_id)` that make a cross-tenant reference a database error; and `tenant-isolation.e2e-spec.ts`, which asserts non-leakage across every list, detail, and report endpoint.
+- Raw SQL is **outside** the extension's reach — the whole of `reports.service.ts` plus the `FOR UPDATE` lock sites — and carries hand-written `tenant_id` predicates instead. This is the known soft spot; see `08 - Tech_Debt_Log.md`.
+- `TenantStatusGuard` rejects every request from a `SUSPENDED` tenant except `POST /auth/logout`.
+- `PlatformAdmin` bypasses all of the above via a separate `PlatformAuthGuard` and an unscoped Prisma client, reachable only under `/api/v1/platform/*`. Impersonation mints a 30-minute, refresh-less tenant token whose `imp` claim makes every non-`GET` request fail.
 
 ## 9. Tech Stack
 

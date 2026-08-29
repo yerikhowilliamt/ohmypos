@@ -20,7 +20,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import {
-  CENTRAL_BRANCH_NAME,
   resolveLedgerBranchId,
   resolvePurchaseCategoryId,
 } from '../../common/system-refs';
@@ -110,11 +109,11 @@ export class SupplierPurchasesService {
               `Branch with ID ${dto.branchId} not found`,
             );
           }
-          // ADR-014: `Pusat (Dapur Sentral)` is a ledger-attribution row, not an
+          // ADR-014: the system location is a ledger-attribution row, not an
           // outlet. Accepting it here would produce `isCentral: false` on a
           // purchase that is central — so `branchId: null` stays the single way
           // to say "central", exactly as the ADR promises.
-          if (branch.name === CENTRAL_BRANCH_NAME) {
+          if (branch.isSystem) {
             throw new CentralBranchNotAssignableException();
           }
         }

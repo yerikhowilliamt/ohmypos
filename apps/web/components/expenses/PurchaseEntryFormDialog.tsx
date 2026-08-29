@@ -51,6 +51,7 @@ import {
   useSuppliers,
 } from '@/hooks/useExpenses';
 import { SupplierQuickCreateDialog } from './SupplierQuickCreateDialog';
+import { ScopeHint } from '@/components/branches/ScopeHint';
 
 interface PurchaseEntryFormDialogProps {
   open: boolean;
@@ -323,7 +324,7 @@ export function PurchaseEntryFormDialog({
                       checked={isCentral}
                       onChange={() => setValue('branchId', null)}
                     />
-                    Pusat (Central)
+                    Umum
                   </Label>
                   <Label className="flex items-center gap-1.5 text-sm cursor-pointer font-normal">
                     <RadioInput
@@ -336,6 +337,14 @@ export function PurchaseEntryFormDialog({
                     Cabang
                   </Label>
                 </div>
+                <ScopeHint>
+                  Pilih{' '}
+                  <strong className="font-medium text-text-primary">
+                    Umum
+                  </strong>{' '}
+                  bila pembelian ini untuk kebutuhan bersama dan tidak
+                  dibebankan ke satu cabang.
+                </ScopeHint>
                 {!isCentral && (
                   <Controller
                     name="branchId"

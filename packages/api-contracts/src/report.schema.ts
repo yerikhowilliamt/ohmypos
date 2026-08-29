@@ -24,7 +24,7 @@ export const ReportRangeQuerySchema = z
   .object({
     startDate: ReportDate,
     endDate: ReportDate,
-    /** Optional filter. Omitted = all branches, including Pusat (Dapur Sentral). */
+    /** Optional filter. Omitted = all branches, including the system location. */
     branchId: UuidString.optional(),
   })
   .refine((q) => q.startDate <= q.endDate, {

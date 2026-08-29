@@ -7,6 +7,7 @@ import { PayablesService } from '../src/modules/payables/payables.service';
 import { StockMovementsService } from '../src/modules/stock-movements/stock-movements.service';
 import { SupplierPurchasesService } from '../src/modules/supplier-purchases/supplier-purchases.service';
 import { SalesService } from '../src/modules/sales/sales.service';
+import { ensureSystemRefs } from '../src/common/system-refs';
 
 /**
  * Synthetic seed data only — fictional branches and staff, never anything from
@@ -15,7 +16,7 @@ import { SalesService } from '../src/modules/sales/sales.service';
  * Load-bearing entities:
  *  - the initial OWNER (ADR-011 §5);
  *  - system categories (ADR-012);
- *  - system branch `Pusat (Dapur Sentral)` (ADR-014);
+ *  - the system location `Umum`, flagged `isSystem` (ADR-014);
  *  - Phase 4 purchasing fixtures per §9.9 for hand verification and e2e testing;
  *  - Phase 5 sale fixture per plan §10.6.
  *
@@ -52,18 +53,12 @@ async function main() {
     ledgerEntriesService,
   );
 
-  // System central branch (ADR-014) — required for central purchase ledger entry
-  // attribution. Not captured in a variable on purpose: the services resolve it
-  // by its unique name via `resolveLedgerBranchId`, and nothing here should be
-  // tempted to pass its id around as if it were an ordinary branch.
-  await prisma.branch.upsert({
-    where: { name: 'Pusat (Dapur Sentral)' },
-    update: {},
-    create: {
-      name: 'Pusat (Dapur Sentral)',
-      address: 'Dapur Sentral',
-    },
-  });
+  // System refs (ADR-014/ADR-015) come from the same function the production
+  // bootstrap uses, so the demo seed can never drift from a real install.
+  // Not captured in a variable on purpose: services resolve the system branch
+  // via `resolveLedgerBranchId`, and nothing here should be tempted to pass its
+  // id around as if it were an ordinary branch.
+  await ensureSystemRefs(prisma);
 
   const branches = await Promise.all(
     ['Cabang Melati', 'Cabang Kenanga'].map((name) =>
@@ -359,7 +354,7 @@ async function main() {
   if (!existingPurchaseA) {
     // PAID up front, so the service creates the OUTFLOW LedgerEntry immediately
     // and no Payable at all (ADR-006). Being central, that entry is attributed
-    // to `Pusat (Dapur Sentral)` by `resolveLedgerBranchId` (ADR-014).
+    // to the system location by `resolveLedgerBranchId` (ADR-014).
     await supplierPurchasesService.create({
       supplierId: supplierKopiNusantara.id,
       branchId: null,

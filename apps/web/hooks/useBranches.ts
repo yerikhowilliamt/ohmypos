@@ -65,3 +65,22 @@ export function useDeleteBranch() {
     },
   });
 }
+
+/**
+ * Moves the "Toko Utama" designation. Exactly one store carries it, so the
+ * server releases the previous holder inside the same transaction.
+ */
+export function useSetMainStore() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<BranchResponse>(`/branches/${id}/main-store`, {
+        method: 'PATCH',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: BRANCHES_QUERY_KEYS.branches,
+      });
+    },
+  });
+}

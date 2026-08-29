@@ -88,9 +88,9 @@ describe('Reports — Dashboard 3 (e2e)', () => {
 
     // ADR-014: resolved by name inside the purchase flow, so it must exist.
     const central = await prisma.branch.upsert({
-      where: { name: 'Pusat (Dapur Sentral)' },
+      where: { name: 'Umum' },
       update: {},
-      create: { name: 'Pusat (Dapur Sentral)', address: 'Dapur Sentral' },
+      create: { name: 'Umum', isSystem: true },
     });
     centralBranchId = central.id;
 

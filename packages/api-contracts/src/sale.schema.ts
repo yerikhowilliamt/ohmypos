@@ -41,7 +41,7 @@ export const CreateSaleSchema = z
     /**
      * REQUIRED, NOT nullable — unlike SupplierPurchase.branchId. There is no such
      * thing as a central sale: a sale happens at an outlet (ADR-004). The seeded
-     * `Pusat (Dapur Sentral)` branch is rejected server-side (ADR-014).
+     * system location (`Branch.isSystem`) is rejected server-side (ADR-014).
      */
     branchId: UuidString,
     /** The payment method used — Account, per ERD §3 and System Design §6.1. */

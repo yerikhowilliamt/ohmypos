@@ -49,7 +49,7 @@ describe('Idempotency Keys (e2e)', () => {
 
     // Seed system refs needed for sales / purchases
     await prisma.branch.create({
-      data: { name: 'Pusat (Dapur Sentral)' },
+      data: { name: 'Umum', isSystem: true },
     });
     await prisma.category.create({
       data: { name: 'Pembelian Bahan Baku', type: 'OUTFLOW' },
