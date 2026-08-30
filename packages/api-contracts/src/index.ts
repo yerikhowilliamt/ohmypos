@@ -40,4 +40,5 @@ export * from './tenant.schema';
 export * from './platform-admin.schema';
 export * from './platform-metrics.schema';
 export * from './impersonation.schema';
+export * from './platform-password-reset.schema';
 export * from './vocabulary';

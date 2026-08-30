@@ -75,7 +75,12 @@ describe('User & branch management — role/branch reassignment (e2e)', () => {
     await prisma.user.deleteMany({
       where: {
         email: {
-          in: [owner.email, 'ubm-kasir@test.local', 'ubm-admin@test.local'],
+          in: [
+            owner.email,
+            'ubm-kasir@test.local',
+            'ubm-admin@test.local',
+            'ubm-reset-target@test.local',
+          ],
         },
       },
     });
@@ -192,6 +197,85 @@ describe('User & branch management — role/branch reassignment (e2e)', () => {
       const body = res.body as { role: string; branchId: string | null };
       expect(body.role).toBe('KASIR');
       expect(body.branchId).toBe(branchA);
+    });
+  });
+
+  /**
+   * TASK-130 — the behavioural half of `PATCH /users/:id/password`. Who is
+   * ALLOWED to call it is asserted in `auth-rbac.e2e-spec.ts`; what it does to
+   * the target lives here, because proving it needs two `POST /auth/login`
+   * calls and that suite already sits exactly on the route's 10/60s throttle.
+   */
+  describe('resetting a staff password (TASK-130)', () => {
+    const staff = {
+      email: 'ubm-reset-target@test.local',
+      password: 'ResetTarget123!',
+    };
+    const NEW_PASSWORD = 'ResetTargetBaru456!';
+
+    it('kills the staff member’s running session and makes the new password work', async () => {
+      const created = await request(app.getHttpServer())
+        .post('/api/v1/users')
+        .set('Cookie', owner.cookies)
+        .send({
+          name: 'Reset Target',
+          email: staff.email,
+          password: staff.password,
+          role: 'KASIR',
+          branchId: branchA,
+        })
+        .expect(201);
+      const staffId = (created.body as { id: string }).id;
+
+      const session = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: staff.email, password: staff.password })
+        .expect(200);
+      const staffCookies = session.get('Set-Cookie') ?? [];
+
+      // The session is genuinely alive first, so the 401 further down means
+      // something rather than being the default answer.
+      await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Cookie', staffCookies)
+        .expect(200);
+
+      // JWT `iat` has one-second resolution, so revocation by `tokenValidFrom`
+      // is precise to the second — a token minted in the same second as the
+      // reset legitimately survives it. Crossing the boundary is what makes the
+      // assertion below deterministic instead of timing-dependent.
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/users/${staffId}/password`)
+        .set('Cookie', owner.cookies)
+        .send({ newPassword: NEW_PASSWORD })
+        .expect(200);
+
+      // A cashier thrown out mid-shift is exactly what the dialog warns about —
+      // this is the behaviour that warning describes.
+      await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Cookie', staffCookies)
+        .expect(401);
+
+      // Read before the login below, which stores a fresh `refreshTokenHash`
+      // and would make this assertion depend on statement order rather than on
+      // behaviour. The old credential must also be gone, not merely joined by
+      // a second working one.
+      const row = await prisma.user.findUniqueOrThrow({
+        where: { id: staffId },
+      });
+      expect(row.refreshTokenHash).toBeNull();
+      const bcrypt = await import('bcrypt');
+      await expect(
+        bcrypt.compare(staff.password, row.passwordHash),
+      ).resolves.toBe(false);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: staff.email, password: NEW_PASSWORD })
+        .expect(200);
     });
   });
 
