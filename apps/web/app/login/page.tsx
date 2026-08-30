@@ -8,6 +8,7 @@ import {
 } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
 import { Input } from '@ohmypos/ui/components/input';
+import { PasswordInput } from '@ohmypos/ui/components/password-input';
 import { Label } from '@ohmypos/ui/components/label';
 import {
   ArrowRight,
@@ -281,9 +282,8 @@ export default function LoginPage() {
                     Kata Sandi
                   </Label>
                 </div>
-                <Input
+                <PasswordInput
                   id="password"
-                  type="password"
                   placeholder="••••••••"
                   autoComplete="current-password"
                   aria-invalid={Boolean(errors.password)}

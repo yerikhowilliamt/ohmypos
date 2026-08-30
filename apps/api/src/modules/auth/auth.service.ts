@@ -13,7 +13,11 @@ import type {
   UserResponse,
 } from '@ohmypos/api-contracts';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../../common/prisma/prisma.service';
+import {
+  PrismaService,
+  UnscopedPrismaService,
+} from '../../common/prisma/prisma.service';
+import { adoptTenantScope } from '../../common/prisma/tenant-context';
 import { Prisma } from '../../generated/prisma/client';
 import type { JwtPayload } from '../../common/types/jwt-payload.interface';
 import { AttendanceService } from '../devices/attendance.service';
@@ -44,6 +48,15 @@ export class AuthService {
 
   constructor(
     private readonly prisma: PrismaService,
+    /**
+     * ADR-025 — `login` and `refreshTokens` are `@Public()`, so no guard has
+     * run and there is no tenant in scope yet. The user lookup that FINDS the
+     * tenant therefore has to bypass the tenant filter; everything after it
+     * uses the scoped client, because `adoptTenantScope` has set the scope by
+     * then. `User.email` stays globally unique (ADR-025 Decision 6), which is
+     * what keeps this a plain lookup with no tenant selector on the login page.
+     */
+    private readonly unscopedPrisma: UnscopedPrismaService,
     private readonly jwtService: JwtService,
     private readonly attendanceService: AttendanceService,
   ) {}
@@ -53,9 +66,12 @@ export class AuthService {
     deviceCookieValue: string | undefined,
     meta: { ipAddress?: string; userAgent?: string },
   ): Promise<{ user: LoginResponse; tokens: AuthTokens }> {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.unscopedPrisma.user.findUnique({
       where: { email: dto.email },
     });
+    if (user) {
+      adoptTenantScope(user.tenantId);
+    }
 
     // Compare against a dummy hash when the user does not exist, so a missing
     // account and a wrong password take the same time (carried over from Kasync).
@@ -113,9 +129,12 @@ export class AuthService {
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
-    const user = await this.prisma.user.findUnique({
+    const user = await this.unscopedPrisma.user.findUnique({
       where: { id: payload.sub },
     });
+    if (user) {
+      adoptTenantScope(user.tenantId);
+    }
 
     if (!user?.refreshTokenHash || !user.isActive) {
       throw new UnauthorizedException(SESSION_EXPIRED);

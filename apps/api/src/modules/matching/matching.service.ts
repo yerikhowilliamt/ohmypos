@@ -7,6 +7,7 @@ import type { ProposeMatches } from '@ohmypos/api-contracts';
 import Decimal from 'decimal.js';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
+import { requireTenantId } from '../../common/prisma/tenant-context';
 import {
   BankTransactionInput,
   LedgerEntryInput,
@@ -31,8 +32,13 @@ export class MatchingService {
         const accountFilter = dto?.accountId
           ? Prisma.sql` AND account_id = ${dto.accountId}`
           : Prisma.empty;
+        // ADR-025: the tenant predicate is NOT optional here. Without it this
+        // query locks every tenant's UNRESOLVED rows — the follow-up findMany
+        // is tenant-filtered so nothing leaks into the response, but one
+        // tenant's Reconciliation page would hold locks across the whole
+        // platform for the length of this transaction.
         const lockedIds = await tx.$queryRaw<{ id: string }[]>(
-          Prisma.sql`SELECT id FROM bank_transactions WHERE status = 'UNRESOLVED'${accountFilter} FOR UPDATE SKIP LOCKED`,
+          Prisma.sql`SELECT id FROM bank_transactions WHERE tenant_id = ${requireTenantId()} AND status = 'UNRESOLVED'${accountFilter} FOR UPDATE SKIP LOCKED`,
         );
 
         if (lockedIds.length === 0) {

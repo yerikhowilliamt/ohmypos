@@ -273,7 +273,7 @@ function MetadataSection({
   }, [updatedAt]);
 
   return (
-    <Card bg-surface-muted>
+    <Card className="bg-surface-muted">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-text-secondary">
           Metadata / Info Ringkas

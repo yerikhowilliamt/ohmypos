@@ -5,6 +5,10 @@ import type {
   BranchResponse,
   LeaveRequestListResponse,
 } from '@ohmypos/api-contracts';
+import {
+  AttendanceQuerySchema,
+  LeaveRequestListQuerySchema,
+} from '@ohmypos/api-contracts';
 
 const useAttendanceRecords = vi.fn();
 const useAllLeaveRequests = vi.fn();
@@ -97,6 +101,36 @@ describe('AttendanceCalendarMatrix', () => {
     expect(params.status).toBe('APPROVED');
     expect(params.overlapsFrom).toMatch(/^\d{4}-\d{2}-01$/);
     expect(params.overlapsTo).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  /**
+   * ERR-047 lolos karena test di atas memeriksa parameter terhadap fetch yang
+   * di-mock, dan mock menerima apa pun. Test ini memeriksa parameter yang
+   * sama terhadap schema Zod yang benar-benar dipakai endpoint-nya, jadi
+   * ketidakcocokan kontrak gagal di sini alih-alih di browser.
+   */
+  it('mengirim query cuti yang benar-benar diterima LeaveRequestListQuerySchema', () => {
+    render(<AttendanceCalendarMatrix branches={[BRANCH]} />);
+
+    const params = useAllLeaveRequests.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    const parsed = LeaveRequestListQuerySchema.safeParse(params);
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it('mengirim query absensi yang benar-benar diterima AttendanceQuerySchema', () => {
+    render(<AttendanceCalendarMatrix branches={[BRANCH]} />);
+
+    const params = useAttendanceRecords.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    const parsed = AttendanceQuerySchema.safeParse(params);
+
+    expect(parsed.success).toBe(true);
   });
 
   it('warns when the month holds more logins than were returned', () => {

@@ -201,7 +201,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         kind: 'flow',
-        nodes: ['Semua Cabang', 'Cabang Melati + Cabang Kenanga + Umum'],
+        nodes: ['Semua Cabang', 'Cabang A + Cabang B + Umum'],
         caption: 'Semua Cabang adalah wadahnya; Umum salah satu isinya.',
       },
       {

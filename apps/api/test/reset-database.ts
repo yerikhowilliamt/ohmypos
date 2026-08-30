@@ -1,4 +1,7 @@
-import { PrismaService } from '../src/common/prisma/prisma.service';
+import type {
+  PrismaService,
+  UnscopedPrismaService,
+} from '../src/common/prisma/prisma.service';
 
 /**
  * The one FK-safe truncation order for the whole e2e suite.
@@ -9,8 +12,25 @@ import { PrismaService } from '../src/common/prisma/prisma.service';
  * devices_branch_id_fkey, masking any regression they would have caught.
  *
  * A new table with a foreign key goes in this list, once, above its parent.
+ *
+ * `business_profiles` is deliberately absent: it is a per-tenant singleton that
+ * every suite upserts rather than creates, so deleting it would only force each
+ * one to recreate it. A suite that provisions its OWN tenants must delete their
+ * profiles itself before deleting the tenant rows — see `platform.e2e-spec.ts`.
+ *
+ * ADR-025: accepts either client. Given the tenant-bound one from
+ * `tenantFixture`, the tenant-scoped deletes below are filtered to that tenant
+ * — which is a full wipe, because e2e runs with exactly one. `tenants` itself
+ * is deliberately NOT deleted: suites hold a tenant id captured in `beforeAll`
+ * and several call this again mid-run, so removing the row underneath them
+ * would turn every following insert into an FK error.
  */
-export async function resetDatabase(prisma: PrismaService): Promise<void> {
+export async function resetDatabase(
+  prisma: PrismaService | UnscopedPrismaService,
+): Promise<void> {
+  // Platform-side rows are outside the tenant filter, so these delete globally.
+  await prisma.impersonationSession.deleteMany({});
+  await prisma.platformAdmin.deleteMany({});
   await prisma.allocation.deleteMany({});
   await prisma.bankTransaction.deleteMany({});
   await prisma.payableSettlement.deleteMany({});

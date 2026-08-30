@@ -29,12 +29,23 @@ function poolConfigFromUrl(connectionString: string | undefined) {
 }
 
 /**
- * Ported from Kasync with one required change: Prisma 7 connects through a
- * driver adapter rather than a `url` in the schema, so the connection string is
- * passed here instead of being read by the engine.
+ * The raw client, with NO tenant filter (ADR-025 Fase 2). Ported from Kasync
+ * with one required change: Prisma 7 connects through a driver adapter rather
+ * than a `url` in the schema, so the connection string is passed here instead
+ * of being read by the engine.
+ *
+ * Injecting this is a deliberate, auditable act. It is legitimate in exactly
+ * four places:
+ *
+ *   - `AuthService`, which looks a user up by email before any tenant is known;
+ *   - the `platform/*` module, which is cross-tenant by definition;
+ *   - `prisma/seed.ts` and `scripts/*`;
+ *   - e2e fixtures that build data for more than one tenant.
+ *
+ * Anywhere else, this is almost certainly a bug — use `PrismaService`.
  */
 @Injectable()
-export class PrismaService
+export class UnscopedPrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
@@ -52,3 +63,16 @@ export class PrismaService
     await this.$disconnect();
   }
 }
+
+/**
+ * The tenant-scoped client every module injects. Declared as a subclass purely
+ * so it can serve as both the DI token and the TypeScript type: `PrismaModule`
+ * never constructs it, it provides `UnscopedPrismaService.$extends(...)` under
+ * this token. The extension only installs a `query` hook, so every model
+ * delegate keeps the shape this type promises.
+ *
+ * Touching a tenant-scoped model through this client with no tenant in scope
+ * throws `TenantContextMissingError` rather than reading across tenants.
+ */
+@Injectable()
+export class PrismaService extends UnscopedPrismaService {}

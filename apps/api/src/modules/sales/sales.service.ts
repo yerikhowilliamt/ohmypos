@@ -15,6 +15,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { requireTenantId } from '../../common/prisma/tenant-context';
 import { resolveSaleCategoryId } from '../../common/system-refs';
 import { StockMovementsService } from '../stock-movements/stock-movements.service';
 import { LedgerEntriesService } from '../ledger-entries/ledger-entries.service';
@@ -68,7 +69,12 @@ export class SalesService {
           // ── SISIPAN 1: pra-cek replay (kasus umum: kirim ulang, bukan balapan)
           if (dto.idempotencyKey) {
             const replay = await tx.sale.findUnique({
-              where: { idempotencyKey: dto.idempotencyKey },
+              where: {
+                tenantId_idempotencyKey: {
+                  tenantId: requireTenantId(),
+                  idempotencyKey: dto.idempotencyKey,
+                },
+              },
               include: saleWithRelationsInclude,
             });
             if (replay) {
@@ -299,10 +305,15 @@ export class SalesService {
     } catch (error) {
       if (
         dto.idempotencyKey &&
-        isIdempotencyReplay(error, 'sales_idempotency_key_key')
+        isIdempotencyReplay(error, 'sales_tenant_id_idempotency_key_key')
       ) {
         const original = await this.prisma.sale.findUnique({
-          where: { idempotencyKey: dto.idempotencyKey },
+          where: {
+            tenantId_idempotencyKey: {
+              tenantId: requireTenantId(),
+              idempotencyKey: dto.idempotencyKey,
+            },
+          },
           include: saleWithRelationsInclude,
         });
         if (original) {

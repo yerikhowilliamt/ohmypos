@@ -39,6 +39,139 @@
 
 ## Log
 
+### DEBT-073 — There is no sustained load test, so load-shaped defects are only ever found by hand
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-129 / full test sweep 2026-08-30 §5.2
+- **Description:** Three of the five defects fixed in TASK-129 (ERR-045, ERR-046, ERR-049) are invisible to every automated test in this repo, because all of them require *concurrency at realistic volume* to appear. They were found by a hand-built soak harness during the sweep, which was deliberately not kept (sweep §6). The full version is a checked-in load profile — a fixed concurrency level against the volume dataset for a fixed duration, asserting a non-2xx rate of zero rather than a latency target.
+- **Why deferred:** Keeping the harness is a decision with real cost, not a defect fix, and the sweep chose explicitly not to smuggle it in behind one. It needs a home (CI on a schedule, or a manual `pnpm` script), a dataset it can rely on, and a policy for what a regression means — none of which the repo has settled.
+- **Impact if unaddressed:** The class of defect that produced ERR-045 recurs and is caught, at best, by the next manual sweep — at worst by a user. The unit and e2e suites will stay green throughout, exactly as they did for the months ERR-045 was live.
+- **Trigger condition:** The next time a production incident is load-shaped, or before the first public release — whichever comes first. Also the moment a second such defect is found by hand, since that makes it a pattern.
+- **Proposed resolution:** A scripted soak (autocannon or k6 — a dependency decision, hence a gate) at fixed concurrency against `ohmypos_volume`, run on demand and on a schedule rather than per-PR, asserting zero 5xx across the report endpoints. Pairs with **DEBT-072**: the load profile needs a dataset that is genuinely large.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-072 — `volume-smoke.e2e-spec.ts` does not run against volume
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-129 / full test sweep 2026-08-30 §5.1
+- **Description:** The suite named for volume runs against the ordinary e2e database, which holds seed-scale data. It therefore proves the endpoints answer, not that they answer at scale — the exact property its name claims. The volume dataset (`ohmypos_volume`, 395 k sales / 1.8 M stock movements, built by `prisma/seed-volume.ts`) exists and is what the sweep measured against, but no automated test points at it.
+- **Why deferred:** Repointing it changes how CI runs: the volume dataset takes minutes to seed and hundreds of MB to hold, so it cannot simply become another e2e database on every PR. Deciding where it runs is a CI decision, not a test edit.
+- **Impact if unaddressed:** A suite whose name asserts a guarantee it does not provide is worse than no suite, because it answers the question "do we test at volume?" with a false yes. ERR-045 is what that costs: an endpoint returning 500 at real volume with the volume-smoke suite green.
+- **Trigger condition:** When the volume dataset gets a durable home (a nightly CI job, or a documented local pre-release step) — or immediately, if the suite is ever cited as evidence that scale is covered.
+- **Proposed resolution:** Either point the suite at `ohmypos_volume` behind an env flag and run it on a schedule rather than per-PR, or rename it to what it actually is and create a separate, genuinely-at-volume suite. Renaming alone is a legitimate first step and costs nothing.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-071 — `react/no-unknown-property` is not enabled, so a missing `className=` is caught by nobody
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-129 / ERR-048
+- **Description:** `<Card bg-surface-muted>` shipped and rendered on `/business` for as long as the page has existed. TypeScript cannot see it (the prop name has dashes and lands in a spread), no test asserts on console output, and the repo's ESLint config does not include `eslint-plugin-react`, whose `react/no-unknown-property` rule catches exactly this.
+- **Why deferred:** Enabling it means adding an ESLint plugin, which is a dependency change and therefore an explicit approval gate (AGENTS.md §AI Gatekeeper). It was not in scope for a defect fix, so it is written down instead of being taken.
+- **Impact if unaddressed:** Every future instance of this mistake also ships. The failure is cosmetic each time — a style silently not applied plus console noise — but console noise is cumulative, and it is what hides the warnings that do matter.
+- **Trigger condition:** The next time an ESLint plugin is added for any reason (add this one in the same change), or the second occurrence of this bug.
+- **Proposed resolution:** Add `eslint-plugin-react` to the web lint config with `react/no-unknown-property` at error. Expect a one-time cleanup pass; the rule is noisy on legitimate SVG and custom-element attributes.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-070 — There is no route for a migration that cannot run inside a transaction
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-129 / D-1b (the inventory-summary index, held at the schema-change approval gate)
+- **Description:** Prisma wraps every migration in a transaction. `CREATE INDEX CONCURRENTLY` cannot run inside one, and a plain `CREATE INDEX` takes an `ACCESS EXCLUSIVE`-blocking share lock that stops writes to the table while it builds. On `stock_movements` — 1.8 M rows, 838 MB, written on every single sale — that means cashiers cannot sell for the duration of the build. So the repo currently has no way to add an index to a large hot table in production without downtime.
+- **Why deferred:** It only becomes a blocker when such an index is actually approved, and D-1b is still at the gate. Building the escape hatch before the first real case would be guessing at its shape.
+- **Impact if unaddressed:** Either an index that production needs is never applied, or it is applied with a write outage nobody planned for. Note this compounds with **ERR-040** (nothing in the pipeline applies migrations at all) — the manual step that exists today is also the only place a concurrent index could be run.
+- **Trigger condition:** The first approved index or constraint on a table over roughly a million rows. D-1b is that case if it is approved.
+- **Proposed resolution:** A documented out-of-band path: an `-- CreateIndexConcurrently` marked SQL file applied by hand (or by a separate one-shot job) against production, recorded in the migration table via `prisma migrate resolve --applied` so Prisma's history stays consistent. Write the runbook when the first one lands, not before.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-069 — Production's Postgres shared-memory setting has never been checked against real report load
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-129 / ERR-049
+- **Description:** `shm_size: 1gb` fixes the 53100 failures in `docker-compose.yml`, which is a **development** target only (its own header says so). Production runs on Render, whose `/dev/shm` is a property of the instance plan and is not configurable from this repo. So production's exposure to the same failure is currently unknown, not fixed.
+- **Why deferred:** It cannot be fixed from here. Verifying it requires either Render's documentation for the plan in use or an observed load test against the deployed instance — and the load harness itself is **DEBT-073**.
+- **Impact if unaddressed:** Random HTTP 500s on report endpoints under concurrent use, with an error message (`could not resize shared memory segment`) that points at shared memory only if someone reads the server log — the client sees a generic 500. Silent, load-dependent, and easy to misattribute to the query.
+- **Trigger condition:** Before the first public release, or the first unexplained 500 on a report endpoint in production.
+- **Proposed resolution:** Check the Render plan's `/dev/shm` against a measured report workload. If the setting is not exposed — the likely case — the remedy is `max_parallel_workers_per_gather = 0` at the database level, which the sweep proved removes all 103 occurrences of the error. Do **not** go looking for a way to resize `/dev/shm` on a managed instance.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-068 — Nothing audits the constraints that live outside `schema.prisma`
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-128 / ERR-044 — two globally-scoped partial unique indexes survived the entire multi-tenant conversion
+- **Description:** This database enforces invariants in three places `schema.prisma` cannot express: partial unique indexes (`branches_single_system`, `branches_single_main_store`), the 35 composite foreign keys and 13 composite uniques added by the multi-tenancy migration, and three PL/pgSQL triggers. All of them live only in raw SQL inside migration files. Any audit that reads the schema — which is the natural thing to do, and what plan §1.3 did — is blind to every one of them.
+- **Why deferred:** The fix is not a code change but a check, and the right shape for it is not obvious yet: a snapshot test over `pg_indexes` / `pg_constraint` would be precise but noisy on every legitimate migration, while a narrower assertion (every unique index on a tenant-scoped table either includes `tenant_id` or is a documented exception) needs the exception list to be maintained by hand.
+- **Impact if unaddressed:** ERR-044 is the shape of the failure: a constraint that is silently wrong for multi-tenancy, invisible to schema review, and discovered only when a second tenant exists. `users_email_key` and `devices_activation_code_key` are deliberately global (ADR-025 Decision 6), so "every unique includes tenant_id" is not a rule that can simply be asserted — which is precisely why the exceptions need writing down somewhere a test can read.
+- **Trigger condition:** The next migration that adds an index, a CHECK constraint or a trigger — or the next multi-tenancy-adjacent audit, which should start from `pg_indexes` rather than from the schema file.
+- **Proposed resolution:** An e2e test that queries `pg_indexes` and `pg_constraint` and asserts: every UNIQUE index on a tenant-scoped table includes `tenant_id` or appears in an explicit, commented allow-list; the 35 composite FKs and 13 composite `(id, tenant_id)` uniques are all present (the count check already written into DEBT-063); and the three triggers still exist. It runs against the same `ohmypos_e2e` the suite already migrates, so it costs nothing to keep honest.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-067 — The platform console duplicates the app shell rather than sharing one
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-127 — building the `/platform` console
+- **Description:** `components/platform/PlatformShell.tsx` composes the same `packages/ui` sidebar primitives and the same design tokens as `components/shell/AppShell.tsx`, but is a second implementation of the sidebar header, the mobile topbar, the logout row and the account card. The full version would be one shell parameterised by an identity, a nav list and a logout endpoint, with `UserResponse` and `PlatformAdminResponse` both adapted onto it.
+- **Why deferred:** Unifying them today means widening `AppShell`, `Sidebar`, `Topbar` and `SidebarAccountCard` — four components on the critical path of every existing tenant route — to serve a console with two flat destinations, no dark mode, no nav search, no collapsible groups and no profile page. The risk sits entirely on the tenant app, which is the part that has users. The duplication is bounded and visible; the alternative spreads a generic identity abstraction through the app's most-used components before there is a second real consumer to shape it.
+- **Impact if unaddressed:** Shell-level design changes have to be made twice, and the second one gets forgotten — the console drifts visually from the app it administers. Contained for now because both sides render `packages/ui` primitives, so token and primitive changes still propagate to both; only the composition is duplicated.
+- **Trigger condition:** A third shell consumer, or the first shell-level change (breakpoints, brand mark, account card) that has to be applied in two places and is noticed only after one of them shipped without it.
+- **Proposed resolution:** Extract a `ShellIdentity` type (`{ name, email, contextLabel, avatarUrl }`) and give `AppShell` optional `navItems` / `identity` / `logoutPath` props defaulting to today's role-derived behaviour, then delete `PlatformShell`. Do it when there is a second consumer, so the abstraction is shaped by two real cases rather than one and a guess.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-065 — `ledger_entries.source_id` and `stock_movements.reference_id` are polymorphic, so no foreign key guards their tenant
+
+- **Date logged:** 2026-08-29
+- **Found during:** TASK-123 — auditing which columns the 35 composite FKs actually cover
+- **Description:** Both columns point at a row in one of three different tables, chosen by a sibling `source_type` / `reference_type` column (ERD §2), so neither can carry a foreign key at all — composite or otherwise. Every other cross-row reference in the schema is now physically prevented from crossing tenants; these two are not. The full version would be either three nullable typed FK columns per table, or a check trigger per `source_type`.
+- **Why deferred:** The polymorphic shape predates multi-tenancy and is load-bearing for the audit trail; splitting it is a schema change with no user-visible benefit. Both columns are written only by service code that already resolved the parent through a tenant-filtered query, so the value is correct today.
+- **Impact if unaddressed:** A future writer that takes a `sourceId` from a request body rather than from a filtered query could attach one tenant's ledger entry to another tenant's sale. Nothing in the database would object, and `reports.service.ts`'s `LEFT JOIN sales … AND s.tenant_id = le.tenant_id` would silently drop the row from revenue rather than error.
+- **Trigger condition:** Any new endpoint that accepts `sourceId` or `referenceId` from a client, or the first report discrepancy traced to one of these joins.
+- **Proposed resolution:** A `BEFORE INSERT OR UPDATE` trigger per table asserting the referenced row's `tenant_id` matches. Note the constraint from ADR-025 §1.6: no new `BEFORE` trigger on `allocations` whose name sorts between `trg_check_allocation_sum` and `trg_check_ledger_allocation_sum`.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-064 — Tenant isolation in `reports.service.ts` is hand-written SQL with only one test standing behind it
+
+- **Date logged:** 2026-08-29
+- **Found during:** TASK-124 — plan §2.5 Group A
+- **Description:** The Prisma client extension that scopes every query cannot see `$queryRaw`, and the whole reporting layer is raw SQL. Isolation there rests on `tenantScope(alias)` being present in each fragment, written by hand. There is no RLS and no database-side backstop.
+- **Why deferred:** Postgres row-level security would be the real answer, but it needs a per-request `SET LOCAL app.tenant_id`, which interacts with the pooled `pg` adapter and with the `FOR UPDATE` lock ordering in ADR-016 — a change worth its own ADR, not a Phase 2 detail.
+- **Impact if unaddressed:** A new report, or a new `WHERE` clause on an existing one, can omit the predicate and silently sum every tenant's money. Nothing fails; the number is just wrong, for every tenant at once.
+- **Trigger condition:** The third new raw-SQL report, or the first paying tenant beyond the original one.
+- **Proposed resolution:** RLS on the 23 tenant-scoped tables with a session variable set per request, keeping the hand-written predicates as defence in depth. Until then `tenant-isolation.e2e-spec.ts` (Phase 6) must assert every report endpoint, not a sample.
+- **Priority:** High
+- **Status:** Open — **partially mitigated (2026-08-30, TASK-128).** `tenant-isolation.e2e-spec.ts` now seeds two tenants with different INFLOW amounts and asserts `profit-loss`, `daily-income`, `cash-balance` and `income-by-payment-method` return each caller's own figure. The amounts differ per tenant on purpose, so a dropped predicate surfaces as a WRONG NUMBER rather than as an extra row nobody inspects. **Still uncovered: `product-profit` and `top-products`**, because both need a real Sale (recipe, stock, HPP snapshot) rather than a bare ledger entry — they go through the same `saleScope()` fragment as the covered reports, but "same fragment" is an argument, not a test. The underlying debt is unchanged: this is still hand-written SQL with tests as the only net.
+
+### DEBT-063 — Every future Prisma migration will try to drop the 35 composite foreign keys
+
+- **Date logged:** 2026-08-29
+- **Found during:** TASK-123 — verifying the migration against a clean shadow database
+- **Description:** The plan for ADR-025 assumed Prisma tolerates database constraints it does not know about. It does not: `prisma migrate diff` (and therefore `prisma migrate dev`) emits `DROP CONSTRAINT` for all 35 composite `(child_id, tenant_id)` foreign keys and all 13 composite `(id, tenant_id)` uniques, because they are absent from `schema.prisma`. Modelling them in Prisma instead is not an option — Prisma cannot express `DEFERRABLE INITIALLY DEFERRED`, and mirroring the existing `ON DELETE SET NULL` onto a composite containing the `NOT NULL` `tenant_id` cannot work.
+- **Why deferred:** The constraints are the whole point of ADR-025 Decision 1; keeping them and editing generated SQL is strictly better than dropping them for tooling's convenience.
+- **Impact if unaddressed:** Someone runs `prisma migrate dev` for an unrelated change, does not read the generated SQL, and silently removes the only thing making cross-tenant references physically impossible. The application keeps working and the guarantee is gone.
+- **Trigger condition:** The next schema change of any kind.
+- **Proposed resolution:** Until Prisma can model this, every generated migration must be opened and its `DROP CONSTRAINT … _tenant_id_fkey` / `… _id_tenant_id_key` lines deleted. The check is one query:
+  `SELECT count(*) FROM pg_constraint WHERE contype='f' AND array_length(conkey,1)=2 AND conname LIKE '%tenant_id_fkey';` — it must return **35**, and `contype='u' AND conname LIKE '%\_id\_tenant\_id\_key'` must return **13**. Worth turning into an assertion inside `tenant-isolation.e2e-spec.ts` when Phase 6 lands.
+- **Priority:** High
+- **Status:** Open
+
+### DEBT-062 — `tenantId` carries a `@default("")` that exists only to satisfy Prisma's generated types
+
+- **Date logged:** 2026-08-29
+- **Found during:** TASK-124 — the first typecheck after adding the column
+- **Description:** `tenantId` is supplied at runtime by the Prisma client extension, but Prisma types it as a required field in every generated create input, which broke the build in 280 places. `@default("")` makes it optional in those types while the column stays `NOT NULL` in the database. The empty string is never a valid tenant id, so a write that somehow escaped the extension fails on `<table>_tenant_id_fkey` rather than landing in an arbitrary tenant — but the default is a typing device masquerading as a data default, and it reads as one.
+- **Why deferred:** The alternative is passing `tenantId` explicitly at roughly 50 create call sites. That is arguably *safer* (a missed one becomes a compile error rather than relying on the extension) but it contradicts ADR-025 Decision 1's single-rule design and leaves reads and updates depending on the extension regardless.
+- **Impact if unaddressed:** A reader takes the default literally and assumes an untenanted row is representable. Worse, someone "cleans up" the default and the build breaks in 280 places with no explanation of why it was there.
+- **Trigger condition:** Prisma gaining a way for a client extension to mark a field as supplied — or the first bug traced to a row that reached the database with `tenant_id = ''`.
+- **Proposed resolution:** Either thread `tenantId` explicitly through every create (and keep the extension for reads/updates), or drop the default once Prisma can express this. Whichever is chosen, the `SET DEFAULT ''` statements in `20260829090000_add_multi_tenancy` must move in step.
+- **Priority:** Medium
+- **Status:** Open
+
 ### DEBT-061 — Vercel BFF payload limit is lower than three backend upload limits
 
 - **Date logged:** 2026-08-25
@@ -818,6 +951,18 @@
 ---
 
 ## Resolved
+
+### DEBT-066 — A platform controller authenticates only if someone remembers to write `@UseGuards(PlatformAuthGuard)`
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-125 — building `PlatformAuthGuard` for the platform console
+- **Description:** `JwtAuthGuard` is the globally registered guard, so a `/platform/*` controller has to mark itself `@Public()` to get past it and then apply `PlatformAuthGuard` itself. That makes authentication opt-in for exactly the routes that read and mutate every tenant in the system, and it is the inverse of the fail-closed property ADR-011 §4 gives every other endpoint. A controller that carries `@Public()` and forgets the second decorator is an unauthenticated cross-tenant endpoint, and neither the compiler nor any existing test notices.
+- **Why deferred:** The alternative — teaching the global `JwtAuthGuard` to recognise platform routes and dispatch to the platform verification path — puts tenant and platform authentication back in one class, which is the coupling ADR-025 Decision 5 separates on purpose. The safer shape is a route-enumerating test rather than a cleverer guard.
+- **Impact if unaddressed:** One forgotten decorator exposes tenant listings, per-tenant metrics, suspend/activate, or impersonation to anonymous callers. This is the highest-severity failure mode in v2 and it leaves no trace when it happens.
+- **Trigger condition:** Fase 6. Nothing should ship to production with `/platform/*` routes until `platform-auth.e2e-spec.ts` exists.
+- **Proposed resolution:** `platform-auth.e2e-spec.ts` enumerating routes from the Nest router at runtime — `app.getHttpAdapter().getInstance()._router.stack` or the `RouterExplorer` — filtering to paths under `/api/v1/platform`, and asserting 401 on each with no token, with a tenant token, and with an expired platform token. Enumerating from the router rather than from a hand-written list is the whole point: a hand-written list drifts the moment a route is added, which is the exact failure being guarded against.
+- **Priority:** High
+- **Status:** Resolved (2026-08-30, TASK-126) — `apps/api/test/platform.e2e-spec.ts` now enumerates the `/platform/*` surface from `PlatformModule`'s own `@Module({ controllers })` metadata plus each controller's `@Controller`/`@Get`/`@Post` metadata, and asserts 401 on every route both with no token and with a valid TENANT token. Enumeration from module metadata rather than a hand-written list is what makes it hold: a controller must be registered in `PlatformModule` to be routed at all, so a route added later is covered without anyone updating the test. The fail-open SHAPE remains — `@Public()` without `PlatformAuthGuard` is still an open endpoint — so this closes the detection gap, not the design; if the platform surface ever grows past one module, the enumeration must grow with it.
 
 ### DEBT-003 — Two vocabularies for transaction direction
 

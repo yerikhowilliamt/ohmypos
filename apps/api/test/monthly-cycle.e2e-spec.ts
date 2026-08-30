@@ -22,6 +22,7 @@ import type {
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantScopedPrisma } from './tenant-fixture';
 import { Prisma } from '../src/generated/prisma/client';
 import { resetDatabase } from './reset-database';
 
@@ -113,7 +114,7 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    prisma = await tenantScopedPrisma(app);
     await resetDatabase(prisma);
 
     // ── Branches (ADR-014 requires the central-purchase attribution branch

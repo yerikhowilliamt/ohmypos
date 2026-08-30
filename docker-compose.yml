@@ -14,6 +14,15 @@ services:
     image: postgres:16-alpine
     container_name: ohmypos-postgres
     restart: unless-stopped
+    # Docker memberi /dev/shm hanya 64 MB secara default. Postgres memakai
+    # shared memory untuk setiap parallel worker, dan dengan
+    # max_parallel_workers_per_gather = 2 dua laporan yang jalan bersamaan di
+    # atas 395 k baris sales sudah cukup untuk saling menghabiskan segmennya:
+    #   "could not resize shared memory segment ... No space left on device"
+    #   (SQLSTATE 53100)
+    # Terukur di sweep 2026-08-30 §3 D-5: 103 error dengan paralel menyala,
+    # 0 error dengan paralel dimatikan. Ini batas infra, bukan bug query.
+    shm_size: 1gb
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

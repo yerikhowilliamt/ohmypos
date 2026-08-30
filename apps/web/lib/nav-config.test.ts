@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { filterNavItems, getNavItems, isNavItemActive } from './nav-config';
+import {
+  filterNavItems,
+  getNavItems,
+  isNavItemActive,
+  PLATFORM_NAV_ITEMS,
+} from './nav-config';
 
 describe('getNavItems', () => {
   it('returns Penjualan with children, Cuti, and Bantuan for KASIR', () => {
@@ -154,5 +159,30 @@ describe('filterNavItems', () => {
 
   it('returns an empty list when nothing matches', () => {
     expect(filterNavItems(owner, 'zzzz')).toEqual([]);
+  });
+});
+
+describe('PLATFORM_NAV_ITEMS (ADR-025)', () => {
+  it('lists the console destinations, all under /platform', () => {
+    expect(PLATFORM_NAV_ITEMS.map((item) => item.href)).toEqual([
+      '/platform',
+      '/platform/tenants',
+    ]);
+  });
+
+  it('never leaks into a tenant role\u2019s nav', () => {
+    // A super admin is not a UserRole (ADR-025 Decision 5). If these ever
+    // merged, a shop OWNER's sidebar would carry a link into the console.
+    for (const role of ['KASIR', 'ADMIN', 'OWNER'] as const) {
+      const hrefs = getNavItems(role).map((item) => item.href);
+      expect(hrefs.some((href) => href.startsWith('/platform'))).toBe(false);
+    }
+  });
+
+  it('is flat \u2014 the console has no nested groups to expand', () => {
+    for (const item of PLATFORM_NAV_ITEMS) {
+      expect(item.children).toBeUndefined();
+      expect(item.icon).toBeDefined();
+    }
   });
 });

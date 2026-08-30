@@ -11,6 +11,7 @@ import {
 } from '@ohmypos/api-contracts';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { requireTenantId } from '../../common/prisma/tenant-context';
 import {
   resolveLedgerBranchId,
   resolvePurchaseCategoryId,
@@ -39,7 +40,12 @@ export class PayablesService {
           // SISIPAN 1: pra-cek replay (kasus umum: kirim ulang, bukan balapan)
           if (dto.idempotencyKey) {
             const existingSettlement = await tx.payableSettlement.findUnique({
-              where: { idempotencyKey: dto.idempotencyKey },
+              where: {
+                tenantId_idempotencyKey: {
+                  tenantId: requireTenantId(),
+                  idempotencyKey: dto.idempotencyKey,
+                },
+              },
             });
             if (existingSettlement) {
               const replayPayable = await tx.payable.findUnique({
@@ -56,7 +62,7 @@ export class PayablesService {
           }
 
           // 1. ⚠️ LOCK FIRST, READ SECOND — serializes concurrent settlements on the same payable
-          await tx.$queryRaw`SELECT id FROM payables WHERE id = ${payableId} FOR UPDATE`;
+          await tx.$queryRaw`SELECT id FROM payables WHERE id = ${payableId} AND tenant_id = ${requireTenantId()} FOR UPDATE`;
 
           // 2. Read AFTER the lock to prevent check-then-act race
           const payable = await tx.payable.findUnique({
@@ -171,10 +177,18 @@ export class PayablesService {
     } catch (error) {
       if (
         dto.idempotencyKey &&
-        isIdempotencyReplay(error, 'payable_settlements_idempotency_key_key')
+        isIdempotencyReplay(
+          error,
+          'payable_settlements_tenant_id_idempotency_key_key',
+        )
       ) {
         const existing = await this.prisma.payableSettlement.findUnique({
-          where: { idempotencyKey: dto.idempotencyKey },
+          where: {
+            tenantId_idempotencyKey: {
+              tenantId: requireTenantId(),
+              idempotencyKey: dto.idempotencyKey,
+            },
+          },
         });
         if (existing) {
           const parent = await this.prisma.payable.findUnique({

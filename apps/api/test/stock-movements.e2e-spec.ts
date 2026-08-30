@@ -29,6 +29,7 @@ import { StockMovementListResponse } from '@ohmypos/api-contracts';
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantScopedPrisma } from './tenant-fixture';
 
 /** The whole fixture window. Every assertion below passes these two bounds. */
 const WINDOW_START = '2024-03-01T00:00:00.000Z';
@@ -170,7 +171,7 @@ describe('StockMovements read endpoint (e2e)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    prisma = await tenantScopedPrisma(app);
     await cleanup();
 
     const branch = await prisma.branch.create({

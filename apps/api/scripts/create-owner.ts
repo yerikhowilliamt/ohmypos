@@ -2,7 +2,12 @@ import 'reflect-metadata';
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import * as readline from 'readline';
-import { PrismaService } from '../src/common/prisma/prisma.service';
+import {
+  PrismaService,
+  UnscopedPrismaService,
+} from '../src/common/prisma/prisma.service';
+import { enterTenantScope } from '../src/common/prisma/tenant-context';
+import { tenantExtension } from '../src/common/prisma/tenant.extension';
 import { ensureSystemRefs } from '../src/common/system-refs';
 
 function askQuestion(query: string, hideText = false): Promise<string> {
@@ -116,11 +121,27 @@ async function main() {
     process.exit(1);
   }
 
-  const prisma = new PrismaService();
+  const unscoped = new UnscopedPrismaService();
 
   try {
+    // ADR-025 — this is the v1 bootstrap path, so it adopts (or creates) the
+    // single default tenant. Additional tenants are created through
+    // `POST /platform/tenants`, which seeds the same system refs in one
+    // transaction.
+    const tenant =
+      (await unscoped.tenant.findFirst({ orderBy: { createdAt: 'asc' } })) ??
+      (await unscoped.tenant.create({
+        data: { name: 'OhMyPos', slug: 'default' },
+      }));
+    enterTenantScope(tenant.id);
+    const prisma = unscoped.$extends(
+      tenantExtension,
+    ) as unknown as PrismaService;
+
     const normalizedEmail = email.toLowerCase();
-    const existing = await prisma.user.findUnique({
+    // Unscoped: `User.email` is globally unique (ADR-025 Decision 6), so the
+    // collision to report is a collision across ALL tenants, not just this one.
+    const existing = await unscoped.user.findUnique({
       where: { email: normalizedEmail },
     });
 
@@ -153,6 +174,8 @@ async function main() {
     console.log(`- Email : ${user.email}`);
     console.log(`- Role  : ${user.role}`);
 
+    console.log(`- Tenant: ${tenant.name} (${tenant.slug})`);
+
     console.log('\nData sistem siap:');
     console.log('- Lokasi  : Umum');
     console.log('- Kategori: Penjualan, Pembelian Bahan Baku');
@@ -163,7 +186,7 @@ async function main() {
     console.error('Gagal membuat akun owner:', error);
     process.exit(1);
   } finally {
-    await prisma.$disconnect();
+    await unscoped.$disconnect();
   }
 }
 

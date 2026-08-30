@@ -15,6 +15,7 @@ import {
   CardDescription,
 } from '@ohmypos/ui/components/card';
 import { Input } from '@ohmypos/ui/components/input';
+import { PasswordInput } from '@ohmypos/ui/components/password-input';
 import { Label } from '@ohmypos/ui/components/label';
 import { useRouter } from 'next/navigation';
 import {
@@ -310,9 +311,8 @@ function PasswordForm() {
         >
           <div className="space-y-1.5">
             <Label htmlFor="profile-old-password">Kata Sandi Saat Ini</Label>
-            <Input
+            <PasswordInput
               id="profile-old-password"
-              type="password"
               autoComplete="current-password"
               aria-invalid={Boolean(errors.oldPassword)}
               {...register('oldPassword')}
@@ -325,9 +325,8 @@ function PasswordForm() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="profile-new-password">Kata Sandi Baru</Label>
-            <Input
+            <PasswordInput
               id="profile-new-password"
-              type="password"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.newPassword)}
               {...register('newPassword')}
@@ -342,9 +341,8 @@ function PasswordForm() {
             <Label htmlFor="profile-confirm-password">
               Konfirmasi Kata Sandi Baru
             </Label>
-            <Input
+            <PasswordInput
               id="profile-confirm-password"
-              type="password"
               autoComplete="new-password"
               aria-invalid={Boolean(errors.confirmPassword)}
               {...register('confirmPassword')}
