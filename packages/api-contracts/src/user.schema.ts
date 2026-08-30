@@ -54,6 +54,25 @@ export const UpdateUserSchema = z.object({
 });
 export type UpdateUser = z.infer<typeof UpdateUserSchema>;
 
+/**
+ * An OWNER setting a staff member's forgotten password (TASK-130).
+ *
+ * There is no `oldPassword`: an OWNER does not know their cashier's password,
+ * and that is the entire reason this endpoint exists. What replaces the
+ * old-password check is two other things — the endpoint is `@Roles('OWNER')`,
+ * and it refuses to act on the caller themselves (see
+ * `UsersService.resetPassword`).
+ *
+ * The floor is 8, the same as `CreateUserSchema`: a password set here is an
+ * initial password with exactly the properties one set at account creation has,
+ * and demanding different rules for the same thing only guarantees one of them
+ * gets broken.
+ */
+export const ResetUserPasswordSchema = z.object({
+  newPassword: z.string().min(8).max(200),
+});
+export type ResetUserPassword = z.infer<typeof ResetUserPasswordSchema>;
+
 export const UserResponseSchema = z.object({
   id: UuidString,
   name: z.string(),

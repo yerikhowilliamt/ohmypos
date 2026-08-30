@@ -84,6 +84,14 @@ export type TenantListItem = z.infer<typeof TenantListItemSchema>;
  * is the number an operator actually wants to see.
  */
 export const TenantDetailResponseSchema = TenantListItemSchema.extend({
+  /**
+   * The same OWNER `ownerEmail` names. Carried as an id because the console's
+   * password-reset call (TASK-130) has to say WHICH user it means, and a tenant
+   * may hold more than one OWNER — see `ResetTenantOwnerPasswordSchema`. Null
+   * for a tenant with no active OWNER, which is possible only if one was
+   * deactivated after provisioning.
+   */
+  ownerId: UuidString.nullable(),
   ownerEmail: z.string().nullable(),
   rawMaterialCount: z.number().int(),
   productCount: z.number().int(),

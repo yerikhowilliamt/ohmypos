@@ -60,6 +60,23 @@ export function useDeactivateUser() {
   });
 }
 
+/**
+ * TASK-130 — an OWNER setting a staff member's password for them.
+ *
+ * Nothing is invalidated on success, and that is deliberate rather than an
+ * omission: no field the table renders changes, because a password never
+ * appears in any response. The server's message is the whole result.
+ */
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: ({ id, newPassword }: { id: string; newPassword: string }) =>
+      apiFetch<{ message: string }>(`/users/${id}/password`, {
+        method: 'PATCH',
+        body: JSON.stringify({ newPassword }),
+      }),
+  });
+}
+
 export function useReactivateUser() {
   const queryClient = useQueryClient();
   return useMutation({

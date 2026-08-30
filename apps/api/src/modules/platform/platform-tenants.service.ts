@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type {
   CreateTenant,
   PaginationQuery,
+  ResetTenantOwnerPassword,
   TenantDetailResponse,
   TenantListItem,
   TenantResponse,
@@ -110,12 +111,13 @@ export class PlatformTenantsService {
       this.prisma.user.findFirst({
         where: { tenantId: id, role: 'OWNER', isActive: true },
         orderBy: { createdAt: 'asc' },
-        select: { email: true },
+        select: { id: true, email: true },
       }),
     ]);
 
     return {
       ...this.toListItem(tenant),
+      ownerId: owner?.id ?? null,
       ownerEmail: owner?.email ?? null,
       rawMaterialCount: tenant._count.rawMaterials,
       productCount: tenant._count.products,
@@ -253,6 +255,64 @@ export class PlatformTenantsService {
       status: tenant.status,
       createdAt: tenant.createdAt,
       updatedAt: tenant.updatedAt,
+    };
+  }
+
+  /**
+   * A platform operator setting a tenant OWNER's password (TASK-130).
+   *
+   * This is a tenant's last recovery floor: if an OWNER forgets their password
+   * and there is no second OWNER, nobody inside that business can help them,
+   * and there is no self-registration or email reset to fall back on.
+   *
+   * Unlike impersonation, this WRITES — so it deliberately does not go through
+   * an impersonation token, which is read-only by design (ADR-025 Decision 8),
+   * but through the platform admin's own session.
+   */
+  async resetOwnerPassword(
+    tenantId: string,
+    platformAdminId: string,
+    dto: ResetTenantOwnerPassword,
+  ): Promise<{ message: string }> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+    if (!tenant) {
+      throw new TenantNotFoundException();
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+    });
+
+    // Three conditions, one message. Distinguishing "no such user" from
+    // "another tenant's user" from "not an OWNER" would tell the caller things
+    // about a row they did not correctly name.
+    if (!user || user.tenantId !== tenantId || user.role !== 'OWNER') {
+      throw new NotFoundException(
+        'Owner tidak ditemukan pada tenant ini. Muat ulang halaman dan pilih dari daftar.',
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS),
+        refreshTokenHash: null,
+        tokenValidFrom: new Date(),
+      },
+    });
+
+    // `warn`, not `log`: this should be rare, and what someone reading the log
+    // wants is every occurrence at once. The password is NOT recorded; the
+    // reason is — that is what makes it mandatory.
+    this.logger.warn(
+      `Owner password reset: platformAdmin=${platformAdminId} tenant=${tenant.slug} target=${user.id} reason=${JSON.stringify(dto.reason)}`,
+    );
+
+    return {
+      message:
+        'Kata sandi Owner berhasil direset. Sampaikan lewat jalur terpisah, jangan lewat email biasa.',
     };
   }
 

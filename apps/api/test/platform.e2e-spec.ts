@@ -312,6 +312,118 @@ describe('Platform console (e2e)', () => {
     });
   });
 
+  // --- own password (TASK-130 B1) ------------------------------------------
+
+  describe('PATCH /platform/auth/password', () => {
+    /**
+     * A dedicated admin per assertion. The endpoint revokes every session it
+     * touches, so sharing one account across these would have each test
+     * invalidate the next one's cookies rather than assert anything.
+     */
+    const NEW_PASSWORD = 'platform-password-5678';
+    let subject: { email: string; cookies: string[] };
+
+    async function makeAdmin(email: string): Promise<string[]> {
+      await unscoped.platformAdmin.create({
+        data: {
+          name: 'Pwd Ops',
+          email,
+          passwordHash: await bcrypt.hash(PLATFORM_PASSWORD, 10),
+        },
+      });
+      return platformLogin(email);
+    }
+
+    beforeAll(async () => {
+      subject = {
+        email: 'plat-pwd@ohmypos.local',
+        cookies: await makeAdmin('plat-pwd@ohmypos.local'),
+      };
+    });
+
+    it('rejects a caller with no platform session', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/platform/auth/password')
+        .send({ oldPassword: PLATFORM_PASSWORD, newPassword: NEW_PASSWORD })
+        .expect(401);
+    });
+
+    it('rejects an ordinary TENANT token, not merely a missing one', async () => {
+      // What proves `@Public()` + PlatformAuthGuard separates two audiences
+      // rather than just opening the door (DEBT-066).
+      const cookies = await tenantLogin(tenantOwner.email, TENANT_PASSWORD);
+      await request(app.getHttpServer())
+        .patch('/api/v1/platform/auth/password')
+        .set('Cookie', cookies)
+        .send({ oldPassword: PLATFORM_PASSWORD, newPassword: NEW_PASSWORD })
+        .expect(401);
+    });
+
+    it('rejects a wrong current password with 401', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/platform/auth/password')
+        .set('Cookie', subject.cookies)
+        .send({ oldPassword: 'not-the-password', newPassword: NEW_PASSWORD })
+        .expect(401);
+      expect(readBody<{ message: string }>(res).message).toContain(
+        'Kata sandi saat ini salah',
+      );
+    });
+
+    it('rejects a new password under 12 characters with 400', async () => {
+      // The floor `create-platform-admin.ts` has always enforced. Eight would
+      // be a way around it, so the schema says twelve here too.
+      await request(app.getHttpServer())
+        .patch('/api/v1/platform/auth/password')
+        .set('Cookie', subject.cookies)
+        .send({ oldPassword: PLATFORM_PASSWORD, newPassword: 'sebelas-kar' })
+        .expect(400);
+    });
+
+    it('changes the password and revokes the session that made the call', async () => {
+      const before = new Date();
+
+      await request(app.getHttpServer())
+        .patch('/api/v1/platform/auth/password')
+        .set('Cookie', subject.cookies)
+        .send({ oldPassword: PLATFORM_PASSWORD, newPassword: NEW_PASSWORD })
+        .expect(200);
+
+      // Read before anything logs in again — a later login writes a fresh
+      // `refreshTokenHash`, which would make this assertion pass or fail on
+      // test ordering rather than on behaviour.
+      const row = await unscoped.platformAdmin.findUniqueOrThrow({
+        where: { email: subject.email },
+      });
+      expect(row.refreshTokenHash).toBeNull();
+      expect(row.tokenValidFrom.getTime()).toBeGreaterThan(
+        before.getTime() - 1000,
+      );
+
+      // And over HTTP: the refresh token presented is no longer renewable.
+      // Asserted on refresh rather than on an access-token route because
+      // revocation by `tokenValidFrom` is precise to the second — an access
+      // token minted in the same second legitimately survives it, the identical
+      // caveat the logout test above documents.
+      await request(app.getHttpServer())
+        .post('/api/v1/platform/auth/refresh')
+        .set('Cookie', subject.cookies)
+        .expect(401);
+    });
+
+    it('accepts the new password at login and refuses the old one', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/platform/auth/login')
+        .send({ email: subject.email, password: NEW_PASSWORD })
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/platform/auth/login')
+        .send({ email: subject.email, password: PLATFORM_PASSWORD })
+        .expect(401);
+    });
+  });
+
   // --- tenant provisioning -------------------------------------------------
 
   describe('tenant provisioning', () => {
@@ -417,6 +529,11 @@ describe('Platform console (e2e)', () => {
         .set('Cookie', mainAdmin.cookies)
         .expect(200);
 
+      // `ownerId` rides along with `ownerEmail` so the console can name WHICH
+      // owner a password reset targets (TASK-130).
+      expect(readBody<{ ownerId: string | null }>(res).ownerId).toEqual(
+        expect.any(String),
+      );
       expect(res.body).toMatchObject({
         slug: 'plat-kopi',
         userCount: 1,
@@ -495,6 +612,97 @@ describe('Platform console (e2e)', () => {
         .set('Cookie', mainAdmin.cookies)
         .send({ status: 'ACTIVE' })
         .expect(200);
+    });
+  });
+
+  // --- owner password reset (TASK-130 A2a) ---------------------------------
+
+  /**
+   * Budget note, because it is a real constraint and not an accident: this
+   * route is throttled at 5/60s (tighter than the usual 10 — nobody legitimately
+   * resets five owner passwords in a minute), and the route-protection block
+   * above spends TWO of those on every run when it probes every `/platform/*`
+   * path. That leaves three for this block. Adding a fourth request here turns
+   * the last test into a 429 rather than an assertion.
+   */
+  describe('POST /platform/tenants/:id/reset-owner-password', () => {
+    const NEW_OWNER_PASSWORD = 'OwnerResetBaru456!';
+    const REASON = 'Owner melapor terkunci dan tidak ada Owner lain';
+    let tenantId: string;
+    let ownerId: string;
+
+    beforeAll(async () => {
+      const tenant = await unscoped.tenant.findUniqueOrThrow({
+        where: { slug: 'plat-kopi' },
+      });
+      tenantId = tenant.id;
+      ownerId = (
+        await unscoped.user.findUniqueOrThrow({
+          where: { email: 'plat-new-owner@test.local' },
+        })
+      ).id;
+    });
+
+    it('requires a substantive reason, like impersonation does', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/v1/platform/tenants/${tenantId}/reset-owner-password`)
+        .set('Cookie', mainAdmin.cookies)
+        .send({ userId: ownerId, newPassword: NEW_OWNER_PASSWORD, reason: 'x' })
+        .expect(400);
+    });
+
+    it('404s for a user who is not an OWNER of this tenant', async () => {
+      // The e2e tenant's own OWNER — a real user, real OWNER, wrong tenant.
+      // 404 rather than 403: saying "wrong tenant" would confirm the id exists
+      // somewhere, which is the leak the isolation suite exists to prevent.
+      const outsider = await unscoped.user.findUniqueOrThrow({
+        where: { email: tenantOwner.email },
+      });
+      await request(app.getHttpServer())
+        .post(`/api/v1/platform/tenants/${tenantId}/reset-owner-password`)
+        .set('Cookie', mainAdmin.cookies)
+        .send({
+          userId: outsider.id,
+          newPassword: NEW_OWNER_PASSWORD,
+          reason: REASON,
+        })
+        .expect(404);
+
+      // And nothing was written to the user who was wrongly named.
+      const after = await unscoped.user.findUniqueOrThrow({
+        where: { id: outsider.id },
+      });
+      expect(after.tokenValidFrom).toEqual(outsider.tokenValidFrom);
+    });
+
+    it('resets the owner password and revokes their sessions', async () => {
+      const before = await unscoped.user.findUniqueOrThrow({
+        where: { id: ownerId },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/platform/tenants/${tenantId}/reset-owner-password`)
+        .set('Cookie', mainAdmin.cookies)
+        .send({
+          userId: ownerId,
+          newPassword: NEW_OWNER_PASSWORD,
+          reason: REASON,
+        })
+        .expect(200);
+      // The password never comes back out (Playbook §9).
+      expect(JSON.stringify(res.body)).not.toContain(NEW_OWNER_PASSWORD);
+
+      const after = await unscoped.user.findUniqueOrThrow({
+        where: { id: ownerId },
+      });
+      expect(after.passwordHash).not.toBe(before.passwordHash);
+      expect(after.refreshTokenHash).toBeNull();
+      expect(after.tokenValidFrom.getTime()).toBeGreaterThan(
+        before.tokenValidFrom.getTime(),
+      );
+
+      // The point of the whole endpoint: the owner can get back in.
+      await tenantLogin('plat-new-owner@test.local', NEW_OWNER_PASSWORD);
     });
   });
 

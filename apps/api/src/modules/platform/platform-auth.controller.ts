@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   Res,
@@ -23,7 +24,10 @@ import { Public } from '../../common/decorators/public.decorator';
 import { ReqPlatformAdmin } from '../../common/decorators/req-platform-admin.decorator';
 import { PlatformAuthGuard } from '../../common/guards/platform-auth.guard';
 import { PlatformAuthService } from './platform-auth.service';
-import { PlatformAdminLoginDto } from './platform.dto';
+import {
+  PlatformAdminChangePasswordDto,
+  PlatformAdminLoginDto,
+} from './platform.dto';
 
 /**
  * ADR-025 Fase 4.
@@ -102,6 +106,31 @@ export class PlatformAuthController {
   @ApiOperation({ summary: 'Current platform admin' })
   getProfile(@ReqPlatformAdmin('sub') adminId: string) {
     return this.platformAuthService.getProfile(adminId);
+  }
+
+  /**
+   * TASK-130 — `@Public()` + `PlatformAuthGuard` is the same pair `logout` and
+   * `me` above carry, and both halves are required: `@Public()` gets past the
+   * global tenant `JwtAuthGuard`, and the guard is what actually authenticates
+   * the platform admin. Dropping `@Public()` would make this reject every
+   * platform admin.
+   *
+   * Throttled because a wrong-old-password answer is a guessing oracle.
+   */
+  @Public()
+  @UseGuards(PlatformAuthGuard)
+  @Patch('password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @ApiOperation({
+    summary: 'Change own platform password; revokes all existing sessions',
+  })
+  @ApiResponse({ status: 401, description: 'Current password is wrong' })
+  changePassword(
+    @ReqPlatformAdmin('sub') adminId: string,
+    @Body() dto: PlatformAdminChangePasswordDto,
+  ) {
+    return this.platformAuthService.changePassword(adminId, dto);
   }
 
   private setAuthCookies(

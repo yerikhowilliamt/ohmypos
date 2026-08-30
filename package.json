@@ -15,6 +15,8 @@
     "test": "turbo run test",
     "check": "turbo run lint typecheck test",
     "create:owner": "pnpm --filter api create:owner",
+    "create:platform-admin": "pnpm --filter api create:platform-admin",
+    "reset:platform-admin-password": "pnpm --filter api reset:platform-admin-password",
     "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css}\" \"*.{json,mjs}\" --ignore-path .gitignore"
   },
   "devDependencies": {

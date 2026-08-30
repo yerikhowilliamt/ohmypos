@@ -41,6 +41,32 @@
 
 ## Log
 
+### TASK-130 — Password recovery: operator-driven resets, and a platform admin who can change their own
+
+- **Date:** 2026-08-30
+- **Module / Phase:** Auth & user administration (plan `docs/plannings/2026-08-30-pemulihan-kata-sandi.md`, Bagian A and B)
+- **Objective:** Close the "permanently locked out" class of failure for every kind of account in the system, without adding an email channel — because with self-signup deliberately absent, every account already has someone above it who can reset it.
+- **Relevant docs:** ADR-011 §3 and §5 (credential changes revoke sessions; user management is OWNER-only), ADR-025 (platform console, impersonation is read-only), AGENTS.md §Contributing 2, 7 and 10, Playbook §9 (never log a credential).
+- **Items closed — cross-checked against the diff:**
+  - **A1** — `PATCH /users/:id/password`. `ResetUserPasswordSchema` in `packages/api-contracts`, `UsersService.resetPassword`, an OWNER-only route on `UsersController` (inherited from the class-level `@Roles('OWNER')`), plus `ResetPasswordDialog.tsx` and a key icon in `UsersTable`'s action cell.
+  - **A2a** — `POST /platform/tenants/:id/reset-owner-password`. New `platform-password-reset.schema.ts`, `PlatformTenantsService.resetOwnerPassword`, a route added to the **existing** `PlatformTenantsController` (which already carries `@UseGuards(PlatformAuthGuard)` — DEBT-066), plus a `ResetOwnerPasswordDialog` on the tenant detail page. `TenantDetailResponse` gains `ownerId` so the console can name which OWNER it means.
+  - **B1** — `PATCH /platform/auth/password`. `PlatformAdminChangePasswordSchema` (12-character floor, not 8), `PlatformAuthService.changePassword`, and a "Ganti kata sandi" item in the platform sidebar footer opening `ChangePasswordDialog`.
+  - **B2** — `apps/api/scripts/reset-platform-admin-password.ts` plus the `reset:platform-admin-password` script, and `docs/runbooks/platform-admin-recovery.md`.
+  - **B3** — the sidebar entry above; it is part of B1's diff, not a separate change.
+  - **A2b (audit table) was NOT done.** It touches `schema.prisma` and is an AGENTS.md approval gate; the plan stops there deliberately. Logged as **DEBT-076** instead. Nothing in this diff claims otherwise.
+  - **Bagian C (email reset) was NOT started.** Logged as **DEBT-074**.
+  - This closes butir 7 of `docs/plannings-v2/2026-08-29-multi-tenant-foundation.md` §Sisa yang belum tertutup ("no password-change endpoint for platform admin; the only way to disable an account is through the database") — B1 gives the endpoint, B2 gives the recovery path.
+- **Decisions made during this task:**
+  1. **The self-reset refusal in `UsersService.resetPassword` is the security core of A1.** `PATCH /auth/password` demands the old password so a stolen session is not enough to seize an account; letting an OWNER reset *themselves* through the OWNER-only endpoint would erase that protection entirely. `id === actorId` → 400, pointing at the profile page. There is an e2e test whose comment says so, because if that test disappears the hole reopens silently.
+  2. **Every reset writes `refreshTokenHash: null` + `tokenValidFrom: new Date()`** — the same pair `deactivate` writes. All four paths (A1, A2a, B1, B2) do it; a reset that leaves the old session alive contradicts the reason it was run.
+  3. **The platform floor is 12 characters, the tenant floor is 8.** Not taste: `create-platform-admin.ts` has enforced 12 since the first platform account, and an endpoint accepting 8 would be a documented way around a live standard. Conversely A1 uses 8 to match `CreateUserSchema` — an initial password set by an OWNER is the same kind of thing as one set at account creation.
+  4. **`ResetTenantOwnerPasswordSchema.userId` is explicit rather than inferred from the tenant.** A tenant may hold more than one OWNER, and "the first OWNER found" would let an operator reset the wrong person without ever learning they had. `ownerId` was added to `TenantDetailResponse` (option (i) in the plan §5.1) rather than adding a `GET /tenants/:id/owners` endpoint for a case that does not exist yet.
+  5. **`reason` is mandatory on A2a with the same 10-character floor as impersonation** — it is the only human-readable account of why an operator handed out a credential.
+  6. **Three dialogs use a keyed remount instead of a reset-on-open `useEffect`.** `react-hooks/set-state-in-effect` rejects the effect form, and the key form is better anyway: it is what guarantees a typed password cannot survive a close.
+  7. **A2a is throttled at 5/60s, tighter than the usual 10.** Nobody legitimately resets five owner passwords in a minute.
+- **Status:** Done (A1, A2a, B1, B2, B3). A2b and Bagian C stopped at their approval gates.
+- **Handoff notes:** `turbo run lint typecheck test build --force` green, 15/15. API unit 232, web unit 555 (73 files), **API e2e 536 across 22 suites — up from 519**, which is the number that proves the new tests actually run. **Two throttle facts the next person needs, both learned the hard way here.** `POST /auth/login` carries a hard-coded `@Throttle(10/60s)` that ignores `.env.test`'s `THROTTLE_LIMIT`, and `auth-rbac.e2e-spec.ts` already sits at exactly 10 — adding two logins there turned an unrelated, pre-existing test into a 429. That is why A1's behavioural assertions (session revoked, new password works) live in `user-branch-management.e2e-spec.ts` while its authority assertions stay in `auth-rbac.e2e-spec.ts`. Likewise, `platform.e2e-spec.ts`'s route-protection block probes **every** `/platform/*` route twice per run, so A2a's 5/60s budget leaves exactly three requests for its own tests; a comment in the spec says so. Second trap, hit three times: **a test that asserts `refreshTokenHash === null` after a reset must read the row BEFORE any subsequent login**, because logging in writes a fresh one — the assertion otherwise passes or fails on statement order rather than behaviour. Also worth knowing: the 7 web-test failures seen during a parallel `turbo run` were load-induced flakiness in timing-sensitive debounce specs, not regressions — `vitest run` alone is 555/555 on both the clean tree and this one. Nothing here touched `schema.prisma`, so **no migration is needed and no new env var exists**; a merge to `main` deploys this as-is.
+
 ### TASK-129 — Remediation of D-1…D-5 from the 2026-08-30 full test sweep
 
 - **Date:** 2026-08-30

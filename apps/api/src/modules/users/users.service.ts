@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   CreateUser,
+  ResetUserPassword,
   UpdateUser,
   UserResponse,
 } from '@ohmypos/api-contracts';
@@ -20,6 +26,8 @@ const BCRYPT_ROUNDS = 10;
  */
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateUser): Promise<UserResponse> {
@@ -142,6 +150,55 @@ export class UsersService {
       data: { isActive: true },
     });
     return this.toResponse(user);
+  }
+
+  /**
+   * An OWNER setting a staff member's password for them (TASK-130).
+   *
+   * `actorId` is passed in from the controller rather than re-read here, so
+   * the identity the guard below checks is the one the auth guard actually
+   * authenticated.
+   */
+  async resetPassword(
+    id: string,
+    actorId: string,
+    dto: ResetUserPassword,
+  ): Promise<{ message: string }> {
+    // The most important guard in this method. `PATCH /auth/password` demands
+    // the OLD password precisely so that a stolen session is not enough to take
+    // an account over — the thief holds the cookie but not the password. If an
+    // OWNER could reset themselves here without it, that protection would be
+    // gone entirely: whoever stole the session would call this on their own id
+    // and lock the real owner out.
+    if (id === actorId) {
+      throw new BadRequestException(
+        'Untuk mengubah kata sandi Anda sendiri, gunakan halaman Profil — di sana kata sandi lama wajib diisi.',
+      );
+    }
+
+    // Through findOne so the 404 matches every other endpoint on this service,
+    // and so tenant scoping applies to the read as well as the write.
+    await this.findOne(id);
+
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        passwordHash: await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS),
+        // The password changed, so every old session has to die — the same
+        // pair `deactivate` writes. Without these two lines a staff member
+        // whose password was just reset keeps working on their old session.
+        refreshTokenHash: null,
+        tokenValidFrom: new Date(),
+      },
+    });
+
+    // Ids only. The password itself is NOT logged, in any form (Playbook §9).
+    this.logger.log(`Staff password reset: owner=${actorId} target=${id}`);
+
+    return {
+      message:
+        'Kata sandi berhasil direset. Sampaikan kata sandi baru ke karyawan lewat jalur terpisah.',
+    };
   }
 
   private assertRoleBranchConsistent(

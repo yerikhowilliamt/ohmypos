@@ -138,6 +138,7 @@ describe('Auth & role-based access control (e2e)', () => {
             'deactivate-me@test.local',
             'bad-kasir@test.local',
             'bad-admin@test.local',
+            'reset-target@test.local',
           ],
         },
       },
@@ -245,6 +246,101 @@ describe('Auth & role-based access control (e2e)', () => {
         .get('/api/v1/users')
         .set('Cookie', kasir.cookies)
         .expect(403);
+    });
+  });
+
+  /**
+   * TASK-130 — the recovery path for a staff member who has forgotten their
+   * password. What is asserted HERE is the authority question: who may set
+   * someone else's credential, and on whom.
+   *
+   * The behavioural half — that the reset really kills the target's running
+   * session and that the new password really works at login — lives in
+   * `user-branch-management.e2e-spec.ts`, and not by preference: `POST
+   * /auth/login` carries a hard-coded `@Throttle(10/60s)` that this suite
+   * already sits exactly at, so two more logins here turn an unrelated test
+   * into a 429. That suite is the user-lifecycle one and has the headroom.
+   */
+  describe('PATCH /users/:id/password — OWNER resets a staff password', () => {
+    const NEW_PASSWORD = 'ResetTargetBaru456!';
+    let staffId: string;
+    let ownerId: string;
+
+    beforeAll(async () => {
+      const created = await request(app.getHttpServer())
+        .post('/api/v1/users')
+        .set('Cookie', owner.cookies)
+        .send({
+          name: 'Reset Target',
+          email: 'reset-target@test.local',
+          password: 'ResetTarget123!',
+          role: 'KASIR',
+          branchId: branchA,
+        })
+        .expect(201);
+      staffId = (created.body as { id: string }).id;
+
+      ownerId = (
+        await prisma.user.findUniqueOrThrow({ where: { email: owner.email } })
+      ).id;
+    });
+
+    it('rejects a KASIR', async () => {
+      await request(app.getHttpServer())
+        .patch(`/api/v1/users/${staffId}/password`)
+        .set('Cookie', kasir.cookies)
+        .send({ newPassword: NEW_PASSWORD })
+        .expect(403);
+    });
+
+    it('rejects an ADMIN', async () => {
+      // Managing users is OWNER-only with no exceptions (ADR-011 §5), and
+      // handing out someone else's credential is squarely user management.
+      await request(app.getHttpServer())
+        .patch(`/api/v1/users/${staffId}/password`)
+        .set('Cookie', admin.cookies)
+        .send({ newPassword: NEW_PASSWORD })
+        .expect(403);
+    });
+
+    it('REFUSES an OWNER resetting their own password', async () => {
+      // The most important assertion in TASK-130. `PATCH /auth/password` asks
+      // for the OLD password so that a stolen session is not enough to take an
+      // account over; a self-reset here would be a way around that, and whoever
+      // stole the session could lock the real owner out. If this test ever
+      // disappears, that hole reopens silently.
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/users/${ownerId}/password`)
+        .set('Cookie', owner.cookies)
+        .send({ newPassword: NEW_PASSWORD })
+        .expect(400);
+      expect((res.body as { message: string }).message).toContain('Profil');
+    });
+
+    it('rejects a password under 8 characters', async () => {
+      await request(app.getHttpServer())
+        .patch(`/api/v1/users/${staffId}/password`)
+        .set('Cookie', owner.cookies)
+        .send({ newPassword: 'pendek' })
+        .expect(400);
+    });
+
+    it('never echoes the new password back', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/users/${staffId}/password`)
+        .set('Cookie', owner.cookies)
+        .send({ newPassword: NEW_PASSWORD })
+        .expect(200);
+      // Playbook §9. The response carries a message and nothing else.
+      expect(JSON.stringify(res.body)).not.toContain(NEW_PASSWORD);
+    });
+
+    it('404s for a user id that does not exist', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/users/00000000-0000-4000-8000-000000000000/password')
+        .set('Cookie', owner.cookies)
+        .send({ newPassword: NEW_PASSWORD })
+        .expect(404);
     });
   });
 

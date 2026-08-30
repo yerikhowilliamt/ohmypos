@@ -5,7 +5,7 @@ import type { PlatformAdminResponse } from '@ohmypos/api-contracts';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut, ShieldAlert } from 'lucide-react';
+import { KeyRound, LogOut, ShieldAlert } from 'lucide-react';
 import {
   Sidebar as SidebarPrimitive,
   SidebarContent,
@@ -27,6 +27,7 @@ import { apiFetch } from '@/lib/api';
 import { useIsMobile, useIsRail } from '@/hooks/useMediaQuery';
 import { isNavItemActive, PLATFORM_NAV_ITEMS } from '@/lib/nav-config';
 import { getInitials } from '@/components/shell/SidebarAccountCard';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 
 /**
  * ADR-025 — the platform console's shell.
@@ -111,6 +112,7 @@ function PlatformSidebar({ admin }: { admin: PlatformAdminResponse }) {
   const isRailCollapsed = state === 'collapsed' && !isMobile;
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [logoutError, setLogoutError] = React.useState<string | null>(null);
+  const [passwordOpen, setPasswordOpen] = React.useState(false);
 
   const closeMobile = () => setOpenMobile(false);
 
@@ -203,6 +205,19 @@ function PlatformSidebar({ admin }: { admin: PlatformAdminResponse }) {
 
       <SidebarFooter className={isRailCollapsed ? 'px-2' : 'px-3'}>
         <SidebarMenu>
+          {/* Account business lives beside "Keluar" rather than behind a third
+              nav item: the comment at the top of this file records that a
+              platform admin deliberately has no profile page, and one form used
+              a few times a year is not a reason to reshape the navigation. */}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Ganti kata sandi"
+              onClick={() => setPasswordOpen(true)}
+            >
+              <KeyRound className="size-4 shrink-0" aria-hidden />
+              <span className="truncate">Ganti kata sandi</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip={isLoggingOut ? 'Keluar…' : 'Keluar'}
@@ -247,6 +262,12 @@ function PlatformSidebar({ admin }: { admin: PlatformAdminResponse }) {
           )}
         </div>
       </SidebarFooter>
+
+      <ChangePasswordDialog
+        key={String(passwordOpen)}
+        open={passwordOpen}
+        onOpenChange={setPasswordOpen}
+      />
     </SidebarPrimitive>
   );
 }
