@@ -16,13 +16,42 @@
  */
 import { Prisma } from '../../generated/prisma/client';
 import { REPORT_TIMEZONE, type ReportRange } from '../../common/period';
+import { currentTenantId } from '../../common/prisma/tenant-context';
 
-/** `le.entry_date >= from AND le.entry_date < to [AND le.branch_id = ...]` */
+/**
+ * ADR-025 — raw SQL is invisible to the Prisma tenant extension, so every
+ * fragment in this file carries its own `tenant_id` predicate. This is the one
+ * place in the codebase where tenant isolation is hand-written rather than
+ * enforced by the client, which is why `tenant-isolation.e2e-spec.ts` exists
+ * (see DEBT-052).
+ *
+ * Throws rather than returning an unfiltered fragment: a report that silently
+ * summed every tenant's money would be the single worst failure this system
+ * could have.
+ */
+export function tenantScope(alias: 'le' | 's' | 'a'): Prisma.Sql {
+  const tenantId = currentTenantId();
+  if (!tenantId) {
+    throw new Error(
+      'Report query attempted with no tenant in scope — refusing to run an unscoped aggregate.',
+    );
+  }
+  switch (alias) {
+    case 'le':
+      return Prisma.sql`le.tenant_id = ${tenantId}`;
+    case 's':
+      return Prisma.sql`s.tenant_id = ${tenantId}`;
+    case 'a':
+      return Prisma.sql`a.tenant_id = ${tenantId}`;
+  }
+}
+
+/** `le.tenant_id = ... AND le.entry_date >= from AND le.entry_date < to [AND le.branch_id = ...]` */
 export function ledgerScope(range: ReportRange, branchId?: string): Prisma.Sql {
   const branch = branchId
     ? Prisma.sql` AND le.branch_id = ${branchId}`
     : Prisma.empty;
-  return Prisma.sql`le.entry_date >= ${range.from} AND le.entry_date < ${range.to}${branch}`;
+  return Prisma.sql`${tenantScope('le')} AND le.entry_date >= ${range.from} AND le.entry_date < ${range.to}${branch}`;
 }
 
 /**
@@ -44,7 +73,7 @@ export function saleScope(range: ReportRange, branchId?: string): Prisma.Sql {
   const branch = branchId
     ? Prisma.sql` AND s.branch_id = ${branchId}`
     : Prisma.empty;
-  return Prisma.sql`s.sold_at >= ${range.from} AND s.sold_at < ${range.to} AND s.status <> 'VOIDED'${branch}`;
+  return Prisma.sql`${tenantScope('s')} AND s.sold_at >= ${range.from} AND s.sold_at < ${range.to} AND s.status <> 'VOIDED'${branch}`;
 }
 
 /**

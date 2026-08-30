@@ -1,7 +1,12 @@
 import 'reflect-metadata';
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../src/common/prisma/prisma.service';
+import {
+  PrismaService,
+  UnscopedPrismaService,
+} from '../src/common/prisma/prisma.service';
+import { enterTenantScope } from '../src/common/prisma/tenant-context';
+import { tenantExtension } from '../src/common/prisma/tenant.extension';
 import { LedgerEntriesService } from '../src/modules/ledger-entries/ledger-entries.service';
 import { PayablesService } from '../src/modules/payables/payables.service';
 import { StockMovementsService } from '../src/modules/stock-movements/stock-movements.service';
@@ -37,7 +42,38 @@ import { ensureSystemRefs } from '../src/common/system-refs';
  * without pulling in pino, throttling and config for a script.
  */
 async function main() {
-  const prisma = new PrismaService();
+  // ADR-025 — the tenant and the platform admin exist OUTSIDE any tenant, so
+  // they are written with the unscoped client before the scope is opened.
+  const unscoped = new UnscopedPrismaService();
+
+  const tenant = await unscoped.tenant.upsert({
+    where: { slug: 'default' },
+    update: {},
+    create: { name: 'OhMyPos', slug: 'default' },
+  });
+  const tenantId = tenant.id;
+
+  const platformAdminEmail =
+    process.env.SEED_PLATFORM_ADMIN_EMAIL ?? 'platform@ohmypos.local';
+  const platformAdminPassword =
+    process.env.SEED_PLATFORM_ADMIN_PASSWORD ?? 'ChangeMe123!';
+  await unscoped.platformAdmin.upsert({
+    where: { email: platformAdminEmail },
+    update: {},
+    create: {
+      name: 'Platform Operator',
+      email: platformAdminEmail,
+      passwordHash: await bcrypt.hash(platformAdminPassword, 10),
+    },
+  });
+
+  // Everything below runs as the default tenant, so the extension supplies
+  // `tenantId` on every create and narrows every read — not one of the ~200
+  // calls below had to change for it.
+  enterTenantScope(tenantId);
+  const prisma = unscoped.$extends(
+    tenantExtension,
+  ) as unknown as PrismaService;
 
   const stockMovementsService = new StockMovementsService(prisma);
   const ledgerEntriesService = new LedgerEntriesService(prisma);
@@ -63,7 +99,7 @@ async function main() {
   const branches = await Promise.all(
     ['Cabang Melati', 'Cabang Kenanga'].map((name) =>
       prisma.branch.upsert({
-        where: { name },
+        where: { tenantId_name: { tenantId, name } },
         update: {},
         create: { name, address: `Jl. ${name} No. 1` },
       }),
@@ -128,7 +164,7 @@ async function main() {
       { name: 'Operasional', type: 'OUTFLOW' as const },
     ].map((category) =>
       prisma.category.upsert({
-        where: { name: category.name },
+        where: { tenantId_name: { tenantId, name: category.name } },
         update: {},
         create: category,
       }),
@@ -190,7 +226,7 @@ async function main() {
 
   // Master Data fixtures per §9.8 — hand-checkable numbers for HPP calculation and e2e testing.
   const gula = await prisma.rawMaterial.upsert({
-    where: { name: 'Gula' },
+    where: { tenantId_name: { tenantId, name: 'Gula' } },
     update: {},
     create: {
       name: 'Gula',
@@ -208,7 +244,7 @@ async function main() {
   });
 
   const kopi = await prisma.rawMaterial.upsert({
-    where: { name: 'Kopi' },
+    where: { tenantId_name: { tenantId, name: 'Kopi' } },
     update: {},
     create: {
       name: 'Kopi',
@@ -227,7 +263,7 @@ async function main() {
   // has NO recipe and NO stock movement: it must not shift any figure the
   // existing e2e suites assert on.
   await prisma.rawMaterial.upsert({
-    where: { name: 'Ayam' },
+    where: { tenantId_name: { tenantId, name: 'Ayam' } },
     update: {},
     create: {
       name: 'Ayam',
@@ -269,7 +305,7 @@ async function main() {
   });
 
   const esKopiSusu = await prisma.product.upsert({
-    where: { name: 'Es Kopi Susu' },
+    where: { tenantId_name: { tenantId, name: 'Es Kopi Susu' } },
     update: {},
     create: {
       name: 'Es Kopi Susu',
@@ -310,7 +346,7 @@ async function main() {
 
   // Product with no recipe (§9.8) to exercise null-path HPP case
   await prisma.product.upsert({
-    where: { name: 'Air Mineral' },
+    where: { tenantId_name: { tenantId, name: 'Air Mineral' } },
     update: {},
     create: {
       name: 'Air Mineral',
@@ -323,7 +359,7 @@ async function main() {
   // Phase 4: Suppliers, Purchases, Payables, Settlements & StockMovements (§9.9)
   // ---------------------------------------------------------------------------
   const supplierSumberRejeki = await prisma.supplier.upsert({
-    where: { name: 'Toko Sumber Rejeki' },
+    where: { tenantId_name: { tenantId, name: 'Toko Sumber Rejeki' } },
     update: {},
     create: {
       name: 'Toko Sumber Rejeki',
@@ -332,7 +368,7 @@ async function main() {
   });
 
   const supplierKopiNusantara = await prisma.supplier.upsert({
-    where: { name: 'CV Kopi Nusantara' },
+    where: { tenantId_name: { tenantId, name: 'CV Kopi Nusantara' } },
     update: {},
     create: {
       name: 'CV Kopi Nusantara',
@@ -726,7 +762,8 @@ async function main() {
   }
 
   console.log(`Seeded. Owner login: ${ownerEmail}`);
-  await prisma.$disconnect();
+  console.log(`Platform admin login: ${platformAdminEmail}`);
+  await unscoped.$disconnect();
 }
 
 void main();

@@ -26,11 +26,13 @@ import { SaleResponse } from '@ohmypos/api-contracts';
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantFixture } from './tenant-fixture';
 import { Prisma } from '../src/generated/prisma/client';
 
 describe('Sales (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let tenantId: string;
 
   const password = 'TestPassword123!';
   const owner = { email: 'sl-owner@test.local', cookies: [] as string[] };
@@ -94,11 +96,11 @@ describe('Sales (e2e)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    ({ prisma, tenantId } = await tenantFixture(app));
     await cleanup();
 
     const centralBranch = await prisma.branch.upsert({
-      where: { name: 'Umum' },
+      where: { tenantId_name: { tenantId, name: 'Umum' } },
       update: {},
       create: { name: 'Umum', isSystem: true },
     });
@@ -122,7 +124,7 @@ describe('Sales (e2e)', () => {
     // Required by ADR-012; resolved by name inside SalesService, so no id is
     // captured here either — asserting the suite runs standalone (no db:seed).
     await prisma.category.upsert({
-      where: { name: 'Penjualan' },
+      where: { tenantId_name: { tenantId, name: 'Penjualan' } },
       update: {},
       create: { name: 'Penjualan', type: 'INFLOW' },
     });

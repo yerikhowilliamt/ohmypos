@@ -18,6 +18,7 @@ import {
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantScopedPrisma } from './tenant-fixture';
 
 describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
   let app: INestApplication<App>;
@@ -39,7 +40,7 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    prisma = await tenantScopedPrisma(app);
     await cleanup();
 
     const branch = await prisma.branch.create({

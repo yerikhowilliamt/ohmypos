@@ -14,6 +14,25 @@ import {
 } from '../errors/postgres-error';
 
 /**
+ * Error dari `body-parser` saat body melewati batas ukuran. Ia bukan
+ * `HttpException`, jadi tanpa penanganan khusus ia jatuh ke cabang 500 di
+ * bawah — klien diberi tahu "an unexpected error occurred" untuk sesuatu yang
+ * sepenuhnya salah dari sisi klien, dan setiap percobaan menulis satu baris
+ * log level error.
+ *
+ * Dicocokkan lewat `type`, bukan `instanceof`: `body-parser` tidak mengekspor
+ * kelasnya, dan `err.type === 'entity.too.large'` adalah kontrak yang memang
+ * didokumentasikannya.
+ */
+function isPayloadTooLarge(exception: unknown): boolean {
+  return (
+    typeof exception === 'object' &&
+    exception !== null &&
+    (exception as { type?: unknown }).type === 'entity.too.large'
+  );
+}
+
+/**
  * Translates database-trigger rejections into proper HTTP responses.
  *
  * Adapted from Kasync rather than ported verbatim: Kasync matched Prisma 5's
@@ -33,6 +52,27 @@ export class PostgresTriggerExceptionFilter implements ExceptionFilter {
       return response
         .status(exception.getStatus())
         .json(exception.getResponse());
+    }
+
+    if (isPayloadTooLarge(exception)) {
+      // Level warn, bukan error: body kebesaran adalah klien yang salah, bukan
+      // server yang rusak. Body parsing berjalan di middleware Express sebelum
+      // ThrottlerGuard, jadi pemanggil tanpa kredensial bisa memicu ini
+      // sesering yang ia mau — mencatatnya di level error berarti menyerahkan
+      // kendali kebisingan log (dan kuota Sentry) kepada siapa pun di internet.
+      this.logger.warn(
+        {
+          correlationId: (
+            host.switchToHttp().getRequest<{ id?: string }>() ?? {}
+          ).id,
+        },
+        'Rejected an oversized request body',
+      );
+      return response.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
+        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+        error: 'Payload Too Large',
+        message: 'Ukuran data yang dikirim melebihi batas yang diizinkan.',
+      });
     }
 
     if (exception instanceof AllocationExceededError) {

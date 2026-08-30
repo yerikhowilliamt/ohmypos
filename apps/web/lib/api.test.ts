@@ -95,6 +95,43 @@ describe('apiFetch', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('refreshes a /platform 401 against the PLATFORM refresh endpoint', async () => {
+    // ADR-025 — two audiences, two cookie pairs, two refresh endpoints. Sending
+    // this to `/auth/refresh` would rotate a shop session the operator does not
+    // have, and leave the console 401ing forever.
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(401, { message: 'stale' }))
+      .mockResolvedValueOnce(jsonResponse(200, { message: 'Token refreshed' }))
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+
+    await expect(apiFetch('/platform/tenants')).resolves.toEqual({ ok: true });
+    expect(String(vi.mocked(fetch).mock.calls[1]?.[0])).toContain(
+      '/platform/auth/refresh',
+    );
+  });
+
+  it('sends a failed PLATFORM refresh to /platform/login, not /login', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse(401, { message: 'stale' }))
+      .mockResolvedValueOnce(jsonResponse(401, { message: 'dead' }));
+
+    await expect(apiFetch('/platform/tenants')).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    expect(window.location.href).toBe('/platform/login');
+  });
+
+  it('does not attempt a refresh for a 401 from /platform/auth/login', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse(401, { message: 'Email atau kata sandi salah.' }),
+    );
+
+    await expect(apiFetch('/platform/auth/login')).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('omits Content-Type for a FormData body so the browser sets the boundary', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       jsonResponse(200, { imported: 3, skipped: 0, total: 3 }),

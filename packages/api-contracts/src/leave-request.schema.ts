@@ -47,6 +47,19 @@ export const LeaveRequestListQuerySchema = PaginationQuerySchema.extend({
   overlapsTo: LeaveDate.optional(),
   sortBy: LeaveRequestSortBySchema.optional(),
   sortOrder: SortOrderSchema.optional(),
+  /**
+   * Menaikkan cap 100 milik PaginationQuerySchema, dengan alasan yang sama
+   * persis seperti AttendanceQuerySchema (device.schema.ts): kalender absensi
+   * meminta satu bulan penuh dalam satu halaman, dan cuti adalah overlay di
+   * atas kalender itu — keduanya harus muat di halaman yang sama atau
+   * overlay-nya tidak sejajar dengan barisnya.
+   *
+   * ERR-047: sebelum ini matriks mengirim `limit=500` ke endpoint yang
+   * dibatasi 100, jadi setiap render menghasilkan 400 dan kalender tidak
+   * pernah sekali pun menggambar cuti yang disetujui — tanpa pesan error,
+   * karena sel kosong terlihat sama saja dengan "tidak ada cuti".
+   */
+  limit: z.coerce.number().int().min(1).max(500).default(50),
 });
 export type LeaveRequestListQuery = z.infer<typeof LeaveRequestListQuerySchema>;
 

@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantScopedPrisma } from './tenant-fixture';
 
 /**
  * Phase 10a adds three self-service auth endpoints: PATCH /auth/me (name),
@@ -38,7 +39,7 @@ describe('Profile self-service (e2e)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    prisma = await tenantScopedPrisma(app);
     await cleanup();
 
     const branch = await prisma.branch.create({ data: { name: 'PSS Branch' } });

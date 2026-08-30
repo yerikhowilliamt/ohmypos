@@ -38,11 +38,13 @@ import {
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantFixture } from './tenant-fixture';
 import { Prisma } from '../src/generated/prisma/client';
 
 describe('Reports — Dashboard 3 (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let tenantId: string;
 
   const password = 'TestPassword123!';
   const owner = { email: 'rp-owner@test.local', cookies: [] as string[] };
@@ -83,12 +85,12 @@ describe('Reports — Dashboard 3 (e2e)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    ({ prisma, tenantId } = await tenantFixture(app));
     await cleanup();
 
     // ADR-014: resolved by name inside the purchase flow, so it must exist.
     const central = await prisma.branch.upsert({
-      where: { name: 'Umum' },
+      where: { tenantId_name: { tenantId, name: 'Umum' } },
       update: {},
       create: { name: 'Umum', isSystem: true },
     });
@@ -123,7 +125,7 @@ describe('Reports — Dashboard 3 (e2e)', () => {
       { name: 'Operasional', type: 'OUTFLOW' as const },
     ]) {
       await prisma.category.upsert({
-        where: { name: category.name },
+        where: { tenantId_name: { tenantId, name: category.name } },
         update: {},
         create: category,
       });
@@ -327,7 +329,7 @@ describe('Reports — Dashboard 3 (e2e)', () => {
     type: 'INFLOW' | 'OUTFLOW';
   }): Promise<void> {
     const category = await prisma.category.findUniqueOrThrow({
-      where: { name: input.categoryName },
+      where: { tenantId_name: { tenantId, name: input.categoryName } },
     });
     await request(app.getHttpServer())
       .post('/api/v1/ledger-entries')

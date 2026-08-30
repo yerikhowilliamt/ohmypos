@@ -7,7 +7,8 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-import { PrismaService } from '../prisma/prisma.service';
+import { UnscopedPrismaService } from '../prisma/prisma.service';
+import { tenantStorage } from '../prisma/tenant-context';
 import type { JwtPayload } from '../types/jwt-payload.interface';
 import { ACCESS_TOKEN_COOKIE } from '../constants/cookie.constants';
 import {
@@ -30,7 +31,9 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService,
+    // Unscoped on purpose: this guard is what ESTABLISHES the tenant, so it
+    // cannot itself run inside a tenant filter.
+    private readonly prisma: UnscopedPrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -76,6 +79,9 @@ export class JwtAuthGuard implements CanActivate {
         isActive: true,
         role: true,
         branchId: true,
+        // ADR-025 — the tenant rides along on the round-trip this guard already
+        // makes, so establishing it costs nothing extra.
+        tenantId: true,
       },
     });
 
@@ -115,7 +121,19 @@ export class JwtAuthGuard implements CanActivate {
       ...payload,
       role: user.role,
       branchId: user.branchId,
+      tenantId: user.tenantId,
     };
+
+    // ADR-025 Decision 2 — the tenant comes from the User row, never from the
+    // client. TenantScopeMiddleware opened this scope; the guard fills it.
+    const scope = tenantStorage.getStore();
+    if (!scope) {
+      // The middleware did not run. Fail closed rather than let the request
+      // through with no tenant, which the Prisma extension would then reject
+      // deep inside a service with a far less legible error.
+      throw new UnauthorizedException(SESSION_EXPIRED);
+    }
+    scope.tenantId = user.tenantId;
 
     return true;
   }

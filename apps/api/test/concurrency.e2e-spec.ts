@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantFixture } from './tenant-fixture';
 import Decimal from 'decimal.js';
 
 /**
@@ -44,6 +45,7 @@ async function settleAllChunked<T>(
 describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let tenantId: string;
 
   let branchId: string;
   let branchBId: string;
@@ -66,7 +68,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    ({ prisma, tenantId } = await tenantFixture(app));
     await cleanup();
 
     const branch = await prisma.branch.create({
@@ -83,19 +85,19 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
     branchBId = branchB.id;
 
     await prisma.branch.upsert({
-      where: { name: 'Umum' },
+      where: { tenantId_name: { tenantId, name: 'Umum' } },
       update: {},
       create: { name: 'Umum', isSystem: true },
     });
 
     await prisma.category.upsert({
-      where: { name: 'Penjualan' },
+      where: { tenantId_name: { tenantId, name: 'Penjualan' } },
       update: {},
       create: { name: 'Penjualan', type: 'INFLOW' },
     });
 
     await prisma.category.upsert({
-      where: { name: 'Pembelian Bahan Baku' },
+      where: { tenantId_name: { tenantId, name: 'Pembelian Bahan Baku' } },
       update: {},
       create: { name: 'Pembelian Bahan Baku', type: 'OUTFLOW' },
     });

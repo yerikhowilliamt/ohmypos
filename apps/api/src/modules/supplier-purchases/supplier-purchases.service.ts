@@ -19,6 +19,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { requireTenantId } from '../../common/prisma/tenant-context';
 import {
   resolveLedgerBranchId,
   resolvePurchaseCategoryId,
@@ -62,7 +63,12 @@ export class SupplierPurchasesService {
         // SISIPAN 1: pra-cek replay (kasus umum: kirim ulang, bukan balapan)
         if (dto.idempotencyKey) {
           const replay = await tx.supplierPurchase.findUnique({
-            where: { idempotencyKey: dto.idempotencyKey },
+            where: {
+              tenantId_idempotencyKey: {
+                tenantId: requireTenantId(),
+                idempotencyKey: dto.idempotencyKey,
+              },
+            },
             include: {
               supplier: true,
               items: {
@@ -253,7 +259,8 @@ export class SupplierPurchasesService {
             SELECT spi.unit_cost
               FROM supplier_purchase_items spi
               JOIN supplier_purchases sp ON sp.id = spi.supplier_purchase_id
-             WHERE spi.raw_material_id = ${rawMaterialId}
+             WHERE spi.tenant_id = ${requireTenantId()}
+               AND spi.raw_material_id = ${rawMaterialId}
              ORDER BY sp.purchase_date DESC, sp.created_at DESC, sp.id DESC
              LIMIT 1
           `;
@@ -327,10 +334,18 @@ export class SupplierPurchasesService {
     } catch (error) {
       if (
         dto.idempotencyKey &&
-        isIdempotencyReplay(error, 'supplier_purchases_idempotency_key_key')
+        isIdempotencyReplay(
+          error,
+          'supplier_purchases_tenant_id_idempotency_key_key',
+        )
       ) {
         const original = await this.prisma.supplierPurchase.findUnique({
-          where: { idempotencyKey: dto.idempotencyKey },
+          where: {
+            tenantId_idempotencyKey: {
+              tenantId: requireTenantId(),
+              idempotencyKey: dto.idempotencyKey,
+            },
+          },
           include: {
             supplier: true,
             items: {

@@ -9,6 +9,7 @@ import type {
 } from '@ohmypos/api-contracts';
 import Decimal from 'decimal.js';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { requireTenantId } from '../../common/prisma/tenant-context';
 import { Prisma } from '../../generated/prisma/client';
 
 /**
@@ -43,7 +44,7 @@ export class AllocationService {
         // Lock the bank transaction row first — same guard the trigger uses.
         // `id` is a TEXT column (Prisma String @id), so no ::uuid cast here —
         // Postgres would reject the text = uuid comparison.
-        await tx.$queryRaw`SELECT id FROM bank_transactions WHERE id = ${txnId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT id FROM bank_transactions WHERE id = ${txnId} AND tenant_id = ${requireTenantId()} FOR UPDATE`;
 
         const bankTransaction = await tx.bankTransaction.findUnique({
           where: { id: txnId },
@@ -114,7 +115,7 @@ export class AllocationService {
           // bersamaan yang menyentuh pasangan (txn, entry) yang bertukar bisa
           // saling deadlock, dan Postgres membatalkan salah satunya dengan
           // 40P01 yang tidak bisa ditindaklanjuti pemanggil.
-          await tx.$queryRaw`SELECT id FROM ledger_entries WHERE id = ${item.ledgerEntryId} FOR UPDATE`;
+          await tx.$queryRaw`SELECT id FROM ledger_entries WHERE id = ${item.ledgerEntryId} AND tenant_id = ${requireTenantId()} FOR UPDATE`;
 
           const ledgerEntry = await tx.ledgerEntry.findUnique({
             where: { id: item.ledgerEntryId },

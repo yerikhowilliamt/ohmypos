@@ -99,6 +99,8 @@ jobs:
       JWT_SECRET: 'ci-test-access-secret-min-32-chars-long'
       JWT_REFRESH_SECRET: 'ci-test-refresh-secret-min-32-chars-long'
       DEVICE_COOKIE_SECRET: 'ci-test-device-cookie-secret-min-32-chars-long'
+      PLATFORM_JWT_SECRET: 'ci-test-platform-access-secret-min-32-chars'
+      PLATFORM_JWT_REFRESH_SECRET: 'ci-test-platform-refresh-secret-min-32-chars'
       JWT_EXPIRES_IN: '1d'
       JWT_REFRESH_EXPIRES_IN: '30d'
     steps:
@@ -171,6 +173,8 @@ jobs:
       JWT_SECRET: 'ci-test-access-secret-min-32-chars-long'
       JWT_REFRESH_SECRET: 'ci-test-refresh-secret-min-32-chars-long'
       DEVICE_COOKIE_SECRET: 'ci-test-device-cookie-secret-min-32-chars-long'
+      PLATFORM_JWT_SECRET: 'ci-test-platform-access-secret-min-32-chars'
+      PLATFORM_JWT_REFRESH_SECRET: 'ci-test-platform-refresh-secret-min-32-chars'
       JWT_EXPIRES_IN: '1d'
       JWT_REFRESH_EXPIRES_IN: '30d'
     steps:

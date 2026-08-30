@@ -9,9 +9,11 @@ import {
   OWNER_CREDS,
   ADMIN_CREDS,
   KASIR_CREDS,
+  PLATFORM_CREDS,
   OWNER_STATE,
   ADMIN_STATE,
   KASIR_STATE,
+  PLATFORM_STATE,
 } from './fixtures';
 
 async function saveSession(
@@ -51,4 +53,20 @@ setup('authenticate as ADMIN', async ({ page }) => {
 
 setup('authenticate as KASIR', async ({ page }) => {
   await saveSession(page, KASIR_CREDS, KASIR_STATE, /\/sales/);
+});
+
+/**
+ * ADR-025 — a separate login page, a separate cookie pair, and therefore a
+ * separate storage state. Deliberately NOT routed through `saveSession`: that
+ * helper knows about `/login` and the KASIR attendance warning, neither of
+ * which exists here, and folding the two flows into one function is how the
+ * console would end up quietly asserting the tenant page's behaviour.
+ */
+setup('authenticate as PLATFORM ADMIN', async ({ page }) => {
+  await page.goto('/platform/login');
+  await page.locator('input[type="email"]').fill(PLATFORM_CREDS.email);
+  await page.locator('input[type="password"]').fill(PLATFORM_CREDS.password);
+  await page.locator('button:has-text("Masuk ke Konsol")').click();
+  await page.waitForURL(/\/platform$/, { timeout: 30000 });
+  await page.context().storageState({ path: PLATFORM_STATE });
 });

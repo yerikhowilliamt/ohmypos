@@ -44,8 +44,14 @@ interface AttendanceCalendarMatrixProps {
 
 /**
  * One page big enough to hold a whole month of logins: 8 kasir x 2 logins x 31
- * days = 496. Matches the `limit` ceiling on AttendanceQuerySchema. A month
- * past this is reported on screen, never silently trimmed.
+ * days = 496. Matches the `limit` ceiling on AttendanceQuerySchema.
+ *
+ * Angka yang sama juga dipakai untuk daftar cuti, dan itu HANYA sah karena
+ * LeaveRequestListQuerySchema juga di-cap di 500. Keduanya harus bergerak
+ * bersama — ERR-047 terjadi tepat ketika keduanya tidak. Kalau salah satu cap
+ * diubah, konstanta ini harus dipecah, bukan diikutkan.
+ *
+ * Sebulan melewati angka ini dilaporkan di layar, tidak pernah dipotong diam-diam.
  */
 const MATRIX_PAGE_LIMIT = 500;
 
@@ -149,6 +155,15 @@ export function AttendanceCalendarMatrix({
     limit: MATRIX_PAGE_LIMIT,
   });
   const leaveRequests = React.useMemo(() => leavePage?.data ?? [], [leavePage]);
+  /**
+   * Sama persis dengan `omittedCount` di atas, dan untuk alasan yang sama: sel
+   * tanpa penanda cuti terbaca sebagai "masuk kerja", bukan sebagai "datanya
+   * belum termuat". Bulan yang lebih besar dari satu halaman harus mengatakannya.
+   */
+  const omittedLeaveCount = Math.max(
+    0,
+    (leavePage?.meta.total ?? 0) - leaveRequests.length,
+  );
 
   const isLoading = isUsersLoading || isAttendanceLoading || isLeavesLoading;
 
@@ -327,6 +342,26 @@ export function AttendanceCalendarMatrix({
             <strong>{omittedCount.toLocaleString('id-ID')}</strong> log belum
             termuat, jadi sebagian sel kosong di bawah bisa jadi bukan
             ketidakhadiran. Persempit dengan filter cabang.
+          </span>
+        </div>
+      ) : null}
+
+      {omittedLeaveCount > 0 ? (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2.5 text-xs text-text-primary"
+        >
+          <TriangleAlert
+            className="size-4 shrink-0 text-status-warning mt-px"
+            aria-hidden="true"
+          />
+          <span>
+            Menampilkan {leaveRequests.length.toLocaleString('id-ID')} dari{' '}
+            {(leavePage?.meta.total ?? 0).toLocaleString('id-ID')} pengajuan
+            cuti bulan ini.{' '}
+            <strong>{omittedLeaveCount.toLocaleString('id-ID')}</strong>{' '}
+            pengajuan belum termuat, jadi sebagian sel bisa terlihat masuk kerja
+            padahal sedang cuti.
           </span>
         </div>
       ) : null}

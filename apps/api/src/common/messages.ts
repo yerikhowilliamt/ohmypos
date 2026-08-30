@@ -37,3 +37,29 @@ export const SERVER_MISCONFIGURED =
 /** A cashier reaching for another branch's data, or for no branch at all. */
 export const OTHER_BRANCH_FORBIDDEN =
   'Anda hanya dapat mengakses data cabang Anda sendiri.';
+
+/**
+ * ADR-025 — the tenant itself is suspended, so nothing the signed-in user does
+ * will work until the platform operator lifts it. Deliberately distinct from
+ * ACCOUNT_DEACTIVATED: the account is fine, the business subscription is not,
+ * and pointing the reader at their Owner would send them to the wrong person.
+ */
+export const TENANT_SUSPENDED =
+  'Akses bisnis ini sedang ditangguhkan. Hubungi penyedia layanan OhMyPos.';
+
+/**
+ * ADR-025 Fase 3 — a deactivated PLATFORM admin. Distinct from
+ * ACCOUNT_DEACTIVATED, which tells the reader to contact their Owner: a
+ * platform operator has no Owner, and sending them to a tenant's owner would be
+ * both useless and a hint about who else exists.
+ */
+export const PLATFORM_ACCOUNT_DEACTIVATED =
+  'Akun platform ini sudah dinonaktifkan. Hubungi administrator platform lain untuk mengaktifkannya kembali.';
+
+/**
+ * ADR-025 Decision 8 — an impersonation token may only read. Lives here rather
+ * than in `modules/platform/platform.exceptions.ts` because the guard that
+ * throws it is in `common/guards`, and `common` must not depend on a module.
+ */
+export const IMPERSONATION_IS_READ_ONLY =
+  'Sesi ini hanya bisa membaca data. Keluar dari mode impersonasi terlebih dahulu untuk mengubah apa pun.';
