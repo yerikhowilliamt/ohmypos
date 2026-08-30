@@ -10,11 +10,17 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ReqUser } from '../../common/decorators/req-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto } from './users.dto';
+import {
+  CreateUserDto,
+  ResetUserPasswordDto,
+  UpdateUserDto,
+} from './users.dto';
 
 /**
  * OWNER-only, with no exceptions and no approval workflow (ADR-011 §5).
@@ -70,5 +76,29 @@ export class UsersController {
   @ApiOperation({ summary: 'Reactivate a user (OWNER only)' })
   reactivate(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.reactivate(id);
+  }
+
+  /**
+   * TASK-130. `@Roles('OWNER')` is not repeated here — it is on the class
+   * above, which is why a route added later inherits it.
+   */
+  @Patch(':id/password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @ApiOperation({
+    summary:
+      "Reset a staff member's password; revokes all their sessions. Cannot be used on yourself.",
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Caller targeted their own account',
+  })
+  @ApiResponse({ status: 403, description: 'Caller is not an OWNER' })
+  resetPassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @ReqUser('sub') actorId: string,
+    @Body() dto: ResetUserPasswordDto,
+  ) {
+    return this.usersService.resetPassword(id, actorId, dto);
   }
 }

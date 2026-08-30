@@ -39,6 +39,42 @@
 
 ## Log
 
+### DEBT-076 — Platform writes are recorded only in the application log, not an audit table
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-130 (plan `docs/plannings/2026-08-30-pemulihan-kata-sandi.md` §A2b, which stops at the schema approval gate)
+- **Description:** `POST /platform/tenants/:id/reset-owner-password` writes a `logger.warn` line carrying the platform admin, the tenant, the target user and the mandatory reason — and nothing else. Impersonation, by contrast, has a permanent `ImpersonationSession` row. The asymmetry runs the wrong way: impersonation can only READ (`ImpersonationReadOnlyGuard`), while a password reset WRITES, and writes the one thing that changes who can get into a business. The full version is a small append-only `PlatformAuditLog` model (platform admin, tenant, action, target, reason, timestamp) written in the same transaction as the change it records.
+- **Why deferred:** It needs a new model in `schema.prisma` plus a migration, which is an AGENTS.md §AI Gatekeeper approval gate. TASK-130 deliberately shipped the endpoint and stopped rather than smuggling a schema change in behind it.
+- **Impact if unaddressed:** The only record of an operator handing out a tenant OWNER's credential is a log line, which disappears when Render rotates its logs. A customer asking "who reset my password, and why" six weeks later has no answer.
+- **Trigger condition:** The first time this endpoint is used against a real tenant, OR the first customer question about a platform action — whichever comes first. Note the migration caveat in **DEBT-063**: any Prisma-generated migration in this repo tries to drop 35 composite FKs and 13 composite uniques and must be hand-edited.
+- **Proposed resolution:** The model sketched in the plan §5.2, plus wrapping `resetOwnerPassword`'s update and its audit write in one `$transaction` — an audit trail that can fail on its own while the password change succeeds is worse than none, because it looks complete while being full of holes.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-075 — An operator-set password is never forced to be changed at next login
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-130
+- **Description:** After a reset through any of the three operator paths (OWNER → staff, platform admin → tenant OWNER, CLI → platform admin), the password the operator typed is a normal, permanent password. There is no `mustChangePassword` column and no interstitial at next login, so a credential that has by definition been spoken aloud or sent through a chat window can stay in use indefinitely.
+- **Why deferred:** It needs a new column on `User` (and on `PlatformAdmin`) → schema approval gate, plus a login-flow branch in both apps. The value is real but modest while recovery is operator-mediated and rare; it grows sharply the moment resets become routine.
+- **Impact if unaddressed:** Shared-channel passwords persist. The dialogs mitigate this only by telling the operator to pass it along separately — advice, not enforcement.
+- **Trigger condition:** Resets become routine (more than a handful a month), OR self-service email reset ships (**DEBT-074**) and operator resets become the exception used precisely when something is already wrong.
+- **Proposed resolution:** `mustChangePassword: Boolean @default(false)`, set true by every operator-driven reset and cleared by `PATCH /auth/password`; the guard or the login response redirects to the profile page until it is cleared.
+- **Priority:** Low
+- **Status:** Open
+
+### DEBT-074 — No self-service password reset; recovery depends on an operator being awake
+
+- **Date logged:** 2026-08-30
+- **Found during:** TASK-130 (plan §2.2 recommends option C — operator paths now, email later)
+- **Description:** There is no `POST /auth/forgot-password`, no email library in any `package.json`, and no email channel at all. Every recovery path built in TASK-130 goes through a human above the locked-out account: staff → their OWNER, OWNER → a platform admin, platform admin → the CLI. That chain has no gaps, which is exactly why it was enough to ship; what it does not have is availability.
+- **Why deferred:** The cost of email reset is not the code — it is **owning a mail channel**: domain verification, SPF/DKIM, bounce handling, sender reputation, quota. Plus a `PasswordResetToken` table (schema gate), a dependency (gate), and new env vars that must be set in the Render and Vercel dashboards **before** merge. Meanwhile the operator paths already remove the "permanently locked out" failure class entirely; email adds convenience on top of a floor that is already safe. Ordering also matters: email reset needs an operator fallback for when mail does not arrive, which it always eventually does not — so A had to exist first regardless.
+- **Impact if unaddressed:** A shop owner locked out at 11pm waits for an operator. Reasonable for a one-operator SaaS today; not reasonable at twenty tenants.
+- **Trigger condition:** The first reset request that arrives outside operator working hours, OR the tenth tenant — whichever comes first.
+- **Proposed resolution:** Plan §8. Sketched to the point of being decidable, deliberately not built: hashed single-use tokens with a 1-hour expiry, a `POST /auth/forgot-password` that always answers 200 identically whether or not the email exists (it is an enumeration oracle otherwise — the same concern `auth.service.ts`'s dummy-hash comparison already answers for login), per-account rate limiting on top of per-IP, and the operator paths **kept** rather than replaced.
+- **Priority:** Medium
+- **Status:** Open
+
 ### DEBT-073 — There is no sustained load test, so load-shaped defects are only ever found by hand
 
 - **Date logged:** 2026-08-30

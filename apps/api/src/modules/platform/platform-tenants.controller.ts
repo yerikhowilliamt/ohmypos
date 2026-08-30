@@ -11,6 +11,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { ReqPlatformAdmin } from '../../common/decorators/req-platform-admin.decorator';
@@ -20,6 +21,7 @@ import { PlatformMetricsService } from './platform-metrics.service';
 import { PlatformTenantsService } from './platform-tenants.service';
 import {
   CreateTenantDto,
+  ResetTenantOwnerPasswordDto,
   StartImpersonationDto,
   TenantListQueryDto,
   UpdateTenantDto,
@@ -100,6 +102,37 @@ export class PlatformTenantsController {
     @Body() dto: StartImpersonationDto,
   ) {
     return this.impersonationService.start(platformAdminId, id, dto);
+  }
+
+  /**
+   * TASK-130. Added to THIS controller rather than a new one on purpose:
+   * DEBT-066 records that a platform controller is authenticated only if
+   * somebody remembers to write `@UseGuards(PlatformAuthGuard)`. This class
+   * already carries it, so a route added here inherits the guard instead of
+   * betting on a memory.
+   *
+   * 5 per minute rather than the usual 10: there is no legitimate reason to
+   * reset five owner passwords in a minute, and the tighter number costs
+   * nobody anything.
+   */
+  @Post('tenants/:id/reset-owner-password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @ApiOperation({
+    summary:
+      "Reset a tenant OWNER's password; revokes all their sessions. Requires a reason.",
+  })
+  @ApiResponse({ status: 404, description: 'No such tenant, or no such OWNER' })
+  resetOwnerPassword(
+    @ReqPlatformAdmin('sub') platformAdminId: string,
+    @Param('id', ParseUUIDPipe) tenantId: string,
+    @Body() dto: ResetTenantOwnerPasswordDto,
+  ) {
+    return this.tenantsService.resetOwnerPassword(
+      tenantId,
+      platformAdminId,
+      dto,
+    );
   }
 
   @Post('impersonation/end')

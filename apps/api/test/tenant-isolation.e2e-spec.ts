@@ -386,6 +386,32 @@ describe('Tenant isolation (e2e)', () => {
       expect(supplier.name).toBe('PT Pemasok Sama');
     });
 
+    it('refuses to reset the other tenant’s OWNER password', async () => {
+      // TASK-130. The reset endpoint is the one write in the tenant API that
+      // hands somebody a working credential, so "the extension already scopes
+      // it" is exactly the kind of claim that deserves an assertion.
+      //
+      // 404, not 403, for the same reason as every other detail endpoint here:
+      // a 403 would confirm the id belongs to someone.
+      const before = await b.prisma.user.findUniqueOrThrow({
+        where: { id: b.ownerId },
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/users/${b.ownerId}/password`)
+        .set('Cookie', a.cookies)
+        .send({ newPassword: 'DiambilAlih123!' })
+        .expect(404);
+
+      // And nothing moved — a 404 returned after a successful write would be
+      // the worst of both.
+      const after = await b.prisma.user.findUniqueOrThrow({
+        where: { id: b.ownerId },
+      });
+      expect(after.passwordHash).toBe(before.passwordHash);
+      expect(after.tokenValidFrom).toEqual(before.tokenValidFrom);
+    });
+
     it('refuses to delete the other tenant’s row', async () => {
       const res = await request(app.getHttpServer())
         .delete(`/api/v1/suppliers/${b.supplierId}`)

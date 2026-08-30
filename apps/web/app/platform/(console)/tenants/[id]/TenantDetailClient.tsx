@@ -5,13 +5,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 import {
+  ResetTenantOwnerPasswordSchema,
   StartImpersonationSchema,
+  type ResetTenantOwnerPassword,
   type StartImpersonation,
 } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
 import { Label } from '@ohmypos/ui/components/label';
 import { Input } from '@ohmypos/ui/components/input';
+import { PasswordInput } from '@ohmypos/ui/components/password-input';
 import { Skeleton } from '@ohmypos/ui/components/skeleton';
 import {
   Dialog,
@@ -21,10 +25,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
-import { ArrowLeft, Eye, PauseCircle, PlayCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  Eye,
+  KeyRound,
+  PauseCircle,
+  PlayCircle,
+} from 'lucide-react';
 import { TenantStatusBadge } from '@/components/platform/TenantStatusBadge';
 import {
   usePlatformTenant,
+  useResetTenantOwnerPassword,
   useStartImpersonation,
   useTenantImpersonations,
   useUpdateTenant,
@@ -45,6 +56,7 @@ export function TenantDetailClient({ tenantId }: { tenantId: string }) {
   const { data: sessions } = useTenantImpersonations(tenantId);
   const updateTenant = useUpdateTenant(tenantId);
   const [isImpersonateOpen, setImpersonateOpen] = React.useState(false);
+  const [isResetPasswordOpen, setResetPasswordOpen] = React.useState(false);
   const [statusError, setStatusError] = React.useState<string | null>(null);
 
   const toggleStatus = async () => {
@@ -136,6 +148,21 @@ export function TenantDetailClient({ tenantId }: { tenantId: string }) {
             )}
             {isSuspended ? 'Aktifkan kembali' : 'Tangguhkan'}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={() => setResetPasswordOpen(true)}
+            // Nothing to reset when the tenant has no active OWNER, and a
+            // dialog that can only fail is worse than a button that says so.
+            disabled={!tenant.ownerId}
+            title={
+              tenant.ownerId ? undefined : 'Tenant ini tidak punya Owner aktif.'
+            }
+          >
+            <KeyRound className="size-4" aria-hidden />
+            Reset kata sandi Owner
+          </Button>
         </div>
       </header>
 
@@ -203,6 +230,15 @@ export function TenantDetailClient({ tenantId }: { tenantId: string }) {
         tenantName={tenant.name}
         open={isImpersonateOpen}
         onOpenChange={setImpersonateOpen}
+      />
+
+      <ResetOwnerPasswordDialog
+        key={String(isResetPasswordOpen)}
+        tenantId={tenantId}
+        ownerId={tenant.ownerId}
+        ownerEmail={tenant.ownerEmail}
+        open={isResetPasswordOpen}
+        onOpenChange={setResetPasswordOpen}
       />
     </div>
   );
@@ -325,6 +361,215 @@ function ImpersonateDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * TASK-130 — the operator's recovery path for a tenant OWNER who cannot get in.
+ *
+ * Shaped after `ImpersonateDialog` above, and for the same reason: both are an
+ * operator reaching into somebody else's business, so both state what will
+ * happen before the button is pressed and both record why. The differences are
+ * that this one WRITES, and that what it writes is a working credential.
+ */
+const ResetOwnerPasswordFormSchema = ResetTenantOwnerPasswordSchema.omit({
+  userId: true,
+})
+  .extend({ confirmPassword: z.string().min(1, 'Konfirmasi wajib diisi') })
+  .refine((v) => v.newPassword === v.confirmPassword, {
+    message: 'Konfirmasi kata sandi tidak cocok',
+    path: ['confirmPassword'],
+  });
+
+type ResetOwnerPasswordFormValues = z.infer<
+  typeof ResetOwnerPasswordFormSchema
+>;
+
+function ResetOwnerPasswordDialog({
+  tenantId,
+  ownerId,
+  ownerEmail,
+  open,
+  onOpenChange,
+}: {
+  tenantId: string;
+  ownerId: string | null;
+  ownerEmail: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const resetPassword = useResetTenantOwnerPassword(tenantId);
+  const [formError, setFormError] = React.useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(
+    null,
+  );
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<ResetOwnerPasswordFormValues>({
+    resolver: zodResolver(ResetOwnerPasswordFormSchema),
+    defaultValues: { newPassword: '', confirmPassword: '', reason: '' },
+  });
+
+  // No reset-on-open effect — the page keys this component on `open`, so each
+  // opening mounts a fresh one. See the note in `users/ResetPasswordDialog`.
+
+  const onSubmit = async (values: ResetOwnerPasswordFormValues) => {
+    if (!ownerId) return;
+    setFormError(null);
+    try {
+      const result = await resetPassword.mutateAsync({
+        userId: ownerId,
+        newPassword: values.newPassword,
+        reason: values.reason,
+      } satisfies ResetTenantOwnerPassword);
+      // Cleared as soon as the request succeeds — the typed password has no
+      // reason to stay in this component, and the dialog never shows it again.
+      reset({ newPassword: '', confirmPassword: '', reason: '' });
+      setSuccessMessage(result.message);
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Kata sandi Owner belum direset.',
+      );
+    }
+  };
+
+  const isPending = isSubmitting || resetPassword.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            Reset kata sandi Owner{ownerEmail ? ` — ${ownerEmail}` : ''}
+          </DialogTitle>
+          <DialogDescription>
+            Owner akan langsung keluar dari semua perangkat. Alasan yang Anda
+            tulis tersimpan permanen. Sampaikan kata sandi barunya lewat jalur
+            terpisah, jangan lewat email biasa.
+          </DialogDescription>
+        </DialogHeader>
+
+        {successMessage ? (
+          <div className="space-y-4">
+            <p
+              role="status"
+              className="rounded-sm border border-status-success/30 bg-status-success/10 p-3 text-xs font-medium text-text-primary"
+            >
+              {successMessage}
+            </p>
+            <DialogFooter>
+              <Button type="button" onClick={() => onOpenChange(false)}>
+                Tutup
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            noValidate
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="owner-new-password"
+                className="text-xs font-semibold text-text-primary"
+              >
+                Kata sandi baru
+              </Label>
+              <PasswordInput
+                id="owner-new-password"
+                autoComplete="new-password"
+                aria-invalid={Boolean(errors.newPassword)}
+                {...register('newPassword')}
+              />
+              {errors.newPassword && (
+                <p
+                  role="alert"
+                  className="text-xs font-medium text-status-danger"
+                >
+                  {errors.newPassword.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="owner-confirm-password"
+                className="text-xs font-semibold text-text-primary"
+              >
+                Konfirmasi kata sandi baru
+              </Label>
+              <PasswordInput
+                id="owner-confirm-password"
+                autoComplete="new-password"
+                aria-invalid={Boolean(errors.confirmPassword)}
+                {...register('confirmPassword')}
+              />
+              {errors.confirmPassword && (
+                <p
+                  role="alert"
+                  className="text-xs font-medium text-status-danger"
+                >
+                  {errors.confirmPassword.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="owner-reset-reason"
+                className="text-xs font-semibold text-text-primary"
+              >
+                Alasan
+              </Label>
+              <Input
+                id="owner-reset-reason"
+                placeholder="Owner melapor terkunci dan tidak ada Owner lain"
+                aria-invalid={Boolean(errors.reason)}
+                {...register('reason')}
+              />
+              {errors.reason && (
+                <p
+                  role="alert"
+                  className="text-xs font-medium text-status-danger"
+                >
+                  {errors.reason.message}
+                </p>
+              )}
+            </div>
+
+            {formError && (
+              <p
+                role="alert"
+                className="rounded-sm border border-status-danger/30 bg-status-danger/10 p-3 text-xs font-medium text-status-danger"
+              >
+                {formError}
+              </p>
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => onOpenChange(false)}
+              >
+                Batal
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Menyimpan…' : 'Reset kata sandi'}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );

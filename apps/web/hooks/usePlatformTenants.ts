@@ -5,6 +5,7 @@ import type {
   CreateTenant,
   ImpersonationSessionResponse,
   PaginationMeta,
+  ResetTenantOwnerPassword,
   StartImpersonation,
   TenantDetailResponse,
   TenantListItem,
@@ -80,6 +81,21 @@ export function useUpdateTenant(id: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['platform'] });
     },
+  });
+}
+
+/**
+ * TASK-130 — the operator's last-resort recovery for a tenant whose OWNER is
+ * locked out. Nothing on screen changes as a result (a password appears in no
+ * response), so nothing is invalidated; the server's message is the result.
+ */
+export function useResetTenantOwnerPassword(id: string) {
+  return useMutation({
+    mutationFn: (data: ResetTenantOwnerPassword) =>
+      apiFetch<{ message: string }>(
+        `/platform/tenants/${id}/reset-owner-password`,
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
   });
 }
 

@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type {
+  PlatformAdminChangePassword,
   PlatformAdminLogin,
   PlatformAdminResponse,
 } from '@ohmypos/api-contracts';
@@ -135,6 +136,53 @@ export class PlatformAuthService {
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
     return this.toResponse(admin);
+  }
+
+  /**
+   * TASK-130 — the exact mirror of `AuthService.changePassword` against
+   * `platform_admins`. The old password stays mandatory: it is what makes a
+   * stolen session insufficient to take the account over.
+   *
+   * A platform admin who has forgotten their password cannot use this, and
+   * nobody sits above them to reset it — that case is
+   * `pnpm --filter api reset:platform-admin-password`, documented in
+   * `docs/runbooks/platform-admin-recovery.md`.
+   */
+  async changePassword(
+    adminId: string,
+    dto: PlatformAdminChangePassword,
+  ): Promise<{ message: string }> {
+    const admin = await this.prisma.platformAdmin.findUnique({
+      where: { id: adminId },
+    });
+    if (!admin) {
+      throw new UnauthorizedException(SESSION_EXPIRED);
+    }
+
+    const isValid = await bcrypt.compare(dto.oldPassword, admin.passwordHash);
+    if (!isValid) {
+      throw new UnauthorizedException(
+        'Kata sandi saat ini salah. Coba ketik ulang.',
+      );
+    }
+
+    await this.prisma.platformAdmin.update({
+      where: { id: adminId },
+      data: {
+        passwordHash: await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS),
+        refreshTokenHash: null,
+        // A credential change revokes every existing session (ADR-011 §3).
+        tokenValidFrom: new Date(),
+      },
+    });
+
+    // Worded differently from the tenant version ('Kata sandi berhasil
+    // diperbarui.') because the bumped `tokenValidFrom` also kills the session
+    // making this very call: the caller lands on the login page on their next
+    // request, and this sentence is what keeps that from reading as a failure.
+    return {
+      message: 'Kata sandi berhasil diperbarui. Silakan masuk kembali.',
+    };
   }
 
   private async generateTokens(

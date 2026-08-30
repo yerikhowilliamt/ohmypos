@@ -5,12 +5,13 @@ import type { ColumnDef } from '@tanstack/react-table';
 import type { BranchResponse, UserResponse } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
 import { Badge } from '@ohmypos/ui/components/badge';
-import { Edit2, RotateCcw, Trash2, Plus } from 'lucide-react';
+import { Edit2, KeyRound, RotateCcw, Trash2, Plus } from 'lucide-react';
 import { useDeactivateUser, useReactivateUser } from '@/hooks/useUsers';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { CreateUserDialog } from './CreateUserDialog';
 import { EditUserDialog } from './EditUserDialog';
 import { DeactivateConfirmDialog } from './DeactivateConfirmDialog';
+import { ResetPasswordDialog } from './ResetPasswordDialog';
 
 interface UsersTableProps {
   users: UserResponse[];
@@ -44,6 +45,9 @@ export function UsersTable({
   );
   const [deactivatingUser, setDeactivatingUser] =
     React.useState<UserResponse | null>(null);
+  const [resettingUser, setResettingUser] = React.useState<UserResponse | null>(
+    null,
+  );
   const [actionError, setActionError] = React.useState<string | null>(null);
 
   const deactivateMutation = useDeactivateUser();
@@ -118,6 +122,16 @@ export function UsersTable({
           >
             <Edit2 className="size-3.5" />
             <span className="sr-only">Edit</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="Reset kata sandi"
+            onClick={() => setResettingUser(row.original)}
+            className="size-7 text-text-secondary hover:text-text-primary"
+          >
+            <KeyRound className="size-3.5" />
+            <span className="sr-only">Reset kata sandi</span>
           </Button>
           {row.original.isActive ? (
             <Button
@@ -214,6 +228,14 @@ export function UsersTable({
           if (!open) setEditingUser(null);
         }}
         user={editingUser}
+      />
+
+      <ResetPasswordDialog
+        key={resettingUser?.id ?? 'none'}
+        user={resettingUser}
+        onOpenChange={(open) => {
+          if (!open) setResettingUser(null);
+        }}
       />
 
       <DeactivateConfirmDialog
