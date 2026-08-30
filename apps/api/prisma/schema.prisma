@@ -117,6 +117,15 @@ enum StockReferenceType {
 model Account {
   id String @id @default(uuid())
 
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
   name String
   type AccountType
 
@@ -131,14 +140,24 @@ model Account {
   payableSettlements PayableSettlement[]
   sales              Sale[]
 
+  @@index([tenantId])
   @@map("accounts")
 }
 
 model Category {
   id String @id @default(uuid())
 
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
   /// Kasync's unique is (userId, name); with multi-tenancy dropped it collapses to name.
-  name String @unique
+  name String
 
   /// OhMyPos — Kasync's Category is id/name only.
   type TransactionType
@@ -148,13 +167,23 @@ model Category {
 
   ledgerEntries LedgerEntry[]
 
+  @@unique([tenantId, name])
   @@map("categories")
 }
 
 model Branch {
   id String @id @default(uuid())
 
-  name    String  @unique
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  name    String
   /// OhMyPos.
   address String?
 
@@ -178,11 +207,21 @@ model Branch {
   sales             Sale[]
   devices           Device[]
 
+  @@unique([tenantId, name])
   @@map("branches")
 }
 
 model LedgerEntry {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   /// OhMyPos, required — Kasync's LedgerEntry has no account link at all.
   /// System Design §6.1 tags each sale's entry with the payment method's Account.
@@ -228,11 +267,21 @@ model LedgerEntry {
   @@index([branchId, entryDate])
   /// OhMyPos — trace a ledger entry back to its Sale/Purchase/Settlement.
   @@index([sourceType, sourceId])
+  @@index([tenantId, branchId, entryDate])
   @@map("ledger_entries")
 }
 
 model BankTransaction {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   accountId   String          @map("account_id")
   txnDate     DateTime        @map("txn_date")
@@ -259,19 +308,29 @@ model BankTransaction {
   @@unique([accountId, dedupHash])
   @@index([txnDate])
   @@index([status])
+  @@index([tenantId])
   @@map("bank_transactions")
 }
 
 model Allocation {
   id String @id @default(uuid())
 
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
   bankTransactionId String  @map("bank_transaction_id")
   ledgerEntryId     String  @map("ledger_entry_id")
   amountPortion     Decimal @map("amount_portion") @db.Decimal(18, 2)
 
-  status AllocationStatus @default(ACTIVE)
+  status    AllocationStatus @default(ACTIVE)
   /// Set when status becomes REVOKED — revocation is a state change, never a delete.
-  revokedAt DateTime? @map("revoked_at")
+  revokedAt DateTime?        @map("revoked_at")
 
   /// Makes repeated allocation-create calls idempotent rather than duplicating.
   idempotencyKey String? @map("idempotency_key")
@@ -285,11 +344,21 @@ model Allocation {
   @@unique([bankTransactionId, idempotencyKey])
   @@index([bankTransactionId])
   @@index([ledgerEntryId])
+  @@index([tenantId])
   @@map("allocations")
 }
 
 model User {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   name         String
   email        String @unique
@@ -320,12 +389,12 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  sales  Sale[] @relation("SaleCashier")
+  branch      Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  sales       Sale[]  @relation("SaleCashier")
   /// DEBT-010 — sales this user voided (ADMIN/OWNER only, per RoleGuard on
   /// POST /sales/:id/void). Separate from `sales` (the cashier relation)
   /// since a User can appear on both sides for different rows.
-  voidedSales Sale[] @relation("SaleVoidedBy")
+  voidedSales Sale[]  @relation("SaleVoidedBy")
 
   /// Phase 11 — the two device relations below are separate: a User can
   /// activate zero or more devices (as OWNER) and separately generate zero or
@@ -341,6 +410,7 @@ model User {
 
   /// BranchScopeGuard filters on this for every KASIR-scoped request (ERD §6).
   @@index([branchId])
+  @@index([tenantId])
   @@map("users")
 }
 
@@ -348,7 +418,16 @@ model User {
 model RawMaterial {
   id String @id @default(uuid())
 
-  name String @unique
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  name String
 
   /// STOCK/RECIPE base unit — ml, gram, pcs. Free text (ERD §3), not an enum.
   ///
@@ -399,6 +478,7 @@ model RawMaterial {
   stockMovements StockMovement[]
   openingStocks  OpeningStock[]
 
+  @@unique([tenantId, name])
   @@map("raw_materials")
 }
 
@@ -408,7 +488,16 @@ model RawMaterial {
 model Product {
   id String @id @default(uuid())
 
-  name      String  @unique
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  name      String
   sellPrice Decimal @map("sell_price") @db.Decimal(18, 2)
   isActive  Boolean @default(true) @map("is_active")
 
@@ -428,6 +517,7 @@ model Product {
   recipeItems RecipeItem[]
   saleItems   SaleItem[]
 
+  @@unique([tenantId, name])
   @@map("products")
 }
 
@@ -435,6 +525,15 @@ model Product {
 /// rows; there is deliberately no separate Recipe table.
 model RecipeItem {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   productId     String @map("product_id")
   rawMaterialId String @map("raw_material_id")
@@ -453,6 +552,7 @@ model RecipeItem {
   @@unique([productId, rawMaterialId])
   @@index([productId])
   @@index([rawMaterialId])
+  @@index([tenantId])
   @@map("recipe_items")
 }
 
@@ -470,21 +570,30 @@ model RecipeItem {
 model Sale {
   id String @id @default(uuid())
 
-  branchId String @map("branch_id")
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  branchId      String @map("branch_id")
   /// Payment method (System Design §6.1) — cash, transfer, QRIS, e-wallet all
   /// resolve to an Account.
-  accountId String @map("account_id")
+  accountId     String @map("account_id")
   /// The cashier. Taken from the JWT, never the request body (plan §7.3): a
   /// client-supplied cashier id is a forgeable audit trail. Users are
   /// deactivated, never deleted (ADR-011 §5), so this reference always resolves.
-  userId String @map("user_id")
+  userId        String @map("user_id")
   ledgerEntryId String @unique @map("ledger_entry_id")
 
   /// = Σ SaleItem.lineTotal, and nothing else. No tax, no discount columns in v1
   /// — the per-line price override is the discount mechanism (PRD §5.2, ADR-015,
   /// DEBT-004). Every Phase 7 report reads this as the definition of revenue.
-  totalAmount Decimal @map("total_amount") @db.Decimal(18, 2)
-  soldAt DateTime @map("sold_at")
+  totalAmount Decimal  @map("total_amount") @db.Decimal(18, 2)
+  soldAt      DateTime @map("sold_at")
 
   /// Kunci idempotensi yang dibuat klien (TASK-082, menutup DEBT-017 dan
   /// DEF-A1/A2/A5). Nullable: baris sebelum TASK-082 tidak punya kunci, dan
@@ -516,6 +625,7 @@ model Sale {
 
   items SaleItem[]
 
+  @@unique([tenantId, idempotencyKey])
   @@index([branchId])
   @@index([soldAt])
   /// Dashboard 3 filters by date and usually by branch; KASIR always by branch.
@@ -523,7 +633,7 @@ model Sale {
   @@index([userId])
   @@index([accountId])
   @@index([status])
-  @@unique([idempotencyKey])
+  @@index([tenantId, branchId, soldAt])
   @@map("sales")
 }
 
@@ -538,6 +648,15 @@ model Sale {
 model SaleItem {
   id String @id @default(uuid())
 
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
   saleId    String @map("sale_id")
   productId String @map("product_id")
 
@@ -545,7 +664,7 @@ model SaleItem {
 
   /// What the customer actually paid per unit — the master price unless
   /// overridden (PRD §5.2).
-  unitPriceAtSale Decimal @map("unit_price_at_sale") @db.Decimal(18, 2)
+  unitPriceAtSale   Decimal @map("unit_price_at_sale") @db.Decimal(18, 2)
   /// True only when the charged price DIFFERS from Product.sellPrice at sale
   /// time. Sending the master price explicitly is not an override (plan §10.2).
   isPriceOverridden Boolean @default(false) @map("is_price_overridden")
@@ -569,6 +688,7 @@ model SaleItem {
 
   @@index([saleId])
   @@index([productId])
+  @@index([tenantId])
   @@map("sale_items")
 }
 
@@ -576,7 +696,16 @@ model SaleItem {
 model Supplier {
   id String @id @default(uuid())
 
-  name String @unique
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  name    String
   /// Free text — phone, WhatsApp, or a person's name. Not validated as a phone
   /// number: Indonesian supplier contacts are not reliably one format.
   contact String?
@@ -587,6 +716,7 @@ model Supplier {
   purchases SupplierPurchase[]
   payables  Payable[]
 
+  @@unique([tenantId, name])
   @@map("suppliers")
 }
 
@@ -599,6 +729,15 @@ model Supplier {
 /// time (ERD §6).
 model SupplierPurchase {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   supplierId String  @map("supplier_id")
   branchId   String? @map("branch_id")
@@ -630,12 +769,13 @@ model SupplierPurchase {
   items   SupplierPurchaseItem[]
   payable Payable?
 
+  @@unique([tenantId, idempotencyKey])
   @@index([supplierId])
   @@index([branchId])
   @@index([purchaseDate])
   /// Dashboard 2.2 lists purchases by branch and date; KASIR always filters by branch.
   @@index([branchId, purchaseDate])
-  @@unique([idempotencyKey])
+  @@index([tenantId, branchId, purchaseDate])
   @@map("supplier_purchases")
 }
 
@@ -644,6 +784,15 @@ model SupplierPurchase {
 /// (plan §9.3). This is deliberately different from HPP's round-once rule.
 model SupplierPurchaseItem {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   supplierPurchaseId String @map("supplier_purchase_id")
   rawMaterialId      String @map("raw_material_id")
@@ -679,6 +828,7 @@ model SupplierPurchaseItem {
   @@unique([supplierPurchaseId, rawMaterialId])
   @@index([supplierPurchaseId])
   @@index([rawMaterialId])
+  @@index([tenantId])
   @@map("supplier_purchase_items")
 }
 
@@ -691,6 +841,15 @@ model SupplierPurchaseItem {
 /// holds a FOR UPDATE lock on this row (plan §2 Option B, §9.6).
 model Payable {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   /// Unique: one payable per unpaid purchase (ERD §3), never a rolled-up
   /// per-supplier balance. The per-supplier figure PRD §5.3 asks for is a SUM
@@ -711,6 +870,7 @@ model Payable {
 
   @@index([supplierId])
   @@index([status])
+  @@index([tenantId])
   @@map("payables")
 }
 
@@ -719,8 +879,17 @@ model Payable {
 model PayableSettlement {
   id String @id @default(uuid())
 
-  payableId String @map("payable_id")
-  accountId String @map("account_id")
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  payableId     String @map("payable_id")
+  accountId     String @map("account_id")
   /// Required and unique: every settlement generates exactly one expense entry.
   /// Unlike SupplierPurchase.ledgerEntryId this is NOT nullable — a settlement
   /// with no ledger entry would be money moving with no record of it.
@@ -741,9 +910,9 @@ model PayableSettlement {
   account     Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
   ledgerEntry LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
 
+  @@unique([tenantId, idempotencyKey])
   @@index([payableId])
   @@index([settledAt])
-  @@unique([idempotencyKey])
   @@map("payable_settlements")
 }
 
@@ -753,10 +922,19 @@ model PayableSettlement {
 model StockMovement {
   id String @id @default(uuid())
 
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
   rawMaterialId String  @map("raw_material_id")
   /// Attribution only — which branch triggered it. Null for central events
   /// (a central purchase, an OPENING). Never a partitioning key (ADR-004).
-  branchId String? @map("branch_id")
+  branchId      String? @map("branch_id")
 
   direction StockDirection
   quantity  Decimal        @db.Decimal(18, 4)
@@ -765,7 +943,7 @@ model StockMovement {
   /// Points at the SupplierPurchase / Sale / OpeningStock that caused this.
   /// Deliberately NOT a foreign key: it is polymorphic across three tables,
   /// exactly like LedgerEntry.sourceId (ERD §2).
-  referenceId String? @map("reference_id")
+  referenceId   String?            @map("reference_id")
 
   /// Decimal(18,6) — a per-unit rate, matching RawMaterial.unitCost (ADR-024).
   unitCostAtMovement Decimal  @map("unit_cost_at_movement") @db.Decimal(18, 6)
@@ -786,6 +964,7 @@ model StockMovement {
   @@index([rawMaterialId, movementDate, direction])
   @@index([referenceType, referenceId])
   @@index([branchId])
+  @@index([tenantId, rawMaterialId, movementDate, direction])
   @@map("stock_movements")
 }
 
@@ -798,6 +977,15 @@ model StockMovement {
 /// source of truth; this table records what a human counted.
 model OpeningStock {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   rawMaterialId String @map("raw_material_id")
 
@@ -826,6 +1014,7 @@ model OpeningStock {
   /// upsert idempotent (plan §6).
   @@unique([rawMaterialId, periodMonth])
   @@index([periodMonth])
+  @@index([tenantId])
   @@map("opening_stocks")
 }
 
@@ -845,27 +1034,37 @@ enum AttendanceViolationReason {
 model Device {
   id String @id @default(uuid())
 
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
   branchId String @map("branch_id")
   label    String
 
   isActive Boolean @default(false) @map("is_active")
 
   activatedByUserId String?   @map("activated_by_user_id")
-  activatedAt        DateTime? @map("activated_at")
+  activatedAt       DateTime? @map("activated_at")
 
   /// Single-use, expiring code proving physical intent to activate. Unique so
   /// DevicesService.activate can look a device up by code alone.
-  activationCode           String?   @unique @map("activation_code")
+  activationCode          String?   @unique @map("activation_code")
   activationCodeExpiresAt DateTime? @map("activation_code_expires_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   branch            Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  activatedBy        User?              @relation(fields: [activatedByUserId], references: [id], onDelete: SetNull)
+  activatedBy       User?              @relation(fields: [activatedByUserId], references: [id], onDelete: SetNull)
   attendanceRecords AttendanceRecord[]
 
   @@index([branchId])
+  @@index([tenantId])
   @@map("devices")
 }
 
@@ -876,6 +1075,15 @@ model Device {
 /// is informational/monitoring, never an access gate.
 model AttendanceRecord {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   userId   String  @map("user_id")
   deviceId String? @map("device_id")
@@ -897,6 +1105,7 @@ model AttendanceRecord {
 
   @@index([userId])
   @@index([deviceId])
+  @@index([tenantId])
   @@map("attendance_records")
 }
 
@@ -912,6 +1121,15 @@ enum LeaveRequestStatus {
 /// OpeningStock.periodMonth — a leave request is a date range, not an instant.
 model LeaveRequest {
   id String @id @default(uuid())
+
+  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
+  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
+  /// input types, so the 25 existing modules did not have to thread a tenant
+  /// argument through every write. The empty string is not a valid tenant id
+  /// and no row ever holds it: an insert that somehow escaped the extension
+  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  tenantId String @default("") @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   userId String @map("user_id")
 
@@ -934,12 +1152,18 @@ model LeaveRequest {
 
   @@index([userId])
   @@index([status])
+  @@index([tenantId])
   @@map("leave_requests")
 }
 
 /// Business profile configuration — single record for business name, logo, and address.
 model BusinessProfile {
-  id        String   @id @default(uuid())
+  id String @id @default(uuid())
+
+  /// See the note on the other 22 models — `@default("")` is a typing device,
+  /// not a real default.
+  tenantId  String   @unique @default("") @map("tenant_id")
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name      String   @default("OhMyPos")
   logoUrl   String?  @map("logo_url")
   address   String?
@@ -949,5 +1173,98 @@ model BusinessProfile {
   @@map("business_profiles")
 }
 
+// ---------------------------------------------------------------------------
+// v2 — multi-tenancy and the platform-operator identity (ADR-025).
+// ---------------------------------------------------------------------------
 
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
 
+/// v2 (ADR-025) — one row per business. Holds what the platform operator owns
+/// (slug, status); what a tenant edits about itself stays in BusinessProfile.
+model Tenant {
+  id String @id @default(uuid())
+
+  name String
+
+  /// How a super admin recognises a tenant. NOT a routing key — the tenant is
+  /// resolved from the User record, never from the client (ADR-025 Decision 2).
+  slug   String       @unique
+  status TenantStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  accounts              Account[]
+  categories            Category[]
+  branches              Branch[]
+  ledgerEntries         LedgerEntry[]
+  bankTransactions      BankTransaction[]
+  allocations           Allocation[]
+  users                 User[]
+  rawMaterials          RawMaterial[]
+  products              Product[]
+  recipeItems           RecipeItem[]
+  sales                 Sale[]
+  saleItems             SaleItem[]
+  suppliers             Supplier[]
+  supplierPurchases     SupplierPurchase[]
+  supplierPurchaseItems SupplierPurchaseItem[]
+  payables              Payable[]
+  payableSettlements    PayableSettlement[]
+  stockMovements        StockMovement[]
+  openingStocks         OpeningStock[]
+  devices               Device[]
+  attendanceRecords     AttendanceRecord[]
+  leaveRequests         LeaveRequest[]
+  businessProfile       BusinessProfile?
+  impersonationSessions ImpersonationSession[]
+
+  @@map("tenants")
+}
+
+/// v2 (ADR-025 Decision 5) — the platform operator. Deliberately NOT a row in
+/// `users`, so User.tenantId can be NOT NULL with no exception carved out.
+model PlatformAdmin {
+  id String @id @default(uuid())
+
+  name             String
+  email            String  @unique
+  passwordHash     String  @map("password_hash")
+  refreshTokenHash String? @map("refresh_token_hash")
+  isActive         Boolean @default(true) @map("is_active")
+
+  /// Same session-revocation pattern as User (ADR-011 §3).
+  tokenValidFrom DateTime @default(now()) @map("token_valid_from")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  impersonations ImpersonationSession[]
+
+  @@map("platform_admins")
+}
+
+/// v2 (ADR-025 Decision 8) — the impersonation audit trail. Append-only apart
+/// from `endedAt`.
+model ImpersonationSession {
+  id String @id @default(uuid())
+
+  platformAdminId String @map("platform_admin_id")
+  tenantId        String @map("tenant_id")
+  /// The tenant's OWNER User whose identity is borrowed.
+  actingAsUserId  String @map("acting_as_user_id")
+  reason          String
+
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+
+  platformAdmin PlatformAdmin @relation(fields: [platformAdminId], references: [id], onDelete: Restrict)
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([platformAdminId])
+  @@index([tenantId, startedAt])
+  @@map("impersonation_sessions")
+}

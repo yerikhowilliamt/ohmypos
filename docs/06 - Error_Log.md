@@ -37,6 +37,119 @@
 
 ## Log
 
+### ERR-049 — Docker's default 64 MB `/dev/shm` makes Postgres parallel workers fail under report load
+
+- **Date found:** 2026-08-30
+- **Found during:** TASK-129 (remediasi D-5), from the full test sweep `docs/testing/2026-08-30 - Full_Test_Sweep.md` §3
+- **Symptom:** 103 occurrences of `could not resize shared memory segment ... No space left on device` (SQLSTATE 53100) during a 60-second soak against the volume dataset (395 k sales / 1.8 M stock movements). They surface to the caller as random HTTP 500s on report endpoints — nothing in the response mentions shared memory.
+- **Root cause:** Docker gives a container 64 MB of `/dev/shm` by default. Postgres allocates a shared memory segment per parallel worker, and with `max_parallel_workers_per_gather = 2` two concurrent reports over the volume dataset exhaust it. This is an infrastructure limit, not a query defect — the sweep proved it by disabling parallelism, which took the 53100 count from 103 to 0 while the (separate) transaction-timeout errors barely moved (47 → 38).
+- **Resolution:** `shm_size: 1gb` on the `postgres` service in `docker-compose.yml`, with the measurement recorded in a comment above it. Verified: `docker compose exec postgres df -h /dev/shm` now reports 1.0G, previously 64M.
+- **Prevention:** The comment in `docker-compose.yml` states the measured numbers and the alternative remedy, so the next person who sees a bare 53100 has the diagnosis in front of them. Production is **not** covered by this fix — `docker-compose.yml` is a development target and production runs on Render, whose `/dev/shm` is set by the instance plan. That gap is tracked as **DEBT-069**.
+- **Severity:** Medium — no data was ever at risk (the queries fail and roll back), but the failure mode is random 500s under exactly the load a real business generates.
+
+### ERR-048 — `<Card bg-surface-muted>` had no `className=`, so a boolean prop was passed to the DOM
+
+- **Date found:** 2026-08-30
+- **Found during:** TASK-129 (remediasi D-4), from the full test sweep §3
+- **Symptom:** Every render of `/business` logged a React warning — *Received `true` for a non-boolean attribute `bg-surface-muted`* — to the browser console, and the muted background the card was supposed to have was never applied.
+- **Root cause:** `BusinessProfileClient.tsx:276` read `<Card bg-surface-muted>`. JSX parses a bare attribute as a boolean prop literally named `bg-surface-muted`, which `Card` spreads onto its underlying `div`, so React forwards an unknown attribute to the DOM. A missing `className="…"` is invisible to TypeScript because the prop name contains dashes and lands in the spread.
+- **Resolution:** `<Card className="bg-surface-muted">`.
+- **Prevention:** None automated, and that is the finding. `react/no-unknown-property` from `eslint-plugin-react` catches this whole class of mistake, but the repo does not enable that plugin, and adding it is a dependency change (AGENTS.md §AI Gatekeeper). Tracked as **DEBT-071** rather than done here. Until it is enabled, the only guard is that a console warning on a page under development is treated as a defect, not noise.
+- **Severity:** Low — cosmetic, plus console noise that makes real warnings harder to see.
+
+### ERR-047 — The attendance calendar asked a `limit=100` endpoint for `limit=500`, so approved leave was never drawn
+
+- **Date found:** 2026-08-30
+- **Found during:** TASK-129 (remediasi D-3), from the full test sweep §3 (observed in the browser network tab)
+- **Symptom:** `GET /api/v1/leave-requests?status=APPROVED&overlapsFrom=…&limit=500` returned **400** on every render of `/business/devices`. The hook returned `undefined`, the matrix rendered with no leave overlay at all, and nothing told the user — an empty cell looks exactly like "no leave".
+- **Root cause:** One constant, `MATRIX_PAGE_LIMIT = 500` in `AttendanceCalendarMatrix.tsx`, fed two different endpoints with two different caps. `AttendanceQuerySchema` raises its own `limit` ceiling to 500 (`device.schema.ts`); `LeaveRequestListQuerySchema` did not override it and so inherited `PaginationQuerySchema`'s `.max(100)`. A live ADR-010 violation: the frontend's idea of the contract and the schema disagreed.
+- **Why nothing caught it:** `AttendanceCalendarMatrix.test.tsx` asserted the outgoing query params against a **mocked** fetch, and a mock accepts anything. The test verified the frontend's intent and never once touched the contract it was talking to.
+- **Resolution:** `LeaveRequestListQuerySchema` now overrides `limit` to `.max(500)`, matching `AttendanceQuerySchema` and the precedent it set, with the reasoning inline. Because raising a cap only moves the cliff, the fix also adds the truncation guard the attendance side already had: `omittedLeaveCount` compares `meta.total` against the rows received and renders an on-screen warning when a month does not fit one page. Verified live against the running API: the same request now returns 200.
+- **Prevention:** Two new tests in `AttendanceCalendarMatrix.test.tsx` parse the outgoing params through the **real Zod schemas** — `LeaveRequestListQuerySchema.safeParse(...)` and `AttendanceQuerySchema.safeParse(...)` — so a contract mismatch fails in the unit suite instead of in a browser. The first was confirmed to go red when the cap was temporarily reverted to 100. **The general rule this establishes: any frontend unit test that mocks an endpoint must validate its outgoing params against that endpoint's Zod schema.** Mocking the transport is fine; mocking the contract is what let this live.
+- **Severity:** Medium — silent data loss on screen. No stored data was wrong, but the screen asserted "present" for people who were on approved leave.
+
+### ERR-046 — An oversized request body returned 500 and logged at error level, reachable without credentials
+
+- **Date found:** 2026-08-30
+- **Found during:** TASK-129 (remediasi D-2), from the full test sweep §3
+- **Symptom:** A 101 KB body to any endpoint returned `500 {"statusCode":500,"error":"Internal Server Error","message":"An unexpected error…"}`. The client is told the server broke, for a request that is entirely the client's fault, and is given nothing actionable.
+- **Root cause:** `PostgresTriggerExceptionFilter` is registered as the single global filter and is `@Catch()` — catch-all. `body-parser`'s `PayloadTooLargeError` is not an `HttpException`, so it fell straight through to the generic 500 branch, discarding the `413` the error itself carried. The second half of the defect: body parsing runs in Express middleware **before** Nest's `ThrottlerGuard`, so an unauthenticated caller can trigger this at will and write one `level 50` log line (and one Sentry event) per attempt — handing control of log volume to anyone on the internet.
+- **Resolution:** Handled inside the existing filter, before the 500 branch, matched on `err.type === 'entity.too.large'` (body-parser's documented contract; it does not export the class). Responds 413 with an Indonesian message, and logs at **warn**, not error. Handled in the existing filter rather than a second `@Catch(PayloadTooLargeError)` one, because Nest resolves filters by registration order against an existing catch-all — getting that order wrong produces no error and no effect.
+- **Prevention:** New `postgres-trigger-exception.filter.spec.ts` asserts both branches: `entity.too.large` → 413, and a plain `Error` → 500. Verified live with `curl` against the running API: 500 before, 413 after. The wider gap it exposes is that no test in the suite asserted a status code for a non-2xx/4xx response at all.
+- **Severity:** Medium — wrong status on a client error, plus an unauthenticated log/Sentry amplification path.
+
+### ERR-045 — The inventory summary's read transaction used Prisma's default 5000 ms limit, so it returned 500 under load
+
+- **Date found:** 2026-08-30
+- **Found during:** TASK-129 (remediasi D-1a), from the full test sweep §3
+- **Symptom:** **40 HTTP 500s** in a 60-second soak of `GET /inventory/summary` against the volume dataset, with `Transaction API error: A batch query cannot be executed on an expired transaction. The timeout for this transaction was 5000 ms, however 6258 ms passed since the start of the transaction.`
+- **Root cause:** `InventorySummaryService.findByPeriod` called `this.prisma.$transaction(async (tx) => …)` with no second argument, so Prisma's default interactive-transaction limit of 5000 ms applied — a limit nobody had chosen and nothing stated. Against 1.8 M `stock_movements` the two `groupBy` calls inside take ~800 ms idle and cross 5 s under concurrency. The transaction itself is correct and deliberate: the three result sets must describe one instant, or a sale committing between query 2 and query 3 yields a report that is internally consistent and silently stale. Removing it was rejected for that reason.
+- **Resolution:** An explicit `INVENTORY_SUMMARY_TX_OPTIONS = { maxWait: 5_000, timeout: 20_000 }`, documented at the constant with the measurements and with the instruction that a future breach means indexing or reshaping the query, not raising the number again. The callback body is untouched.
+- **Prevention:** New `inventory-summary.service.spec.ts` asserts (a) that `$transaction` is called with an options object whose `timeout` exceeds 5000 ms, so a silent return to the default fails the build, and (b) that all three reads still happen inside the one transaction, so the consistency guarantee cannot be quietly dismantled by a future refactor. Note what this does **not** fix: the timeout moves the cliff, it does not make the query fast. The measured root cause — a parallel sequential scan of the whole 838 MB table — is a separate, index-shaped fix held behind the schema-change approval gate (D-1b), with `EXPLAIN ANALYZE` numbers recorded in TASK-129.
+- **Severity:** High — a report endpoint returning 500 under ordinary concurrent use at realistic volume.
+
+### ERR-044 — Only one tenant on the whole platform could own a system branch, so the second tenant could never be created
+
+- **Date found:** 2026-08-30
+- **Found during:** TASK-128 — the first run of `tenant-isolation.e2e-spec.ts`, which seeds two tenants side by side
+- **Symptom:** `Unique constraint failed on the fields: (is_system)` from `prisma.branch.create()` while building the second tenant's fixtures. In production the same failure would have come out of `POST /platform/tenants` at `ensureSystemRefs`, rolling back the whole provisioning transaction — so the second tenant ever created on any database would simply have failed, with an error naming a database index and nothing else.
+- **Root cause:** `20260828201617_add_branch_system_and_main_store` (TASK-120) created two partial unique indexes — `branches_single_system ON branches((is_system)) WHERE is_system` and `branches_single_main_store ON branches((is_main_store)) WHERE is_main_store` — which were exactly right while OhMyPos was a single business, and became global cross-tenant constraints the moment it was not. Neither appears in `schema.prisma`, because Prisma cannot express a partial index; the Phase 1 audit of unique constraints (plan §1.3) worked from the schema and therefore never saw them.
+- **Why nothing caught it earlier:** `platform.e2e-spec.ts` provisions a tenant through the API and passed. `resetDatabase` had deleted every branch first, so the newly provisioned tenant was always the only holder of an `isSystem` row — the one state a real platform is never in. The suite now creates a system branch for the e2e tenant before provisioning, so that test exercises the real case.
+- **Resolution:** migration `20260830090000_scope_branch_flags_to_tenant` drops both and recreates them on `("tenant_id") WHERE is_system` / `WHERE is_main_store`. Indexed on `tenant_id` alone — the `WHERE` clause already restricts the index to rows where the flag is true, so the flag column carries no information inside it. No backfill: the predicate can only be violated by two rows sharing a tenant, and the pre-multi-tenancy database had at most one of each in total. Verified zero violating rows in both `ohmypos_db` and `ohmypos_e2e` before applying. Approved explicitly before being written, per AGENTS.md §AI Gatekeeper.
+- **Prevention:** `tenant-isolation.e2e-spec.ts` builds two complete tenants from scratch in `beforeAll`, so any constraint that is accidentally global fails the suite at setup rather than in production. The wider lesson is recorded in **DEBT-068**: a schema-only audit cannot see partial indexes, CHECK constraints, or trigger-enforced invariants, and this schema has all three.
+- **Severity:** High — a total blocker for the v2 feature (no second tenant could exist), shipped in Phase 1 and live through Phases 2–5 without being noticed. No data was at risk: the constraint failed closed and rolled the transaction back.
+
+### ERR-043 — A backdated `iat` in a test token silently backdates `exp` too, so the wrong assertion passes
+
+- **Date found:** 2026-08-30
+- **Found during:** TASK-125 — writing the `tokenValidFrom` cases in `platform-auth.guard.spec.ts`
+- **Symptom:** "accepts a token minted in the same second as `tokenValidFrom`" failed with `UnauthorizedException: Sesi Anda sudah berakhir`. The sibling case, "rejects a token issued before `tokenValidFrom`", passed — which is what made this worth logging rather than just fixing.
+- **Root cause:** `jsonwebtoken` derives `exp` from the payload's own `iat` when one is supplied (`timestamp = payload.iat || now`), so `sign({ iat }, { expiresIn: '1h' })` with `iat` pinned to a fixed 2026-06-01 instant minted a token that expired on 2026-06-01T11:00. Both tests were therefore rejected at `verifyAsync` for expiry, before the `tokenValidFrom` comparison ever ran. The rejection test was passing on the wrong reason — a green assertion covering nothing.
+- **Resolution:** the spec's `sign()` helper now sets `exp` explicitly to `now + 3600` and never passes `expiresIn`, so `iat` can be moved freely without dragging `exp` with it. The comment on the helper says why, because the next person to add a token case will otherwise reach for `expiresIn` again.
+- **Prevention:** none automatic — a test that passes for the wrong reason is invisible by construction. The only real defence is the habit that caught it here: when one of a matched pair of assertions fails, check that the other one is passing for the reason you think it is, rather than only debugging the failure.
+- **Severity:** Low as shipped — test-only, and the guard's behaviour was correct throughout. Worth recording because the failure mode (a security assertion that never reaches the code it claims to test) is much more expensive anywhere it is not noticed.
+
+### ERR-042 — Nested relation creates wrote children with no tenant, failing on a foreign key two call sites away
+
+- **Date found:** 2026-08-29
+- **Found during:** TASK-124 — first full e2e run after the Prisma tenant extension landed
+- **Symptom:** `PrismaClientKnownRequestError: Foreign key constraint violated on the constraint: recipe_items_tenant_id_fkey`, raised from `prisma.product.create()` in `idempotency.e2e-spec.ts` and `concurrency.e2e-spec.ts` (7 tests across 2 suites). The reported call site was the product create; nothing in the message mentioned recipe items or the tenant.
+- **Root cause:** The extension stamped `tenantId` onto the top-level `data` only. `product.create({ data: { name, recipeItems: { create: [...] } } })` therefore inserted the parent with a tenant and each child with the schema's `@default("")`, and `''` matches no row in `tenants`.
+- **Resolution:** `applyTenantScope` now walks the payload and stamps nested `create`, `createMany`, `connectOrCreate` and `upsert` payloads recursively. Relations are recognised structurally — a plain object carrying one of those verbs — since no column in this schema is a JSON object. `connect`, `set`, `disconnect`, `delete` and `update` are deliberately untouched: they address rows that already carry a tenant.
+- **Prevention:** Five unit tests in `tenant.extension.spec.ts` covering each nested verb, the single-object and array forms, that `connect`/`deleteMany` are left alone, and that a `Date` is not mistaken for a nested write. `apps/api/src` happens to contain no nested writes today, so only the e2e fixtures exposed this — the unit tests are what will catch the first one someone adds.
+- **Severity:** Medium — caught by tests before any code shipped; the `@default("")` + FK pairing (DEBT-062) is what turned a silent mis-tenanted insert into a loud failure.
+
+### ERR-041 — `AsyncLocalStorage` set in a Jest `beforeAll` is invisible inside the tests
+
+- **Date found:** 2026-08-29
+- **Found during:** TASK-124 — wiring the 20 e2e suites onto the tenant-scoped Prisma client
+- **Symptom:** With `tenantStorage.enterWith({ tenantId: 'T' })` called in `beforeAll`, `currentTenantId()` returned `null` in every `it` body — including one that only awaited `Promise.resolve()`. Confirmed with a two-test probe spec before any suite was changed.
+- **Root cause:** `enterWith` mutates the store of the *current* async resource and its descendants. Jest resumes after `await beforeAll()` in the runner's own context, not in the hook's, so each `it` runs as a sibling of the hook rather than a child of it. Nothing about this is Jest-specific — it is what `enterWith` means — but the failure looks like a broken store rather than a scoping one.
+- **Resolution:** e2e suites no longer rely on the request scope at all. `test/tenant-fixture.ts` hands them a client bound to an explicit tenant id via `tenantBoundExtension(tenantId)`, which routes through the same `applyTenantScope` the API runs, so the tests still exercise the shipping filter. `bootstrap.e2e-spec.ts` is the exception: it calls `ensureSystemRefs`, which reads the scope directly, so those calls are wrapped in `runWithTenant` *inside* the test body — where `run()` does propagate.
+- **Prevention:** The reasoning is written into the doc comments on `tenant-fixture.ts` and `tenantBoundExtension`, both stating that it was verified rather than assumed. Rule of thumb for this repo: `run()` inside the function that needs the scope; `enterWith` only in a script that does one thing and exits (the seed, `scripts/*`); never `enterWith` in a test hook.
+- **Severity:** Low — a test-harness problem, no production code path involved.
+
+### ERR-040 — Production ran three deploys ahead of its own database: nothing in the pipeline applies migrations
+
+- **Date found:** 2026-08-29
+- **Found during:** Owner pasted Render logs — the deployed API was returning 500 on `/branches`, `/sales`, `/inventory/summary` and `/supplier-purchases`
+- **Symptom:** `PrismaClientKnownRequestError P2022` (`42703 ColumnNotFound`) on three different columns:
+  - `branches.is_system` → `/api/v1/branches`, `/api/v1/sales`
+  - `raw_materials.purchase_unit` → `/api/v1/inventory/summary`
+  - `supplier_purchase_items.purchase_quantity` → `/api/v1/supplier-purchases`
+  Endpoints that touch none of those columns (`/reports/profit-loss`, `/reports/daily-income`, `/payables/summary`, `/ledger-entries`, `/auth/me`) returned 200 throughout, which is why the app looked half-alive rather than down.
+- **Root cause:** The Render service deploys the built code but **never applies migrations**. There is no `render.yaml`, no Dockerfile for the API, and — until this entry — no `migrate:deploy` script anywhere in the repo, so nothing existed for a build command to call even if one had been configured. Every schema change since the last manual application had therefore accumulated unapplied. Three were outstanding:
+  1. `20260828043000_add_purchase_units_and_product_waste` (ADR-024, shipped in `8105fcc`)
+  2. `20260828201617_add_branch_system_and_main_store` (TASK-120, shipped in `0d490ed`)
+  3. `20260828211500_rename_system_branch_label` (TASK-120)
+- **Why CI never caught it:** the e2e suite runs `migrate deploy` against a scratch database, so the code and the schema are always in step there. Nothing in the pipeline compares the deployed commit's migration folder against production's `_prisma_migrations` table. A green CI says the code matches *a* correctly-migrated database, never *the* production one.
+- **Resolution:** `apps/api/package.json` gains `migrate:deploy` and `migrate:status`. The Render **build command** must be changed to run `pnpm --filter api migrate:deploy` after the build — that part lives in the Render dashboard, not in this repo, and is the actual fix; the scripts alone are inert.
+- **Two things to check after the migrations are applied**, both consequences of migration 2 keying its backfill on the OLD row name:
+  1. `UPDATE "branches" SET "is_system" = true … WHERE "name" = 'Pusat (Dapur Sentral)'` matches nothing if production's attribution row was never named that, leaving **no row with `is_system = true`** — every central purchase then throws 503 `Konfigurasi sistem belum lengkap`. Verify with `SELECT name, is_system, is_main_store FROM branches;`.
+  2. `create-owner.ts` cannot repair that: it `process.exit(1)`s on an existing owner email **before** it reaches `ensureSystemRefs`, so the one script that provisions the row is unreachable on a database that already has an Owner.
+- **Severity:** High — four endpoints returning 500 in production, including the POS branch list and sales history. No data was lost or corrupted: a missing column fails the read, it does not write anything wrong.
+- **Prevention:** The deploy command is the fix. `pnpm --filter api migrate:status` exits non-zero when a migration is pending, so it can also be run as a pre-deploy gate or a scheduled check against the production URL.
+
 ### ERR-039 — Renaming the system location to `Umum (Semua Cabang)` collided with this product's "no filter" label
 
 - **Date found:** 2026-08-29

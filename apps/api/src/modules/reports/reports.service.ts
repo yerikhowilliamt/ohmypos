@@ -39,6 +39,7 @@ import {
 import {
   ledgerScope,
   saleScope,
+  tenantScope,
   wibDayOfEntryDate,
   wibDayOfSoldAt,
 } from './report-filters';
@@ -129,7 +130,7 @@ export class ReportsService {
         -- unconditional on source_type/status by design, so a void's real
         -- reversal OUTFLOW still nets the cash view to zero (see
         -- report-filters.ts's saleScope() doc comment for the full split).
-        LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id
+        LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id AND s.tenant_id = le.tenant_id
         WHERE ${ledgerWhere}`,
       this.prisma.$queryRaw<ProfitLossCogsRow[]>`
         SELECT
@@ -227,7 +228,7 @@ export class ReportsService {
       FROM ledger_entries le
       JOIN accounts a ON a.id = le.account_id
       -- DEBT-010: same voided-sale exclusion as profitLoss()'s moneyRows.
-      LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id
+      LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id AND s.tenant_id = le.tenant_id
       WHERE le.type = 'INFLOW' AND ${ledgerWhere}
       GROUP BY le.account_id, a.name, a.type
       ORDER BY total DESC, a.name ASC`;
@@ -263,7 +264,7 @@ export class ReportsService {
         -- DEBT-010: same voided-sale exclusion as profitLoss()'s moneyRows —
         -- non-sale INFLOW rows (le.source_type <> 'SALE') never match this
         -- join, so they're unaffected either way.
-        LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id
+        LEFT JOIN sales s ON le.source_type = 'SALE' AND le.source_id = s.id AND s.tenant_id = le.tenant_id
         WHERE le.type = 'INFLOW' AND (s.id IS NULL OR s.status <> 'VOIDED') AND ${ledgerWhere}
         GROUP BY 1`,
       this.prisma.$queryRaw<DailyCogsQueryRow[]>`
@@ -330,7 +331,8 @@ export class ReportsService {
         COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'INFLOW'  AND le.entry_date < ${cutoff}), 0) AS total_inflow,
         COALESCE(SUM(le.amount) FILTER (WHERE le.type = 'OUTFLOW' AND le.entry_date < ${cutoff}), 0) AS total_outflow
       FROM accounts a
-      LEFT JOIN ledger_entries le ON le.account_id = a.id
+      LEFT JOIN ledger_entries le ON le.account_id = a.id AND le.tenant_id = a.tenant_id
+      WHERE ${tenantScope('a')}
       GROUP BY a.id, a.name, a.type, a.opening_balance
       ORDER BY a.name ASC, a.id ASC`;
 

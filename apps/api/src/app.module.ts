@@ -7,9 +7,12 @@ import { LoggerModule } from 'nestjs-pino';
 import pino from 'pino';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { z } from 'zod';
+import { ImpersonationReadOnlyGuard } from './common/guards/impersonation-read-only.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RoleGuard } from './common/guards/role.guard';
+import { TenantStatusGuard } from './common/guards/tenant-status.guard';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { TenantScopeMiddleware } from './common/middleware/tenant-scope.middleware';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { HealthModule } from './modules/health/health.module';
@@ -36,11 +39,19 @@ import { SalesModule } from './modules/sales/sales.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { BusinessProfileModule } from './modules/business-profile/business-profile.module';
+import { PlatformModule } from './modules/platform/platform.module';
 
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
+  // ADR-025 Fase 3 — the platform console signs with its own pair, so a
+  // tenant token can never verify against a platform route and vice versa.
+  // Required, not optional: an absent secret would leave PlatformAuthGuard
+  // throwing SERVER_MISCONFIGURED on every call, which is a boot-time
+  // deployment error worth failing on rather than a runtime 401.
+  PLATFORM_JWT_SECRET: z.string().min(32),
+  PLATFORM_JWT_REFRESH_SECRET: z.string().min(32),
   DEVICE_COOKIE_SECRET: z.string().min(32),
   CORS_ORIGIN: z.string().optional(),
   SENTRY_DSN: z.string().url().optional(),
@@ -122,6 +133,7 @@ const EnvSchema = z.object({
     InventoryModule,
     ReportsModule,
     BusinessProfileModule,
+    PlatformModule,
   ],
 
   providers: [
@@ -129,6 +141,12 @@ const EnvSchema = z.object({
     // Registered globally so every endpoint is authenticated by default; an
     // endpoint opts out only with an explicit @Public() (Playbook §8).
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // ADR-025 Decision 8 — before TenantStatusGuard, because that guard's
+    // impersonation exemption is only safe once this one has reduced the token
+    // to GET. Both sit after JwtAuthGuard, which is what puts `user` on the
+    // request; the APP_GUARD array's order is its execution order.
+    { provide: APP_GUARD, useClass: ImpersonationReadOnlyGuard },
+    { provide: APP_GUARD, useClass: TenantStatusGuard },
     // Registered globally so every endpoint checks @Roles(...) declarations (ADR-011).
     { provide: APP_GUARD, useClass: RoleGuard },
     // Every request body/query is validated against its Zod schema from
@@ -138,6 +156,11 @@ const EnvSchema = z.object({
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    // TenantScopeMiddleware must open the AsyncLocalStorage scope before any
+    // guard runs; in NestJS middleware always precedes guards, so ordering
+    // against CorrelationIdMiddleware does not matter, only that both run.
+    consumer
+      .apply(TenantScopeMiddleware, CorrelationIdMiddleware)
+      .forRoutes('*');
   }
 }

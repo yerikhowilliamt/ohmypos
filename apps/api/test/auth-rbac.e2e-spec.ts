@@ -7,6 +7,7 @@ import type { PaymentMethodResponse } from '@ohmypos/api-contracts';
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantFixture } from './tenant-fixture';
 
 /**
  * RoleGuard, BranchScopeGuard and the JWT lifecycle are all in Playbook §10's
@@ -20,6 +21,7 @@ import { PrismaService } from '../src/common/prisma/prisma.service';
 describe('Auth & role-based access control (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let tenantId: string;
 
   let branchA: string;
   let branchB: string;
@@ -43,7 +45,7 @@ describe('Auth & role-based access control (e2e)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    ({ prisma, tenantId } = await tenantFixture(app));
     await cleanup();
 
     const [a, b] = await Promise.all([
@@ -53,7 +55,7 @@ describe('Auth & role-based access control (e2e)', () => {
     branchA = a.id;
     branchB = b.id;
     const centralBranch = await prisma.branch.upsert({
-      where: { name: 'Umum' },
+      where: { tenantId_name: { tenantId, name: 'Umum' } },
       create: { name: 'Umum', isSystem: true },
       update: {},
     });

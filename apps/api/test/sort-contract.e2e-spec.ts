@@ -7,6 +7,7 @@ import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantScopedPrisma } from './tenant-fixture';
 import { resetDatabase } from './reset-database';
 import {
   PayableSortBySchema,
@@ -40,7 +41,7 @@ describe('Sort Contract (e2e - TASK-086)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    prisma = await tenantScopedPrisma(app);
     await resetDatabase(prisma);
 
     const hash = await bcrypt.hash('Password123!', 10);

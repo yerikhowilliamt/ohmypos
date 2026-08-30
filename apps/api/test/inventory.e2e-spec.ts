@@ -24,11 +24,13 @@ import {
 import { AppModule } from '../src/app.module';
 import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-trigger-exception.filter';
 import { PrismaService } from '../src/common/prisma/prisma.service';
+import { tenantFixture } from './tenant-fixture';
 import { Prisma } from '../src/generated/prisma/client';
 
 describe('Inventory (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let tenantId: string;
 
   const password = 'TestPassword123!';
   const owner = { email: 'inv-owner@test.local', cookies: [] as string[] };
@@ -82,11 +84,11 @@ describe('Inventory (e2e)', () => {
     app.useGlobalFilters(new PostgresTriggerExceptionFilter());
     await app.init();
 
-    prisma = app.get(PrismaService);
+    ({ prisma, tenantId } = await tenantFixture(app));
     await cleanup();
 
     await prisma.branch.upsert({
-      where: { name: 'Umum' },
+      where: { tenantId_name: { tenantId, name: 'Umum' } },
       update: {},
       create: { name: 'Umum', isSystem: true },
     });
@@ -107,13 +109,13 @@ describe('Inventory (e2e)', () => {
     supplierId = supplier.id;
 
     await prisma.category.upsert({
-      where: { name: 'Penjualan' },
+      where: { tenantId_name: { tenantId, name: 'Penjualan' } },
       update: {},
       create: { name: 'Penjualan', type: 'INFLOW' },
     });
 
     await prisma.category.upsert({
-      where: { name: 'Pembelian Bahan Baku' },
+      where: { tenantId_name: { tenantId, name: 'Pembelian Bahan Baku' } },
       update: {},
       create: { name: 'Pembelian Bahan Baku', type: 'OUTFLOW' },
     });

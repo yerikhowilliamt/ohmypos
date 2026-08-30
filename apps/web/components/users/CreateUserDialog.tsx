@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@ohmypos/ui/components/dialog';
 import { Input } from '@ohmypos/ui/components/input';
+import { PasswordInput } from '@ohmypos/ui/components/password-input';
 import { Label } from '@ohmypos/ui/components/label';
 import {
   Select,
@@ -200,9 +201,8 @@ export function CreateUserDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="user-password">Password Awal</Label>
-              <Input
+              <PasswordInput
                 id="user-password"
-                type="password"
                 placeholder="Minimal 8 karakter"
                 autoComplete="new-password"
                 aria-invalid={Boolean(errors.password)}

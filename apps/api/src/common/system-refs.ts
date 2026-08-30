@@ -1,5 +1,6 @@
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
+import { currentTenantId } from './prisma/tenant-context';
 
 const logger = new Logger('SystemRefs');
 
@@ -46,9 +47,31 @@ export function isSystemCategoryName(name: string): boolean {
  * Idempotent. Called by `scripts/create-owner.ts` (the production path) and by
  * `prisma/seed.ts` (the demo path), so the two cannot drift apart.
  */
+/**
+ * ADR-025 — the system category names are unique PER TENANT now
+ * (`@@unique([tenantId, name])`), so every lookup here needs the tenant
+ * explicitly. This is the single most dangerous spot in the multi-tenant
+ * conversion: a lookup left keyed on the global name would silently attach
+ * tenant B's sales to tenant A's system category, raising no error and
+ * corrupting both tenants' reports at once.
+ */
+function requireTenantId(): string {
+  const tenantId = currentTenantId();
+  if (!tenantId) {
+    logger.error(
+      'System refs resolved with no tenant in scope. Wrap the call in runWithTenant().',
+    );
+    throw new ServiceUnavailableException(
+      'Konfigurasi sistem belum lengkap. Hubungi administrator.',
+    );
+  }
+  return tenantId;
+}
+
 export async function ensureSystemRefs(
   tx: Prisma.TransactionClient,
 ): Promise<void> {
+  const tenantId = requireTenantId();
   // Checked by flag, never upserted by name: if the Owner has relabelled the
   // row, an upsert-by-name would create a SECOND system row, which the partial
   // unique index then rejects outright.
@@ -59,14 +82,14 @@ export async function ensureSystemRefs(
     });
   }
   await tx.category.upsert({
-    where: { name: PURCHASE_CATEGORY_NAME },
+    where: { tenantId_name: { tenantId, name: PURCHASE_CATEGORY_NAME } },
     update: {},
-    create: { name: PURCHASE_CATEGORY_NAME, type: 'OUTFLOW' },
+    create: { tenantId, name: PURCHASE_CATEGORY_NAME, type: 'OUTFLOW' },
   });
   await tx.category.upsert({
-    where: { name: SALE_CATEGORY_NAME },
+    where: { tenantId_name: { tenantId, name: SALE_CATEGORY_NAME } },
     update: {},
-    create: { name: SALE_CATEGORY_NAME, type: 'INFLOW' },
+    create: { tenantId, name: SALE_CATEGORY_NAME, type: 'INFLOW' },
   });
 }
 
@@ -93,7 +116,12 @@ export async function resolvePurchaseCategoryId(
   tx: Prisma.TransactionClient,
 ): Promise<string> {
   const category = await tx.category.findUnique({
-    where: { name: PURCHASE_CATEGORY_NAME },
+    where: {
+      tenantId_name: {
+        tenantId: requireTenantId(),
+        name: PURCHASE_CATEGORY_NAME,
+      },
+    },
   });
   if (!category) {
     logger.error(
@@ -110,7 +138,9 @@ export async function resolveSaleCategoryId(
   tx: Prisma.TransactionClient,
 ): Promise<string> {
   const category = await tx.category.findUnique({
-    where: { name: SALE_CATEGORY_NAME },
+    where: {
+      tenantId_name: { tenantId: requireTenantId(), name: SALE_CATEGORY_NAME },
+    },
   });
   if (!category) {
     logger.error(

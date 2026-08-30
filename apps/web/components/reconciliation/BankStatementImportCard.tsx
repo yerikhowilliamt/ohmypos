@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from '@ohmypos/ui/components/card';
 import { Input } from '@ohmypos/ui/components/input';
+import { PasswordInput } from '@ohmypos/ui/components/password-input';
 import { Label } from '@ohmypos/ui/components/label';
 import {
   Select,
@@ -163,10 +164,9 @@ export function BankStatementImportCard({
                   (Opsional jika terkunci)
                 </span>
               </Label>
-              <Input
+              <PasswordInput
                 id="import-password"
                 data-testid="import-password-input"
-                type="password"
                 placeholder="Contoh: Tanggal lahir (DDMMYY)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

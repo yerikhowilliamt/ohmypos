@@ -17,8 +17,11 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
     "db:seed": "ts-node -O '{\"module\":\"commonjs\"}' prisma/seed.ts",
     "create:owner": "ts-node -O '{\"module\":\"commonjs\"}' scripts/create-owner.ts",
+    "create:platform-admin": "ts-node -O '{\"module\":\"commonjs\"}' scripts/create-platform-admin.ts",
     "create-owner": "ts-node -O '{\"module\":\"commonjs\"}' scripts/create-owner.ts"
   },
   "dependencies": {

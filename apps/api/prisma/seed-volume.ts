@@ -3,6 +3,11 @@ import { randomInt, randomUUID } from 'crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Prisma, PrismaClient } from '../src/generated/prisma/client';
 import { ensureSystemRefs } from '../src/common/system-refs';
+import {
+  enterTenantScope,
+  requireTenantId,
+} from '../src/common/prisma/tenant-context';
+import { tenantExtension } from '../src/common/prisma/tenant.extension';
 
 /**
  * OhMyPos — Phase 14 Workstream C volume seeder (plan §6.1 Option 1).
@@ -33,9 +38,18 @@ if (!DATABASE_URL || !/\/[A-Za-z0-9_]*_volume(?:\?|$)/.test(DATABASE_URL)) {
   );
 }
 
-const prisma = new PrismaClient({
+const unscopedPrisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: DATABASE_URL }),
 });
+
+/**
+ * ADR-025 — the same tenant-filtered client the API uses, so `createMany` gets
+ * `tenantId` injected and this script does not become a second, divergent
+ * definition of what a tenant-scoped write looks like.
+ */
+const prisma = unscopedPrisma.$extends(
+  tenantExtension,
+) as unknown as PrismaClient;
 
 const monthsArg = process.argv.find((a) => a.startsWith('--months='));
 const MONTHS = monthsArg ? Number(monthsArg.split('=')[1]) : 12;
@@ -70,6 +84,15 @@ interface ProductFixture {
   recipe: Array<{ rawMaterialId: string; quantityUsed: number }>;
 }
 
+async function ensureTenant() {
+  const tenant =
+    (await unscopedPrisma.tenant.findFirst({ orderBy: { createdAt: 'asc' } })) ??
+    (await unscopedPrisma.tenant.create({
+      data: { name: 'OhMyPos Volume', slug: 'default' },
+    }));
+  enterTenantScope(tenant.id);
+}
+
 async function ensureMasterData() {
   // Same writer as the production bootstrap and the demo seed (ADR-014).
   await ensureSystemRefs(prisma);
@@ -77,7 +100,11 @@ async function ensureMasterData() {
   const branchNames = ['Volume Cabang A', 'Volume Cabang B', 'Volume Cabang C'];
   const branches = await Promise.all(
     branchNames.map((name) =>
-      prisma.branch.upsert({ where: { name }, update: {}, create: { name } }),
+      prisma.branch.upsert({
+        where: { tenantId_name: { tenantId: requireTenantId(), name } },
+        update: {},
+        create: { name },
+      }),
     ),
   );
 
@@ -111,12 +138,12 @@ async function ensureMasterData() {
   );
 
   const salesCategory = await prisma.category.upsert({
-    where: { name: 'Penjualan' },
+    where: { tenantId_name: { tenantId: requireTenantId(), name: 'Penjualan' } },
     update: {},
     create: { name: 'Penjualan', type: 'INFLOW' },
   });
   await prisma.category.upsert({
-    where: { name: 'Pembelian Bahan Baku' },
+    where: { tenantId_name: { tenantId: requireTenantId(), name: 'Pembelian Bahan Baku' } },
     update: {},
     create: { name: 'Pembelian Bahan Baku', type: 'OUTFLOW' },
   });
@@ -160,7 +187,7 @@ async function ensureMasterData() {
   const materials = await Promise.all(
     materialDefs.map((m) =>
       prisma.rawMaterial.upsert({
-        where: { name: m.name },
+        where: { tenantId_name: { tenantId: requireTenantId(), name: m.name } },
         update: {},
         create: {
           name: m.name,
@@ -230,7 +257,7 @@ async function ensureMasterData() {
   const products: ProductFixture[] = [];
   for (const def of productDefs) {
     const product = await prisma.product.upsert({
-      where: { name: def.name },
+      where: { tenantId_name: { tenantId: requireTenantId(), name: def.name } },
       update: {},
       create: { name: def.name, sellPrice: money(def.sellPrice) },
     });
@@ -277,6 +304,8 @@ async function main() {
   console.log(
     `seed-volume: target database = ${new URL(DATABASE_URL!).pathname.slice(1)}, months = ${MONTHS}`,
   );
+
+  await ensureTenant();
 
   const { branches, accounts, user, products, salesCategoryId } =
     await ensureMasterData();

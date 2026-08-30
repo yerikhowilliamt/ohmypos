@@ -53,6 +53,10 @@ apps/web/e2e/.auth/*.json
 # counterparty names. Test fixtures are generated synthetically instead (ADR: PDF import).
 docs/e-statement/
 
+# test results and sweep artifacts
+apps/web/test-results/
+docs/testing/
+
 .agents/
 docs/portfolio/
 docs/handoff/

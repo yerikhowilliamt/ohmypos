@@ -35,4 +35,9 @@ export * from './opening-stock.schema';
 export * from './inventory-summary.schema';
 export * from './report.schema';
 export * from './business-profile.schema';
+// v2 platform console (ADR-025). Ordered after the tenant schema they build on.
+export * from './tenant.schema';
+export * from './platform-admin.schema';
+export * from './platform-metrics.schema';
+export * from './impersonation.schema';
 export * from './vocabulary';

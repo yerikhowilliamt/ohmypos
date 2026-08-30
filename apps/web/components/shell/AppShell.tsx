@@ -12,6 +12,7 @@ import { getBreadcrumbSegments } from '@/lib/nav-config';
 import { persistThemeCookie } from '@/lib/theme-client';
 import type { Theme } from '@/lib/theme';
 import { ThemeProvider } from '@/lib/theme-context';
+import { ImpersonationBanner } from '@/components/platform/ImpersonationBanner';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
@@ -33,6 +34,7 @@ export function AppShell({
   variant = 'default',
   enableDarkMode = false,
   initialTheme = 'light',
+  impersonatedLabel = null,
 }: {
   user: UserResponse;
   children: ReactNode;
@@ -42,6 +44,13 @@ export function AppShell({
    * what the theme cookie holds. */
   enableDarkMode?: boolean;
   initialTheme?: Theme;
+  /**
+   * ADR-025 Decision 8 — non-null while a platform operator is browsing this
+   * tenant as its OWNER. Read from a cookie by the route-group layouts, so a
+   * layout that does not pass it simply never shows the banner rather than
+   * showing a wrong one.
+   */
+  impersonatedLabel?: string | null;
 }) {
   const [theme, setTheme] = React.useState<Theme>(initialTheme);
   const [shellEl, setShellEl] = React.useState<HTMLDivElement | null>(null);
@@ -80,6 +89,9 @@ export function AppShell({
           <SidebarProvider isMobile={isMobile} open={!isRail}>
             <Sidebar user={user} />
             <div className="flex min-w-0 flex-1 flex-col">
+              {impersonatedLabel && (
+                <ImpersonationBanner label={impersonatedLabel} />
+              )}
               <Topbar
                 variant={variant}
                 breadcrumb={breadcrumb}

@@ -114,35 +114,68 @@ async function doFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /**
- * Concurrent 401s share a single `/auth/refresh` call: the backend rotates
- * the refresh token on every call, so two simultaneous refreshes would
- * invalidate each other.
+ * ADR-025 — there are TWO audiences behind this client, with two cookie pairs
+ * and two refresh endpoints. Which one a 401 belongs to is decided by the path,
+ * because nothing else on the response says so.
+ *
+ * Getting this wrong is not cosmetic: a platform 401 refreshed against
+ * `/auth/refresh` would send the operator to `/login`, the shop owner's page,
+ * with their console session still perfectly valid.
  */
-let refreshPromise: Promise<void> | null = null;
+interface Audience {
+  refreshPath: string;
+  loginHref: string;
+}
 
-function refreshTokenOnce(): Promise<void> {
-  if (!refreshPromise) {
-    refreshPromise = doFetch('/auth/refresh', { method: 'POST' })
-      .then(() => undefined)
-      .catch((error) => {
-        if (typeof window !== 'undefined') {
-          // Runs outside a component (no router available) — a full reload
-          // is also correct here, clearing any in-memory state after a
-          // fatal auth failure.
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-          window.location.href = '/login';
-        }
-        throw error;
-      })
-      .finally(() => {
-        refreshPromise = null;
-      });
-  }
-  return refreshPromise;
+const TENANT: Audience = { refreshPath: '/auth/refresh', loginHref: '/login' };
+const PLATFORM: Audience = {
+  refreshPath: '/platform/auth/refresh',
+  loginHref: '/platform/login',
+};
+
+function audienceFor(path: string): Audience {
+  return path.startsWith('/platform/') ? PLATFORM : TENANT;
+}
+
+/**
+ * Concurrent 401s share a single refresh call per audience: the backend rotates
+ * the refresh token on every call, so two simultaneous refreshes would
+ * invalidate each other. Keyed by refresh path so a tenant refresh and a
+ * platform refresh never share (or cancel) one another's promise.
+ */
+const refreshPromises = new Map<string, Promise<void>>();
+
+function refreshTokenOnce(audience: Audience): Promise<void> {
+  const existing = refreshPromises.get(audience.refreshPath);
+  if (existing) return existing;
+
+  const promise = doFetch(audience.refreshPath, { method: 'POST' })
+    .then(() => undefined)
+    .catch((error) => {
+      if (typeof window !== 'undefined') {
+        // Runs outside a component (no router available) — a full reload
+        // is also correct here, clearing any in-memory state after a
+        // fatal auth failure.
+
+        window.location.href = audience.loginHref;
+      }
+      throw error;
+    })
+    .finally(() => {
+      refreshPromises.delete(audience.refreshPath);
+    });
+
+  refreshPromises.set(audience.refreshPath, promise);
+  return promise;
 }
 
 /** A 401 here means bad credentials, not a stale token — refreshing won't help. */
-const NO_REFRESH_PATHS = ['/auth/login', '/auth/refresh'];
+const NO_REFRESH_PATHS = [
+  '/auth/login',
+  '/auth/refresh',
+  '/platform/auth/login',
+  '/platform/auth/refresh',
+];
 
 /**
  * The frontend talks to apps/api over REST only, never to the database
@@ -150,8 +183,10 @@ const NO_REFRESH_PATHS = ['/auth/login', '/auth/refresh'];
  * travel with the request — the token is never read by JavaScript.
  *
  * A 401 from any other endpoint is treated as a stale access token: it
- * triggers one silent `/auth/refresh` (deduplicated across concurrent
- * callers) and retries the original request once before giving up.
+ * triggers one silent refresh — `/auth/refresh` for tenant paths,
+ * `/platform/auth/refresh` for `/platform/*` ones (ADR-025) — deduplicated
+ * across concurrent callers, and retries the original request once before
+ * giving up.
  */
 export async function apiFetch<T>(
   path: string,
@@ -165,7 +200,7 @@ export async function apiFetch<T>(
       error.status === 401 &&
       !NO_REFRESH_PATHS.includes(path)
     ) {
-      await refreshTokenOnce();
+      await refreshTokenOnce(audienceFor(path));
       return doFetch<T>(path, init);
     }
     throw error;

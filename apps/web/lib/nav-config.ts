@@ -228,3 +228,20 @@ export function filterNavItems(items: NavItem[], query: string): NavItem[] {
   }
   return matched;
 }
+
+/**
+ * ADR-025 — the platform console's nav.
+ *
+ * A SEPARATE constant, not an entry in `NAV_ITEMS: Record<UserRole, NavItem[]>`,
+ * because a super admin is not a `UserRole` (ADR-025 Decision 5). Adding a
+ * fourth key there would have meant widening `UserRole`, which is exactly the
+ * change that ADR rejects — it forces `User.tenantId` to become nullable, and
+ * a nullable tenant is the leak the whole design exists to prevent.
+ *
+ * Flat by design: three destinations, no groups. `getBreadcrumbSegments` is
+ * role-keyed and is therefore not used by the console.
+ */
+export const PLATFORM_NAV_ITEMS: NavItem[] = [
+  { href: '/platform', label: 'Ringkasan', icon: LayoutDashboard },
+  { href: '/platform/tenants', label: 'Tenant', icon: Building2 },
+];
