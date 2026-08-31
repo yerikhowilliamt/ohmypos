@@ -119,6 +119,11 @@ describe('Platform console (e2e)', () => {
     await unscoped.businessProfile.deleteMany({
       where: { tenantId: { in: ids } },
     });
+    // The owner-email suite writes one supplier to prove the "tenant already
+    // has data" gate. Cleared here rather than in that suite's own afterAll so
+    // a run that dies mid-suite does not leave a row that makes the NEXT run's
+    // tenant delete fail its (Restrict) foreign key.
+    await unscoped.supplier.deleteMany({ where: { tenantId: { in: ids } } });
     await unscoped.tenant.deleteMany({ where: { id: { in: ids } } });
   }
 
@@ -828,6 +833,115 @@ describe('Platform console (e2e)', () => {
         .post('/api/v1/platform/impersonation/end')
         .set('Cookie', mainAdmin.cookies)
         .expect(404);
+    });
+  });
+  // --- owner login email (TASK-131) ----------------------------------------
+
+  /**
+   * Runs LAST on purpose: it rewrites `plat-kopi`'s owner email, and the
+   * impersonation suite above asserts on that address.
+   *
+   * Same throttle budget as the password reset — 5/60s, minus the two the
+   * route-protection block spends probing every `/platform/*` path, leaving
+   * three. Each test below makes exactly one throttled request; a fourth turns
+   * the last assertion into a 429.
+   */
+  describe('PATCH /platform/tenants/:id/owner-email', () => {
+    const OWNER_PASSWORD = 'OwnerResetBaru456!';
+    const CORRECTED_EMAIL = 'plat-owner-benar@test.local';
+    const REASON = 'Email owner salah ketik saat pendaftaran tenant';
+    let tenantId: string;
+    let ownerId: string;
+
+    beforeAll(async () => {
+      const tenant = await unscoped.tenant.findUniqueOrThrow({
+        where: { slug: 'plat-kopi' },
+      });
+      tenantId = tenant.id;
+      ownerId = (
+        await unscoped.user.findUniqueOrThrow({
+          where: { email: 'plat-new-owner@test.local' },
+        })
+      ).id;
+    });
+
+    it('404s for a user who is not an OWNER of this tenant', async () => {
+      // Same shape as the password reset: 404 rather than 403, because naming
+      // the tenant would confirm the id exists somewhere.
+      const outsider = await unscoped.user.findUniqueOrThrow({
+        where: { email: tenantOwner.email },
+      });
+      await request(app.getHttpServer())
+        .patch(`/api/v1/platform/tenants/${tenantId}/owner-email`)
+        .set('Cookie', mainAdmin.cookies)
+        .send({
+          userId: outsider.id,
+          newEmail: CORRECTED_EMAIL,
+          reason: REASON,
+        })
+        .expect(404);
+
+      const after = await unscoped.user.findUniqueOrThrow({
+        where: { id: outsider.id },
+      });
+      expect(after.email).toBe(tenantOwner.email);
+    });
+
+    it('refuses on a tenant that already holds data unless told to proceed', async () => {
+      // One supplier is enough — the gate is "has this tenant been used", not
+      // "has it traded". Written directly, because the point is the tenant's
+      // state, not the route that would create it.
+      await unscoped.supplier.create({
+        data: { tenantId, name: 'Supplier Uji Gerbang' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/platform/tenants/${tenantId}/owner-email`)
+        .set('Cookie', mainAdmin.cookies)
+        .send({ userId: ownerId, newEmail: CORRECTED_EMAIL, reason: REASON })
+        .expect(409);
+      // The refusal has to say WHAT it found, or the operator cannot judge
+      // whether to acknowledge it.
+      expect(readBody<{ message: string }>(res).message).toContain(
+        '1 supplier',
+      );
+
+      const untouched = await unscoped.user.findUniqueOrThrow({
+        where: { id: ownerId },
+      });
+      expect(untouched.email).toBe('plat-new-owner@test.local');
+    });
+
+    it('changes the email once acknowledged, and revokes the owner’s sessions', async () => {
+      const before = await unscoped.user.findUniqueOrThrow({
+        where: { id: ownerId },
+      });
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/platform/tenants/${tenantId}/owner-email`)
+        .set('Cookie', mainAdmin.cookies)
+        .send({
+          userId: ownerId,
+          newEmail: CORRECTED_EMAIL,
+          reason: REASON,
+          acknowledgeExistingData: true,
+        })
+        .expect(200);
+
+      const after = await unscoped.user.findUniqueOrThrow({
+        where: { id: ownerId },
+      });
+      expect(after.email).toBe(CORRECTED_EMAIL);
+      expect(after.refreshTokenHash).toBeNull();
+      expect(after.tokenValidFrom.getTime()).toBeGreaterThan(
+        before.tokenValidFrom.getTime(),
+      );
+      // The password is untouched — this endpoint moves the identity, not the
+      // credential.
+      expect(after.passwordHash).toBe(before.passwordHash);
+
+      // The point of the whole endpoint: the owner gets in at the new address.
+      await tenantLogin(CORRECTED_EMAIL, OWNER_PASSWORD);
     });
   });
 });

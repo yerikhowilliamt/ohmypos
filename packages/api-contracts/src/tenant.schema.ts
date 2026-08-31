@@ -93,6 +93,14 @@ export const TenantDetailResponseSchema = TenantListItemSchema.extend({
    */
   ownerId: UuidString.nullable(),
   ownerEmail: z.string().nullable(),
+  /**
+   * True when the tenant holds nothing beyond what provisioning itself created
+   * (its business profile, its system branch, its two system categories and
+   * that one OWNER). It is what the console uses to decide whether changing
+   * the owner's login email is a typo fix or an intervention in a live
+   * business — see `UpdateTenantOwnerEmailSchema.acknowledgeExistingData`.
+   */
+  isPristine: z.boolean(),
   rawMaterialCount: z.number().int(),
   productCount: z.number().int(),
   grossRevenue: MoneyString,
