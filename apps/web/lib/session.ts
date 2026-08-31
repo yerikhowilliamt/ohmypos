@@ -1,4 +1,4 @@
-import type { UserResponse } from '@ohmypos/api-contracts';
+import type { SessionResponse, UserResponse } from '@ohmypos/api-contracts';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { API_BASE_URL } from './api';
@@ -9,7 +9,7 @@ import { isTheme, THEME_COOKIE_NAME, type Theme } from './theme';
  * this asks the API who the caller actually is, which is the only answer that
  * can be trusted for role gating.
  */
-export async function getSession(): Promise<UserResponse | null> {
+export async function getSession(): Promise<SessionResponse | null> {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
 
@@ -21,7 +21,7 @@ export async function getSession(): Promise<UserResponse | null> {
       cache: 'no-store',
     });
     if (!res.ok) return null;
-    return (await res.json()) as UserResponse;
+    return (await res.json()) as SessionResponse;
   } catch {
     // API unreachable — treat as signed out rather than crashing the render.
     return null;
@@ -35,7 +35,7 @@ export async function getSession(): Promise<UserResponse | null> {
  */
 export async function requireRole(
   allowed: Array<UserResponse['role']>,
-): Promise<UserResponse> {
+): Promise<SessionResponse> {
   const user = await getSession();
 
   if (!user) {

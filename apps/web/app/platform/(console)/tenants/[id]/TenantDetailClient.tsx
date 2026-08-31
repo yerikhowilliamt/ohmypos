@@ -9,10 +9,13 @@ import { z } from 'zod';
 import {
   ResetTenantOwnerPasswordSchema,
   StartImpersonationSchema,
+  UpdateTenantOwnerEmailSchema,
   type ResetTenantOwnerPassword,
   type StartImpersonation,
+  type UpdateTenantOwnerEmail,
 } from '@ohmypos/api-contracts';
 import { Button } from '@ohmypos/ui/components/button';
+import { Checkbox } from '@ohmypos/ui/components/checkbox';
 import { Label } from '@ohmypos/ui/components/label';
 import { Input } from '@ohmypos/ui/components/input';
 import { PasswordInput } from '@ohmypos/ui/components/password-input';
@@ -27,6 +30,7 @@ import {
 } from '@ohmypos/ui/components/dialog';
 import {
   ArrowLeft,
+  AtSign,
   Eye,
   KeyRound,
   PauseCircle,
@@ -39,6 +43,7 @@ import {
   useStartImpersonation,
   useTenantImpersonations,
   useUpdateTenant,
+  useUpdateTenantOwnerEmail,
 } from '@/hooks/usePlatformTenants';
 import { formatCurrency, formatThousands } from '@/lib/formatters';
 
@@ -57,6 +62,7 @@ export function TenantDetailClient({ tenantId }: { tenantId: string }) {
   const updateTenant = useUpdateTenant(tenantId);
   const [isImpersonateOpen, setImpersonateOpen] = React.useState(false);
   const [isResetPasswordOpen, setResetPasswordOpen] = React.useState(false);
+  const [isOwnerEmailOpen, setOwnerEmailOpen] = React.useState(false);
   const [statusError, setStatusError] = React.useState<string | null>(null);
 
   const toggleStatus = async () => {
@@ -163,6 +169,21 @@ export function TenantDetailClient({ tenantId }: { tenantId: string }) {
             <KeyRound className="size-4" aria-hidden />
             Reset kata sandi Owner
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={() => setOwnerEmailOpen(true)}
+            // Same rule as the reset button beside it: with no active OWNER
+            // there is no login address to correct.
+            disabled={!tenant.ownerId}
+            title={
+              tenant.ownerId ? undefined : 'Tenant ini tidak punya Owner aktif.'
+            }
+          >
+            <AtSign className="size-4" aria-hidden />
+            Ubah email Owner
+          </Button>
         </div>
       </header>
 
@@ -239,6 +260,16 @@ export function TenantDetailClient({ tenantId }: { tenantId: string }) {
         ownerEmail={tenant.ownerEmail}
         open={isResetPasswordOpen}
         onOpenChange={setResetPasswordOpen}
+      />
+
+      <ChangeOwnerEmailDialog
+        key={`owner-email-${String(isOwnerEmailOpen)}`}
+        tenantId={tenantId}
+        ownerId={tenant.ownerId}
+        ownerEmail={tenant.ownerEmail}
+        isPristine={tenant.isPristine}
+        open={isOwnerEmailOpen}
+        onOpenChange={setOwnerEmailOpen}
       />
     </div>
   );
@@ -566,6 +597,219 @@ function ResetOwnerPasswordDialog({
               </Button>
               <Button type="submit" disabled={isPending}>
                 {isPending ? 'Menyimpan…' : 'Reset kata sandi'}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * TASK-131 — the operator's fix for an owner login address that was mistyped
+ * at provisioning.
+ *
+ * The third dialog on this page shaped the same way as the other two, and for
+ * the same reason: an operator is reaching into somebody else's business, so it
+ * says what will happen before the button is pressed and it records why.
+ *
+ * What is specific to this one is the confirmation checkbox. It appears only
+ * when the tenant already holds data — the typo case it exists for is a tenant
+ * provisioned minutes ago, where the box would be pure friction, but on a
+ * trading business the same call hands over the login and the operator should
+ * have to say so. The server enforces the same rule; this is not the guard,
+ * only the part of it a human reads.
+ */
+const ChangeOwnerEmailFormSchema = UpdateTenantOwnerEmailSchema.omit({
+  userId: true,
+});
+
+type ChangeOwnerEmailFormValues = z.infer<typeof ChangeOwnerEmailFormSchema>;
+
+function ChangeOwnerEmailDialog({
+  tenantId,
+  ownerId,
+  ownerEmail,
+  isPristine,
+  open,
+  onOpenChange,
+}: {
+  tenantId: string;
+  ownerId: string | null;
+  ownerEmail: string | null;
+  isPristine: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const updateOwnerEmail = useUpdateTenantOwnerEmail(tenantId);
+  const [formError, setFormError] = React.useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(
+    null,
+  );
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<ChangeOwnerEmailFormValues>({
+    resolver: zodResolver(ChangeOwnerEmailFormSchema),
+    defaultValues: {
+      newEmail: '',
+      reason: '',
+      acknowledgeExistingData: false,
+    },
+  });
+
+  const onSubmit = async (values: ChangeOwnerEmailFormValues) => {
+    if (!ownerId) return;
+    setFormError(null);
+    try {
+      const result = await updateOwnerEmail.mutateAsync({
+        userId: ownerId,
+        newEmail: values.newEmail,
+        reason: values.reason,
+        acknowledgeExistingData: values.acknowledgeExistingData,
+      } satisfies UpdateTenantOwnerEmail);
+      setSuccessMessage(result.message);
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Email Owner belum berhasil diubah.',
+      );
+    }
+  };
+
+  const isPending = isSubmitting || updateOwnerEmail.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Ubah email Owner</DialogTitle>
+          <DialogDescription>
+            Email adalah identitas login Owner. Setelah diubah, Owner keluar
+            dari semua perangkat dan hanya bisa masuk dengan alamat baru. Alasan
+            yang Anda tulis tersimpan permanen.
+          </DialogDescription>
+        </DialogHeader>
+
+        {successMessage ? (
+          <div className="space-y-4">
+            <p
+              role="status"
+              className="rounded-sm border border-status-success/30 bg-status-success/10 p-3 text-xs font-medium text-text-primary"
+            >
+              {successMessage}
+            </p>
+            <DialogFooter>
+              <Button type="button" onClick={() => onOpenChange(false)}>
+                Tutup
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            noValidate
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-text-primary">
+                Email sekarang
+              </Label>
+              <p className="font-mono text-xs text-text-secondary">
+                {ownerEmail ?? '—'}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="owner-new-email"
+                className="text-xs font-semibold text-text-primary"
+              >
+                Email baru
+              </Label>
+              <Input
+                id="owner-new-email"
+                type="email"
+                autoComplete="off"
+                placeholder="owner@bisnisnya.com"
+                aria-invalid={Boolean(errors.newEmail)}
+                {...register('newEmail')}
+              />
+              {errors.newEmail && (
+                <p
+                  role="alert"
+                  className="text-xs font-medium text-status-danger"
+                >
+                  {errors.newEmail.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="owner-email-reason"
+                className="text-xs font-semibold text-text-primary"
+              >
+                Alasan
+              </Label>
+              <Input
+                id="owner-email-reason"
+                placeholder="Email owner salah ketik saat pendaftaran tenant"
+                aria-invalid={Boolean(errors.reason)}
+                {...register('reason')}
+              />
+              {errors.reason && (
+                <p
+                  role="alert"
+                  className="text-xs font-medium text-status-danger"
+                >
+                  {errors.reason.message}
+                </p>
+              )}
+            </div>
+
+            {!isPristine && (
+              <div className="space-y-2 rounded-sm border border-status-warning/30 bg-status-warning/10 p-3">
+                <p className="text-xs text-text-primary">
+                  Tenant ini sudah punya data. Mengubah email Owner di sini
+                  berarti memindahkan akses login bisnis yang sedang berjalan —
+                  pastikan permintaannya benar-benar datang dari pemilik
+                  bisnisnya.
+                </p>
+                <label className="flex items-start gap-2 text-xs text-text-primary">
+                  <Checkbox
+                    className="mt-0.5"
+                    {...register('acknowledgeExistingData')}
+                  />
+                  <span>Saya tahu tenant ini sudah punya data, lanjutkan.</span>
+                </label>
+              </div>
+            )}
+
+            {formError && (
+              <p
+                role="alert"
+                className="rounded-sm border border-status-danger/30 bg-status-danger/10 p-3 text-xs font-medium text-status-danger"
+              >
+                {formError}
+              </p>
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => onOpenChange(false)}
+              >
+                Batal
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Menyimpan…' : 'Ubah email'}
               </Button>
             </DialogFooter>
           </form>

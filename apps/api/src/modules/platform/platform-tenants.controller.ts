@@ -25,6 +25,7 @@ import {
   StartImpersonationDto,
   TenantListQueryDto,
   UpdateTenantDto,
+  UpdateTenantOwnerEmailDto,
 } from './platform.dto';
 
 /**
@@ -133,6 +134,40 @@ export class PlatformTenantsController {
       platformAdminId,
       dto,
     );
+  }
+
+  /**
+   * TASK-131. Same controller and same reasoning as the password reset above:
+   * the class already carries `PlatformAuthGuard`, so a route added here is
+   * authenticated by inheritance rather than by somebody remembering.
+   *
+   * PATCH, not POST, because it changes one field of an existing row —
+   * `reset-owner-password` is a POST because setting a credential is an action,
+   * not an edit.
+   *
+   * 5 per minute, matching the password reset: correcting a mistyped owner
+   * address is a once-per-tenant event, and a rate that allows five a minute is
+   * already far past any honest use.
+   */
+  @Patch('tenants/:id/owner-email')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @ApiOperation({
+    summary:
+      "Change a tenant OWNER's login email; revokes all their sessions. Requires a reason.",
+  })
+  @ApiResponse({ status: 404, description: 'No such tenant, or no such OWNER' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Email already used by another user, or tenant already holds data and the caller did not acknowledge it',
+  })
+  updateOwnerEmail(
+    @ReqPlatformAdmin('sub') platformAdminId: string,
+    @Param('id', ParseUUIDPipe) tenantId: string,
+    @Body() dto: UpdateTenantOwnerEmailDto,
+  ) {
+    return this.tenantsService.updateOwnerEmail(tenantId, platformAdminId, dto);
   }
 
   @Post('impersonation/end')

@@ -7,6 +7,8 @@ import type {
   TenantListItem,
   TenantResponse,
   UpdateTenant,
+  UpdateTenantOwnerEmail,
+  UpdateTenantOwnerEmailResponse,
 } from '@ohmypos/api-contracts';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'node:crypto';
@@ -19,9 +21,14 @@ import { ensureSystemRefs } from '../../common/system-refs';
 import { Prisma, type Tenant } from '../../generated/prisma/client';
 import {
   OwnerEmailTakenException,
+  TenantHasDataUnacknowledgedException,
   TenantNotFoundException,
   TenantSlugTakenException,
 } from './platform.exceptions';
+import {
+  summarizeTenantData,
+  type TenantDataSummary,
+} from './tenant-data-check';
 
 const BCRYPT_ROUNDS = 10;
 
@@ -95,7 +102,7 @@ export class PlatformTenantsService {
       throw new TenantNotFoundException();
     }
 
-    const [revenue, lastSale, owner] = await Promise.all([
+    const [revenue, lastSale, owner, dataSummary] = await Promise.all([
       // VOIDED excluded, matching how every report defines revenue (DEBT-010).
       // A voided sale's row survives for the audit trail, so summing blindly
       // here would make this figure disagree with the tenant's own reports.
@@ -113,12 +120,14 @@ export class PlatformTenantsService {
         orderBy: { createdAt: 'asc' },
         select: { id: true, email: true },
       }),
+      this.assessTenantData(id),
     ]);
 
     return {
       ...this.toListItem(tenant),
       ownerId: owner?.id ?? null,
       ownerEmail: owner?.email ?? null,
+      isPristine: dataSummary.isPristine,
       rawMaterialCount: tenant._count.rawMaterials,
       productCount: tenant._count.products,
       grossRevenue: (revenue._sum.totalAmount ?? new Prisma.Decimal(0)).toFixed(
@@ -314,6 +323,160 @@ export class PlatformTenantsService {
       message:
         'Kata sandi Owner berhasil direset. Sampaikan lewat jalur terpisah, jangan lewat email biasa.',
     };
+  }
+
+  /**
+   * TASK-131 — eleven existence counts, run together, folded into one decision
+   * by `summarizeTenantData`. `count` rather than `findFirst` because the
+   * numbers themselves are what the operator reads in the refusal message
+   * ("3 penjualan" tells them more than "ada data").
+   *
+   * Unscoped and keyed on `tenantId` explicitly: this runs outside
+   * `runWithTenant`, so nothing filters these queries for us.
+   */
+  private async assessTenantData(tenantId: string): Promise<TenantDataSummary> {
+    const where = { tenantId };
+    const [
+      users,
+      nonSystemBranches,
+      accounts,
+      suppliers,
+      rawMaterials,
+      products,
+      sales,
+      supplierPurchases,
+      ledgerEntries,
+      bankTransactions,
+      devices,
+    ] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.branch.count({ where: { tenantId, isSystem: false } }),
+      this.prisma.account.count({ where }),
+      this.prisma.supplier.count({ where }),
+      this.prisma.rawMaterial.count({ where }),
+      this.prisma.product.count({ where }),
+      this.prisma.sale.count({ where }),
+      this.prisma.supplierPurchase.count({ where }),
+      this.prisma.ledgerEntry.count({ where }),
+      this.prisma.bankTransaction.count({ where }),
+      this.prisma.device.count({ where }),
+    ]);
+
+    return summarizeTenantData({
+      users,
+      nonSystemBranches,
+      accounts,
+      suppliers,
+      rawMaterials,
+      products,
+      sales,
+      supplierPurchases,
+      ledgerEntries,
+      bankTransactions,
+      devices,
+    });
+  }
+
+  /**
+   * A platform operator correcting the email a tenant OWNER logs in with
+   * (TASK-131).
+   *
+   * The case this exists for: an operator provisions a tenant, mistypes the
+   * owner's address, and the business cannot log in at all. Nothing inside the
+   * tenant can fix that — the email IS the login, there is no self-registration,
+   * and `resetOwnerPassword` only sets a password on an address the owner does
+   * not own.
+   *
+   * The same call on a tenant that has been trading hands somebody the login of
+   * a live business, so the tenant is measured first: pristine goes through,
+   * anything else needs `acknowledgeExistingData` and is logged as such. That
+   * is a speed bump by decision, not a wall — the operator who needs it is not
+   * blocked, but cannot do it without reading what they are doing it to.
+   */
+  async updateOwnerEmail(
+    tenantId: string,
+    platformAdminId: string,
+    dto: UpdateTenantOwnerEmail,
+  ): Promise<UpdateTenantOwnerEmailResponse> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+    if (!tenant) {
+      throw new TenantNotFoundException();
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+    });
+
+    // One message for three conditions, exactly as `resetOwnerPassword` does:
+    // separating "no such user" from "another tenant's user" would confirm the
+    // existence of a row the caller named wrongly.
+    if (!user || user.tenantId !== tenantId || user.role !== 'OWNER') {
+      throw new NotFoundException(
+        'Owner tidak ditemukan pada tenant ini. Muat ulang halaman dan pilih dari daftar.',
+      );
+    }
+
+    if (user.email === dto.newEmail) {
+      return {
+        message: 'Email Owner sudah sama dengan yang Anda masukkan.',
+        ownerId: user.id,
+        ownerEmail: user.email,
+      };
+    }
+
+    // `users.email` is globally unique by decision (ADR-025 Decision 6), so the
+    // collision can be with a user in any tenant — which is what the exception
+    // message says, so the operator does not go looking in this one.
+    const taken = await this.prisma.user.findUnique({
+      where: { email: dto.newEmail },
+    });
+    if (taken) {
+      throw new OwnerEmailTakenException(dto.newEmail);
+    }
+
+    const summary = await this.assessTenantData(tenantId);
+    if (!summary.isPristine && dto.acknowledgeExistingData !== true) {
+      throw new TenantHasDataUnacknowledgedException(summary.evidence);
+    }
+
+    try {
+      const updated = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          email: dto.newEmail,
+          // The old address may have been somebody else's, or a typo that
+          // happens to be deliverable. Whatever holds a session on this account
+          // now loses it.
+          refreshTokenHash: null,
+          tokenValidFrom: new Date(),
+        },
+      });
+
+      // `warn`, not `log`: this rewrites a login identity and should be rare
+      // enough that a reader wants every occurrence at once. Both addresses are
+      // recorded — the old one is what makes the change reversible.
+      this.logger.warn(
+        `Owner email changed: platformAdmin=${platformAdminId} tenant=${tenant.slug} target=${user.id} from=${user.email} to=${updated.email} pristine=${summary.isPristine} existingData=${JSON.stringify(summary.evidence)} reason=${JSON.stringify(dto.reason)}`,
+      );
+
+      return {
+        message: `Email Owner diubah menjadi ${updated.email}. Owner keluar dari semua perangkat dan harus login dengan alamat baru ini.`,
+        ownerId: updated.id,
+        ownerEmail: updated.email,
+      };
+    } catch (error) {
+      // The `findUnique` above loses to a concurrent write; the unique index is
+      // what actually decides.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new OwnerEmailTakenException(dto.newEmail);
+      }
+      throw error;
+    }
   }
 
   private toListItem(tenant: TenantWithCounts): TenantListItem {

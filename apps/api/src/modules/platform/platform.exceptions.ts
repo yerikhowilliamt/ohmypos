@@ -30,6 +30,21 @@ export class OwnerEmailTakenException extends ConflictException {
   }
 }
 
+/**
+ * TASK-131 — changing a tenant OWNER's login email on a tenant that has already
+ * been used. Not forbidden: an operator may genuinely have to do it. But it is
+ * a different act there than on a tenant provisioned five minutes ago, so the
+ * refusal names what was found and tells the caller how to proceed anyway.
+ */
+export class TenantHasDataUnacknowledgedException extends ConflictException {
+  constructor(evidence: string[]) {
+    super(
+      `Tenant ini sudah dipakai (${evidence.join(', ')}), jadi mengubah email Owner berarti memindahkan akses login bisnis yang sedang berjalan. Centang konfirmasi "tenant ini sudah punya data" untuk melanjutkan.`,
+    );
+    this.name = 'TenantHasDataUnacknowledgedException';
+  }
+}
+
 export class TenantNotFoundException extends NotFoundException {
   constructor() {
     super('Tenant tidak ditemukan.');

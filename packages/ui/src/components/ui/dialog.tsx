@@ -44,11 +44,23 @@ function DialogOverlay({
   );
 }
 
+/**
+ * `showCloseButton={false}` is for the one dialog shape that must not be
+ * dismissable — a modal reporting a state in which nothing behind it works, so
+ * closing it would only hide the explanation (see `SuspendedTenantDialog`).
+ * Defaults to true, so every existing dialog is unchanged. Suppressing the X
+ * alone is not enough for that case: Escape and click-outside also close a
+ * Radix dialog, and those are the caller's to prevent via `onEscapeKeyDown` /
+ * `onInteractOutside`.
+ */
 function DialogContent({
   className,
   children,
+  showCloseButton = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  showCloseButton?: boolean;
+}) {
   const container = usePortalContainer();
   return (
     <DialogPortal container={container}>
@@ -62,10 +74,12 @@ function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-focus-ring disabled:pointer-events-none cursor-pointer">
-          <X className="size-4 text-text-secondary" />
-          <span className="sr-only">Tutup</span>
-        </DialogPrimitive.Close>
+        {showCloseButton && (
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-focus-ring disabled:pointer-events-none cursor-pointer">
+            <X className="size-4 text-text-secondary" />
+            <span className="sr-only">Tutup</span>
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
     </DialogPortal>
   );
