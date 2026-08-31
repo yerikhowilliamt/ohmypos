@@ -37,6 +37,16 @@
 
 ## Log
 
+### ERR-050 — A suspended tenant's owner was bounced to the login screen forever, with no reason given
+
+- **Date found:** 2026-08-31
+- **Found during:** TASK-132 (while implementing the suspension modal — the loop was found on the way, not reported)
+- **Symptom:** Suspend a tenant, then have its OWNER log in. The login succeeds — cookies are set, no error — and the browser lands back on `/login`. Trying again does the same thing. Nothing anywhere on screen says the business was suspended, so the only available reading is "my password is wrong."
+- **Root cause:** `TenantStatusGuard` rejected every authenticated route except `POST /auth/logout`, and `GET /auth/me` was one of them. `getSession()` in `apps/web/lib/session.ts` treats any non-2xx from `/auth/me` as `null` — it cannot distinguish 401 (no session) from 403 (session fine, business off) — and every layout's `requireRole` redirects on `null`. `POST /auth/login` is `@Public()`, so the guard never runs there and the login itself keeps succeeding: the loop is the two halves disagreeing, not either one failing.
+- **Resolution:** `GET /auth/me` joins logout as the second exemption in `TenantStatusGuard.isExempt`, matched on method AND path so `PATCH /auth/me` (a write) stays blocked. `getProfile` now returns `SessionResponse` — `UserResponse` plus `tenantStatus` — which is what lets the frontend tell the two states apart. `AppShell` renders a non-dismissable `SuspendedTenantDialog` and withholds `children` when the status is `SUSPENDED`.
+- **Prevention:** Three e2e assertions in `platform.e2e-spec.ts`, in the existing suspension test: `GET /auth/me` answers 200 with `tenantStatus: 'SUSPENDED'`, `GET /branches` still answers 403, and `PATCH /auth/me` still answers 403. The third is the one that matters for the next person widening this carve-out — it is what keeps a path-only exemption from opening a write. The general lesson is in the guard's own doc comment: an authenticated 403 that the frontend reads through a null-returning session helper becomes an unexplained redirect, so any guard blanket-rejecting authenticated routes needs one route left open that can state the reason.
+- **Severity:** Medium (no money or stock touched; the business is fully locked out of a product it may still be paying for, and the only diagnosis available to the user is a wrong one)
+
 ### ERR-049 — Docker's default 64 MB `/dev/shm` makes Postgres parallel workers fail under report load
 
 - **Date found:** 2026-08-30

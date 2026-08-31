@@ -9,6 +9,7 @@ import type {
   ChangePassword,
   Login,
   LoginResponse,
+  SessionResponse,
   UpdateSelf,
   UserResponse,
 } from '@ohmypos/api-contracts';
@@ -207,12 +208,29 @@ export class AuthService {
     return { message: 'Kata sandi berhasil diperbarui.' };
   }
 
-  async getProfile(userId: string): Promise<UserResponse> {
+  /**
+   * TASK-132 — this is the ONE authenticated endpoint a suspended tenant's user
+   * can still reach (see `TenantStatusGuard`), so it is also the only place the
+   * frontend can learn WHY nothing else works. Hence `tenantStatus`.
+   *
+   * The lookup is unscoped for the tenant row alone: `Tenant` is a platform
+   * model, and the user's own row is still found through the scoped client.
+   */
+  async getProfile(userId: string): Promise<SessionResponse> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
-    return this.toResponse(user);
+    const tenant = await this.unscopedPrisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { status: true },
+    });
+    return {
+      ...this.toResponse(user),
+      // A user whose tenant row has vanished has no working session anyway;
+      // reporting ACTIVE would be the one answer that hides that.
+      tenantStatus: tenant?.status ?? 'SUSPENDED',
+    };
   }
 
   /** Self-service name change (Phase 10a). Email is not self-service — see auth.schema.ts. */

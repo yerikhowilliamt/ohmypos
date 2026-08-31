@@ -603,6 +603,27 @@ describe('Platform console (e2e)', () => {
         'ditangguhkan',
       );
 
+      // TASK-132 — `/auth/me` is the one authenticated endpoint that stays
+      // open, and it has to SAY the tenant is suspended. Without both halves
+      // the frontend cannot tell this apart from a signed-out session, which is
+      // exactly what bounced the owner back to the login screen with no reason
+      // given.
+      const me = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Cookie', ownerCookies)
+        .expect(200);
+      expect(
+        readBody<{ tenantStatus: string; email: string }>(me),
+      ).toMatchObject({ tenantStatus: 'SUSPENDED', email: body.owner.email });
+
+      // The exemption is on GET only — `PATCH /auth/me` is a write and stays
+      // blocked, or the carve-out would have opened one.
+      await request(app.getHttpServer())
+        .patch('/api/v1/auth/me')
+        .set('Cookie', ownerCookies)
+        .send({ name: 'Nama Baru' })
+        .expect(403);
+
       // Exempt on purpose: a user suspended mid-session must still be able to
       // end that session cleanly.
       await request(app.getHttpServer())

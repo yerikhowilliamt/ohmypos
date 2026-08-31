@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AttendanceStatusSchema } from './device.schema';
+import { TenantStatusSchema } from './tenant.schema';
 import { UserResponseSchema } from './user.schema';
 
 /**
@@ -29,6 +30,25 @@ export const LoginResponseSchema = UserResponseSchema.extend({
   attendance: AttendanceStatusSchema.nullable(),
 });
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
+
+/**
+ * What `GET /auth/me` returns (TASK-132).
+ *
+ * `UserResponse` plus the one thing about the BUSINESS that the frontend has
+ * to know before it renders anything: whether the tenant is suspended. A
+ * suspended tenant's user can still authenticate — `TenantStatusGuard` blocks
+ * the application, not the login — so without this field the app cannot tell
+ * "signed out" from "signed in to a business that is switched off", and it
+ * showed the login screen for both.
+ *
+ * Only on `/auth/me`. `PATCH /users/:id`, `PATCH /auth/me` and the rest still
+ * return plain `UserResponse`: they answer questions about a person, and this
+ * field is about the business.
+ */
+export const SessionResponseSchema = UserResponseSchema.extend({
+  tenantStatus: TenantStatusSchema,
+});
+export type SessionResponse = z.infer<typeof SessionResponseSchema>;
 
 /**
  * Self-service profile update (Phase 10a). Deliberately name-only: email is
