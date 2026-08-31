@@ -11,6 +11,8 @@ import type {
   TenantListItem,
   TenantResponse,
   UpdateTenant,
+  UpdateTenantOwnerEmail,
+  UpdateTenantOwnerEmailResponse,
 } from '@ohmypos/api-contracts';
 import { apiFetch } from '@/lib/api';
 
@@ -96,6 +98,29 @@ export function useResetTenantOwnerPassword(id: string) {
         `/platform/tenants/${id}/reset-owner-password`,
         { method: 'POST', body: JSON.stringify(data) },
       ),
+  });
+}
+
+/**
+ * TASK-131 — correcting the address a tenant OWNER logs in with, for the case
+ * where it was mistyped at provisioning and nobody inside the tenant can get in
+ * to fix it.
+ *
+ * Unlike the password reset, this one DOES change what is on screen — the
+ * detail header shows `ownerEmail`, and `isPristine` is read by the dialog — so
+ * the platform queries are invalidated.
+ */
+export function useUpdateTenantOwnerEmail(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateTenantOwnerEmail) =>
+      apiFetch<UpdateTenantOwnerEmailResponse>(
+        `/platform/tenants/${id}/owner-email`,
+        { method: 'PATCH', body: JSON.stringify(data) },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['platform'] });
+    },
   });
 }
 

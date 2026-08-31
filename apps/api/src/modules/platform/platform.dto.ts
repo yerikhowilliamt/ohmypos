@@ -5,6 +5,7 @@ import {
   PlatformAdminLoginSchema,
   ResetTenantOwnerPasswordSchema,
   StartImpersonationSchema,
+  UpdateTenantOwnerEmailSchema,
   UpdateTenantSchema,
 } from '@ohmypos/api-contracts';
 import { createZodDto } from 'nestjs-zod';
@@ -22,5 +23,8 @@ export class StartImpersonationDto extends createZodDto(
 ) {}
 export class ResetTenantOwnerPasswordDto extends createZodDto(
   ResetTenantOwnerPasswordSchema,
+) {}
+export class UpdateTenantOwnerEmailDto extends createZodDto(
+  UpdateTenantOwnerEmailSchema,
 ) {}
 export class TenantListQueryDto extends createZodDto(PaginationQuerySchema) {}
