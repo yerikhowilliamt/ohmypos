@@ -17,9 +17,18 @@ import { TENANT_SUSPENDED } from '../messages';
  * A request with no user is either `@Public()` or a platform route, and is not
  * this guard's business.
  *
- * `POST /auth/logout` is exempt on purpose: a user whose tenant was suspended
- * mid-session must still be able to end that session cleanly, rather than be
- * left holding a cookie that every other endpoint rejects.
+ * Two routes are exempt on purpose, and the list is deliberately this short —
+ * every entry is a route a suspended tenant's user can still reach:
+ *
+ * - `POST /auth/logout`: a user suspended mid-session must still be able to end
+ *   that session cleanly, rather than be left holding a cookie every other
+ *   endpoint rejects.
+ * - `GET /auth/me` (TASK-132): without it, the frontend cannot tell "signed
+ *   out" from "signed in to a suspended business" — `getSession()` saw a 403,
+ *   returned null, and every page bounced the owner back to the login screen
+ *   with no way to learn why. The endpoint returns the caller's own identity
+ *   plus `tenantStatus`, and no business data whatsoever, so exempting it
+ *   reveals nothing the caller did not already supply by logging in.
  */
 @Injectable()
 export class TenantStatusGuard implements CanActivate {
@@ -38,7 +47,7 @@ export class TenantStatusGuard implements CanActivate {
       return true;
     }
 
-    if (this.isLogout(request)) {
+    if (this.isExempt(request)) {
       return true;
     }
 
@@ -64,13 +73,16 @@ export class TenantStatusGuard implements CanActivate {
     return true;
   }
 
-  private isLogout(request: {
+  private isExempt(request: {
     method: string;
     path?: string;
     originalUrl?: string;
   }): boolean {
-    if (request.method !== 'POST') return false;
     const url = (request.path ?? request.originalUrl ?? '').split('?')[0];
-    return url.endsWith('/auth/logout');
+    // Matched on method AND path: `PATCH /auth/me` renames the user and must
+    // stay blocked, so exempting the path alone would open a write.
+    if (request.method === 'POST') return url.endsWith('/auth/logout');
+    if (request.method === 'GET') return url.endsWith('/auth/me');
+    return false;
   }
 }
