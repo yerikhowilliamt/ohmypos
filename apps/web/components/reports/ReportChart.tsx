@@ -150,6 +150,24 @@ export function ReportBarChart({
   );
 }
 
+/**
+ * Recharts strokes the SEGMENTS between points, so a one-point series draws
+ * nothing at all — and with `dot={false}` there is no marker either, leaving a
+ * silently blank panel. That is not the same as "no data", which has its own
+ * `<ChartEmptyState/>`: the value is real and simply invisible.
+ *
+ * The dashboard hits this on the 1st of every month. Its range is
+ * "start of month → today" (`DashboardClient.tsx`), which on the 1st is a
+ * single day, so every tenant's income chart renders empty for that whole day.
+ *
+ * Exported for the regression test: the branch is one expression inside JSX,
+ * and Recharts needs a measured container that jsdom never gives it, so this is
+ * the only layer where the rule can actually be asserted.
+ */
+export function lineDotFor(pointCount: number): { r: number } | false {
+  return pointCount === 1 ? { r: 3 } : false;
+}
+
 interface ReportLineChartSeries {
   key: string;
   label: string;
@@ -236,7 +254,7 @@ export function ReportLineChart({
               name={line.label}
               stroke={line.color ?? CHART_COLORS[index % CHART_COLORS.length]}
               strokeWidth={2}
-              dot={false}
+              dot={lineDotFor(data.length)}
               activeDot={{ r: 4 }}
             />
           ))}
