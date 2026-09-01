@@ -37,6 +37,21 @@
 
 ## Log
 
+### ERR-051 — The daily-income chart renders blank on the 1st of every month
+
+- **Date found:** 2026-09-01
+- **Found during:** TASK-134 (seeding the demo tenant — the blank chart was reported as a seed problem and turned out not to be one)
+- **Symptom:** The dashboard's "Pendapatan Harian" panel is an empty white area. Not the `<ChartEmptyState/>` copy ("Belum ada transaksi pendapatan bulan ini"), which would at least explain itself — the card renders, the total and average above it show correct figures, and the chart area below is simply nothing. `GET /reports/daily-income` answers **HTTP 200** with correct data throughout, so nothing in the API or the network tab looks wrong.
+- **Root cause:** `ReportLineChart` passed `dot={false}` to every Recharts `<Line>` (`apps/web/components/reports/ReportChart.tsx`). Recharts strokes the **segments between** points, so a series with exactly one point has nothing to stroke, and with dots off there is no marker either — the value is real and simply invisible. The dashboard requests `startDate = start of current month`, `endDate = today` (`DashboardClient.tsx`), so on the 1st of any month that range is a single day and the series has exactly one point. This affects every tenant, on the 1st, for the whole day; it is not specific to seeded data. It was found only because the demo seed happened to be run on 1 September.
+- **Resolution:** Two layers, because the dot alone only made the value *visible* — it did not make the panel a trend.
+  1. `ReportChart.tsx`: extracted `lineDotFor(pointCount)` and changed the line to `dot={lineDotFor(data.length)}` — `{ r: 3 }` for a one-point series, `false` otherwise. This is the right answer on the **Reports** page, where the operator chose a one-day range deliberately and should see their data.
+  2. `DashboardClient.tsx`: the trend chart moved off the calendar month onto a **rolling 30-day window** (`trendWindowRange`, `TREND_WINDOW_DAYS = 30`), so the panel titled "Tren" always has a shape. The "Total bulan ini" figure above it is unaffected and still month-to-date — it now reads `profitLoss.totalIncome`, which the dashboard was already fetching for the KPI cards, so widening the chart's window cost **no extra request and no client-side money arithmetic** (Playbook §5). The second figure is relabelled "Rata-rata 30 hari" to match what the chart actually shows, and the empty state now says "…dalam 30 hari terakhir".
+- **Prevention:** Two unit-test files, both asserting exported pure functions rather than rendered output — Recharts needs a measured container that jsdom never provides, so a DOM-level assertion on the SVG would not have caught this and would not catch a regression either.
+  - `components/reports/ReportChart.test.tsx` — all three `lineDotFor` branches (1 point → dot, ≥2 → no dot, 0 → no dot, since `ChartEmptyState` covers that).
+  - `components/dashboard/DashboardTrendRange.test.tsx` — `trendWindowRange` spans a full window on the 1st of a month (the exact case that broke), mid-month, and across a year boundary, plus a sweep over 48 dates asserting the window never collapses below `TREND_WINDOW_DAYS`.
+  General rule worth carrying: **a range derived from a calendar boundary can be one unit long**, so any chart bound to "this month/week/year so far" needs either a rolling window or an explicit single-point rendering path.
+- **Severity:** Medium (no money or stock correctness involved; it is a reporting-visibility defect that recurs on a predictable schedule)
+
 ### ERR-050 — A suspended tenant's owner was bounced to the login screen forever, with no reason given
 
 - **Date found:** 2026-08-31
