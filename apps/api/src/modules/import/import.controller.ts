@@ -87,7 +87,7 @@ export class ImportController {
   )
   @ApiOperation({ summary: 'Import a bank statement PDF into an account' })
   @ApiConsumes('multipart/form-data')
-  @ApiQuery({ name: 'format', enum: ['MANDIRI_PDF'] })
+  @ApiQuery({ name: 'format', enum: ['BCA_PDF', 'MANDIRI_PDF'] })
   @ApiQuery({ name: 'password', required: false, type: String })
   @ApiBody({
     schema: {
