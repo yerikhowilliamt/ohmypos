@@ -44,11 +44,31 @@ import {
   Wallet,
 } from 'lucide-react';
 
+/** Days in the dashboard trend window (ERR-051 — never a single point). */
+export const TREND_WINDOW_DAYS = 30;
+
 function toDateString(d: Date): string {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * The chart's range: `TREND_WINDOW_DAYS` calendar days ending today, inclusive.
+ *
+ * Exported so the invariant that actually matters can be asserted — the window
+ * must never collapse to a single day, whatever the date. That is the whole
+ * point of ERR-051, and it cannot be checked by rendering: Recharts needs a
+ * measured container that jsdom does not provide.
+ */
+export function trendWindowRange(now: Date): {
+  startDate: string;
+  endDate: string;
+} {
+  const start = new Date(now);
+  start.setDate(start.getDate() - (TREND_WINDOW_DAYS - 1));
+  return { startDate: toDateString(start), endDate: toDateString(now) };
 }
 
 function getCurrentMonthString(): string {
@@ -85,13 +105,25 @@ export function DashboardClient() {
     () => ({ startDate: monthStart, endDate: today }),
     [monthStart, today],
   );
+  /**
+   * The trend chart runs on a ROLLING window, not on `monthRange` — see
+   * ERR-051. A calendar-month range holds a single day on the 1st of every
+   * month, and a one-point line has no segment to draw, so the panel called
+   * "Tren" showed no trend at all for that whole day. Thirty days always has a
+   * shape, on any date, and early in a month the tail of the previous month is
+   * the useful comparison rather than noise.
+   *
+   * The month-to-date figure above the chart is unaffected: it comes from
+   * `profitLoss.totalIncome`, which this dashboard already fetches.
+   */
+  const trendRange = React.useMemo(() => trendWindowRange(new Date()), []);
 
   const { data: profitLoss, isLoading: isProfitLossLoading } =
     useProfitLoss(monthRange);
   const { data: cashBalance, isLoading: isCashBalanceLoading } =
     useCashBalance();
   const { data: dailyIncome, isLoading: isDailyIncomeLoading } =
-    useDailyIncome(monthRange);
+    useDailyIncome(trendRange);
   const { data: incomeByPayment, isLoading: isPaymentMethodsLoading } =
     useIncomeByPaymentMethod(monthRange);
   const { data: topProductsData, isLoading: isTopProductsLoading } =
@@ -241,18 +273,28 @@ export function DashboardClient() {
                   Detail <ArrowRight className="size-3" />
                 </Link>
               </div>
-              {dailyIncome && (
-                <p className="text-xs text-text-secondary">
-                  Total bulan ini:{' '}
-                  <span className="font-semibold font-mono text-text-primary">
-                    {formatCurrency(dailyIncome.total)}
-                  </span>{' '}
-                  · Rata-rata:{' '}
-                  <span className="font-mono">
-                    {formatCurrency(dailyIncome.averagePerDay)}/hari
-                  </span>
-                </p>
-              )}
+              <p className="text-xs text-text-secondary">
+                {/* Month-to-date, taken from the P&L this dashboard already
+                    loads — so widening the chart's window costs no extra
+                    request and no client-side money arithmetic (Playbook §5). */}
+                {profitLoss && (
+                  <>
+                    Total bulan ini:{' '}
+                    <span className="font-semibold font-mono text-text-primary">
+                      {formatCurrency(profitLoss.totalIncome)}
+                    </span>
+                  </>
+                )}
+                {profitLoss && dailyIncome && ' · '}
+                {dailyIncome && (
+                  <>
+                    Rata-rata {TREND_WINDOW_DAYS} hari:{' '}
+                    <span className="font-mono">
+                      {formatCurrency(dailyIncome.averagePerDay)}/hari
+                    </span>
+                  </>
+                )}
+              </p>
             </CardHeader>
             <CardContent className="px-0 pt-2">
               {isDailyIncomeLoading ? (
@@ -277,7 +319,9 @@ export function DashboardClient() {
                   tooltipFormatter={(v) => formatCurrency(v)}
                 />
               ) : (
-                <ChartEmptyState message="Belum ada transaksi pendapatan bulan ini." />
+                <ChartEmptyState
+                  message={`Belum ada transaksi pendapatan dalam ${TREND_WINDOW_DAYS} hari terakhir.`}
+                />
               )}
             </CardContent>
           </div>
