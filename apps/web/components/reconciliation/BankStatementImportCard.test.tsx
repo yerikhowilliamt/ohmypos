@@ -130,6 +130,45 @@ describe('BankStatementImportCard', () => {
     });
   });
 
+  it('routes the BCA PDF format to the PDF route, not the CSV one', async () => {
+    // `BCA` and `BCA_PDF` differ only by container, so a picker that keyed off
+    // the bank name rather than `BANK_IMPORT_FORMATS.container` would send this
+    // to /import/csv and the API would reject it as a PDF fed to a CSV parser.
+    vi.mocked(apiModule.apiFetch).mockResolvedValue({
+      imported: 63,
+      skipped: 0,
+      total: 63,
+    });
+
+    renderWithClient(<BankStatementImportCard accounts={accounts} />);
+
+    fireEvent.click(screen.getByLabelText(/akun bank/i));
+    fireEvent.click(
+      await screen.findByRole('option', { name: accounts[0].name }),
+    );
+
+    fireEvent.click(screen.getByLabelText(/format bank/i));
+    fireEvent.click(await screen.findByRole('option', { name: /bca \(pdf/i }));
+
+    expect(screen.getByTestId('import-file-input')).toHaveAttribute(
+      'accept',
+      '.pdf,application/pdf',
+    );
+
+    fireEvent.change(screen.getByTestId('import-file-input'), {
+      target: { files: [new File(['%PDF-1.5'], 'mutasi-bca.pdf')] },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /impor mutasi/i }));
+
+    await waitFor(() => {
+      expect(apiModule.apiFetch).toHaveBeenCalledWith(
+        `/import/pdf/${accounts[0].id}?format=BCA_PDF`,
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
   it('drops an already-chosen file when the format changes', async () => {
     renderWithClient(<BankStatementImportCard accounts={accounts} />);
 

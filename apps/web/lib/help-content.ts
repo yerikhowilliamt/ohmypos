@@ -580,7 +580,15 @@ export const HELP_SECTIONS: HelpSection[] = [
     category: 'data',
     roles: ['ADMIN', 'OWNER'],
     covers: ['/reconciliation'],
-    keywords: ['rekonsiliasi', 'mutasi', 'csv', 'pdf', 'mandiri', 'cocok'],
+    keywords: [
+      'rekonsiliasi',
+      'mutasi',
+      'csv',
+      'pdf',
+      'bca',
+      'mandiri',
+      'cocok',
+    ],
     blocks: [
       {
         kind: 'text',
@@ -590,7 +598,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         kind: 'steps',
         items: [
           'Buka menu "Rekonsiliasi", pilih akun bank yang ingin dicocokkan.',
-          'Impor mutasi rekening: berkas CSV, atau PDF e-statement Mandiri Livin.',
+          'Impor mutasi rekening: berkas CSV, atau PDF e-statement BCA / Mandiri Livin.',
           'Aplikasi menyarankan pasangan yang cocok secara otomatis. Periksa saran itu satu per satu.',
           'Klik cocokkan untuk mengonfirmasi pasangan yang benar, atau lewati bila belum ada pasangannya.',
         ],
@@ -598,7 +606,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         kind: 'note',
         tone: 'info',
-        body: 'PDF hanya didukung untuk e-statement Mandiri Livin, dan berkas yang terkunci kata sandi akan ditolak — buka proteksinya dulu, atau pakai CSV. Bank lain: gunakan CSV.',
+        body: 'PDF didukung untuk e-statement BCA dan Mandiri Livin. Berkas yang terkunci kata sandi akan ditolak — buka proteksinya dulu, atau pakai CSV. Bank lain: gunakan CSV.',
       },
     ],
   },

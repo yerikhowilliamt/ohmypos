@@ -59,7 +59,12 @@ export type PaginatedBankTransactions = z.infer<
  * Statement formats `BankParserFactory` supports. Kept here so the API switch
  * and the web format picker read from one list instead of drifting apart.
  */
-export const BankImportFormatSchema = z.enum(['BCA', 'MANDIRI', 'MANDIRI_PDF']);
+export const BankImportFormatSchema = z.enum([
+  'BCA',
+  'MANDIRI',
+  'BCA_PDF',
+  'MANDIRI_PDF',
+]);
 export type BankImportFormat = z.infer<typeof BankImportFormatSchema>;
 
 /**
@@ -78,6 +83,12 @@ export const BANK_IMPORT_FORMATS = [
     label: 'Mandiri (CSV)',
     container: 'csv',
     accept: '.csv,text/csv',
+  },
+  {
+    value: 'BCA_PDF',
+    label: 'BCA (PDF e-Statement)',
+    container: 'pdf',
+    accept: '.pdf,application/pdf',
   },
   {
     value: 'MANDIRI_PDF',
