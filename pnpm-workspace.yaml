@@ -18,6 +18,19 @@ allowBuilds:
   bcrypt: true
   canvas: false
   '@sentry/cli': true
+overrides:
+  # Advisory fixes that no in-range lockfile update could reach: the parent
+  # pins an exact version (prisma -> mysql2 3.15.3,
+  # @nestjs/platform-express -> multer 2.2.0, @nestjs/swagger -> js-yaml
+  # 5.2.1) or, for js-yaml 3.x, sits behind a stale lockfile entry. Drop a
+  # line only when its parent ships a range covering the patched release.
+  # braces and sprintf-js are absent on purpose: neither has a patched release
+  # published yet (advisories need 3.0.4 / 1.1.4; registry tops out at
+  # 3.0.3 / 1.1.3), so an override would fail the install outright.
+  mysql2: ^3.23.1
+  multer: ^2.4.0
+  '@nestjs/swagger>js-yaml': ^5.4.1
+  '@istanbuljs/load-nyc-config>js-yaml': ^3.15.2
 minimumReleaseAgeExclude:
   - '@turbo/darwin-64@2.10.10'
   - '@turbo/darwin-arm64@2.10.10'
@@ -26,3 +39,24 @@ minimumReleaseAgeExclude:
   - '@turbo/windows-64@2.10.10'
   - '@turbo/windows-arm64@2.10.10'
   - turbo@2.10.10
+  - tar@7.5.3 || 7.5.4 || 7.5.7 || 7.5.8 || 7.5.10 || 7.5.11 || 7.5.16 || 7.5.17 || 7.5.18 || 7.5.19 || 7.5.21
+  - pdfjs-dist@4.1.393
+  - uuid@11.1.1
+  - js-yaml@3.15.2 || 4.3.2 || 5.2.2 || 5.4.1
+  - deepmerge-ts@8.0.0
+  - mysql2@3.22.0 || 3.23.1
+  - qs@6.15.4 || 6.16.0
+  - fast-uri@3.1.6 || 3.1.7 || 3.1.8
+  - next@16.3.3 || 16.3.6 || 16.3.8
+  - vitest@4.1.11
+  - '@vitest/mocker@4.1.11'
+  - sharp@0.35.4 || 0.35.5
+  - multer@2.3.0 || 2.4.0
+  - undici@8.10.2
+  - brace-expansion@1.1.19 || 1.1.20 || 1.1.21 || 2.1.5 || 2.1.6 || 2.1.7 || 5.0.10 || 5.0.11 || 5.0.12
+  - braces@3.0.4
+  - sprintf-js@1.1.4
+  - source-map-js@1.2.2
+  - proxy-addr@2.0.8
+  - fast-copy@4.1.0
+  - handlebars@4.7.10
