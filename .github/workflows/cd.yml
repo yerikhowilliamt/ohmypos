@@ -6,7 +6,7 @@ name: CD
 # trigger, so it never builds a commit whose tests haven't been verified, and
 # never re-runs the test suite a second time.
 #
-# docs/04 - Engineering_Playbook.md §14 step 4 ("on merge to main: build and
+# docs/guide.md §14 step 4 ("on merge to main: build and
 # push web and api images") — this is that step.
 
 on:

@@ -1,4 +1,4 @@
-/* Design tokens live in packages/ui (System Design §2, DESIGN.md) — this app
+/* Design tokens live in packages/ui (System Design §2, design.md) — this app
    imports them rather than declaring its own. */
 @import '@ohmypos/ui/globals.css';
 

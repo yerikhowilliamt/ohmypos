@@ -91,7 +91,7 @@ export function SaleSuccessDialog({
               <span className="text-sm font-medium text-text-primary">
                 Total
               </span>
-              {/* Flow Indicator — money in (DESIGN.md §12.2 Signature Flow Indicator). */}
+              {/* Flow Indicator — money in (design.md §12.2 Signature Flow Indicator). */}
               <span
                 data-testid="sale-success-total"
                 className="numeric font-mono text-lg font-semibold text-accent-inflow"

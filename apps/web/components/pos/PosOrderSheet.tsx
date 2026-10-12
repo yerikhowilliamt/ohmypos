@@ -18,7 +18,7 @@ interface PosOrderSheetProps {
 }
 
 /**
- * Mobile order panel as a bottom sheet (DESIGN.md §13.2), wrapping the same
+ * Mobile order panel as a bottom sheet (design.md §13.2), wrapping the same
  * `CartPanel` instance. The collapsed bar is hidden when the cart is empty.
  */
 export function PosOrderSheet({

@@ -14,7 +14,7 @@ interface PosPageHeaderProps {
   branchPicker?: React.ReactNode;
 }
 
-/** POS page header: title, operating day and search (DESIGN.md §10.4). */
+/** POS page header: title, operating day and search (design.md §10.4). */
 export function PosPageHeader({
   query,
   onQueryChange,

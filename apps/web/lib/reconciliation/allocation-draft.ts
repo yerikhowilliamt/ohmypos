@@ -44,7 +44,7 @@ export interface DraftSummary {
   committed: Fixed;
   /** Σ of READY draft lines. */
   draft: Fixed;
-  /** committed + draft: the "Allocated" figure (DESIGN.md §12.3). */
+  /** committed + draft: the "Allocated" figure (design.md §12.3). */
   allocated: Fixed;
   /** transactionAmount − allocated. Negative when over-allocated. */
   remaining: Fixed;

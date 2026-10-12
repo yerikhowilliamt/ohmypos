@@ -342,7 +342,7 @@ function ExpandedNavGroup({
 }
 
 /* ------------------------------------------------------------------ */
-/* Rail (768–1023px) — DESIGN.md §13.1 Sidebar Behaviour by Breakpoint                                 */
+/* Rail (768–1023px) — design.md §13.1 Sidebar Behaviour by Breakpoint                                 */
 /* ------------------------------------------------------------------ */
 
 function RailNavItem({ item, pathname }: { item: NavItem; pathname: string }) {

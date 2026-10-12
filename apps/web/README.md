@@ -1,6 +1,6 @@
 # apps/web
 
-**Related:** System Design §5 · ADR-002, ADR-004, ADR-010, ADR-011, ADR-013, ADR-015, ADR-018, ADR-019, ADR-025 · [`docs/DESIGN.md`](../../docs/DESIGN.md) · Playbook §5, §19
+**Related:** System Design §5 · ADR-002, ADR-004, ADR-010, ADR-011, ADR-013, ADR-015, ADR-018, ADR-019, ADR-025 · [`docs/design.md`](../../docs/design.md) · Playbook §5, §19
 
 This is the Next.js frontend for the POS, back office and platform console. It talks to `apps/api` over REST only, never to the database (ADR-002). Request and response shapes come from `@ohmypos/api-contracts`. Before touching Next-specific APIs, read [`AGENTS.md`](AGENTS.md) in this folder: this Next version differs from older conventions.
 
@@ -88,7 +88,7 @@ This is the Next.js frontend for the POS, back office and platform console. It t
 
 **Errors (`submit-error.ts`):** never a toast. A failure becomes a `CartError` in Indonesian, shown beside the lines it names. Stock shortfalls are per raw material and are mapped to cart lines through each product's recipe. The problem-line highlight combines the client's own advisory over-commit with the server's 409 verdict. The server's verdict is authoritative and often names lines the client thought were fine, because another till drained the pool first. Other 409s (inactive product, no recipe) mean the product cache is stale and it is invalidated.
 
-**Layout:** three zones (DESIGN.md §11.1). On mobile, the order panel becomes a bottom sheet that wraps the **same** `CartPanel` instance. There is no customer picker and no service tax (no Customer model; ADR-015, DEBT-004). The payment method (an `Account`) is a visible tile grid, not a dropdown. `SaleSuccessDialog` renders the receipt from the 201 response only, because a `KASIR` cannot `GET /sales/:id`.
+**Layout:** three zones (design.md §11.1). On mobile, the order panel becomes a bottom sheet that wraps the **same** `CartPanel` instance. There is no customer picker and no service tax (no Customer model; ADR-015, DEBT-004). The payment method (an `Account`) is a visible tile grid, not a dropdown. `SaleSuccessDialog` renders the receipt from the 201 response only, because a `KASIR` cannot `GET /sales/:id`.
 
 ## Reconciliation UI (`components/reconciliation`, `lib/reconciliation`, `hooks/useReconciliation.ts`)
 

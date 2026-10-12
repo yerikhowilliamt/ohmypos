@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { PosScreen } from '@/components/pos/PosScreen';
 import { getSession } from '@/lib/session';
 
-/** POS (DESIGN.md §11.1). KASIR sells at their own branch; OWNER picks one. */
+/** POS (design.md §11.1). KASIR sells at their own branch; OWNER picks one. */
 export default async function SalesPage() {
   const user = await getSession();
 

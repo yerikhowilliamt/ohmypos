@@ -10,7 +10,7 @@ interface CategoryFilterRowProps {
   onSelect: (bucket: ProductBucket) => void;
 }
 
-/** Availability filter cards (DESIGN.md §11.3); one horizontally scrolling row on mobile. */
+/** Availability filter cards (design.md §11.3); one horizontally scrolling row on mobile. */
 export function CategoryFilterRow({
   buckets,
   selected,

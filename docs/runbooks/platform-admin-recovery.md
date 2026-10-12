@@ -17,8 +17,9 @@ tenant**, bukan super admin, jangan pakai dokumen ini — buka
 | Lupa kata sandi dan **tidak ada** super admin lain | §2. Ini satu-satunya jalan. |
 | Belum ada akun super admin sama sekali | `pnpm --filter api create:platform-admin` (bukan skrip reset). |
 
-Tidak ada pemulihan lewat email di sistem ini, dan itu disengaja — lihat
-`docs/plannings/2026-08-30-pemulihan-kata-sandi.md` §0.1.
+Tidak ada pemulihan lewat email di sistem ini, dan itu disengaja: setiap akun dibuat oleh pihak yang masih berwenang di
+atasnya (staf oleh OWNER, OWNER pertama oleh platform admin bersama tenant-nya,
+platform admin lewat CLI), jadi selalu ada orang yang bisa mereset kata sandinya.
 
 ---
 

@@ -47,7 +47,7 @@ function Avatar({
   );
 }
 
-/** Identity and role card; avatar only on the tablet rail (DESIGN.md §10.2). */
+/** Identity and role card; avatar only on the tablet rail (design.md §10.2). */
 export function SidebarAccountCard({
   user,
   isRail,

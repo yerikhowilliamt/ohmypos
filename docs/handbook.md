@@ -22,7 +22,7 @@ ohmypos/
 │   ├── api-contracts/   Zod schemas — single source of truth for request/response
 │   │                      shapes and their inferred TypeScript types (ADR-010)
 │   ├── ui/               Shared shadcn/ui component wrappers + design tokens
-│   │                      from DESIGN.md
+│   │                      from design.md
 │   └── config/           Shared ESLint/Prettier/TS config
 ```
 
@@ -34,8 +34,8 @@ Core principle to keep in mind while working in this repo: **any operation that 
 |---|---|---|
 | Backend framework | NestJS (TypeScript) | System Design §9 |
 | Frontend framework | Next.js (App Router) | System Design §5 |
-| Component library | shadcn/ui | DESIGN.md |
-| Typography | Plus Jakarta Sans (UI), JetBrains Mono (numeric) | DESIGN.md |
+| Component library | shadcn/ui | design.md |
+| Typography | Plus Jakarta Sans (UI), JetBrains Mono (numeric) | design.md |
 | Database | PostgreSQL (single instance) | System Design §3 |
 | ORM | Prisma | ADR-003 |
 | Validation | Zod (`packages/api-contracts`) | ADR-010 |
@@ -66,17 +66,14 @@ Core principle to keep in mind while working in this repo: **any operation that 
 
 | Doc | Covers |
 |---|---|
-| `00 - PRD.md` | Problem, goals, functional requirements per dashboard, confirmed branch policy |
-| `01 - System Design.md` | Monorepo structure, module responsibilities, key flows, deployment |
-| `02 - ADR.md` | The architecturally significant decisions and their rationale (23 as of this writing — see the doc itself for the current count) |
-| `03 - ERD.md` | Field-level schema, relationships, combined diagram, porting notes |
-| `04 - Engineering Playbook.md` | Day-to-day rules — transactions, branch scoping, role enforcement, testing, CI, Definition of Done |
-| `DESIGN.md` | Design tokens, accessibility rules, component expectations |
-| `05 - Project Handbook.md` (this doc) | Setup, glossary, constraints, contributing, troubleshooting |
+| `prd.md` | Problem, goals, functional requirements per dashboard, confirmed branch policy |
+| `system-design.md` | Monorepo structure, module responsibilities, key flows, deployment |
+| `adrs/` | The architecturally significant decisions and their rationale — one file per decision, indexed in `adrs/README.md` |
+| `erd.md` | Field-level schema, relationships, combined diagram, porting notes |
+| `guide.md` | Day-to-day rules — transactions, branch scoping, role enforcement, testing, CI, Definition of Done |
+| `design.md` | Design tokens, accessibility rules, component expectations |
+| `handbook.md` (this doc) | Setup, glossary, constraints, contributing, troubleshooting |
 | `AGENTS.md` | Kasync source location, governance/approval gates, scope boundaries — context for AI agents and future-you |
-| `06 - Error_Log.md` | Real errors hit during implementation, with root cause and prevention |
-| `07 - Task_Log.md` | What each task actually did, decided, and left unfinished |
-| `08 - Tech_Debt_Log.md` | Deliberate shortcuts, each with a concrete trigger condition for paying it off |
 
 ## 6. Synthetic Data Safety
 
@@ -91,7 +88,7 @@ Seed data (`pnpm --filter api db:seed`) uses entirely fictional branches, suppli
 | Kas Awal | Opening cash — the starting cash balance, centralized (not per-branch) |
 | Reconciliation | Matching bank statement transactions against `LedgerEntry` records via `Allocation` — restricted to `ADMIN`/`OWNER` (ADR-011) |
 | Central Purchase | A `SupplierPurchase` with `branchId = null` — bought centrally, not by one branch |
-| Flow Indicator | The signature UI motif for any inflow/outflow number (DESIGN.md) |
+| Flow Indicator | The signature UI motif for any inflow/outflow number (design.md) |
 | Ported module | A module copied and adapted from Kasync, unchanged in responsibility |
 | Kasir | Cashier role — branch-scoped access only (`User.branchId` required), cannot create users or perform reconciliation matching (ADR-011) |
 | Admin | Staff role with all-branch data access, reconciliation-matching permission, and Master Data + Reconciliation frontend routes only — cannot create users (ADR-011, System Design v4 §5) |

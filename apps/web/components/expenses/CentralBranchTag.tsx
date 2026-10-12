@@ -6,7 +6,7 @@ interface CentralBranchTagProps {
   branchName?: string | null;
 }
 
-/** Central vs branch tag with icon and label, not colour alone (DESIGN.md §19). */
+/** Central vs branch tag with icon and label, not colour alone (design.md §19). */
 export function CentralBranchTag({
   branchId,
   branchName,

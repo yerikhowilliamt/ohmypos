@@ -64,7 +64,7 @@ interface SplitAllocationDialogProps {
 }
 
 /**
- * Manual split allocation (DESIGN.md §12.3). Blocks submit while over-allocated;
+ * Manual split allocation (design.md §12.3). Blocks submit while over-allocated;
  * the server stays the authority, and its error is shown verbatim if the base is stale.
  */
 export function SplitAllocationDialog({
@@ -195,7 +195,7 @@ export function SplitAllocationDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* DESIGN.md §12.3 Bank Reconciliation Split-Allocation: Bank Transaction / Allocated / Remaining, font-mono. */}
+          {/* design.md §12.3 Bank Reconciliation Split-Allocation: Bank Transaction / Allocated / Remaining, font-mono. */}
           <div className="mt-4 grid grid-cols-3 gap-2 rounded-sm border border-border-default bg-surface-muted/60 p-3 text-xs">
             <div>
               <span className="block text-[11px] text-text-tertiary">
@@ -292,7 +292,7 @@ export function SplitAllocationDialog({
             )}
           </div>
 
-          {/* Draft rows — DESIGN.md §12.3 Bank Reconciliation Split-Allocation's "allocation rows". */}
+          {/* Draft rows — design.md §12.3 Bank Reconciliation Split-Allocation's "allocation rows". */}
           <div className="mt-4 flex flex-col gap-3 rounded-sm border border-border-default bg-surface-muted/60 p-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">

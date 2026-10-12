@@ -34,7 +34,7 @@ interface CartPanelProps {
 }
 
 /**
- * The order panel (DESIGN.md §11.1), always mounted. No customer picker or
+ * The order panel (design.md §11.1), always mounted. No customer picker or
  * service tax by decision (no Customer model; ADR-015, DEBT-004).
  */
 export function CartPanel({
@@ -100,7 +100,7 @@ export function CartPanel({
       {/* Order list — the only part that scrolls, so the CTA stays pinned. */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3">
         {state.lines.length === 0 ? (
-          // DESIGN.md §17 empty-state copy.
+          // design.md §17 empty-state copy.
           <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
             <span
               aria-hidden

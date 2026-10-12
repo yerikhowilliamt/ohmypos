@@ -108,7 +108,7 @@ export function Topbar({
       )}
 
       <div className="hidden items-center gap-2 md:flex">
-        {/* Back-office-only (§8.2 of the current DESIGN.md) — never rendered
+        {/* Back-office-only (§8.2 of the current design.md) — never rendered
             for POS (`variant='pos'` never reaches this block) or shared
             routes (`enableDarkMode` is never passed there). */}
         {variant === 'default' && enableDarkMode && (

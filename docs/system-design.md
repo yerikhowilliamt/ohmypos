@@ -17,7 +17,7 @@
 OhMyPos is a **monorepo** containing two deployable applications and shared internal packages:
 
 - `apps/api` — the NestJS backend, structured as a **modular monolith** (one app, one PostgreSQL database, one container). This continues the same architecture style Kasync uses (ADR-001 in Kasync), for the same reasons — single developer, low operational complexity, and low transaction volume for a small multi-branch business.
-- `apps/web` — the Next.js frontend, using shadcn/ui components and the design tokens defined in `DESIGN.md`.
+- `apps/web` — the Next.js frontend, using shadcn/ui components and the design tokens defined in `design.md`.
 
 The frontend is **decoupled from the backend and consumes it purely via REST** — no Next.js API routes acting as backend logic. This is the same frontend/backend relationship Kasync already established (ADR-007 in Kasync), just now organized as a monorepo instead of requiring two separately-managed repos.
 
@@ -41,7 +41,7 @@ ohmypos/
 │   ├── api-contracts/    Zod schemas — single source of truth for request/response
 │   │                       shapes and their inferred TypeScript types (ADR-010)
 │   ├── ui/               Shared shadcn/ui-based component wrappers + design
-│   │                       tokens from DESIGN.md (colors, spacing, typography)
+│   │                       tokens from design.md (colors, spacing, typography)
 │   └── config/           Shared TS/ESLint/Prettier config
 ├── docker-compose.yml
 └── turbo.json
@@ -81,12 +81,12 @@ This was decided in the integration discussion (see PRD background): `Sale` crea
 ## 5. Frontend Structure (`apps/web`)
 
 - Next.js App Router, TypeScript.
-- shadcn/ui as the component base, customized per `DESIGN.md` tokens (spacing scale, radius, single-layer shadow, Plus Jakarta Sans / JetBrains Mono, brand + accent + status colors).
-- Route groups aligned to the PRD's screens: `(pos)/sales`, `(back-office)/master-data`, `(back-office)/expenses`, `(back-office)/inventory`, `(back-office)/reconciliation`, `(back-office)/reports`, `(back-office)/users`, `(back-office)/dashboard`, `(back-office)/devices`, `(back-office)/branches`, `(back-office)/accounts` — plus a `(shared)/*` group (profile, help, leave-requests) reachable by all three roles — with the POS/sales route optimized for the high-density, tablet-first layout, and back-office routes following the standard/relaxed density per screen as defined in `DESIGN.md`. The `(back-office)/devices`, `/branches`, `/accounts`, and `(shared)/*` groups postdate the original PRD screen set (ADR-020, ADR-021) and were added without a corresponding update to this list until now.
+- shadcn/ui as the component base, customized per `design.md` tokens (spacing scale, radius, single-layer shadow, Plus Jakarta Sans / JetBrains Mono, brand + accent + status colors).
+- Route groups aligned to the PRD's screens: `(pos)/sales`, `(back-office)/master-data`, `(back-office)/expenses`, `(back-office)/inventory`, `(back-office)/reconciliation`, `(back-office)/reports`, `(back-office)/users`, `(back-office)/dashboard`, `(back-office)/devices`, `(back-office)/branches`, `(back-office)/accounts` — plus a `(shared)/*` group (profile, help, leave-requests) reachable by all three roles — with the POS/sales route optimized for the high-density, tablet-first layout, and back-office routes following the standard/relaxed density per screen as defined in `design.md`. The `(back-office)/devices`, `/branches`, `/accounts`, and `(shared)/*` groups postdate the original PRD screen set (ADR-020, ADR-021) and were added without a corresponding update to this list until now.
 - **Role-based routing** (per ADR-011, three roles):
   - **`KASIR`** → lands on `(pos)/sales` only, scoped to their own `branchId`. No back-office access, but reaches `(shared)/*` (profile, help, leave-requests) like every role.
   - **`ADMIN`** → gets `(back-office)/master-data`, `(back-office)/reconciliation`, and `(back-office)/accounts` only — matching the backend restriction that `ADMIN` can perform reconciliation matching (ADR-011) and manage master data, but has no reason to access `(back-office)/users` (Owner-only, per ADR-011) or is not otherwise scoped into reports/inventory/expenses/devices/branches screens in v1. `(back-office)/accounts` (payment methods) is master-data-adjacent, which is why it's included here despite not being named in earlier drafts of this restriction. `ADMIN` does **not** get `(pos)/sales`.
-  - **`OWNER`** → gets the full `(back-office)/*` route group (including `(back-office)/users`, `/dashboard`, `/devices`, `/branches`), unscoped by branch, plus the branch filter described in `DESIGN.md`.
+  - **`OWNER`** → gets the full `(back-office)/*` route group (including `(back-office)/users`, `/dashboard`, `/devices`, `/branches`), unscoped by branch, plus the branch filter described in `design.md`.
   - This is a UX convenience only — the authoritative restriction is enforced backend-side via `RoleGuard`/`BranchScopeGuard` (Section 8), never trusted from routing alone.
 - **Platform operator (v2, ADR-025)** — a fourth route group `(platform)/*` (dashboard, tenants list, tenant detail) plus a public `/platform/login`, gated by `requirePlatformAdmin()` rather than `requireRole()`. Its occupant is a `PlatformAdmin`, **not** a `User`: `UserRole` gains no `SUPER_ADMIN` member, the group has its own cookie (`platform_access_token`) and its own JWT secret, and `apps/web/proxy.ts` checks that cookie for `/platform/*` paths. `PLATFORM_NAV_ITEMS` is a separate constant, deliberately not part of `NAV_ITEMS: Record<UserRole, NavItem[]>`.
 - Data fetching: server components / route handlers call `apps/api` over REST using types from `packages/api-contracts`; no direct database access from the frontend at any point.
@@ -127,7 +127,7 @@ A scheduled or manually-triggered action at the start of each month: for each ra
 
 ### 6.5 Reconciliation
 
-Import a bank statement via the existing `BankParser` strategy pattern — Kasync's CSV parsers unchanged, plus a Mandiri Livin PDF e-statement parser added in ADR-022 (`POST /import/pdf/:accountId`, separate from the CSV route so each validates its own file type) — then run the `MatchingEngine` to suggest matches against `LedgerEntry` records (which now include sale-generated entries, not just manual ones), and let the user confirm or split-allocate via `Allocation` on the Reconciliation screen's two-pane layout (`DESIGN.md`). The invariant `sum(Allocation.amountPortion) <= BankTransaction.amount` is enforced the same way (application + database trigger with a row lock), unchanged. Per ADR-011, only `ADMIN` and `OWNER` can perform this matching action — `KASIR` has no access to this screen at all (Section 5).
+Import a bank statement via the existing `BankParser` strategy pattern — Kasync's CSV parsers unchanged, plus a Mandiri Livin PDF e-statement parser added in ADR-022 (`POST /import/pdf/:accountId`, separate from the CSV route so each validates its own file type) — then run the `MatchingEngine` to suggest matches against `LedgerEntry` records (which now include sale-generated entries, not just manual ones), and let the user confirm or split-allocate via `Allocation` on the Reconciliation screen's two-pane layout (`design.md`). The invariant `sum(Allocation.amountPortion) <= BankTransaction.amount` is enforced the same way (application + database trigger with a row lock), unchanged. Per ADR-011, only `ADMIN` and `OWNER` can perform this matching action — `KASIR` has no access to this screen at all (Section 5).
 
 ### 6.6 Reporting (Dashboard 3, Inventory Summary)
 
@@ -160,14 +160,14 @@ Tenant scoping sits **beneath** branch scoping and is independent of it. Branch 
 - Every one of the 23 business models carries `tenantId TEXT NOT NULL`, child tables included. `User.tenantId` has no nullable case — that is the reason `PlatformAdmin` is a separate table.
 - The tenant is resolved server-side in `JwtAuthGuard`, from the same per-request `users` read that already refreshes `role` and `branchId`, and published through an `AsyncLocalStorage` scope. **No client input carries a tenant** — no header, no subdomain, no path segment.
 - Enforcement is three layers: a Prisma client extension that injects `tenantId` and throws on an empty scope (fail closed); composite foreign keys `(child_id, tenant_id) → parent(id, tenant_id)` that make a cross-tenant reference a database error; and `tenant-isolation.e2e-spec.ts`, which asserts non-leakage across every list, detail, and report endpoint.
-- Raw SQL is **outside** the extension's reach — the whole of `reports.service.ts` plus the `FOR UPDATE` lock sites — and carries hand-written `tenant_id` predicates instead. This is the known soft spot; see `08 - Tech_Debt_Log.md`.
+- Raw SQL is **outside** the extension's reach — the whole of `reports.service.ts` plus the `FOR UPDATE` lock sites — and carries hand-written `tenant_id` predicates instead. This is the known soft spot, tracked as `DEBT-064`.
 - `TenantStatusGuard` rejects every request from a `SUSPENDED` tenant except `POST /auth/logout`.
 - `PlatformAdmin` bypasses all of the above via a separate `PlatformAuthGuard` and an unscoped Prisma client, reachable only under `/api/v1/platform/*`. Impersonation mints a 30-minute, refresh-less tenant token whose `imp` claim makes every non-`GET` request fail.
 
 ## 9. Tech Stack
 
 - **Backend (`apps/api`)**: NestJS (TypeScript), modular monolith, PostgreSQL (single instance), Prisma ORM (ADR-003). No message queue or cache in v1 — synchronous request flow, same rationale as Kasync (low transaction volume). Auth: JWT via HttpOnly cookies, dual-token (access + refresh) pattern from Kasync, extended with a role (`KASIR`/`ADMIN`/`OWNER`) and branch claim (ADR-011). Validation via Zod schemas from `packages/api-contracts` (ADR-010).
-- **Frontend (`apps/web`)**: Next.js, shadcn/ui, Plus Jakarta Sans + JetBrains Mono, design tokens per `DESIGN.md`.
+- **Frontend (`apps/web`)**: Next.js, shadcn/ui, Plus Jakarta Sans + JetBrains Mono, design tokens per `design.md`.
 - **Shared**: `packages/api-contracts` for Zod-derived request/response types, `packages/ui` for shared component wrappers and tokens.
 - **Monorepo tooling**: pnpm workspaces + Turborepo.
 

@@ -148,6 +148,6 @@ Code says *what*; comments say *why*; the module README says *how it fits*. Refe
 
 **Not allowed in code:** file-header essays; phase/task history ("Phase 4 added…", "TASK-070 adds…"); `plan §x.y` references; comments that restate the code; anything longer than a short paragraph.
 
-**Where it goes instead:** `README.md` in the module folder, with these sections: *Overview*, *Public API* (methods + callers), *Invariants* (numbered, the rules whose violation corrupts data silently), domain-specific sections, *Errors*, *Testing*, *History*. Task-level narrative stays in `07 - Task_Log.md`; cross-module decisions stay in ADRs.
+**Where it goes instead:** `README.md` in the module folder, with these sections: *Overview*, *Public API* (methods + callers), *Invariants* (numbered, the rules whose violation corrupts data silently), domain-specific sections, *Errors*, *Testing*, *History*. Task-level narrative stays in the task's Task Log entry; cross-module decisions stay in ADRs.
 
 **When changing a module:** update its README in the same PR when the change touches an invariant, a public method, a caller, or an error shape.

@@ -22,10 +22,10 @@ export type NavChildItem = {
 export type NavItem = {
   href: string;
   label: string;
-  /** Required: the tablet rail renders icons only (DESIGN.md §13.1). */
+  /** Required: the tablet rail renders icons only (design.md §13.1). */
   icon: LucideIcon;
   children?: NavChildItem[];
-  /** Tags an unfinished module "Coming soon" instead of hiding it (DESIGN.md §10.2). Unused today. */
+  /** Tags an unfinished module "Coming soon" instead of hiding it (design.md §10.2). Unused today. */
   comingSoon?: boolean;
 };
 

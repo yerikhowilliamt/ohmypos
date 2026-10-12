@@ -65,7 +65,7 @@ export {
 };
 
 /**
- * Returns Tailwind classes for Flow Indicator badge or text motif (DESIGN.md §6.2 Status Tokens).
+ * Returns Tailwind classes for Flow Indicator badge or text motif (design.md §6.2 Status Tokens).
  */
 export function getFlowIndicatorClasses(
   direction: TransactionType | StockDirection,
@@ -85,7 +85,7 @@ export function getFlowIndicatorClassesForAmount(
 }
 
 /**
- * Returns badge variant styling classes for stock status (DESIGN.md §6.2 Status Tokens).
+ * Returns badge variant styling classes for stock status (design.md §6.2 Status Tokens).
  */
 export function getStockStatusBadgeClasses(status: StockStatus): string {
   switch (status) {

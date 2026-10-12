@@ -1,6 +1,6 @@
 # OhMyPos — POS & Backoffice Design System
 
-> **Section numbers in this document are load-bearing.** The codebase cites them by number in source comments. Renumbering a section is therefore a breaking change: run `grep -rn "DESIGN.md §" apps packages` and update every site in the same commit. Always cite by number **and** name — `§7 Spacing`, never `§7` — so a stale reference is visible rather than silent. A citation that still resolves after a renumber, but to unrelated content, is the failure mode this rule exists to prevent (see TASK-069).
+> **Section numbers in this document are load-bearing.** The codebase cites them by number in source comments. Renumbering a section is therefore a breaking change: run `grep -rn "design.md §" apps packages` and update every site in the same commit. Always cite by number **and** name — `§7 Spacing`, never `§7` — so a stale reference is visible rather than silent. A citation that still resolves after a renumber, but to unrelated content, is the failure mode this rule exists to prevent (see TASK-069).
 
 ## 1. Context and Mission
 

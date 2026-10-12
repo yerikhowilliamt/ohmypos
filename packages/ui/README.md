@@ -1,10 +1,10 @@
 # @ohmypos/ui
 
-Shared shadcn/ui components and the design tokens from [`docs/DESIGN.md`](../../docs/DESIGN.md), consumed by `apps/web`.
+Shared shadcn/ui components and the design tokens from [`docs/design.md`](../../docs/design.md), consumed by `apps/web`.
 
 | Export | Source |
 |---|---|
-| `@ohmypos/ui/globals.css` | `src/styles/globals.css`: Tailwind v4 theme variables (the DESIGN.md tokens) |
+| `@ohmypos/ui/globals.css` | `src/styles/globals.css`: Tailwind v4 theme variables (the design.md tokens) |
 | `@ohmypos/ui/components/<name>` | `src/components/ui/<name>.tsx` |
 | `@ohmypos/ui/lib/<name>` | `src/lib/<name>.ts` (`cn`, `portal-container`) |
 

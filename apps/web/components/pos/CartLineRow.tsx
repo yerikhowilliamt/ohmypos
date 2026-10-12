@@ -35,7 +35,7 @@ export function CartLineRow({
 }: CartLineRowProps) {
   const isOverridden = line.overridePrice !== null;
   // Starts collapsed unless the line already carries an override, so a fresh
-  // cart line reads as compact text (DESIGN.md §11.4 Order Panel) rather than a full form
+  // cart line reads as compact text (design.md §11.4 Order Panel) rather than a full form
   // row — the CurrencyInput only reappears once the cashier asks to edit it.
   const [isEditingPrice, setIsEditingPrice] = React.useState(isOverridden);
 

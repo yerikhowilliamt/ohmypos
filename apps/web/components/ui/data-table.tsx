@@ -121,7 +121,7 @@ interface DataTableProps<TData, TValue> {
   exportAll?: () => Promise<TData[]>;
   /** Total rows behind the filter (`pagination.meta.total`), for the Export label. */
   exportTotal?: number;
-  /** Pins the first column while scrolling horizontally (DESIGN.md §13.3). Default true. */
+  /** Pins the first column while scrolling horizontally (design.md §13.3). Default true. */
   stickyFirstColumn?: boolean;
   /** Server-driven sorting: pass both `sorting` and `onSortingChange`. */
   sorting?: SortingState;
@@ -197,7 +197,7 @@ function ExportButton<TData>({
   );
 }
 
-/** Rows-per-page selector in the toolbar; reads `meta.limit` (DESIGN.md §12.4). */
+/** Rows-per-page selector in the toolbar; reads `meta.limit` (design.md §12.4). */
 function PageSizeSelect({
   limit,
   onLimitChange,
@@ -242,7 +242,7 @@ function getColumnAlign(
   return undefined;
 }
 
-/** Pinned first column with its own background and row-synced hover (DESIGN.md §12.1). */
+/** Pinned first column with its own background and row-synced hover (design.md §12.1). */
 function stickyCellClass(
   isFirst: boolean,
   isHeader: boolean,
@@ -266,7 +266,7 @@ export interface DataTablePagination {
 /** Fixed options; the API caps `limit` at 100. */
 export const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
-/** Footer for server-paginated tables, always rendered (DESIGN.md §12.4). */
+/** Footer for server-paginated tables, always rendered (design.md §12.4). */
 function DataTablePaginationFooter({
   meta,
   onPageChange,
@@ -338,7 +338,7 @@ function DataTablePaginationFooter({
   );
 }
 
-/** Sortable column header; click toggles asc/desc (DESIGN.md §12.1). */
+/** Sortable column header; click toggles asc/desc (design.md §12.1). */
 export function SortableHeader<TData>({
   label,
   column,

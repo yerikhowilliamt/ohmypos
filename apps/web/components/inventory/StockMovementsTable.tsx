@@ -31,7 +31,7 @@ const REFERENCE_TYPE_LABEL: Record<StockReferenceType, string> = {
   ADJUSTMENT: 'Penyesuaian',
 };
 
-/** Direction is carried by chevron and word, not colour alone (DESIGN.md §12.2). */
+/** Direction is carried by chevron and word, not colour alone (design.md §12.2). */
 function DirectionIndicator({ direction }: { direction: StockDirection }) {
   const isInflow = direction === 'IN';
   const Icon = isInflow ? ChevronUp : ChevronDown;

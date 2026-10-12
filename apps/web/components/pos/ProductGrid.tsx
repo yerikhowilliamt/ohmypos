@@ -53,7 +53,7 @@ export function ProductGrid({
   return (
     <div className="flex flex-col gap-3">
       {products.length === 0 && (
-        // DESIGN.md §11.2 Product Grid & Cards: a distinct no-result state, distinct from empty data.
+        // design.md §11.2 Product Grid & Cards: a distinct no-result state, distinct from empty data.
         <p className="py-8 text-center text-sm text-text-secondary">
           {isFiltered
             ? 'Tidak ada produk yang cocok dengan pencarian atau filter ini.'

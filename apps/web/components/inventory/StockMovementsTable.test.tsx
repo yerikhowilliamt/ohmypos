@@ -92,7 +92,7 @@ describe('StockMovementsTable', () => {
   });
 
   it('carries direction in TEXT, not in colour alone', () => {
-    // DESIGN.md §12.2 + §22: colour is never the sole carrier of meaning, and
+    // design.md §12.2 + §22: colour is never the sole carrier of meaning, and
     // the gold/accent palette does not clear 4.5:1 on small glyphs anyway. If
     // this assertion is ever satisfied only by a class name, the indicator has
     // regressed to colour-only.

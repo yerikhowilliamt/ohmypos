@@ -1,6 +1,6 @@
 # apps/api/prisma
 
-**Related:** [`docs/03 - ERD.md`](../../../docs/03%20-%20ERD.md) (entities, relationships, porting notes) · ADR-004, ADR-005, ADR-006, ADR-007, ADR-011, ADR-012, ADR-013, ADR-014, ADR-015, ADR-018, ADR-024, ADR-025 · AGENTS.md (approval gate)
+**Related:** [`docs/erd.md`](../../../docs/erd.md) (entities, relationships, porting notes) · ADR-004, ADR-005, ADR-006, ADR-007, ADR-011, ADR-012, ADR-013, ADR-014, ADR-015, ADR-018, ADR-024, ADR-025 · AGENTS.md (approval gate)
 
 **Any change to `schema.prisma` or a migration needs approval first** (AGENTS.md). Migrate with `pnpm --filter api prisma migrate dev --name <name>`, then reseed with `pnpm --filter api db:seed`. Prisma-generated migrations in this repo try to drop the composite tenant FKs and uniques and must be hand-edited (DEBT-063).
 

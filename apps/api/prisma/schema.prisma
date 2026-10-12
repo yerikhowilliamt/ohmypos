@@ -1,4 +1,4 @@
-// OhMyPos schema. Design notes: prisma/README.md and docs/03 - ERD.md.
+// OhMyPos schema. Design notes: prisma/README.md and docs/erd.md.
 
 generator client {
   provider = "prisma-client"

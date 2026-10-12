@@ -14,7 +14,7 @@ interface ProductCardProps {
   /** Cart-aware makeable quantity — how many MORE can be added (ADR-013). */
   headroom: number | null | undefined;
   inCartQuantity: number;
-  /** DESIGN.md §11.2 Product Grid & Cards: the most recently added product carries a brand border. */
+  /** design.md §11.2 Product Grid & Cards: the most recently added product carries a brand border. */
   isHighlighted: boolean;
   onAdd: (product: ProductWithHppResponse) => void;
 }

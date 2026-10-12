@@ -18,7 +18,7 @@ import { SuspendedTenantDialog } from './SuspendedTenantDialog';
 import { Topbar } from './Topbar';
 
 /**
- * App shell (DESIGN.md §10). `default` has a topbar and a scrolling page; `pos`
+ * App shell (design.md §10). `default` has a topbar and a scrolling page; `pos`
  * is exactly one viewport tall so the POS zones size against it.
  */
 export function AppShell({
