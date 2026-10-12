@@ -1,14 +1,6 @@
 /**
- * OhMyPos — unit tests for the report SQL fragments (plan §6.6).
- *
- * These assert PARAMETERISATION, not SQL semantics: that user input lands in
- * `values` and never in the SQL text, and that the branch predicate is absent
- * (not `AND TRUE`) when no branch is filtered.
- *
- * ADR-025 added a third thing worth asserting: every fragment leads with a
- * BOUND `tenant_id` predicate. Raw SQL is the one place the Prisma extension
- * cannot help, so `tenantId` being first in `values` is the check that a report
- * cannot be run unscoped.
+ * Asserts parameterisation, not SQL semantics: input is bound, an absent branch
+ * adds no predicate, and the bound `tenant_id` always comes first.
  */
 import { resolveReportRange } from '../../common/period';
 import { runWithTenant } from '../../common/prisma/tenant-context';

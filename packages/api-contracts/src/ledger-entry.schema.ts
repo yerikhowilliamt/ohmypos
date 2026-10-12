@@ -10,11 +10,7 @@ import {
 export const CreateLedgerEntrySchema = z.object({
   accountId: UuidString,
   categoryId: UuidString,
-  /**
-   * Required-nullable: a UUID targets a branch; null asks the backend to
-   * attribute the entry to the seeded central-operation branch. The persisted
-   * LedgerEntry.branchId remains non-null (ADR-004, ADR-014).
-   */
+  /** Required key; `null` attributes the entry to the system branch (ADR-014). */
   branchId: UuidString.nullable(),
   entryDate: DateTimeString,
   amount: MoneyString,
@@ -40,11 +36,7 @@ export const LedgerEntryQuerySchema = PaginationQuerySchema.extend({
   type: TransactionType.optional(),
   sortBy: LedgerEntrySortBySchema.optional(),
   sortOrder: SortOrderSchema.optional(),
-  /**
-   * Inclusive `entryDate` bounds (ADR-019 / Reconciliation split-allocation
-   * candidate picker). Independent of each other — either may be supplied
-   * alone.
-   */
+  /** Inclusive `entryDate` bounds; either may be given alone. */
   startDate: DateTimeString.optional(),
   endDate: DateTimeString.optional(),
 });

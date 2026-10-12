@@ -47,12 +47,7 @@ function Avatar({
   );
 }
 
-/**
- * DESIGN.md §10.2 Sidebar Specifications: identity and permission context are always visible, inside
- * their own light-muted rounded container, separated from Settings / Log out.
- * §41.2 collapses it to the avatar alone on the tablet rail, where the name and
- * role move into a popover.
- */
+/** Identity and role card; avatar only on the tablet rail (design.md §10.2). */
 export function SidebarAccountCard({
   user,
   isRail,

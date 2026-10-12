@@ -1,15 +1,6 @@
 /**
- * OhMyPos — cart money math (ADR-015, Phase 8c plan §3).
- *
- * The number on the payment button is what the server will charge, so it must be
- * derived by the same rule the server uses. `calculateSaleLineTotal` /
- * `calculateSaleTotal` round PER LINE and then sum — the opposite of the stock
- * fan-out in `availability.ts`, which rounds once. Both rules are deliberate;
- * swapping them is the drift ADR-015 exists to prevent.
- *
- * There is no tax, no discount, no service charge: `Sale.totalAmount = Σ
- * SaleItem.lineTotal` and nothing else (ADR-015 decision 1, DEBT-004). A
- * "discount" is a per-line price override.
+ * Cart totals by the server's rule: round per line, then sum. No tax or
+ * discount; a discount is a per-line price override (ADR-015).
  */
 import {
   addFixed,

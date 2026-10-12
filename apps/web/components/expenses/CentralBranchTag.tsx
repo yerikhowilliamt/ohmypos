@@ -6,11 +6,7 @@ interface CentralBranchTagProps {
   branchName?: string | null;
 }
 
-/**
- * DESIGN.md §19 Domain-Specific Components — CENTRAL/BRANCH must stay distinguishable without relying on
- * color alone, so each state carries its own icon and label in addition to
- * the badge tint (ADR-004's central-purchase marker is `branchId === null`).
- */
+/** Central vs branch tag with icon and label, not colour alone (design.md §19). */
 export function CentralBranchTag({
   branchId,
   branchName,

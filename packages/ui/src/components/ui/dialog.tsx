@@ -45,13 +45,8 @@ function DialogOverlay({
 }
 
 /**
- * `showCloseButton={false}` is for the one dialog shape that must not be
- * dismissable — a modal reporting a state in which nothing behind it works, so
- * closing it would only hide the explanation (see `SuspendedTenantDialog`).
- * Defaults to true, so every existing dialog is unchanged. Suppressing the X
- * alone is not enough for that case: Escape and click-outside also close a
- * Radix dialog, and those are the caller's to prevent via `onEscapeKeyDown` /
- * `onInteractOutside`.
+ * `showCloseButton={false}` hides the X for non-dismissable dialogs. Callers
+ * must also block Escape and outside clicks (`onEscapeKeyDown`, `onInteractOutside`).
  */
 function DialogContent({
   className,

@@ -60,12 +60,7 @@ const STATUS_CONFIG = {
 
 const PAGE_SIZE = 25;
 
-/**
- * Minimal pager for the two hand-rolled tables on this screen. They are not
- * DataTable instances and converting them would be unrelated refactoring, but
- * an unpaged list here silently hid every request past the first page once the
- * API started paging.
- */
+/** Minimal pager for this screen's two hand-rolled (non-DataTable) tables. */
 function LeavePager({
   page,
   totalPages,
@@ -133,12 +128,7 @@ export function OwnerReviewQueue() {
       limit: PAGE_SIZE,
     });
   const pendingRequests = pendingPageData?.data ?? [];
-  /**
-   * The tab badge counts the whole queue, not the current page — `meta.total`,
-   * never `pendingRequests.length`. Once the list is paged those two diverge,
-   * and a badge reading "50" while 130 requests wait for review is worse than
-   * no badge at all.
-   */
+  /** Badge counts the whole queue (`meta.total`), not the current page. */
   const pendingTotal = pendingPageData?.meta.total ?? 0;
   const pendingTotalPages = pendingPageData?.meta.totalPages ?? 1;
 

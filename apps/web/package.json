@@ -4,7 +4,7 @@
   "description": "OhMyPos frontend — Next.js App Router, consumes apps/api via REST only (System Design §5)",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "node ../../scripts/prune-next-cache.mjs && next dev --port 3001",
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint",
@@ -22,7 +22,7 @@
     "@tanstack/react-table": "^8.21.3",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.469.0",
-    "next": "16.3.0",
+    "next": "16.4.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hook-form": "^7.85.0",
@@ -32,19 +32,19 @@
   "devDependencies": {
     "@ohmypos/config": "workspace:*",
     "@playwright/test": "^1.62.1",
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "^24.0.0",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@vitest/coverage-v8": "^4.1.11",
-    "eslint": "^9.18.0",
+    "eslint": "^9.39.5",
     "eslint-config-next": "16.3.0",
     "jsdom": "^30.0.1",
-    "prettier": "^3.4.2",
-    "tailwindcss": "^4",
-    "typescript": "^5.7.3",
-    "vitest": "^4.1.10"
+    "prettier": "^3.9.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   }
 }

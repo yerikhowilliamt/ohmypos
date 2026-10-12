@@ -2,13 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
-/**
- * Uploads to Cloudinary and stores the resulting secure_url on User.photoUrl
- * (Phase 10b, ADR-020). One image per user: the public_id is deterministic
- * (`ohmypos/users/<userId>`), so a re-upload overwrites the previous photo
- * instead of accumulating orphaned images — this is a deliberate v1
- * simplification, not an oversight (no photo history).
- */
+/** Uploads a user photo to Cloudinary under a deterministic, overwritten public_id. */
 @Injectable()
 export class ProfilePhotoService {
   constructor(private readonly prisma: PrismaService) {
@@ -58,7 +52,6 @@ export class ProfilePhotoService {
   private getEnv(key: string): string {
     const value = process.env[key];
     if (!value) {
-      // Return placeholder in non-production fallback if needed, but error when missing
       return 'change-me';
     }
     return value;

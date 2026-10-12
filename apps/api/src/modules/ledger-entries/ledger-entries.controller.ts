@@ -27,15 +27,8 @@ import {
 } from './ledger-entries.dto';
 
 /**
- * Ledger entries carry a branch, so KASIR access is scoped to their own branch
- * (ADR-011 §4). ADMIN and OWNER pass through unscoped. Each endpoint declares
- * where its branch id lives rather than letting the guard guess.
- *
- * DEF-QA-01: `:id` routes have no body/query field the guard can read a
- * branch id from, so `GET :id` enforces branch ownership in the service once
- * the entry (and its branchId) is known, and `PATCH`/`DELETE :id` are
- * restricted to OWNER/ADMIN outright — a manual ledger entry is a
- * back-office correction, never a cashier action.
+ * `KASIR` is scoped to their own branch. `GET :id` checks the branch in the
+ * service; `PATCH`/`DELETE :id` are `OWNER`/`ADMIN` only (DEF-QA-01).
  */
 @ApiTags('ledger-entries')
 @Controller('ledger-entries')

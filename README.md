@@ -19,11 +19,11 @@ ohmypos/
 │   ├── api-contracts/   Zod schemas — single source of truth for request/response
 │   │                      shapes and their inferred TypeScript types (ADR-010)
 │   ├── ui/               Shared shadcn/ui component wrappers + design tokens
-│   │                      from DESIGN.md
+│   │                      from design.md
 │   └── config/           Shared ESLint/Prettier/TS config
 ```
 
-Core principle to keep in mind while working in this repo: **any operation that touches both financial state (`LedgerEntry`) and inventory state (`StockMovement`, `Payable`) happens in one database transaction.** This single rule is what ADR-004, ADR-006, and ADR-007 all depend on holding true at runtime — see [Engineering Playbook](./docs/04%20-%20Engineering_Playbook.md) Section 7.
+Core principle to keep in mind while working in this repo: **any operation that touches both financial state (`LedgerEntry`) and inventory state (`StockMovement`, `Payable`) happens in one database transaction.** This single rule is what ADR-004, ADR-006, and ADR-007 all depend on holding true at runtime — see [Engineering Playbook](./docs/guide.md) Section 7.
 
 ## Tech Stack
 
@@ -31,8 +31,8 @@ Core principle to keep in mind while working in this repo: **any operation that 
 | ------------------ | ------------------------------------------------------------------------------------------------- | ----------------------------- |
 | Backend framework  | NestJS (TypeScript)                                                                               | System Design §9              |
 | Frontend framework | Next.js (App Router)                                                                              | System Design §5              |
-| Component library  | shadcn/ui                                                                                         | DESIGN.md                     |
-| Typography         | Plus Jakarta Sans (UI), JetBrains Mono (numeric)                                                  | DESIGN.md                     |
+| Component library  | shadcn/ui                                                                                         | design.md                     |
+| Typography         | Plus Jakarta Sans (UI), JetBrains Mono (numeric)                                                  | design.md                     |
 | Database           | PostgreSQL (single instance)                                                                      | System Design §3              |
 | ORM                | Prisma                                                                                            | ADR-003                       |
 | Validation         | Zod (`packages/api-contracts`)                                                                    | ADR-010                       |
@@ -84,16 +84,17 @@ with `DNS_HOSTNAME_RESOLVED_PRIVATE`.
 
 ## Documentation Index
 
-| Doc                            | Covers                                                                                                                            |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `00 - PRD.md`                  | Problem, goals, functional requirements per dashboard, confirmed branch policy                                                    |
-| `01 - System Design.md`        | Monorepo structure, module responsibilities, three-role routing, key flows, deployment                                            |
-| `02 - ADR.md`                  | The 12 architecturally significant decisions and their rationale                                                                  |
-| `03 - ERD.md`                  | Field-level schema, relationships, combined diagram, porting notes                                                                |
-| `04 - Engineering Playbook.md` | Day-to-day rules — transactions, branch scoping, role enforcement, testing, CI, Definition of Done                                |
-| `DESIGN.md`                    | Design tokens, accessibility rules, component expectations                                                                        |
-| `AGENTS.md`                    | Kasync source location, glossary, scope boundaries, contributing workflow, troubleshooting — context for AI agents and future-you |
-| `README.md` (this doc)         | Architecture overview, tech stack, setup, scripts                                                                                 |
+| Doc                    | Covers                                                                                                                            |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `prd.md`               | Problem, goals, functional requirements per dashboard, confirmed branch policy                                                    |
+| `system-design.md`     | Monorepo structure, module responsibilities, three-role routing, key flows, deployment                                            |
+| `adrs/`                | One file per architecturally significant decision, indexed in `adrs/README.md`                                                    |
+| `erd.md`               | Field-level schema, relationships, combined diagram, porting notes                                                                |
+| `guide.md`             | Engineering Playbook: day-to-day rules — transactions, branch scoping, role enforcement, testing, CI, Definition of Done          |
+| `handbook.md`          | Project Handbook: setup, glossary, constraints, contributing, troubleshooting                                                     |
+| `design.md`            | Design tokens, accessibility rules, component expectations                                                                        |
+| `AGENTS.md`            | Kasync source location, glossary, scope boundaries, contributing workflow, troubleshooting — context for AI agents and future-you |
+| `README.md` (this doc) | Architecture overview, tech stack, setup, scripts                                                                                 |
 
 ## Synthetic Data Safety
 

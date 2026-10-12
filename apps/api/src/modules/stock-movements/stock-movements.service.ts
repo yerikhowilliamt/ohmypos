@@ -1,25 +1,3 @@
-/**
- * OhMyPos — the single authority for RawMaterial.currentStock (System Design §7,
- * ADR-007). The StockMovement log is the source of truth; currentStock is the
- * fast-read balance, and it is only ever written here, in the same transaction
- * as the movement that justifies it.
- *
- * Takes the caller's `tx` rather than using its own client: the purchase/sale,
- * the stock movement and the ledger entry must share ONE transaction boundary
- * (Playbook §7). A method that opened its own transaction here would silently
- * break that.
- *
- * Phase 4 wrote IN only. Phase 5 adds the OUT counterpart (applyOutbound), plus
- * `lockRawMaterialsInIdOrder` — the ONE place every stock-touching flow takes
- * its locks, in the ONE order (ADR-016). `applyInbound` now calls it too,
- * instead of interleaving lock and write per line; same order, strictly safer,
- * and it is what keeps the invariant in one place instead of two copies of the
- * same loop drifting apart.
- *
- * Phase 6 adds the third writer, applyOpening — the OPENING movement a monthly
- * stock-take produces. It is the only one of the three whose quantity is a
- * signed correction rather than a physical arrival or consumption.
- */
 import { Injectable } from '@nestjs/common';
 import type { StockMovementResponse } from '@ohmypos/api-contracts';
 import { Prisma } from '../../generated/prisma/client';
@@ -31,10 +9,6 @@ type StockMovementWithRelations = Prisma.StockMovementGetPayload<{
   include: { rawMaterial: true; branch: true };
 }>;
 
-/**
- * Decimals cross the wire as strings (ADR-010 / MoneyString, QuantityString) —
- * never as JS numbers, which would round a Decimal(18,4) quantity silently.
- */
 function toStockMovementResponse(
   m: StockMovementWithRelations,
 ): StockMovementResponse {
@@ -63,10 +37,7 @@ export interface InboundStockLine {
 
 export interface InboundStockInput {
   branchId: string | null;
-  // 'SALE' added for DEBT-010: a sale void reverses its own outbound
-  // movement via applyInbound, reusing the SALE reference type rather than
-  // adding a dedicated one — nothing sums StockMovement by referenceType the
-  // way LedgerEntry is summed by sourceType, so the reuse is safe here.
+  /** `SALE` is used when a sale void reverses its own outbound movement. */
   referenceType: 'PURCHASE' | 'SALE';
   referenceId: string;
   movementDate: Date;
@@ -80,7 +51,7 @@ export interface OutboundStockLine {
 }
 
 export interface OutboundStockInput {
-  /** Never null — there is no central sale (ADR-004, ADR-014, ADR-015). */
+  /** Never null: there is no central sale. */
   branchId: string;
   referenceType: 'SALE';
   referenceId: string;
@@ -90,34 +61,30 @@ export interface OutboundStockInput {
 
 export interface OpeningStockLine {
   rawMaterialId: string;
-  /** SIGNED correction — direction and quantity are derived here, not by the caller. */
+  /** Signed correction; direction and absolute quantity are derived from it. */
   delta: Prisma.Decimal;
-  /** OpeningStock.unitPrice ?? rawMaterial.unitCost (plan §5). */
   unitCost: Prisma.Decimal;
-  /**
-   * The OpeningStock row this movement came from. Per LINE, unlike
-   * applyInbound/applyOutbound: one purchase or one sale is a single event with
-   * one id, but a bulk stock-take writes one OpeningStock row per material.
-   */
+  /** The `OpeningStock` row this line came from (one per material). */
   referenceId: string;
 }
 
 export interface OpeningStockInput {
-  /** ALWAYS periodStart — never `new Date()` (plan §11.9 trap 3). */
+  /** The period start, never `new Date()`. */
   movementDate: Date;
   lines: OpeningStockLine[];
 }
 
+/**
+ * Sole writer of `RawMaterial.currentStock`.
+ *
+ * Every `apply*` method must run inside the caller's transaction and never opens
+ * its own. See `README.md` in this folder for invariants and lock ordering.
+ */
 @Injectable()
 export class StockMovementsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * The READ half of this module (TASK-070), and deliberately the ONLY method
-   * here that uses `this.prisma` instead of taking the caller's `tx`: it is a
-   * query, not a participant in anyone's transaction boundary. The three
-   * `apply*` methods below must keep taking `tx` — see the file header.
-   */
+  /** Paginated stock history. The only method here that is not transaction-bound. */
   async findAll(query: StockMovementQueryDto) {
     const {
       page = 1,
@@ -135,8 +102,6 @@ export class StockMovementsService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.StockMovementWhereInput = {
-      // A central movement (branchId null) cannot match the `branch` clause and
-      // that is correct — there is no branch name on it to match against.
       ...(search && {
         OR: [
           { rawMaterial: { name: { contains: search, mode: 'insensitive' } } },
@@ -147,9 +112,7 @@ export class StockMovementsService {
       ...(branchId && { branchId }),
       ...(direction && { direction }),
       ...(referenceType && { referenceType }),
-      // `movementDate`, NOT `createdAt`: applyOpening stamps movementDate with
-      // the period start, so a stock-take entered on the 5th belongs to the 1st.
-      // Filtering createdAt would hide it from a search for its own period.
+      // movementDate, not createdAt: opening movements are back-dated to the period start.
       ...((startDate || endDate) && {
         movementDate: {
           ...(startDate && { gte: new Date(startDate) }),
@@ -158,8 +121,6 @@ export class StockMovementsService {
       }),
     };
 
-    // `rawMaterialName` is the one sort key that is not a StockMovement column
-    // — same nested-orderBy shape as `supplierName` in PayablesService.
     const orderBy: Prisma.StockMovementOrderByWithRelationInput =
       sortBy === 'rawMaterialName'
         ? { rawMaterial: { name: sortOrder } }
@@ -171,9 +132,6 @@ export class StockMovementsService {
         skip,
         take: limit,
         orderBy,
-        // `branch` is a NULLABLE relation and Prisma's include left-joins it, so
-        // central rows (every OPENING, every central purchase) come back with
-        // branch: null rather than being dropped. That is most of this table.
         include: { rawMaterial: true, branch: true },
       }),
       this.prisma.stockMovement.count({ where }),
@@ -185,27 +143,17 @@ export class StockMovementsService {
         total,
         page,
         limit,
-        // `|| 1` — an empty result is still one (empty) page. Reporting 0 here
-        // is the bug TASK-068 fixed in ReconciliationService.
         totalPages: Math.ceil(total / limit) || 1,
       },
     };
   }
 
   /**
-   * The ONE place raw-material locks are taken, in the ONE order every flow
-   * uses (ADR-016). Ascending rawMaterialId: two transactions touching {A,B}
-   * and {B,A} would otherwise take the locks in opposite order and deadlock;
-   * Postgres would abort one of them with a 40P01, which is a 500 the caller
-   * cannot act on. A deterministic order makes the second transaction simply
-   * wait, and it holds across flows — a concurrent sale and purchase touching
-   * the same materials cannot deadlock with each other either.
+   * Row-locks the given raw materials in ascending id order (ADR-016).
    *
-   * Re-locking a row this transaction already holds is a no-op wait, which is
-   * why `applyOutbound` can safely call this again after `SalesService` already
-   * locked the same rows to read `unitCost` for the HPP snapshot (ADR-016 §3):
-   * `applyOutbound` must stay correct even if called from a flow that did not
-   * lock first.
+   * Every stock-touching flow must lock through this method so that concurrent
+   * transactions acquire locks in the same order and cannot deadlock. Re-locking
+   * a row the transaction already holds is a no-op.
    */
   async lockRawMaterialsInIdOrder(
     tx: Prisma.TransactionClient,
@@ -216,12 +164,12 @@ export class StockMovementsService {
     );
 
     for (const id of uniqueSortedIds) {
-      // `id` is a TEXT column (Prisma String @id) — no ::uuid cast. Casting here
-      // is the bug TASK-003's handoff records: it made every allocation a 500.
+      // `id` is TEXT; a ::uuid cast here breaks every caller.
       await tx.$queryRaw`SELECT id FROM raw_materials WHERE id = ${id} FOR UPDATE`;
     }
   }
 
+  /** Records an `IN` movement per line and increments `currentStock`. Never reprices. */
   async applyInbound(
     tx: Prisma.TransactionClient,
     input: InboundStockInput,
@@ -230,7 +178,6 @@ export class StockMovementsService {
       a.rawMaterialId.localeCompare(b.rawMaterialId),
     );
 
-    // Lock everything up front, before any write — ADR-016.
     await this.lockRawMaterialsInIdOrder(
       tx,
       lines.map((l) => l.rawMaterialId),
@@ -250,28 +197,18 @@ export class StockMovementsService {
         },
       });
 
-      // `increment` is an atomic UPDATE … SET x = x + n, so the balance is never
-      // read into JS and written back. The FOR UPDATE above is still required:
-      // it serializes the whole movement+balance pair, not just the arithmetic.
       await tx.rawMaterial.update({
         where: { id: line.rawMaterialId },
         data: { currentStock: { increment: line.quantity } },
       });
-
-      // The unitCost write-back deliberately does NOT happen here, even for an
-      // inbound purchase movement. A stock movement is not a pricing event —
-      // this same method also reverses a voided sale — so repricing from here
-      // would let a void change every product's live HPP. Only a purchase
-      // reprices a material, and SupplierPurchasesService owns that write, in
-      // this same transaction (ADR-024, step 8b; closes DEBT-006).
     }
   }
 
   /**
-   * The OUT counterpart of applyInbound (ADR-007, ADR-015, System Design §6.1).
-   * Validates EVERY line before writing ANY movement, so an insufficient-stock
-   * sale never reaches a partial decrement even before the transaction rolls
-   * back — two independent mechanisms delivering the same guarantee.
+   * Records an `OUT` movement per line and decrements `currentStock`.
+   *
+   * @throws InsufficientStockException if any line exceeds available stock.
+   * Every line is validated before anything is written.
    */
   async applyOutbound(
     tx: Prisma.TransactionClient,
@@ -282,9 +219,6 @@ export class StockMovementsService {
     );
     const ids = lines.map((l) => l.rawMaterialId);
 
-    // Re-locking rows SalesService already locked to read unitCost is a no-op
-    // wait (see the doc comment above) — this call is what keeps applyOutbound
-    // correct on its own, independent of what the caller already did.
     await this.lockRawMaterialsInIdOrder(tx, ids);
 
     const materials = await tx.rawMaterial.findMany({
@@ -295,8 +229,6 @@ export class StockMovementsService {
     );
     const nameById = new Map(materials.map((m) => [m.id, m.name]));
 
-    // Fails closed on a material this loop cannot even name — assertSufficientStock
-    // treats an id missing from the map as a shortfall, not a skip.
     assertSufficientStock(
       lines.map((l) => ({
         rawMaterialId: l.rawMaterialId,
@@ -320,35 +252,19 @@ export class StockMovementsService {
         },
       });
 
-      // `decrement` is an atomic UPDATE … SET x = x − n, so the balance is never
-      // read into JS and written back — but the FOR UPDATE above is still
-      // required: it serializes the check-then-act pair (assertSufficientStock
-      // above vs. this decrement), not the arithmetic. Removing the lock and
-      // keeping `decrement` yields a negative balance under concurrency with no
-      // error, which is exactly the failure ADR-007 exists to prevent.
+      // The row lock is what makes check-then-decrement safe; `decrement` alone is not (ADR-007).
       await tx.rawMaterial.update({
         where: { id: line.rawMaterialId },
         data: { currentStock: { decrement: line.quantity } },
       });
-
-      // Not updating rawMaterial.unitCost — a sale consumes stock, it does not
-      // reprice it. Same rule as applyInbound above (ADR-024).
     }
   }
 
   /**
-   * The OPENING counterpart of applyInbound/applyOutbound (System Design §6.4,
-   * ADR-016, plan §3.2).
+   * Records a stock-take correction per line as a central `OPENING` movement.
    *
-   * Deliberately does NOT call assertSufficientStock. The negative-result check
-   * happens in OpeningStockService BEFORE any write, against `resultingStock`,
-   * so the error can name the declared figure the user typed rather than a
-   * shortfall they never asked for.
-   *
-   * A zero delta still writes a movement (quantity 0.0000). It is the ledger's
-   * record that a count was taken and confirmed the balance, and it is inert in
-   * every sum — which keeps "one declaration, one movement" true and makes the
-   * e2e assertions on movement counts unambiguous.
+   * Does not check sufficiency; the caller validates the resulting stock first.
+   * A zero delta still writes a movement as the record that a count took place.
    */
   async applyOpening(
     tx: Prisma.TransactionClient,
@@ -358,8 +274,6 @@ export class StockMovementsService {
       a.rawMaterialId.localeCompare(b.rawMaterialId),
     );
 
-    // Re-locking rows the caller already holds is a no-op wait — this call is
-    // what keeps applyOpening correct on its own, independent of the caller.
     await this.lockRawMaterialsInIdOrder(
       tx,
       lines.map((l) => l.rawMaterialId),
@@ -369,11 +283,7 @@ export class StockMovementsService {
       await tx.stockMovement.create({
         data: {
           rawMaterialId: line.rawMaterialId,
-          // ERD §3 names OPENING as the example of a central event: a
-          // stock-take counts the shared pool, not one outlet's shelf.
-          // Attributing it to a branch would put centralized stock into a
-          // branch-shaped column, which is the ADR-004 mistake this schema
-          // exists to prevent.
+          // A stock-take counts the shared pool, not a branch (ADR-004).
           branchId: null,
           direction: line.delta.isNegative() ? 'OUT' : 'IN',
           quantity: line.delta.abs(),
@@ -384,19 +294,10 @@ export class StockMovementsService {
         },
       });
 
-      // `increment` with a negative Decimal is a correct atomic subtraction, so
-      // there is one code path here rather than a sign branch. The FOR UPDATE
-      // above is still required: it serializes the check-then-act pair (the
-      // caller's carry-forward read vs. this write), not the arithmetic.
       await tx.rawMaterial.update({
         where: { id: line.rawMaterialId },
         data: { currentStock: { increment: line.delta } },
       });
-
-      // Not updating rawMaterial.unitCost — a stock-take corrects the COUNT, not
-      // the price. `OpeningStock.unitPrice` values THIS movement and nothing
-      // else; letting it reprice the material would make a count silently
-      // rewrite live HPP (ADR-024).
     }
   }
 }

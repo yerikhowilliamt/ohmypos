@@ -1,15 +1,3 @@
-/**
- * OhMyPos — Products controller (ADR-011, Playbook §8).
- *
- * Handles Product CRUD and Recipe sub-routes (`PUT`/`GET /products/:id/recipe`), delegating
- * recipe operations to `RecipesService` (§3, R1).
- *
- * Role scoping: write actions require OWNER or ADMIN; read actions allow any authenticated role
- * (including KASIR for POS product/recipe reads).
- *
- * No BranchScopeGuard is applied here deliberately: Product is centralized master data
- * with no branchId column (§6).
- */
 import {
   BadRequestException,
   Body,
@@ -128,7 +116,7 @@ export class ProductsController {
     return { photoUrl };
   }
 
-  // --- Recipe Sub-Routes (R1) ---
+  // Recipe sub-routes
 
   @Put(':id/recipe')
   @Roles('OWNER', 'ADMIN')

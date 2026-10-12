@@ -1,12 +1,3 @@
-/**
- * OhMyPos — unit tests for the Inventory Summary arithmetic (PRD §5.6,
- * Phase 6 plan §2.1, §4.1, §12.1).
- *
- * The identity `closing = opening + in − out` and its equivalence to the raw
- * signed movement sum is what this whole phase exists to guarantee. It is
- * asserted here exhaustively with no database, and again in e2e against an
- * independent SQL oracle.
- */
 import { Prisma } from '../../generated/prisma/client';
 import {
   assembleInventorySummary,

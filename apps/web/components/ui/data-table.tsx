@@ -46,35 +46,7 @@ import { exportRowsToXlsx, type ExportColumn } from '@/lib/export';
 import { EXPORT_ROW_CAP, ExportTooLargeError } from '@/lib/fetchAllPages';
 import { formatThousands } from '@/lib/formatters';
 
-/**
- * OhMyPos data table (shadcn pattern over @tanstack/react-table + @ohmypos/ui
- * table primitives — DESIGN.md §12.1 Data Table Rules, pagination in §12.4 Pagination).
- *
- * The shared surface for every table that needs search / filter / sort instead
- * of a hand-rolled input. Column-level behavior is declared in `ColumnDef`s;
- * this component owns the toolbar (search input bound to one or more
- * filterable columns), sorting state, loading skeleton, and empty states.
- *
- * Column conventions:
- * - `meta: { align: 'right' | 'center' }` — alignment for numeric/centered cells.
- * - `accessorFn: (row) => Number(row.x)` — numeric sorting; string accessorKeys
- *   sort lexically, which is wrong for quantities and money.
- * - `filterFn: 'includesString'` / `'equalsString'` — opt a column into the
- *   toolbar search or a filter dropdown.
- */
-/**
- * Server-side search. When supplied, the toolbar renders a controlled input
- * whose value the call site owns and forwards to the API — no TanStack column
- * filter is involved, so the box searches the whole result set instead of the
- * page on screen.
- *
- * Takes precedence over `searchColumns`, which is then ignored entirely — the
- * toolbar never calls `setFilterValue`, so no client-side filter runs over the
- * page the server already filtered. That precedence is deliberate rather than
- * incidental: a second, page-scoped filter would drop rows that matched on a
- * field with no column of its own (an attendance row matched by email).
- * Passing both is still pointless; pass only this one.
- */
+/** Server-side search over the whole result set. Supersedes `searchColumns`. */
 export interface DataTableServerSearch {
   value: string;
   onChange: (value: string) => void;
@@ -106,10 +78,7 @@ function DataTableToolbar<TData>({
     : ((columns[0]?.getFilterValue() as string) ?? '');
 
   return (
-    // `w-full` so the wrapper actually claims its max-w-xs budget: as a bare
-    // flex item it sized to content and clipped the placeholder at ~199px,
-    // which truncated "Cari keterangan di halaman ini…" to "Cari keterangan di
-    // ha…" — losing the exact words that make the page-scoped search honest.
+    // `w-full` so the placeholder is not truncated.
     <div className="relative w-full max-w-xs">
       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-text-tertiary" />
       <Input
@@ -142,54 +111,22 @@ interface DataTableProps<TData, TValue> {
   searchLabel?: string;
   emptyMessage?: string;
   emptyDescription?: string;
-  /** Raw-value column spec for the Export button — parallel to `columns` but
-   * without JSX cells, since a spreadsheet needs plain string/number/Date
-   * values. Only rendered when both this and `exportFilename` are set. */
+  /** Plain-value columns for Export; requires `exportFilename`. */
   exportColumns?: ExportColumn<TData>[];
   exportFilename?: string;
   /**
-   * Pemasok baris untuk Export ketika `data` hanya memuat satu halaman.
-   *
-   * WAJIB bila `pagination` dipasang bersama `exportColumns`: tanpanya tombol
-   * membangun workbook dari halaman yang sedang tampil sambil terlihat
-   * mengekspor seluruh hasil terfilter (DEBT-048).
-   *
-   * Tabel yang sudah memegang himpunan penuh (laporan, ringkasan stok, matriks
-   * absensi) justru TIDAK boleh memasangnya — di sana `getFilteredRowModel()`
-   * sudah benar, dan `exportAll` hanya akan memperlambatnya. `TopProductsView`
-   * khususnya: `limit: 10` di sana adalah definisi laporannya, bukan pemotongan.
+   * Fetches every filtered row for Export. Required with `pagination` +
+   * `exportColumns` (DEBT-048); omit for tables that already hold the full set.
    */
   exportAll?: () => Promise<TData[]>;
-  /**
-   * Jumlah baris sesungguhnya di balik filter saat ini, untuk label tombol —
-   * ambil dari `pagination.meta.total`. Tanpa ini tombol memakai jumlah baris
-   * yang dipegang tabel, yang benar hanya untuk tabel tak berpaginasi.
-   */
+  /** Total rows behind the filter (`pagination.meta.total`), for the Export label. */
   exportTotal?: number;
-  /**
-   * DESIGN.md §13.3 Backoffice Behaviour by Breakpoint: the identifying column stays pinned while the table
-   * scrolls horizontally. On by default — it is a general backoffice rule, not
-   * a per-table choice. Pass `false` for a table whose first column is not the
-   * identifier (none today).
-   */
+  /** Pins the first column while scrolling horizontally (design.md §13.3). Default true. */
   stickyFirstColumn?: boolean;
-  /**
-   * Server-driven sorting. Supply BOTH `sorting` and `onSortingChange` to hand
-   * ordering to the backend — the table then stops reordering rows itself
-   * (`manualSorting: true`), because with only one page in `data` a client-side
-   * sort would silently reorder the page while claiming to sort the whole set.
-   * Omit both and the table keeps its own sorting state, as every other table
-   * in the app does.
-   */
+  /** Server-driven sorting: pass both `sorting` and `onSortingChange`. */
   sorting?: SortingState;
   onSortingChange?: OnChangeFn<SortingState>;
-  /**
-   * Server-driven pagination. When supplied, `data` is expected to hold exactly
-   * one page and the footer renders page controls — always, even for a single
-   * page. A paginated table that also wants a search box must use
-   * `serverSearch`: `searchColumns` filters client-side and would only ever
-   * search the page currently on screen.
-   */
+  /** Server-driven pagination: `data` holds one page. Use `serverSearch` for search. */
   pagination?: DataTablePagination;
 }
 
@@ -209,9 +146,7 @@ function ExportButton<TData>({
   const [isExporting, setIsExporting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // `getFilteredRowModel()` is one page under server pagination. `exportTotal`
-  // is the real count behind the filter; the fallback is only correct for
-  // tables that hold their whole result set.
+  // Under server pagination the filtered row model is only one page.
   const rowCount = exportTotal ?? table.getFilteredRowModel().rows.length;
   const isTooLarge = rowCount > EXPORT_ROW_CAP;
 
@@ -224,8 +159,7 @@ function ExportButton<TData>({
         : table.getFilteredRowModel().rows.map((row) => row.original);
       await exportRowsToXlsx(exportFilename, exportColumns, rows);
     } catch (err) {
-      // A failed export must be visible. Staying silent here leaves the
-      // operator believing the file is in their Downloads folder.
+      // A failed export must be visible.
       setError(
         err instanceof ExportTooLargeError
           ? 'Terlalu banyak baris — persempit filter dulu.'
@@ -263,15 +197,7 @@ function ExportButton<TData>({
   );
 }
 
-/**
- * Rows-per-page selector (DESIGN.md §12.4 Pagination). Lives in the table's toolbar row,
- * aligned with the Export button, rather than in the footer — both are controls
- * over the whole table rather than over the current page.
- *
- * Reads its value from the server's `meta.limit`, never from a second copy of
- * the state, so it cannot disagree with the rows on screen. Height matches
- * ExportButton's so the toolbar row stays on one baseline.
- */
+/** Rows-per-page selector in the toolbar; reads `meta.limit` (design.md §12.4). */
 function PageSizeSelect({
   limit,
   onLimitChange,
@@ -316,15 +242,7 @@ function getColumnAlign(
   return undefined;
 }
 
-/**
- * The pinned first column (DESIGN.md §12.1 Data Table Rules, "Sticky Column"). A sticky cell
- * needs its own opaque
- * background or the scrolled content shows through it, and it needs to track
- * the row's hover state or the pinned cell visibly desyncs from its row — hence
- * the `[tr:hover_&]` arbitrary variant rather than inheriting `hover:` from the
- * row. The right-edge shadow only appears once the container is actually
- * scrolled, via `left-0` against the container's own scroll position.
- */
+/** Pinned first column with its own background and row-synced hover (design.md §12.1). */
 function stickyCellClass(
   isFirst: boolean,
   isHeader: boolean,
@@ -335,48 +253,20 @@ function stickyCellClass(
     : 'sticky left-0 z-10 bg-surface-raised [tr:hover_&]:bg-surface-muted';
 }
 
-/**
- * Server-driven pagination for a table whose rows come one page at a time.
- * `meta` is the `PaginationMeta` shape every paginated OhMyPos endpoint returns.
- */
+/** Server pagination state; `meta` is the shared `PaginationMeta`. */
 export interface DataTablePagination {
   meta: { total: number; page: number; limit: number; totalPages: number };
   onPageChange: (page: number) => void;
-  /**
-   * Supply to render the rows-per-page selector. The handler MUST also reset to
-   * page 1 — page 5 of a 10-row paging is not page 5 of a 50-row one, and
-   * keeping the old number can land the operator past the end of the result.
-   */
+  /** Renders the rows-per-page selector. The handler must also reset to page 1. */
   onLimitChange?: (limit: number) => void;
   /** Noun for the row count, e.g. "transaksi". Defaults to "baris". */
   itemNoun?: string;
 }
 
-/** DESIGN.md §12.4 Pagination. Kept small and fixed — a free-text row count invites
- * values the API rejects (`PaginationQuerySchema` caps `limit` at 100). */
+/** Fixed options; the API caps `limit` at 100. */
 export const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
-/**
- * Footer for server-paginated tables (DESIGN.md §12.4 Pagination).
- *
- * Always rendered, including for a single-page result: an invisible control is
- * indistinguishable from a missing one, so hiding it made the pagination
- * impossible to verify by looking at the screen.
- *
- * The caption states the row RANGE, not just the total — "uncompromising
- * financial precision" (§2) means an operator should be able to say exactly
- * which rows they are looking at. Every numeral is JetBrains Mono with
- * `tabular-nums` (§5, §10.1), so the digits do not shift width as pages change.
- *
- * The current page carries a champagne-gold hairline underline rather than gold
- * TEXT: `#C5A880` measures 2.26:1 against porcelain, far below the 4.5:1 that
- * §12 requires of text, so the gold lives in a non-text accent while the
- * numeral itself stays at full contrast.
- *
- * The rows-per-page control is NOT here — it sits in the toolbar row beside
- * Export (`PageSizeSelect`), because it governs the whole table rather than the
- * page currently shown.
- */
+/** Footer for server-paginated tables, always rendered (design.md §12.4). */
 function DataTablePaginationFooter({
   meta,
   onPageChange,
@@ -448,7 +338,7 @@ function DataTablePaginationFooter({
   );
 }
 
-/** Sortable column header (DESIGN.md §12.1 Data Table Rules) — click toggles asc/desc. */
+/** Sortable column header; click toggles asc/desc (design.md §12.1). */
 export function SortableHeader<TData>({
   label,
   column,
@@ -503,8 +393,7 @@ export function DataTable<TData, TValue>({
     [],
   );
 
-  // Both halves of the controlled pair must be present; one alone would leave a
-  // sort the table can display but nobody can change.
+  // Both halves of the controlled pair are required.
   const isManualSorting =
     sorting !== undefined && onSortingChange !== undefined;
   const activeSorting = isManualSorting ? sorting : internalSorting;
@@ -516,8 +405,7 @@ export function DataTable<TData, TValue>({
     state: { sorting: activeSorting, columnFilters },
     onSortingChange: isManualSorting ? onSortingChange : setInternalSorting,
     onColumnFiltersChange: setColumnFilters,
-    // `getSortedRowModel` stays wired below: TanStack ignores it while
-    // manualSorting is true, and the 15 tables that omit these props still need it.
+    // Still wired: ignored under manualSorting, needed by client-sorted tables.
     manualSorting: isManualSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),

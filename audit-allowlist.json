@@ -95,6 +95,18 @@
       "package": "tar",
       "reason": "Transitive dependency via canvas -> pdfjs-dist.",
       "reviewDate": "2026-11-23"
+    },
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "Dev-only, via eslint-config-next -> @next/eslint-plugin-next -> fast-glob -> micromatch (web lint). No patched release published yet (fix needs 3.0.4; registry tops out at 3.0.3), so no override is possible.",
+      "reviewDate": "2026-11-12"
+    },
+    {
+      "id": "GHSA-hp3w-g68c-fv3c",
+      "package": "sprintf-js",
+      "reason": "Dev-only, via jest -> babel-plugin-istanbul -> js-yaml@3 -> argparse (api unit tests). No patched release published yet (fix needs 1.1.4; registry tops out at 1.1.3), so no override is possible.",
+      "reviewDate": "2026-11-12"
     }
   ]
 }

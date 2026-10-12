@@ -8,14 +8,7 @@ import { usePlatformMetrics } from '@/hooks/usePlatformMetrics';
 import { formatCurrency, formatThousands } from '@/lib/formatters';
 import { TenantStatusBadge } from '@/components/platform/TenantStatusBadge';
 
-/**
- * ADR-025 §4 — the operator's landing screen.
- *
- * Everything here is a cross-tenant aggregate, which is the one thing a
- * database-per-tenant design would have made hard and this one makes a
- * `GROUP BY` (ADR-025, Consequences). Figures are computed at query time
- * (ADR-008); nothing is cached client-side beyond TanStack's default.
- */
+/** Platform console landing: cross-tenant aggregates, computed at query time. */
 export function PlatformOverviewClient() {
   const { data, isLoading, isError, error } = usePlatformMetrics();
 

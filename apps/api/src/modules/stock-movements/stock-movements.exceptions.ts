@@ -1,17 +1,6 @@
 import { ConflictException, HttpStatus } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 
-/**
- * OhMyPos — StockMovements domain exceptions (Playbook §6, plan §10.5).
- *
- * - InsufficientStockException (409) — a state conflict: raised when a sale
- *   would drop `RawMaterial.currentStock` below zero. Playbook §6 names this
- *   exception explicitly. Lists every short material at once (assertSufficientStock
- *   checks all requirements before throwing) — a cashier fixing an order needs
- *   the whole list, not the first failure.
- *
- * `this.name` is set, matching every other `*.exceptions.ts` in the repo.
- */
 export interface StockShortfall {
   rawMaterialId: string;
   name: string;
@@ -19,6 +8,12 @@ export interface StockShortfall {
   available: Prisma.Decimal;
 }
 
+/**
+ * 409 raised when a sale would drive any material below zero.
+ *
+ * Lists every shortfall in `details.shortfalls` so the POS can map each one
+ * back to its cart line.
+ */
 export class InsufficientStockException extends ConflictException {
   constructor(shortfalls: StockShortfall[]) {
     const message = `Insufficient stock: ${shortfalls
@@ -28,16 +23,6 @@ export class InsufficientStockException extends ConflictException {
       )
       .join('; ')}`;
 
-    /**
-     * Constructed with an object descriptor rather than a bare string so the POS
-     * can map each shortfall back to the cart lines that caused it. The global
-     * filter returns `getResponse()` verbatim for any HttpException, so this
-     * object is exactly what the client receives.
-     *
-     * `message` stays byte-identical to the previous string form — `this.message`
-     * is initialised from this key, so existing assertions on the message keep
-     * holding, and `error: 'Conflict'` preserves the default envelope shape.
-     */
     super({
       statusCode: HttpStatus.CONFLICT,
       error: 'Conflict',

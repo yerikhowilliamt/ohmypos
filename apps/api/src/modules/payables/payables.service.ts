@@ -1,9 +1,3 @@
-/**
- * OhMyPos — Payables service (ERD §3, ADR-006, System Design §6.3).
- *
- * Stored `remainingBalance` + `status` written ONLY inside the settlement transaction
- * under `SELECT ... FOR UPDATE` row lock (plan §2 Option B, §9.6).
- */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   PayableStatus,
@@ -30,14 +24,14 @@ export class PayablesService {
   ) {}
 
   /**
-   * Settles a payable in a single transaction under FOR UPDATE pessimistic row lock (plan §9.6).
-   * Generates the expense LedgerEntry at the moment money actually leaves the account (ADR-006).
+   * Settles a payable under a row lock and writes the expense ledger entry at
+   * the moment money leaves the account (ADR-006).
    */
   async settle(payableId: string, dto: CreatePayableSettlementDto) {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
-          // SISIPAN 1: pra-cek replay (kasus umum: kirim ulang, bukan balapan)
+          // Replay pre-check; a concurrent replay is caught by the unique index below.
           if (dto.idempotencyKey) {
             const existingSettlement = await tx.payableSettlement.findUnique({
               where: {
@@ -61,10 +55,10 @@ export class PayablesService {
             }
           }
 
-          // 1. ⚠️ LOCK FIRST, READ SECOND — serializes concurrent settlements on the same payable
+          // 1. Lock first, read second: serializes concurrent settlements.
           await tx.$queryRaw`SELECT id FROM payables WHERE id = ${payableId} AND tenant_id = ${requireTenantId()} FOR UPDATE`;
 
-          // 2. Read AFTER the lock to prevent check-then-act race
+          // 2. Read after the lock (no check-then-act race).
           const payable = await tx.payable.findUnique({
             where: { id: payableId },
             include: {
@@ -79,7 +73,7 @@ export class PayablesService {
             );
           }
 
-          // 3. Verify payment account existence
+          // 3. Payment account.
           const account = await tx.account.findUnique({
             where: { id: dto.accountId },
           });
@@ -89,24 +83,24 @@ export class PayablesService {
             );
           }
 
-          // 4. Validate settlable state (pure rule, throws domain exceptions)
+          // 4. Validate (pure rule).
           const amount = new Prisma.Decimal(dto.amount);
           assertSettlable(payable.status, payable.remainingBalance, amount);
 
-          // 5. Calculate new remaining balance & status
+          // 5. New balance and status.
           const newRemaining = payable.remainingBalance.minus(amount);
           const newStatus: PayableStatus = newRemaining.isZero()
             ? 'SETTLED'
             : 'PARTIALLY_SETTLED';
 
-          // 6. Resolve ledger branch & category (ADR-014)
+          // 6. Ledger branch and category (ADR-014).
           const branchIdForLedger = await resolveLedgerBranchId(
             tx,
             payable.supplierPurchase.branchId,
           );
           const categoryId = await resolvePurchaseCategoryId(tx);
 
-          // 7. Create expense LedgerEntry
+          // 7. Expense ledger entry.
           const entry = await this.ledgerEntriesService.createSystemEntry(tx, {
             accountId: dto.accountId,
             categoryId,
@@ -119,7 +113,7 @@ export class PayablesService {
             note: dto.note ?? null,
           });
 
-          // 8. Create PayableSettlement and cross-link sourceId
+          // 8. Settlement row, cross-linked as the entry's source.
           const settlement = await tx.payableSettlement.create({
             data: {
               payableId,
@@ -137,7 +131,7 @@ export class PayablesService {
             data: { sourceId: settlement.id },
           });
 
-          // 9. Update Payable balance & status
+          // 9. Payable balance and status.
           await tx.payable.update({
             where: { id: payableId },
             data: {
@@ -146,7 +140,7 @@ export class PayablesService {
             },
           });
 
-          // 10. Update parent SupplierPurchase paymentStatus (decision 3 / plan §4)
+          // 10. Parent purchase paymentStatus.
           await tx.supplierPurchase.update({
             where: { id: payable.supplierPurchaseId },
             data: {
@@ -155,7 +149,6 @@ export class PayablesService {
             },
           });
 
-          // 11. Reload and return mapped response
           const updated = (await tx.payable.findUnique({
             where: { id: payableId },
             include: {
@@ -166,12 +159,7 @@ export class PayablesService {
 
           return toPayableResponse(updated);
         },
-        // maxWait: Phase 14 finding (B4, concurrency e2e) — 30-way settlement
-        // contention on one payable serializes entirely on the step-1 FOR UPDATE
-        // lock (by design), so later-queued transactions can wait longer than
-        // Prisma's short default before even starting, surfacing as a connection
-        // failure rather than the clean 409 assertSettlable would otherwise
-        // produce. Same reasoning as OpeningStockService.upsert's maxWait.
+        // Long maxWait: heavy contention queues on the step-1 lock (B4).
         { maxWait: 10000, timeout: 15000 },
       );
     } catch (error) {
@@ -223,9 +211,7 @@ export class PayablesService {
       ...(status && { status }),
     };
 
-    // `supplierName` is the one sort key that is not a Payable column — it lives
-    // on the related Supplier, so it needs a nested orderBy rather than the flat
-    // `[sortBy]: sortOrder` every other key uses.
+    // `supplierName` lives on Supplier, so it needs a nested orderBy.
     const orderBy: Prisma.PayableOrderByWithRelationInput =
       sortBy === 'supplierName'
         ? { supplier: { name: sortOrder } }
@@ -274,10 +260,7 @@ export class PayablesService {
     return toPayableResponse(payable);
   }
 
-  /**
-   * Running payable balance per supplier (PRD §5.3).
-   * Aggregates open/partially-settled payables grouped by supplier.
-   */
+  /** Open payable balance per supplier (PRD §5.3). */
   async getSupplierSummary(): Promise<PayableSupplierSummary[]> {
     const payables = await this.prisma.payable.findMany({
       where: {

@@ -67,12 +67,7 @@ function toReconciliationSortBy(
     : 'txnDate';
 }
 
-/**
- * A 403 can only reach this screen if the session's role changed after render —
- * `requireRole(['ADMIN','OWNER'])` already redirects KASIR server-side
- * (page.tsx, lib/session.ts:44) and RoleGuard is the real authority (ADR-011).
- * The screen therefore reports the refusal; it never second-guesses it.
- */
+/** A 403 here means the role changed after render; report it, the API is the authority. */
 function isForbidden(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403;
 }
@@ -91,11 +86,7 @@ export function ReconciliationClient() {
     React.useState<BankTransactionResponse | null>(null);
   const [dialogOpen, setDialogOpen] = React.useState(false);
 
-  // Page 1 is claimed at KEYSTROKE time, not when the debounced value lands: a
-  // new keyword usually yields a shorter result set, and page 7 of the old one
-  // is past the end of the new one — an out-of-range page renders as "nothing
-  // found". Doing it here rather than in an effect on the debounced value also
-  // avoids one wasted request with the new keyword and the old page number.
+  // Reset to page 1 on keystroke, before the debounce, so a stale page is never requested.
   const handleSearchChange = React.useCallback((value: string) => {
     setSearchInput(value);
     setPage(1);

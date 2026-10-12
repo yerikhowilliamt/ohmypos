@@ -1,24 +1,9 @@
 // e2e tests run against the dedicated ohmypos_e2e database (see setup-e2e.ts).
 import 'dotenv/config';
 /**
- * OhMyPos — StockMovement read endpoint E2E (ERD §3, ADR-004, ADR-011,
- * ADR-018, TASK-070 plan §5.1).
- *
- * Fixtures are written straight through Prisma rather than through the real
- * sale/purchase endpoints, unlike inventory.e2e-spec.ts. That suite exists to
- * prove the WRITE path produces correct movements; this one tests the READ
- * path, and needs exact control over quantities, dates and null branches to
- * make the sort/filter assertions decisive.
- *
- * Every request is scoped to March 2024, a window no other suite touches, so
- * these assertions hold even when Jest runs suites in parallel against a shared
- * database.
- *
- * The fixture deliberately puts `movementDate` in MARCH and `createdAt` in
- * APRIL, in opposite orders. That is what makes the date-filter and default-sort
- * assertions able to tell the two columns apart — a service that filtered or
- * sorted `createdAt` would return zero rows for the March window instead of
- * quietly returning something plausible (plan §7 Trap 2).
+ * Read-path tests with fixtures written through Prisma, in March 2024 only.
+ * `movementDate` (March) and `createdAt` (April) are set in opposite orders so
+ * a service using the wrong column fails decisively.
  */
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';

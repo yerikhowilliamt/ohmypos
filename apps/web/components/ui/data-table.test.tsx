@@ -164,7 +164,7 @@ describe('DataTable server-driven sorting and pagination', () => {
     );
   });
 
-  it('renders every numeral in the tabular mono face (DESIGN.md §5 Typography, §12.1 Data Table Rules)', () => {
+  it('renders every numeral in the tabular mono face (design.md §5 Typography, §12.1 Data Table Rules)', () => {
     render(
       <DataTable
         columns={columns}

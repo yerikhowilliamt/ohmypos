@@ -1,6 +1,3 @@
-/**
- * OhMyPos — domain exceptions for the Products module (Playbook §6, ERD §3).
- */
 import { ConflictException } from '@nestjs/common';
 
 export class ProductNameTakenException extends ConflictException {
@@ -10,12 +7,7 @@ export class ProductNameTakenException extends ConflictException {
   }
 }
 
-/**
- * Phase 5, plan §9.4 decision 8: `SaleItem → Product` is `Restrict`, so once a
- * product has been sold, deleting it hits Postgres FK constraint P2003. Mapped
- * here rather than left as a raw 500 — the predictable Phase 5 counterpart to
- * ERR-004, this time anticipated instead of discovered.
- */
+/** The product has been sold (`SaleItem → Product` is Restrict), so it cannot be deleted. */
 export class ProductInUseException extends ConflictException {
   constructor() {
     super(

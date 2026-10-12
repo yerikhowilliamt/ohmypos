@@ -39,11 +39,8 @@ export class AccountsController {
   }
 
   /**
-   * The one account route a KASIR may call: the POS payment-method picker needs
-   * it to satisfy `CreateSaleSchema.accountId` (PRD §5.2). Declared BEFORE
-   * `@Get(':id')` — Nest matches in declaration order, so the reverse would send
-   * `payment-methods` into `ParseUUIDPipe` and 400. The narrowed projection
-   * lives in the service; this route never exposes `openingBalance`.
+   * Payment methods for the POS; the only account route open to KASIR. Must stay
+   * above `@Get(':id')`. Never exposes `openingBalance`.
    */
   @Get('payment-methods')
   @Roles('OWNER', 'ADMIN', 'KASIR')

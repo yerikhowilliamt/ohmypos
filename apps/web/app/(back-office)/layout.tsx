@@ -3,13 +3,8 @@ import { getImpersonationLabel } from '@/lib/impersonation';
 import { getInitialTheme, requireRole } from '@/lib/session';
 
 /**
- * Everything under `(back-office)` excludes KASIR. Individual routes narrow it
- * further — reports, inventory, expenses and users are OWNER-only, while
- * ADMIN also gets master data and reconciliation (System Design §5).
- *
- * This is also the only layout that enables dark mode — night-shift back
- * office staff asked for it. POS and `(shared)` never read or forward the
- * theme cookie, so they can never render dark regardless of its value.
+ * ADMIN and OWNER only; pages narrow further (System Design §5). The only route
+ * group with dark mode.
  */
 export default async function BackOfficeLayout({
   children,

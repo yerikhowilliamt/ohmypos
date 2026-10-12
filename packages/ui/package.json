@@ -2,7 +2,7 @@
   "name": "@ohmypos/ui",
   "version": "0.0.1",
   "private": true,
-  "description": "Shared shadcn/ui component wrappers + design tokens from DESIGN.md (System Design §2)",
+  "description": "Shared shadcn/ui component wrappers + design tokens from design.md (System Design §2)",
   "exports": {
     "./globals.css": "./src/styles/globals.css",
     "./lib/*": "./src/lib/*.ts",
@@ -20,17 +20,17 @@
     "lucide-react": "^0.469.0",
     "radix-ui": "^1.6.7",
     "recharts": "^3.10.1",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.1"
   },
   "devDependencies": {
     "@ohmypos/config": "workspace:*",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9.18.0",
-    "prettier": "^3.4.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.6",
     "react": "19.2.8",
-    "tailwindcss": "^4",
-    "typescript": "^5.7.3"
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
     "react": "^19",

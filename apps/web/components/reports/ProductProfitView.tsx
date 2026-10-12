@@ -22,13 +22,7 @@ import { ChartEmptyState, ReportBarChart } from './ReportChart';
 interface ProductProfitViewProps {
   data: ProductProfitResponse | undefined;
   isLoading: boolean;
-  /**
-   * The report's own date range, for the export filename (DEBT-025). Without
-   * it the file is named for the day it was exported, so two exports of
-   * different ranges on the same day overwrite each other in Downloads — and
-   * whoever opens the file later has no on-screen context to tell them which
-   * period it covers.
-   */
+  /** The report's date range, for the export filename (DEBT-025). */
   filters: ReportFilters;
 }
 

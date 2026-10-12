@@ -12,11 +12,7 @@ interface ReconciliationSummaryCardsProps {
   isLoading: boolean;
 }
 
-/**
- * Status counts plus the bank-vs-ledger variance from GET /reconciliation/summary.
- * Every figure is server-computed (reconciliation.service.ts:38, ADR-008) —
- * nothing here is recomputed client-side.
- */
+/** Status counts and variance, all server-computed. */
 export function ReconciliationSummaryCards({
   summary,
   isLoading,

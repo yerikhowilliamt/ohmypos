@@ -1,17 +1,3 @@
-/**
- * OhMyPos — Sales service (ERD §3, System Design §6.1, PRD §5.2, ADR-005, ADR-007,
- * ADR-014, ADR-015, ADR-016).
- *
- * Summary of the flow: for each line, resolve the charged price and snapshot the
- * PER-UNIT HPP from the current recipe (ADR-005, ADR-015) — never recomputed
- * later. Every raw material the cart's recipes touch is locked, ALL of it,
- * BEFORE any cost is read or any row is written, in ascending rawMaterialId
- * order (ADR-016) — this is what makes two concurrent sales (or a sale and a
- * purchase) racing the same material either serialize cleanly or fail with
- * InsufficientStockException, never deadlock and never corrupt the balance.
- * Stock decrement, SaleItem rows, and the income LedgerEntry all commit or roll
- * back together in one transaction (Playbook §7).
- */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -47,6 +33,10 @@ const saleWithRelationsInclude = {
   items: { include: { product: true } },
 } as const;
 
+/**
+ * Records sales, decrementing stock and writing the income ledger entry in one
+ * transaction. See `README.md` for the phase order and lock rules.
+ */
 @Injectable()
 export class SalesService {
   constructor(
@@ -56,17 +46,15 @@ export class SalesService {
   ) {}
 
   /**
-   * Creates a sale in a single database transaction (Playbook §7, System Design
-   * §6.1). An explicit `timeout` is set: this transaction can legitimately spend
-   * time waiting for row locks held by another sale (ADR-016), and Prisma's 5s
-   * interactive-transaction default would surface that as a P2028/500 on a sale
-   * that was merely queued, not broken. 15s absorbs a queue; it is not a retry.
+   * Creates a sale, or returns the original one on an idempotency-key replay.
+   *
+   * @throws InsufficientStockException if any material is short; nothing is written.
    */
   async create(dto: CreateSaleDto, userId: string, role?: string) {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
-          // ── SISIPAN 1: pra-cek replay (kasus umum: kirim ulang, bukan balapan)
+          // Replay pre-check; a concurrent replay is caught by the unique index below.
           if (dto.idempotencyKey) {
             const replay = await tx.sale.findUnique({
               where: {
@@ -82,7 +70,6 @@ export class SalesService {
             }
           }
 
-          // TASK-087 / DEF-A6 (G4-b N=3): Kasir batas mundur 3 hari
           const BACKDATE_LIMIT_DAYS = 3;
           if (role === 'KASIR') {
             const earliest = new Date();
@@ -93,7 +80,7 @@ export class SalesService {
             }
           }
 
-          // ── Phase 1: resolve (reads only, no locks yet) ─────────────────────
+          // 1. Resolve and validate (reads only, no locks yet).
           const branch = await tx.branch.findUnique({
             where: { id: dto.branchId },
           });
@@ -102,8 +89,6 @@ export class SalesService {
               'Cabang tidak ditemukan. Mungkin sudah dihapus — muat ulang halaman.',
             );
           }
-          // ADR-014/ADR-015: the system location is a ledger-attribution row,
-          // not a till — there is no central sale (ADR-004).
           if (branch.isSystem) {
             throw new CentralBranchNotSellableException();
           }
@@ -136,8 +121,7 @@ export class SalesService {
             throw new InactiveProductException(inactiveNames);
           }
 
-          // ADR-013: "no recipe" is a different fact than "recipe costs nothing" —
-          // a recipeless product is rejected, never sold at hppAtSale = 0 (plan §6).
+          // Never sell at hppAtSale = 0 because a recipe is missing (ADR-013).
           const incompleteNames = products
             .filter((p) => p.recipeItems.length === 0)
             .map((p) => p.name);
@@ -145,12 +129,7 @@ export class SalesService {
             throw new RecipeIncompleteException([...new Set(incompleteNames)]);
           }
 
-          // DEBT-009: KASIR may never charge a price that differs from
-          // Product.sellPrice — only ADMIN/OWNER can. Checked here (Phase 1,
-          // read-only) rather than left to resolveUnitPrice()/Phase 3, so a
-          // disallowed override fails before any lock is taken. Mirrors
-          // resolveUnitPrice()'s own "differs from master price" comparison
-          // exactly, so the two can never disagree on a boundary case.
+          // Same comparison as resolveUnitPrice(), checked before any lock (DEBT-009).
           if (role === 'KASIR') {
             const overriddenNames = dto.items
               .filter((item) => {
@@ -181,8 +160,7 @@ export class SalesService {
             }),
           );
 
-          // ── Phase 2: acquire (ALL locks, ascending order, before any mutation
-          //    or any read of unitCost/currentStock — ADR-016) ────────────────
+          // 2. Lock every material before reading unitCost/currentStock (ADR-016).
           await this.stockMovementsService.lockRawMaterialsInIdOrder(
             tx,
             requirements.map((r) => r.rawMaterialId),
@@ -193,7 +171,7 @@ export class SalesService {
           });
           const materialById = new Map(lockedMaterials.map((m) => [m.id, m]));
 
-          // ── Phase 3: compute and mutate ──────────────────────────────────────
+          // 3. Compute and write.
           const lineComputations = dto.items.map((item) => {
             const product = productById.get(item.productId)!;
             const quantity = new Prisma.Decimal(item.quantity);
@@ -208,19 +186,13 @@ export class SalesService {
               unitPrice: unitPriceAtSale,
             });
 
-            // Same calculateHpp call the Products module uses (ADR-005) — the live
-            // figure and the snapshot must never be two implementations that can
-            // drift. Locked rows only; recipeItems.length > 0 already asserted
-            // above, so this is never null.
+            // Same calculator as the live HPP (ADR-005); non-null since recipes are non-empty.
             const hppAtSale = calculateHpp(
               product.recipeItems.map((ri) => ({
                 quantityUsed: ri.quantityUsed,
                 unitCost: materialById.get(ri.rawMaterialId)!.unitCost,
               })),
-              // The product's waste allowance MUST be passed here too (ADR-024).
-              // Omitting it would snapshot a pre-waste cost while the master
-              // data screen shows the post-waste one — exactly the live/snapshot
-              // drift ADR-005 forbids.
+              // Waste must be included, or the snapshot drifts from live HPP (ADR-024).
               product.wastePercent,
             )!;
 
@@ -274,8 +246,6 @@ export class SalesService {
             })),
           });
 
-          // Raises InsufficientStockException and writes nothing if any material
-          // is short — the transaction then rolls back everything above too.
           await this.stockMovementsService.applyOutbound(tx, {
             branchId: dto.branchId,
             referenceType: 'SALE',
@@ -340,8 +310,6 @@ export class SalesService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.SaleWhereInput = {
-      // `mode: 'insensitive'` on every clause — without it "budi" never finds
-      // "Budi", and the omission reads as working code.
       ...(search && {
         OR: [
           { id: { contains: search, mode: 'insensitive' } },
@@ -399,23 +367,11 @@ export class SalesService {
   }
 
   /**
-   * DEBT-010 minimal interim void guard — NOT a general refund workflow.
-   * Same-day, ~30-minute window from `soldAt`, ADMIN/OWNER only (RoleGuard on
-   * the controller is authoritative), full reversal only (no partial refund).
+   * Fully reverses a sale within 30 minutes of `soldAt` (DEBT-010 interim void).
+   * Writes reversal rows; never edits or deletes the original ones.
    *
-   * Never deletes or mutates the original Sale/SaleItem/LedgerEntry rows —
-   * financial history, same "Restrict everywhere" rule the schema already
-   * enforces (ERD §3). A void instead writes a reversal LedgerEntry (OUTFLOW)
-   * and an inbound StockMovement, then flips Sale.status. Mirrors
-   * AllocationService.revoke()'s TOCTOU-safe lock-then-recheck shape
-   * (allocation.service.ts) — a concurrent void of the same sale must
-   * serialize, never race.
-   *
-   * Report correctness (profitLoss/incomeByPaymentMethod/dailyIncome no
-   * longer counting a voided sale's revenue) is NOT this method's job — it
-   * lives in report-filters.ts's saleScope() and the ledger-to-sales joins in
-   * reports.service.ts. See those files for why a status flip alone would
-   * not be enough.
+   * @throws SaleAlreadyVoidedException
+   * @throws SaleVoidWindowExpiredException
    */
   async void(id: string, userId: string) {
     return this.prisma.$transaction(
@@ -434,9 +390,7 @@ export class SalesService {
           );
         }
 
-        // Lock the sale row before re-checking status — see the TOCTOU note
-        // above. `id` is a TEXT column, no ::uuid cast (same trap as
-        // stock-movements.service.ts's lockRawMaterialsInIdOrder).
+        // Lock, then re-check status, so concurrent voids serialize. TEXT id: no ::uuid.
         await tx.$queryRaw`SELECT id FROM sales WHERE id = ${id} FOR UPDATE`;
 
         const sale = await tx.sale.findUniqueOrThrow({ where: { id } });
@@ -452,9 +406,6 @@ export class SalesService {
           throw new SaleVoidWindowExpiredException(VOID_WINDOW_MINUTES);
         }
 
-        // Reverse stock — same fan-out calculator create() uses, applied as
-        // an inbound movement. Reuses referenceType 'SALE' (see
-        // stock-movements.service.ts's InboundStockInput comment for why).
         const requirements = aggregateStockRequirements(
           target.items.map((item) => ({
             quantity: item.quantity,
@@ -483,9 +434,6 @@ export class SalesService {
           })),
         });
 
-        // Reverse cash — a real OUTFLOW ledger entry. Dedicated sourceType
-        // is for audit-trail legibility only; correctness for the P&L margin
-        // view comes from the Sale.status exclusion in reports.service.ts.
         await this.ledgerEntriesService.createSystemEntry(tx, {
           accountId: sale.accountId,
           categoryId: await resolveSaleCategoryId(tx),

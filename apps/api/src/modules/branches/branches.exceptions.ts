@@ -1,11 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 
-/**
- * The ADR-014 ledger-attribution row. Since the lookup moved to `isSystem`,
- * renaming it no longer breaks anything — but there is no UI for it either,
- * and letting it be dressed up as a store is the exact confusion this guard
- * exists to prevent. Deleting it still breaks every central purchase.
- */
+/** The system branch (ADR-014) cannot be edited or deleted. */
 export class SystemBranchProtectedException extends ConflictException {
   constructor() {
     super(

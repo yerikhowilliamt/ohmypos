@@ -47,15 +47,7 @@ import {
 } from '@/hooks/usePlatformTenants';
 import { formatCurrency, formatThousands } from '@/lib/formatters';
 
-/**
- * ADR-025 — one tenant: what it uses, whether it is switched on, and who has
- * looked inside it.
- *
- * The impersonation history sits on this page rather than behind a separate
- * screen deliberately. It is the record of operators reading a customer's
- * books, and a record nobody passes on the way to the button that adds to it is
- * a record that never gets read.
- */
+/** One tenant: usage, status, owner recovery and impersonation history (ADR-025). */
 export function TenantDetailClient({ tenantId }: { tenantId: string }) {
   const { data: tenant, isLoading } = usePlatformTenant(tenantId);
   const { data: sessions } = useTenantImpersonations(tenantId);
@@ -159,8 +151,7 @@ export function TenantDetailClient({ tenantId }: { tenantId: string }) {
             variant="outline"
             className="gap-2"
             onClick={() => setResetPasswordOpen(true)}
-            // Nothing to reset when the tenant has no active OWNER, and a
-            // dialog that can only fail is worse than a button that says so.
+            // Disabled without an active OWNER: nothing to reset.
             disabled={!tenant.ownerId}
             title={
               tenant.ownerId ? undefined : 'Tenant ini tidak punya Owner aktif.'
@@ -174,8 +165,7 @@ export function TenantDetailClient({ tenantId }: { tenantId: string }) {
             variant="outline"
             className="gap-2"
             onClick={() => setOwnerEmailOpen(true)}
-            // Same rule as the reset button beside it: with no active OWNER
-            // there is no login address to correct.
+            // Same rule: no active OWNER, no login address to correct.
             disabled={!tenant.ownerId}
             title={
               tenant.ownerId ? undefined : 'Tenant ini tidak punya Owner aktif.'
@@ -318,8 +308,7 @@ function ImpersonateDialog({
       await startImpersonation.mutateAsync(values);
       reset();
       onOpenChange(false);
-      // Straight into the tenant app. The banner comes from the cookie the
-      // route handler just set, so it is already there on first paint.
+      // The banner reads the cookie the route handler just set.
       router.push('/');
       router.refresh();
     } catch (error) {
@@ -397,14 +386,7 @@ function ImpersonateDialog({
   );
 }
 
-/**
- * TASK-130 — the operator's recovery path for a tenant OWNER who cannot get in.
- *
- * Shaped after `ImpersonateDialog` above, and for the same reason: both are an
- * operator reaching into somebody else's business, so both state what will
- * happen before the button is pressed and both record why. The differences are
- * that this one WRITES, and that what it writes is a working credential.
- */
+/** Resets a tenant OWNER's password, stating the effect and recording a reason (TASK-130). */
 const ResetOwnerPasswordFormSchema = ResetTenantOwnerPasswordSchema.omit({
   userId: true,
 })
@@ -447,8 +429,7 @@ function ResetOwnerPasswordDialog({
     defaultValues: { newPassword: '', confirmPassword: '', reason: '' },
   });
 
-  // No reset-on-open effect — the page keys this component on `open`, so each
-  // opening mounts a fresh one. See the note in `users/ResetPasswordDialog`.
+  // The page keys this dialog on `open`, so each opening is a fresh mount.
 
   const onSubmit = async (values: ResetOwnerPasswordFormValues) => {
     if (!ownerId) return;
@@ -459,8 +440,7 @@ function ResetOwnerPasswordDialog({
         newPassword: values.newPassword,
         reason: values.reason,
       } satisfies ResetTenantOwnerPassword);
-      // Cleared as soon as the request succeeds — the typed password has no
-      // reason to stay in this component, and the dialog never shows it again.
+      // Clear the typed password as soon as it is sent.
       reset({ newPassword: '', confirmPassword: '', reason: '' });
       setSuccessMessage(result.message);
     } catch (error) {
@@ -607,19 +587,8 @@ function ResetOwnerPasswordDialog({
 }
 
 /**
- * TASK-131 — the operator's fix for an owner login address that was mistyped
- * at provisioning.
- *
- * The third dialog on this page shaped the same way as the other two, and for
- * the same reason: an operator is reaching into somebody else's business, so it
- * says what will happen before the button is pressed and it records why.
- *
- * What is specific to this one is the confirmation checkbox. It appears only
- * when the tenant already holds data — the typo case it exists for is a tenant
- * provisioned minutes ago, where the box would be pure friction, but on a
- * trading business the same call hands over the login and the operator should
- * have to say so. The server enforces the same rule; this is not the guard,
- * only the part of it a human reads.
+ * Corrects a tenant OWNER's login email (TASK-131). The acknowledgement box
+ * appears only when the tenant already holds data; the server enforces the same rule.
  */
 const ChangeOwnerEmailFormSchema = UpdateTenantOwnerEmailSchema.omit({
   userId: true,

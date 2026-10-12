@@ -5,12 +5,7 @@ import { MoneyString, UuidString } from './primitives';
 export const TenantStatusSchema = z.enum(['ACTIVE', 'SUSPENDED']);
 export type TenantStatus = z.infer<typeof TenantStatusSchema>;
 
-/**
- * How a platform operator recognises a tenant in a list. Explicitly NOT a
- * routing key — the tenant is resolved from the User record, never from the
- * client (ADR-025 Decision 2) — so the only real constraints are that it is
- * readable and stable.
- */
+/** Human-readable tenant identifier. Never a routing key (ADR-025 Decision 2). */
 export const TenantSlugSchema = z
   .string()
   .trim()
@@ -22,15 +17,7 @@ export const TenantSlugSchema = z
     'Slug hanya boleh berisi huruf kecil, angka, dan tanda hubung tunggal di antaranya',
   );
 
-/**
- * ADR-025 Decision 7 — creating a tenant also creates its first OWNER, in the
- * same transaction. A tenant with no owner cannot be logged into and there is
- * no self-registration to fix that afterwards, so the two are one operation
- * rather than two endpoints an operator could half-complete.
- *
- * The owner shape mirrors `CreateUserSchema` minus `role` and `branchId`: the
- * role is always OWNER, and ADR-011 §2 requires an OWNER to have no branch.
- */
+/** Creates a tenant and its first OWNER in one transaction (ADR-025 Decision 7). */
 export const CreateTenantSchema = z.object({
   name: z.string().trim().min(1, 'Nama bisnis wajib diisi').max(120),
   slug: TenantSlugSchema,
@@ -43,11 +30,7 @@ export const CreateTenantSchema = z.object({
 });
 export type CreateTenant = z.infer<typeof CreateTenantSchema>;
 
-/**
- * Partial on purpose: suspending a tenant and renaming one are the same
- * endpoint, and an operator suspending a business should not have to resend
- * its name to do it.
- */
+/** Partial: rename and suspend share this endpoint. */
 export const UpdateTenantSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   slug: TenantSlugSchema.optional(),
@@ -65,11 +48,7 @@ export const TenantResponseSchema = z.object({
 });
 export type TenantResponse = z.infer<typeof TenantResponseSchema>;
 
-/**
- * The list row. Counts come from the same query that builds the page, so the
- * operator can tell a live business from an abandoned one without opening each
- * tenant in turn — which is the entire job of this screen.
- */
+/** Tenant list row with usage counts. */
 export const TenantListItemSchema = TenantResponseSchema.extend({
   userCount: z.number().int(),
   branchCount: z.number().int(),
@@ -77,29 +56,12 @@ export const TenantListItemSchema = TenantResponseSchema.extend({
 });
 export type TenantListItem = z.infer<typeof TenantListItemSchema>;
 
-/**
- * `grossRevenue` excludes voided sales, matching how every report in
- * `reports.service.ts` defines revenue (DEBT-010). `lastSaleAt` is null for a
- * tenant that has never recorded one — which, for a newly provisioned tenant,
- * is the number an operator actually wants to see.
- */
+/** `grossRevenue` excludes voided sales (DEBT-010). */
 export const TenantDetailResponseSchema = TenantListItemSchema.extend({
-  /**
-   * The same OWNER `ownerEmail` names. Carried as an id because the console's
-   * password-reset call (TASK-130) has to say WHICH user it means, and a tenant
-   * may hold more than one OWNER — see `ResetTenantOwnerPasswordSchema`. Null
-   * for a tenant with no active OWNER, which is possible only if one was
-   * deactivated after provisioning.
-   */
+  /** The oldest active OWNER, or null. Used to target owner-recovery calls. */
   ownerId: UuidString.nullable(),
   ownerEmail: z.string().nullable(),
-  /**
-   * True when the tenant holds nothing beyond what provisioning itself created
-   * (its business profile, its system branch, its two system categories and
-   * that one OWNER). It is what the console uses to decide whether changing
-   * the owner's login email is a typo fix or an intervention in a live
-   * business — see `UpdateTenantOwnerEmailSchema.acknowledgeExistingData`.
-   */
+  /** True when the tenant holds nothing beyond what provisioning created. */
   isPristine: z.boolean(),
   rawMaterialCount: z.number().int(),
   productCount: z.number().int(),

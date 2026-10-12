@@ -1,15 +1,7 @@
 import { z } from 'zod';
 import { UuidString } from './primitives';
 
-/**
- * ADR-025 Decision 8 — impersonation is read-only, logged, and short-lived.
- *
- * `reason` is required and has a real minimum length because this record is
- * the only account of why an operator looked inside a customer's books. A
- * one-word reason ("debug") makes the audit trail technically complete and
- * practically worthless, so the schema refuses it at the edge rather than
- * relying on operator discipline.
- */
+/** Read-only, logged, short-lived impersonation (ADR-025 Decision 8). `reason` is mandatory. */
 export const StartImpersonationSchema = z.object({
   reason: z
     .string()
@@ -29,12 +21,7 @@ export const ImpersonationSessionResponseSchema = z.object({
   reason: z.string(),
   startedAt: z.date().or(z.string()),
   endedAt: z.date().or(z.string()).nullable(),
-  /**
-   * Present only on the response that STARTS a session — this is the tenant
-   * access token the console then sends as an ordinary user. Deliberately
-   * short-lived (30 minutes) and issued with no refresh token, so an
-   * impersonation session cannot be silently extended.
-   */
+  /** Only on the start response: a 30-minute tenant token with no refresh. */
   accessToken: z.string().optional(),
   expiresAt: z.date().or(z.string()).optional(),
 });

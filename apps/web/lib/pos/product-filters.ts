@@ -1,16 +1,6 @@
 /**
- * OhMyPos — POS product discovery filters (DESIGN.md §11.3 Category Filter Row, §11.2 Product Grid & Cards).
- *
- * Pure: no React, no network, no dates.
- *
- * DESIGN.md §11.3 Category Filter Row illustrates the filter row with menu categories (Foods,
- * Beverage). `Product` has no category column (schema.prisma:354, DEBT-018), so
- * this module buckets by the one product-level fact POS already computes: the
- * cart-aware makeable quantity from `availability.ts` (ADR-013). Same card
- * anatomy as §22, real predicates behind it.
- *
- * The buckets are exhaustive and mutually exclusive, so the three non-ALL
- * counts always sum to the ALL count — a cashier can trust the row.
+ * POS filter buckets by availability (Product has no category, DEBT-018). The
+ * buckets are exhaustive and exclusive, so their counts sum to ALL.
  */
 import type { ProductWithHppResponse } from '@ohmypos/api-contracts';
 
@@ -29,14 +19,7 @@ export const PRODUCT_BUCKETS: BucketDefinition[] = [
   { id: 'NO_RECIPE', label: 'Tanpa Resep' },
 ];
 
-/**
- * Mirrors `canAddProduct`'s reasoning (availability.ts) so the row never
- * disagrees with whether a tile is enabled:
- *
- * - no recipe  → unsellable outright (`RecipeIncompleteException`, ADR-015)
- * - headroom 0 → the cart already claims every unit the shared pool allows
- * - unknown headroom → READY, because headroom is advisory and never a gate
- */
+/** Bucket rules match `canAddProduct`: no recipe = unsellable, zero headroom = out, unknown = ready. */
 export function bucketOf(
   product: ProductWithHppResponse,
   headroom: number | null | undefined,
@@ -59,11 +42,7 @@ export interface BucketCount {
   count: number;
 }
 
-/**
- * The counts rendered on the §22 filter cards. Recomputed on every cart change,
- * because headroom is cart-aware — adding the last Latte moves it from
- * "Siap Dibuat" to "Stok Habis" while the cashier watches.
- */
+/** Filter card counts; recomputed on every cart change because headroom is cart-aware. */
 export function countByBucket(
   products: ProductWithHppResponse[],
   headroom: Map<string, number | null>,
@@ -93,11 +72,7 @@ export interface FilterProductsInput {
   query: string;
 }
 
-/**
- * `GET /products` is unpaginated master data (products.service.ts), so both the
- * filter and the search run client-side and are instant — DESIGN.md §11.2 Product Grid & Cards asks
- * for a fast search, and a round trip per keystroke would not be.
- */
+/** Filter and search run client-side: `GET /products` is unpaginated. */
 export function filterProducts({
   products,
   headroom,

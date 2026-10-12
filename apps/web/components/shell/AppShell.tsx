@@ -18,16 +18,8 @@ import { SuspendedTenantDialog } from './SuspendedTenantDialog';
 import { Topbar } from './Topbar';
 
 /**
- * DESIGN.md §10 Application Shell & Navigation. Two shapes of the same shell:
- *
- * - `default` (Backoffice + shared routes): 52px topbar, page scrolls normally.
- * - `pos`: no desktop topbar strip, and the shell is exactly one viewport tall
- *   so the three POS zones can size themselves against it instead of growing
- *   the page. `<main>` still scrolls internally, which is what keeps
- *   `/sales/history` — an ordinary table page inside the same route group —
- *   working unchanged.
- *
- * Page margins follow §41.6's step-down: 16px mobile, 24px tablet, 32px desktop.
+ * App shell (design.md §10). `default` has a topbar and a scrolling page; `pos`
+ * is exactly one viewport tall so the POS zones size against it.
  */
 export function AppShell({
   user,
@@ -40,17 +32,10 @@ export function AppShell({
   user: SessionResponse;
   children: ReactNode;
   variant?: 'default' | 'pos';
-  /** Back-office-only opt-in (System Design §5) — POS and shared routes
-   * never pass this, so `data-theme` is never emitted there regardless of
-   * what the theme cookie holds. */
+  /** Back-office only; enables `data-theme`. */
   enableDarkMode?: boolean;
   initialTheme?: Theme;
-  /**
-   * ADR-025 Decision 8 — non-null while a platform operator is browsing this
-   * tenant as its OWNER. Read from a cookie by the route-group layouts, so a
-   * layout that does not pass it simply never shows the banner rather than
-   * showing a wrong one.
-   */
+  /** Set while a platform operator impersonates this tenant; shows the banner. */
   impersonatedLabel?: string | null;
 }) {
   const [theme, setTheme] = React.useState<Theme>(initialTheme);
@@ -61,21 +46,8 @@ export function AppShell({
   const isMobile = useIsMobile();
   const isRail = useIsRail();
   /**
-   * TASK-132 — when the business is suspended, the shell renders but the page
-   * does not. `children` is server-rendered output whose client components only
-   * fetch once they MOUNT, so leaving them out of the tree is what keeps a
-   * dozen 403s from piling up behind a modal that already explains the one
-   * reason for all of them.
-   *
-   * The chrome stays: the point is that the owner has arrived inside the
-   * application and is being told why it is empty, rather than being bounced
-   * back to a login screen that accepts their password and asks again.
-   *
-   * An impersonating operator is excluded, and that exclusion is the whole
-   * reason ADR-025 Decision 8 exempts impersonation from `TenantStatusGuard`:
-   * the most likely reason to open a suspended tenant's books is to work out
-   * why it was suspended, and a modal covering them would undo the exemption
-   * from the frontend.
+   * The tenant is suspended: render the shell and the explanation, but not the
+   * page (its components would only fire 403s). Ignored while impersonating.
    */
   const isTenantSuspended =
     user.tenantStatus === 'SUSPENDED' && !impersonatedLabel;
@@ -135,11 +107,7 @@ export function AppShell({
   );
 }
 
-/**
- * What sits under the suspension modal. Not a spinner and not an error: nothing
- * is loading and nothing failed, so it says the same thing the modal says, in
- * one line, for the moment after the modal is read.
- */
+/** Placeholder under the suspension modal, repeating its message in one line. */
 function SuspendedTenantNotice() {
   return (
     <div className="flex h-full items-center justify-center p-8">

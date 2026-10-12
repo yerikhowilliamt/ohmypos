@@ -12,10 +12,8 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { verifyDeviceCookie } from '../../common/utils/device-cookie.util';
 
 /**
- * Writes one AttendanceRecord per KASIR login and returns whether it was
- * valid (Phase 11, Context section — informational only, never blocks
- * login). Not called for ADMIN/OWNER; the caller (AuthService.login) decides
- * that, this service does not re-check the role itself.
+ * Records one attendance row per KASIR login and whether it came from a valid
+ * device. Informational only: it never blocks login.
  */
 @Injectable()
 export class AttendanceService {
@@ -100,18 +98,14 @@ export class AttendanceService {
     } = query;
     const skip = (page - 1) * limit;
 
-    // Both the search and the branch filter are OR groups, so they are collected
-    // into an AND array rather than written as two `OR` keys on one object —
-    // the second key would silently overwrite the first, and searching would
-    // quietly drop the branch scoping.
+    // AND of OR-groups: two `OR` keys on one object would overwrite each other.
     const andClauses: Prisma.AttendanceRecordWhereInput[] = [];
 
     if (search) {
       andClauses.push({
         OR: [
           { user: { name: { contains: search, mode: 'insensitive' } } },
-          // Email is searchable although no column renders it on its own: the
-          // Karyawan cell prints it under the name (DEBT-052).
+          // Email is searchable: the Karyawan cell shows it (DEBT-052).
           { user: { email: { contains: search, mode: 'insensitive' } } },
           {
             user: {
@@ -132,9 +126,7 @@ export class AttendanceService {
     const where: Prisma.AttendanceRecordWhereInput = {
       ...(violationOnly ? { isValid: false } : {}),
       ...(andClauses.length ? { AND: andClauses } : {}),
-      // `loginAt`, NOT `createdAt`: both default to now() and are equal in
-      // practice, so filtering the wrong one would never fail a test written
-      // against real data. loginAt is what the calendar matrix reads.
+      // loginAt, not createdAt: it is what the calendar matrix reads.
       ...(startDate || endDate
         ? {
             loginAt: {

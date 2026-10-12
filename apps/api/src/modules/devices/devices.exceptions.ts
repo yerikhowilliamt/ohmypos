@@ -1,7 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
-/** Domain exceptions for the Devices module (Playbook §6). */
-
 export class InvalidActivationCodeException extends NotFoundException {
   constructor() {
     super(
@@ -21,12 +19,8 @@ export class ActivationCodeExpiredException extends BadRequestException {
 }
 
 /**
- * `AttendanceRecord.device` is `onDelete: SetNull`, so deleting a used device
- * would NOT fail and would NOT cascade — it would blank `deviceId` on every
- * past login, and the attendance log renders a blank as "Perangkat Luar", the
- * same wording it uses for a login from an UNREGISTERED device. Months of
- * legitimate in-store attendance would silently start reading as violations.
- * Deactivation already exists for retiring a terminal.
+ * A device with logins cannot be deleted: `SetNull` would relabel past logins as
+ * "Perangkat Luar". Deactivate it instead.
  */
 export class DeviceHasAttendanceHistoryException extends BadRequestException {
   constructor(count: number) {

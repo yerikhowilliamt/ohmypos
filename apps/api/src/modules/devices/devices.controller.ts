@@ -33,11 +33,7 @@ import {
   UpdateDeviceDto,
 } from './devices.dto';
 
-/**
- * OWNER-only throughout, including activation (Context section — this
- * corrects the original master plan's `@Public()` sketch: an unauthenticated
- * activation endpoint would defeat the "physical Owner ceremony" premise).
- */
+/** OWNER only, including activation (an in-person ceremony at the terminal). */
 @ApiTags('devices')
 @Controller('devices')
 @UseGuards(RoleGuard)
@@ -113,8 +109,7 @@ export class DevicesController {
     return this.devicesService.deactivate(id);
   }
 
-  // Both bare-`:id` routes are declared LAST so they cannot shadow the literal
-  // paths above them — `attendance/:id`, `activate`, `:id/deactivate`.
+  // Bare `:id` routes stay last so they cannot shadow the literal paths above.
 
   @Patch(':id')
   @ApiOperation({

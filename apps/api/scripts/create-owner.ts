@@ -124,10 +124,7 @@ async function main() {
   const unscoped = new UnscopedPrismaService();
 
   try {
-    // ADR-025 — this is the v1 bootstrap path, so it adopts (or creates) the
-    // single default tenant. Additional tenants are created through
-    // `POST /platform/tenants`, which seeds the same system refs in one
-    // transaction.
+    // v1 bootstrap: adopt or create the default tenant. Other tenants come from the platform API.
     const tenant =
       (await unscoped.tenant.findFirst({ orderBy: { createdAt: 'asc' } })) ??
       (await unscoped.tenant.create({
@@ -139,8 +136,7 @@ async function main() {
     ) as unknown as PrismaService;
 
     const normalizedEmail = email.toLowerCase();
-    // Unscoped: `User.email` is globally unique (ADR-025 Decision 6), so the
-    // collision to report is a collision across ALL tenants, not just this one.
+    // Unscoped: email is unique across all tenants.
     const existing = await unscoped.user.findUnique({
       where: { email: normalizedEmail },
     });
@@ -150,9 +146,7 @@ async function main() {
       process.exit(1);
     }
 
-    // A fresh install has no system refs, and without them the first sale and
-    // the first central purchase both fail with a 503. Idempotent, so running
-    // this script again on a live database changes nothing.
+    // Without system refs the first sale and central purchase return 503. Idempotent.
     await ensureSystemRefs(prisma);
 
     const passwordHash = await bcrypt.hash(password, 10);

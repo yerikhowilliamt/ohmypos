@@ -8,26 +8,11 @@ import {
 } from './primitives';
 import { PeriodMonthString, PeriodResponseSchema } from './period.schema';
 
-/**
- * OhMyPos — OpeningStock contracts (PRD §5.5, ERD §3, System Design §6.4,
- * ADR-004, ADR-010, Phase 6 plan §3, §5, §7).
- */
 export const OpeningStockEntryInputSchema = z.object({
   rawMaterialId: UuidString,
-  /**
-   * The declared physical count at the START of the period — NOT a delta and
-   * NOT an amount to add. The server derives the ledger movement by subtracting
-   * what the ledger already carried in (plan §3.2). Zero is legal: "we counted,
-   * there was none".
-   */
+  /** The physical count at the start of the period, not a delta. Zero is valid. */
   quantity: QuantityString,
-  /**
-   * Required IFF no PURCHASE movement exists for this material in this period
-   * (PRD §5.5, plan §5). Both directions are enforced server-side — omitting it
-   * when required is a 400, and supplying it when a purchase already priced the
-   * material is also a 400. `GET /inventory/opening-stock` exposes
-   * `requiresUnitPrice` per material so the form never has to guess.
-   */
+  /** Required iff the material has no purchase this period, forbidden otherwise (PRD §5.5). */
   unitPrice: UnitCostString.optional(),
 });
 export type OpeningStockEntryInput = z.infer<
@@ -37,19 +22,11 @@ export type OpeningStockEntryInput = z.infer<
 export const UpsertOpeningStockSchema = z
   .object({
     periodMonth: PeriodMonthString,
-    /**
-     * Bounded at 200. Every entry adds round trips inside a transaction that
-     * holds raw-material row locks (ADR-016), and the bound is what keeps the
-     * lock-hold window and the transaction timeout predictable — the same
-     * reasoning as CreateSaleSchema's 50-line bound.
-     */
+    /** At most 200 entries, to bound the lock-holding transaction (ADR-016). */
     entries: z.array(OpeningStockEntryInputSchema).min(1).max(200),
   })
   .superRefine((dto, ctx) => {
-    // One declaration per material per period. Unlike a sale line (where the
-    // same product may legitimately appear twice at two prices), two
-    // declarations for one material in one period are unambiguously a client
-    // bug — and the second would silently win the upsert.
+    // One declaration per material per period.
     const seen = new Set<string>();
     dto.entries.forEach((entry, index) => {
       if (seen.has(entry.rawMaterialId)) {
@@ -73,12 +50,7 @@ export const OpeningStockResponseSchema = z.object({
   periodMonth: z.string(),
   quantity: QuantityString,
   unitPrice: UnitCostString.nullable(),
-  /**
-   * The SIGNED movement this declaration wrote to the ledger — negative when
-   * the count came in below what the ledger carried. Returned so the caller can
-   * see what the stock-take actually corrected, which is the one number the
-   * request body does not contain (plan §3.2).
-   */
+  /** The signed correction written to the ledger. */
   appliedDelta: SignedQuantityString,
   createdAt: DateTimeString,
   updatedAt: DateTimeString,
@@ -93,10 +65,7 @@ export type UpsertOpeningStockResponse = z.infer<
   typeof UpsertOpeningStockResponseSchema
 >;
 
-/**
- * One row per raw material, declared or not — this is what the Phase 8e screen
- * renders as an editable table.
- */
+/** One worksheet row per raw material, declared or not. */
 export const OpeningStockWorksheetRowSchema = z.object({
   rawMaterialId: UuidString,
   name: z.string(),
@@ -112,11 +81,7 @@ export const OpeningStockWorksheetRowSchema = z.object({
   requiresUnitPrice: z.boolean(),
   /** RawMaterial.unitCost, so the form can prefill the price field. */
   currentUnitCost: UnitCostString,
-  /**
-   * Display only (ADR-024). The count is ALWAYS entered and persisted in `unit`
-   * — these two exist so the worksheet can show "1 kg = 1.000 gram" beside the
-   * field, not so a mixed-unit value can be submitted.
-   */
+  /** Display only (ADR-024): counts are always in `unit`. */
   purchaseUnit: z.string(),
   conversionFactor: QuantityString,
 });

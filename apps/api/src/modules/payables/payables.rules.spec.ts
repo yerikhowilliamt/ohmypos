@@ -1,12 +1,3 @@
-/**
- * OhMyPos — unit tests for the payable settlement rule (ADR-006, plan §9.6, §9.10).
- *
- * Playbook §10 puts the Payable/PayableSettlement flow in the "must have
- * thorough tests" tier. Over-settlement and already-settled are the two ways
- * this rule can be wrong, and both are checked here without a database —
- * the row lock that makes them hold under concurrency is covered separately by
- * Case 8 in `test/purchasing-payables.e2e-spec.ts`.
- */
 import { Prisma } from '../../generated/prisma/client';
 import {
   PayableAlreadySettledException,

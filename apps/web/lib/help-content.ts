@@ -6,13 +6,7 @@ import {
   STOCK_STATUS_LABELS,
 } from '@/lib/vocabulary';
 
-/**
- * A block of help content. The old shape was `steps: string[]`, which could
- * only express a numbered click-path — so the page had nowhere to put the
- * things that actually confuse people (what a term means, why the app behaves
- * a certain way, what cannot be undone). Every question the Owner has raised
- * about this product was a model question, not a where-do-I-click question.
- */
+/** A block of help content: prose, steps, callouts, glossaries or flow diagrams. */
 export type HelpBlock =
   /** A paragraph. Prose, not instructions. */
   | { kind: 'text'; body: string }
@@ -65,11 +59,7 @@ export interface HelpSection {
   summary: string;
   category: HelpCategory;
   roles: UserRole[];
-  /**
-   * Sidebar routes this section documents. `help-content.coverage.test.ts`
-   * asserts every route in `nav-config.ts` is claimed by some section the same
-   * role can see — so a new page cannot ship without its help topic.
-   */
+  /** Sidebar routes this section covers; a coverage test requires every nav route to be claimed. */
   covers: string[];
   /** Extra search terms a user might type that the prose does not contain. */
   keywords?: string[];
@@ -77,13 +67,8 @@ export interface HelpSection {
 }
 
 /**
- * Content lives here as a typed array, not MDX (Phase 13 plan §"Context") —
- * developer-authored, lint/typecheck-checked, no new dependency.
- *
- * Status words are interpolated from the shared vocabulary maps rather than
- * retyped, so renaming a status in `packages/api-contracts` renames it here
- * too. Screen names and button labels are quoted verbatim from the components;
- * when you rename one, grep this file.
+ * Help content as a typed array. Status words come from the shared vocabulary;
+ * screen and button names are quoted verbatim, so grep here when renaming one.
  */
 export const HELP_SECTIONS: HelpSection[] = [
   // ─────────────────────────── Konsep Dasar ───────────────────────────
@@ -430,8 +415,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: 'Riwayat transaksi dan pembatalan penjualan',
     summary: 'Mencari transaksi lama, mencetak ulang struk, dan membatalkan.',
     category: 'penjualan',
-    // Not ADMIN: the (pos) route group requires KASIR or OWNER, so an Admin
-    // cannot open this page at all — even though the void API accepts them.
+    // Not ADMIN: the (pos) route group excludes Admins even though the void API allows them.
     roles: ['KASIR', 'OWNER'],
     covers: ['/sales/history'],
     keywords: ['struk', 'batal', 'void', 'refund', 'riwayat'],
@@ -1060,11 +1044,7 @@ function searchableText(section: HelpSection): string {
   return parts.join(' ').toLowerCase();
 }
 
-/**
- * Filters sections by a free-text query. Searches the whole body, not just
- * titles — someone who does not know a feature's name is exactly the person
- * who needs the search box.
- */
+/** Filters sections by free text across the whole body, not just titles. */
 export function filterHelpSections(
   sections: HelpSection[],
   query: string,

@@ -1,9 +1,3 @@
-/**
- * OhMyPos — unit tests for report period resolution (ADR-018, plan §6.4).
- *
- * The partial-month case and the boundary arithmetic are the whole point: every
- * one of the five reports inherits whatever this file gets wrong.
- */
 import { InvalidReportRangeException } from './errors/invalid-report-range.error';
 import {
   MAX_REPORT_RANGE_DAYS,

@@ -34,15 +34,8 @@ interface CartPanelProps {
 }
 
 /**
- * The persistent order context — zone three of DESIGN.md §11.1 Three-Zone POS Layout, structured per
- * §24: panel header, order list, summary block, payment method, primary CTA.
- * Stays mounted whether or not it has lines, so the cashier never loses sight
- * of the order.
- *
- * Two things §24 describes are absent by decision, not oversight: the customer
- * combobox (§18.1 — no `Customer` model exists) and the Service Tax row (§24.2 —
- * `Sale.totalAmount` is Σ line totals and nothing else, ADR-015). See the
- * Phase 3 plan and DEBT-004.
+ * The order panel (design.md §11.1), always mounted. No customer picker or
+ * service tax by decision (no Customer model; ADR-015, DEBT-004).
  */
 export function CartPanel({
   state,
@@ -63,16 +56,7 @@ export function CartPanel({
   onCheckRecent,
   onClearCart,
 }: CartPanelProps) {
-  /**
-   * Two independent sources of "this line is a problem", and both matter:
-   *
-   * - `overCommittedLineIds` is the client's own advisory arithmetic, which can
-   *   only see the stock it last fetched.
-   * - `submit.error.lineIds` is the server's verdict, mapped back from the 409's
-   *   raw-material shortfalls. It is the authoritative one, and it routinely
-   *   names lines the client thought were fine — that is precisely the case
-   *   where another till drained the shared pool first (ADR-004, ADR-013).
-   */
+  /** Problem lines: client advisory (`overCommittedLineIds`) plus the server's 409 verdict (authoritative). */
   const flaggedLineIds = React.useMemo(
     () =>
       new Set([
@@ -91,11 +75,7 @@ export function CartPanel({
     <aside
       id="pos-cart-panel"
       aria-label="Detail pesanan"
-      // shrink-0 only from md up: in the desktop/tablet row layout it must
-      // hold its fixed width against ProductGrid, but inside the mobile
-      // bottom sheet (a bounded-height column) it has to shrink to fit so its
-      // own order-list region (below) scrolls internally instead of the
-      // whole panel overflowing the sheet.
+      // shrink-0 only from md up; inside the mobile sheet it must shrink so its list scrolls.
       className="flex w-full min-h-0 shrink flex-col rounded-lg border border-border-default bg-surface-raised shadow-1 md:h-full md:w-[320px] md:shrink-0 lg:w-[360px] xl:w-[380px]"
     >
       {/* §18.1: the panel has its own header, independent of the page header. */}
@@ -120,7 +100,7 @@ export function CartPanel({
       {/* Order list — the only part that scrolls, so the CTA stays pinned. */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3">
         {state.lines.length === 0 ? (
-          // DESIGN.md §17 Empty, Loading & Error States, near-verbatim copy, no decorative illustration.
+          // design.md §17 empty-state copy.
           <div className="flex h-full flex-col items-center justify-center gap-2 py-10 text-center">
             <span
               aria-hidden

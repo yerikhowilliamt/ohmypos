@@ -7,15 +7,7 @@ interface OrderSummaryProps {
   total: string;
 }
 
-/**
- * DESIGN.md §11.4 Order Panel, minus the Service Tax row: `Sale.totalAmount` is Σ line
- * totals and nothing else (schema.prisma, ADR-015 decision 1), so subtotal and
- * total are the same number by construction. Both are still shown, because
- * §24.2 asks the count to be visible next to the money and because a single
- * unlabelled figure reads as an assertion the cashier cannot check.
- *
- * All monetary values right-aligned, JetBrains Mono (§8, §24.2).
- */
+/** Order summary without service tax: subtotal equals total by construction (ADR-015). */
 export function OrderSummary({ itemCount, total }: OrderSummaryProps) {
   return (
     <div className="flex flex-col gap-2">

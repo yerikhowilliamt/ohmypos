@@ -1,6 +1,3 @@
-/**
- * OhMyPos — unit tests for calendar-period resolution (Phase 6 plan §9, §12.1).
- */
 import {
   assertPeriodHasStarted,
   formatPeriodDate,

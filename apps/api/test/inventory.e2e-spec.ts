@@ -2,14 +2,8 @@
 // keeps the connection string in one place rather than duplicated per suite.
 import 'dotenv/config';
 /**
- * OhMyPos — Inventory E2E Tests (PRD §5.5, §5.6, ADR-004, ADR-007, ADR-008,
- * ADR-011, ADR-016, Playbook §10, Phase 6 plan §12.2).
- *
- * The headline case is R: a full month built THROUGH THE REAL ENDPOINTS, then
- * reconciled three ways — against the report's own identity, against an
- * independent raw-SQL sum of stock_movements, and against
- * RawMaterial.currentStock. The last of those makes this suite an audit of
- * Phase 4 and Phase 5, not merely a test of Phase 6.
+ * Case R builds a full month through the real endpoints, then reconciles it
+ * against the report identity, an independent raw-SQL sum, and currentStock.
  */
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -378,11 +372,7 @@ describe('Inventory (e2e)', () => {
       .set('Cookie', cookies);
   }
 
-  /**
-   * The INDEPENDENT oracle (plan §2.3). Deliberately raw SQL that shares no
-   * code with the production aggregation — two implementations that must agree
-   * is a stronger check than one implementation tested against itself.
-   */
+  /** Independent oracle: raw SQL sharing no code with the production aggregation. */
   async function signedMovementSum(
     rawMaterialId: string,
     beforeIso: string,

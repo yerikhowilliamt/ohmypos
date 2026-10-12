@@ -14,6 +14,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "check": "turbo run lint typecheck test",
+    "clean:cache": "rm -rf .turbo/cache apps/web/.next",
     "create:owner": "pnpm --filter api create:owner",
     "create:platform-admin": "pnpm --filter api create:platform-admin",
     "reset:platform-admin-password": "pnpm --filter api reset:platform-admin-password",
@@ -21,8 +22,8 @@
   },
   "devDependencies": {
     "@ohmypos/config": "workspace:*",
-    "prettier": "^3.4.2",
+    "prettier": "^3.9.6",
     "turbo": "^2.10.10",
-    "typescript": "^5.7.3"
+    "typescript": "^5.9.3"
   }
 }

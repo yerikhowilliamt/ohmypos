@@ -7,10 +7,7 @@ import Decimal from 'decimal.js';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 
-/**
- * Ported from Kasync with the `userId` scoping removed (ERD §7 note 1).
- * Read-only aggregation, computed at query time (ADR-008).
- */
+/** Reconciliation dashboard and list, computed at query time (ADR-008). */
 @Injectable()
 export class ReconciliationService {
   constructor(private readonly prisma: PrismaService) {}
@@ -19,11 +16,7 @@ export class ReconciliationService {
     const { page, limit, sortOrder = 'desc' } = query;
     const [bankTxnWhere] = this.buildWhereClause(query);
 
-    // Deliberately applied here and NOT inside buildWhereClause:
-    // getDashboardSummary derives both sides of `variance` from that same
-    // clause, and the keyword can only match a bank transaction's description.
-    // Narrowing the bank side while the ledger side stays whole would turn
-    // `variance` into a wrong number that still looks official.
+    // Not in buildWhereClause: `variance` would compare a filtered bank side with a whole ledger side.
     if (query.search) {
       bankTxnWhere.description = {
         contains: query.search,
@@ -47,9 +40,6 @@ export class ReconciliationService {
         total,
         page,
         limit,
-        // `|| 1` matches every other paginated service (sales, payables,
-        // supplier-purchases, ledger-entries). Without it an empty result
-        // reports totalPages: 0, which reads as "page 1 of 0".
         totalPages: Math.ceil(total / limit) || 1,
       },
     };
@@ -77,8 +67,7 @@ export class ReconciliationService {
       counts[sc.status] = sc._count._all;
     }
 
-    // The balance always reflects the full bank position, so the status filter
-    // is dropped here deliberately (unchanged from Kasync).
+    // Balance always reflects the full bank position, ignoring the status filter.
     const balanceWhere = { ...bankTxnWhere };
     delete balanceWhere.status;
 

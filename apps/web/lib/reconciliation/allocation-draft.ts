@@ -1,26 +1,3 @@
-/**
- * OhMyPos — split-allocation draft arithmetic (PRD §5.7, DESIGN.md §12.3 Bank Reconciliation Split-Allocation).
- *
- * The invariant this file guards is `sum(Allocation.amountPortion) <=
- * BankTransaction.amount` over ACTIVE rows only (ERD §2). It is enforced for
- * real in two places — `AllocationService.create`'s Decimal check and the
- * `trg_check_allocation_sum` trigger's FOR UPDATE check (Playbook §7). This
- * module is neither of them: it exists so the operator sees the running total
- * while building the split instead of discovering the problem after a 400.
- *
- * Two rules copied verbatim from the backend, and deliberately not "improved":
- *
- * 1. The cap is a STRICT `>` comparison (`allocation.service.ts:105`, and `>`
- *    in the trigger). Allocating exactly the full amount is the success case —
- *    it is what turns the transaction MATCHED (allocation-sum.e2e-spec.ts:120).
- *    Blocking at `>=` would make every full allocation impossible.
- * 2. Only ACTIVE allocations count. REVOKED rows are invisible to the sum
- *    (`allocation.service.ts:61`), so revoking frees the amount again
- *    (allocation-sum.e2e-spec.ts:203).
- *
- * All arithmetic goes through lib/decimal.ts's BigInt-backed `Fixed`. Never
- * `Number` — money is never floating point (Playbook §5).
- */
 import type {
   AllocationResponse,
   CreateAllocation,
@@ -38,16 +15,8 @@ import {
 } from '@/lib/decimal';
 
 /**
- * One row the operator is building. `id` is stable for React and for input
- * focus; `idempotencyKey` is regenerated on every edit.
- *
- * Why two ids: `AllocationService.create` resolves items whose idempotencyKey
- * already exists for that transaction and returns them WITHOUT creating a new
- * row, excluding them from the cap arithmetic (allocation.service.ts:67-100).
- * That makes replaying a timed-out submit safe — but it also means resubmitting
- * an EDITED line under its old key would silently keep the old amount. Rotating
- * the key on edit keeps both properties: retry-unchanged is idempotent, and
- * retry-after-edit is a genuinely new allocation.
+ * A draft allocation line. `id` is stable for React; `idempotencyKey` rotates on
+ * every edit so a retried, edited line is a new allocation.
  */
 export interface DraftAllocationLine {
   id: string;
@@ -75,11 +44,11 @@ export interface DraftSummary {
   committed: Fixed;
   /** Σ of READY draft lines. */
   draft: Fixed;
-  /** committed + draft — the "Allocated" figure of DESIGN.md §12.3 Bank Reconciliation Split-Allocation. */
+  /** committed + draft: the "Allocated" figure (design.md §12.3). */
   allocated: Fixed;
   /** transactionAmount − allocated. Negative when over-allocated. */
   remaining: Fixed;
-  /** True when `allocated > transactionAmount` — a STRICT comparison. */
+  /** `allocated > transactionAmount`: strict, so equality (fully allocated) is valid. */
   overAllocated: boolean;
   /** Per-line state, keyed by DraftAllocationLine.id. */
   lineStates: Record<string, DraftLineState>;
@@ -87,10 +56,10 @@ export interface DraftSummary {
   submittable: boolean;
 }
 
-/** Mirrors MoneyString's shape check (packages/api-contracts/src/primitives.ts:15). */
+/** Mirrors `MoneyString`'s shape check. */
 const MONEY_PATTERN = /^\d+(?:\.\d+)?$/;
 
-/** Mirrors MoneyString's scale refinement — Decimal(18,2), so at most 2 dp. */
+/** Mirrors `MoneyString`'s scale: at most 2 dp. */
 function decimalPlaces(value: string): number {
   return value.split('.')[1]?.length ?? 0;
 }
@@ -109,8 +78,7 @@ function classifyLine(line: DraftAllocationLine): DraftLineState {
   if (!MONEY_PATTERN.test(amount)) return 'MALFORMED_AMOUNT';
   if (decimalPlaces(amount) > MONEY_SCALE) return 'TOO_MANY_DECIMALS';
 
-  // `AllocationService.create` rejects amountPortion <= 0 outright
-  // (allocation.service.ts:94), so '0' and '0.00' are blocking, not merely odd.
+  // The API rejects amountPortion <= 0, so zero is blocking.
   if (compareFixed(parseFixed(amount, MONEY_SCALE), zero(MONEY_SCALE)) <= 0) {
     return 'NOT_POSITIVE';
   }
@@ -118,10 +86,7 @@ function classifyLine(line: DraftAllocationLine): DraftLineState {
   return 'READY';
 }
 
-/**
- * Σ of the ACTIVE portion of the persisted allocations. REVOKED rows are
- * excluded exactly as the backend excludes them.
- */
+/** Σ of persisted ACTIVE allocations; REVOKED rows are excluded, as on the server. */
 export function sumActiveAllocations(
   allocations: ReadonlyArray<
     Pick<AllocationResponse, 'status' | 'amountPortion'>
@@ -163,11 +128,7 @@ export function summariseDraft({
   for (const line of lines) {
     let state = classifyLine(line);
 
-    // Two rows against the same LedgerEntry on the same BankTransaction is
-    // always operator error — the fix is to edit one line's amount. Note this
-    // is a UI rule, not a backend one: the only uniqueness constraint on
-    // Allocation is (bankTransactionId, idempotencyKey) (ERD §6), and nothing
-    // server-side caps allocations per ledger entry. See the Tech Debt Log.
+    // UI-only rule: two lines for one ledger entry is operator error.
     if (state === 'READY') {
       if (seenEntryIds.has(line.ledgerEntryId)) {
         state = 'DUPLICATE_ENTRY';
@@ -191,7 +152,7 @@ export function summariseDraft({
 
   const allocated = addFixed(committed, draft);
   const remaining = subFixed(amount, allocated);
-  // STRICT `>`, matching `totalSum.gt(txnAmount)` — equality is the MATCHED case.
+  // Strict `>`, matching the server: equality is the MATCHED case.
   const overAllocated = compareFixed(allocated, amount) > 0;
 
   return {
@@ -207,13 +168,8 @@ export function summariseDraft({
 }
 
 /**
- * Builds the batch request body. Uses Kasync's `allocations` array form, which
- * `AllocationService.create` flattens and commits inside ONE prisma.$transaction
- * (allocation.service.ts:39) — so a rejected line rolls the whole split back
- * and the operator never has to clean up half a submission.
- *
- * BLANK and invalid lines are dropped; call `summariseDraft` first and only
- * submit when `submittable` is true.
+ * Builds the batch body. The server commits it in one transaction, so a
+ * rejected line rolls back the whole split. Call `summariseDraft` first.
  */
 export function toCreateAllocationPayload(
   bankTransactionId: string,
@@ -237,10 +193,7 @@ export function toMoneyString(value: Fixed): string {
   return formatFixed(value, MONEY_SCALE);
 }
 
-/**
- * Indonesian, operator-facing copy for each blocking line state. Kept next to
- * the states so a new state cannot be added without a message.
- */
+/** Indonesian copy per blocking line state, kept beside the states. */
 export const DRAFT_LINE_MESSAGES: Readonly<Record<DraftLineState, string>> = {
   BLANK: '',
   READY: '',

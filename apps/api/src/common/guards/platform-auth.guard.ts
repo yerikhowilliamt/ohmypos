@@ -16,28 +16,17 @@ import {
 } from '../messages';
 
 /**
- * ADR-025 Fase 3 — the platform console's counterpart to `JwtAuthGuard`, with
- * the same four checks in the same order: signature, row still exists, still
- * active, token not issued before `tokenValidFrom`.
+ * Platform admin authentication: the `JwtAuthGuard` checks against the platform
+ * key pair and `platform_admins`.
  *
- * NOT registered globally. `JwtAuthGuard` is the global one, so a platform
- * controller marks itself `@Public()` to get past it and then applies this
- * guard at class level.
- *
- * That is a fail-OPEN shape and it is worth naming plainly: a `@Public()`
- * controller that forgets `@UseGuards(PlatformAuthGuard)` is an unauthenticated
- * endpoint over cross-tenant data, and nothing at compile time notices. The
- * defence is `platform-auth.e2e-spec.ts` (Fase 6), which enumerates every
- * registered `/platform/*` route from the router and demands 401 on each with
- * no token — so a route added later without this guard fails the suite rather
- * than shipping.
+ * Not global. A `@Public()` platform route without this guard is open to
+ * anyone (DEBT-066); see `common/README.md`.
  */
 @Injectable()
 export class PlatformAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
-    // Platform admins live outside every tenant, so the tenant-filtered client
-    // would throw on this read. Unscoped is the only correct client here.
+    // Unscoped: platform admins belong to no tenant.
     private readonly prisma: UnscopedPrismaService,
   ) {}
 
@@ -60,8 +49,7 @@ export class PlatformAuthGuard implements CanActivate {
 
     let payload: PlatformJwtPayload;
     try {
-      // A tenant access token reaches this line signed with JWT_SECRET and is
-      // rejected here — the secrets are what separate the two audiences.
+      // A tenant token fails here: the secrets separate the two audiences.
       payload = await this.jwtService.verifyAsync<PlatformJwtPayload>(token, {
         secret,
       });
@@ -82,10 +70,7 @@ export class PlatformAuthGuard implements CanActivate {
       throw new UnauthorizedException(PLATFORM_ACCOUNT_DEACTIVATED);
     }
 
-    // Same 1000ms allowance, for the same reason, as JwtAuthGuard: the `iat`
-    // claim has whole-second resolution, so a token minted at 10:00:00.900
-    // carries iat = 10:00:00 and would otherwise be rejected against a
-    // tokenValidFrom of 10:00:00.500.
+    // 1000ms = `iat` resolution, as in JwtAuthGuard.
     const IAT_RESOLUTION_MS = 1000;
     if (
       payload.iat !== undefined &&
@@ -96,15 +81,10 @@ export class PlatformAuthGuard implements CanActivate {
 
     request.platformAdmin = { sub: admin.id, email: admin.email };
 
-    // ADR-025 §3.3 — record WHO is acting, but leave `tenantId` null. A
-    // platform route that reaches for a tenant-scoped model through the
-    // filtered `PrismaService` then throws TenantContextMissingError instead of
-    // quietly reading whichever tenant happened to be in scope. Platform
-    // services use `UnscopedPrismaService` deliberately.
+    // tenantId stays null, so the scoped client throws instead of reading a tenant.
     const scope = tenantStorage.getStore();
     if (!scope) {
-      // TenantScopeMiddleware did not run. Fail closed for the same reason
-      // JwtAuthGuard does.
+      // TenantScopeMiddleware did not run; fail closed.
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
     scope.platformAdminId = admin.id;

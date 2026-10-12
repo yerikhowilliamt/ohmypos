@@ -1,9 +1,3 @@
-/**
- * OhMyPos — Payable and Settlement Mapper (ERD §3, plan §9.1, §9.8).
- *
- * Serializes Prisma Payable models into PayableResponse contracts
- * with explicit decimal scale formatting via `.toFixed(scale)`.
- */
 import type {
   PayableResponse,
   PayableSettlementResponse,

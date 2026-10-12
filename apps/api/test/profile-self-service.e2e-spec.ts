@@ -8,11 +8,7 @@ import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-t
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { tenantScopedPrisma } from './tenant-fixture';
 
-/**
- * Phase 10a adds three self-service auth endpoints: PATCH /auth/me (name),
- * the last-active-OWNER guard on PATCH /auth/deactivate, and confirms an
- * ordinary (non-last-OWNER) self-deactivation actually ends the session.
- */
+/** Self-service: name change, last-active-OWNER guard, and self-deactivation ending the session. */
 describe('Profile self-service (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;

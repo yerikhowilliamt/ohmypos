@@ -7,12 +7,8 @@ const ACCESS_TOKEN_COOKIE = 'access_token';
 const PLATFORM_ACCESS_TOKEN_COOKIE = 'platform_access_token';
 
 /**
- * First line of route gating: redirect before a page renders, so an
- * unauthenticated visitor never sees a flash of protected UI.
- *
- * Proxy cannot verify the JWT's signature without the secret, so it only
- * checks that a session cookie is present. Role-level gating happens in the
- * route-group layouts, which ask the API who the user is (System Design §5).
+ * Redirects before render when the session cookie is missing. It cannot verify
+ * the JWT; role gating happens in the route-group layouts.
  */
 export function proxy(request: NextRequest) {
   const hasSession = request.cookies.has(ACCESS_TOKEN_COOKIE);
@@ -27,12 +23,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ADR-025 — `/platform/**` is a separate audience with a separate cookie, so
-  // it is gated separately and BEFORE the tenant rules below. Without this
-  // early return, an operator holding only a platform session would be bounced
-  // to `/login` (no `access_token`), and a signed-in shop OWNER would sail past
-  // the console's front door on the strength of a cookie that means nothing
-  // here.
+  // `/platform/**` has its own cookie and is gated first.
   if (pathname === '/platform' || pathname.startsWith('/platform/')) {
     const hasPlatformSession = request.cookies.has(
       PLATFORM_ACCESS_TOKEN_COOKIE,

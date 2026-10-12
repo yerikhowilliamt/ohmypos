@@ -2,16 +2,7 @@
 
 import * as React from 'react';
 
-/**
- * SSR-safe media query subscription.
- *
- * `useSyncExternalStore`'s third argument is the server snapshot: on the server
- * and during hydration there is no `window.matchMedia`, so every query reports
- * `false`. That is deliberate — the desktop layout (the primary target,
- * DESIGN.md §13 Responsive Breakpoints) is what renders first, and the tablet rail swaps in on the
- * client once `matchMedia` is available. Defaulting the other way would flash
- * the rail on every desktop load.
- */
+/** SSR-safe media query. Server snapshot is `false`, so desktop renders first. */
 export function useMediaQuery(query: string): boolean {
   const subscribe = React.useCallback(
     (onStoreChange: () => void) => {
@@ -36,7 +27,7 @@ export function useMediaQuery(query: string): boolean {
 }
 
 /**
- * DESIGN.md §13 Responsive Breakpoints breakpoints, as media query strings. Kept here so no screen
+ * design.md §13 Responsive Breakpoints breakpoints, as media query strings. Kept here so no screen
  * hand-writes a pixel value — §41.1 forbids ad-hoc per-screen breakpoints.
  */
 export const MEDIA = {

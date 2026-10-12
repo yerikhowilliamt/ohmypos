@@ -87,12 +87,7 @@ export interface StockMovementFilterParams {
   sortOrder?: SortOrder;
 }
 
-/**
- * The row-level movement log behind Dashboard 5's aggregate (TASK-070).
- * Server-paginated, server-sorted and server-filtered from the first line: this
- * is the highest-volume table in the system — it grows with recipe lines per
- * sale, not with sales — so an unbounded fetch was never an option here.
- */
+/** Stock movement log: server-paginated, sorted and filtered (the highest-volume table). */
 function buildStockMovementQuery(params: StockMovementFilterParams): string {
   const searchParams = new URLSearchParams();
   if (params.search) searchParams.set('search', params.search);
@@ -111,11 +106,7 @@ function buildStockMovementQuery(params: StockMovementFilterParams): string {
   return searchParams.toString();
 }
 
-/**
- * One page, outside React Query — the Export button's `fetchAllPages` loop needs
- * it (DEBT-048). Shares `buildStockMovementQuery` with the hook so the exported
- * set can never drift from the one on screen.
- */
+/** One page outside React Query, for Export (DEBT-048). */
 export function fetchStockMovementsPage(
   params: StockMovementFilterParams = {},
 ) {

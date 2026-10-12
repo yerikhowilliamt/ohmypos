@@ -1,13 +1,10 @@
 import { Prisma } from '../generated/prisma/client';
 
 /**
- * TASK-082. Menjawab satu pertanyaan: apakah kegagalan ini adalah pemutaran
- * ulang (replay) dari permintaan yang sudah pernah kita layani?
+ * Whether `error` is a unique violation on an idempotency key, i.e. a replay.
  *
- * Dipanggil DI LUAR `$transaction`, tidak pernah di dalamnya. Pelanggaran
- * indeks unik membatalkan seluruh transaksi Postgres, jadi `catch` di dalam blok
- * transaksi akan berjalan di atas transaksi mati dan setiap pembacaan
- * sesudahnya gagal. Ini jebakan utama task ini.
+ * Call it outside `$transaction`: a unique violation aborts the Postgres
+ * transaction, so any read inside it would fail.
  */
 export function isIdempotencyReplay(
   error: unknown,

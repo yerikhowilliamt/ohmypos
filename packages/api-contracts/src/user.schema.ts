@@ -1,15 +1,11 @@
 import { z } from 'zod';
 import { UuidString } from './primitives';
 
-/** ADR-011 §1. `CASHIER` is superseded and must not reappear (Playbook §18). */
+/** ADR-011 roles. `CASHIER` is superseded and must not reappear. */
 export const UserRole = z.enum(['KASIR', 'ADMIN', 'OWNER']);
 export type UserRole = z.infer<typeof UserRole>;
 
-/**
- * The branch rule from ADR-011 §2, expressed once so both apps enforce it:
- * a KASIR must have a branch, an ADMIN or OWNER must not. Prisma cannot
- * express this conditional constraint, which is why it lives here.
- */
+/** KASIR requires a branch; ADMIN/OWNER must have none (ADR-011). */
 const branchRule = <
   S extends z.ZodType<{ role: UserRole; branchId?: string | null }>,
 >(
@@ -30,7 +26,7 @@ export const CreateUserSchema = branchRule(
   z.object({
     name: z.string().trim().min(1).max(120),
     email: z.email().toLowerCase(),
-    /** Minimum length only — no composition rules, which push users to reuse passwords. */
+    /** Minimum length only, no composition rules. */
     password: z.string().min(8).max(200),
     role: UserRole,
     branchId: UuidString.nullish(),
@@ -38,14 +34,7 @@ export const CreateUserSchema = branchRule(
 );
 export type CreateUser = z.infer<typeof CreateUserSchema>;
 
-/**
- * `role`/`branchId` are optional here (unlike `CreateUserSchema`) because an
- * update may touch only one of the pair — e.g. reassigning a KASIR's branch
- * without changing their role. The branchRule can't be applied at this layer
- * as a result: a partial patch doesn't know the user's *current* role/branchId
- * to validate the merged state against. `UsersService.update` re-runs
- * `assertRoleBranchConsistent` against the merged result instead (Phase 9).
- */
+/** Partial update. The role/branch rule is checked on the merged state by the service. */
 export const UpdateUserSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   email: z.email().toLowerCase().optional(),
@@ -54,20 +43,7 @@ export const UpdateUserSchema = z.object({
 });
 export type UpdateUser = z.infer<typeof UpdateUserSchema>;
 
-/**
- * An OWNER setting a staff member's forgotten password (TASK-130).
- *
- * There is no `oldPassword`: an OWNER does not know their cashier's password,
- * and that is the entire reason this endpoint exists. What replaces the
- * old-password check is two other things — the endpoint is `@Roles('OWNER')`,
- * and it refuses to act on the caller themselves (see
- * `UsersService.resetPassword`).
- *
- * The floor is 8, the same as `CreateUserSchema`: a password set here is an
- * initial password with exactly the properties one set at account creation has,
- * and demanding different rules for the same thing only guarantees one of them
- * gets broken.
- */
+/** An OWNER sets a staff member's password; no old password (TASK-130). */
 export const ResetUserPasswordSchema = z.object({
   newPassword: z.string().min(8).max(200),
 });

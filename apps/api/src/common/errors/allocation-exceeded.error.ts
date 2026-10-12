@@ -5,11 +5,7 @@ export interface AllocationExceededErrorDetails {
   max?: string;
 }
 
-/**
- * Raised when the `trg_check_allocation_sum` database trigger rejects an
- * allocation because it would push the total past the bank transaction's
- * amount. Ported unchanged from Kasync.
- */
+/** The `trg_check_allocation_sum` trigger rejected an allocation over the transaction amount. */
 export class AllocationExceededError extends Error {
   public readonly txnId?: string;
   public readonly attempted?: string;

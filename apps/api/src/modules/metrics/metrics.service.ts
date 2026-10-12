@@ -1,11 +1,3 @@
-/**
- * OhMyPos — Prometheus metrics (Phase 14 Workstream E, PRD §6, Gate 3).
- *
- * `collectDefaultMetrics` gives process/GC/heap metrics for free. The three
- * business metrics below are the ones actually worth alerting on: sale
- * throughput, sale request latency, and the ADR-007 stock-conflict rate — not
- * an exhaustive dump of every endpoint.
- */
 import { Injectable } from '@nestjs/common';
 import {
   Counter,
@@ -31,7 +23,7 @@ export class MetricsService {
     registers: [this.registry],
   });
 
-  /** Rejections under ADR-007's row lock — a 409, never a 500. */
+  /** Stock conflicts under ADR-007's row lock (409, never 500). */
   readonly stockConflictTotal = new Counter({
     name: 'ohmypos_stock_conflict_total',
     help: 'Total sales rejected for insufficient stock (409)',

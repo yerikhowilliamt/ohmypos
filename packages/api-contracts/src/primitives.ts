@@ -1,15 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Shared primitive schemas.
- *
- * Money and quantity cross the API boundary as **strings**, never numbers —
- * a JSON number is an IEEE-754 double and cannot hold a rupiah amount or a
- * stock quantity without risking silent precision loss (Playbook §5). The
- * service layer parses these back into a `Decimal` before any arithmetic.
- *
- * Scales match the database columns fixed by ADR-012: money is `Decimal(18,2)`,
- * quantity is `Decimal(18,4)`.
+ * Decimal primitives. Money and quantities cross the API as strings, never
+ * JSON numbers; see README for scales.
  */
 
 // Accepts standard decimals ("10", "10.5") and Indonesian/European comma format ("10,5")
@@ -24,11 +17,7 @@ export interface DecimalStringOptions {
   nonNegative?: boolean;
 }
 
-/**
- * Builds a schema for a decimal carried as a string, enforcing the same
- * precision and scale the database column will enforce — so an over-precise
- * value is rejected at the edge rather than silently rounded on insert.
- */
+/** A decimal-as-string schema enforcing the column's precision and scale. */
 export function decimalString(options: DecimalStringOptions) {
   const { scale, nonNegative = true } = options;
 
@@ -60,42 +49,18 @@ export type MoneyString = z.infer<typeof MoneyString>;
 export const QuantityString = decimalString({ scale: 4 });
 export type QuantityString = z.infer<typeof QuantityString>;
 
-/**
- * A per-unit COST — `Decimal(18,6)` (ADR-024).
- *
- * A RATE, not an amount, which is why it is not `MoneyString`. Normalizing a
- * total purchase price over a stock quantity (Rp10.000 over 3.000 gram) does
- * not land on two decimals, and rounding it there understates HPP by ~0,1% on
- * every gram/ml material. Amounts that actually reach the ledger — line totals,
- * purchase totals, sell prices, `hppAtSale` — stay `MoneyString`.
- *
- * The UI displays this at 2dp; the extra digits exist so the arithmetic that
- * feeds HPP is not lossy, not so a cashier reads six decimals.
- */
+/** A per-unit cost (a rate), `Decimal(18,6)` (ADR-024). Not for ledger amounts. */
 export const UnitCostString = decimalString({ scale: 6 });
 export type UnitCostString = z.infer<typeof UnitCostString>;
 
-/**
- * How many stock units are in one purchase unit — `Decimal(18,4)`, strictly
- * positive (ADR-024). `1 ekor = 10 pcs` is `"10"`.
- *
- * Zero is rejected here rather than server-side because it is the one value
- * that makes the normalized unit cost a division by zero.
- */
+/** Stock units per purchase unit, `Decimal(18,4)`, strictly positive (ADR-024). */
 export const ConversionFactorString = decimalString({ scale: 4 }).refine(
   (v) => Number(v) > 0,
   'Harus lebih besar dari 0',
 );
 export type ConversionFactorString = z.infer<typeof ConversionFactorString>;
 
-/**
- * A waste/susut allowance in percent — `Decimal(5,2)`, 0 to 100 inclusive
- * (ADR-024).
- *
- * Bounded at 100 deliberately: an allowance above 100% means the recipe is
- * wrong, not that the allowance is large, and rejecting a typo'd `500` at the
- * edge is far cheaper than finding it in a P&L.
- */
+/** Waste allowance in percent, `Decimal(5,2)`, 0–100 (ADR-024). */
 export const WastePercentString = decimalString({ scale: 2 }).refine(
   (v) => Number(v) >= 0 && Number(v) <= 100,
   'must be between 0 and 100',
@@ -110,36 +75,20 @@ export type UuidString = z.infer<typeof UuidString>;
 export const DateTimeString = z.iso.datetime({ offset: true }).or(z.iso.date());
 export type DateTimeString = z.infer<typeof DateTimeString>;
 
-/**
- * A stock quantity that may legitimately be negative — a carry-forward or a
- * closing balance is a computed difference, not an amount (Phase 6 plan §2.1).
- * Never used for a stored `quantity` column: those carry magnitude only, with
- * the sign living in `StockMovement.direction`.
- */
+/** A computed stock difference that may be negative. Never a stored quantity. */
 export const SignedQuantityString = decimalString({
   scale: 4,
   nonNegative: false,
 });
 export type SignedQuantityString = z.infer<typeof SignedQuantityString>;
 
-/**
- * A monetary amount that may legitimately be negative — e.g. gross profit,
- * net profit, or net cash flow for a central branch with expenses and zero
- * revenue (ADR-014, ADR-017).
- */
+/** A computed money figure that may be negative (profit, net cash flow). */
 export const SignedMoneyString = decimalString({
   scale: 2,
   nonNegative: false,
 });
 export type SignedMoneyString = z.infer<typeof SignedMoneyString>;
 
-/**
- * Kunci idempotensi yang dibuat klien untuk endpoint pencipta uang (TASK-082).
- *
- * UUID, bukan string bebas: panjangnya pasti, tabrakan tak sengaja secara
- * praktis mustahil, dan `crypto.randomUUID()` tersedia di setiap browser yang
- * POS ini dukung. Opsional supaya klien lama tetap jalan — tanpa kunci,
- * perilakunya persis seperti sebelum TASK-082, termasuk risikonya.
- */
+/** Client-generated UUID that makes a money-writing request idempotent (TASK-082). */
 export const IdempotencyKey = UuidString;
 export type IdempotencyKey = z.infer<typeof IdempotencyKey>;

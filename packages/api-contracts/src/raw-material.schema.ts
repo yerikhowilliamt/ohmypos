@@ -1,14 +1,3 @@
-/**
- * Raw Material schemas (ERD §3, ADR-004, ADR-010, ADR-024).
- *
- * `currentStock` is deliberately excluded from create and update schemas —
- * stock is only ever altered via `StockMovement` inside a transaction under
- * `FOR UPDATE` (ADR-007).
- *
- * ADR-024 splits the single `unit` into two: `unit` is the STOCK/RECIPE base
- * unit everything quantity-shaped is measured in, and `purchaseUnit` is the
- * pack the supplier sells, bridged by `conversionFactor`.
- */
 import { z } from 'zod';
 import {
   ConversionFactorString,
@@ -19,11 +8,7 @@ import {
 
 export const CreateRawMaterialSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  /**
-   * STOCK/RECIPE base unit — ml, gram, pcs. Free text (ERD §3), not an enum.
-   * Immutable once the material has stock history; that rule needs a database
-   * read, so it lives in RawMaterialsService.update, not here.
-   */
+  /** Stock/recipe base unit. Immutable once stock history exists (checked server-side). */
   unit: z.string().trim().min(1).max(50),
   /** PURCHASE unit — the pack the supplier sells: ekor, liter, kg, pack. */
   purchaseUnit: z.string().trim().min(1).max(50),
@@ -47,11 +32,7 @@ export const RawMaterialResponseSchema = z.object({
   unitCost: UnitCostString,
   currentStock: QuantityString,
   lowStockThreshold: QuantityString,
-  /**
-   * True once any StockMovement references this material. Decided server-side
-   * so the form can disable the base-unit field instead of letting the user
-   * type a change the API will reject (ADR-024).
-   */
+  /** True once any stock movement exists; the form disables `unit` (ADR-024). */
   isBaseUnitLocked: z.boolean(),
   createdAt: z.date().or(z.string()),
   updatedAt: z.date().or(z.string()),

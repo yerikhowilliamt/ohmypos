@@ -2,10 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
-/**
- * Uploads product photo to Cloudinary and stores the resulting secure_url on Product.photoUrl.
- * Deterministic public_id (`ohmypos/product_<productId>`) with overwrite: true to prevent orphans.
- */
+/** Uploads a product photo to Cloudinary under a deterministic, overwritten public_id. */
 @Injectable()
 export class ProductPhotoService {
   constructor(private readonly prisma: PrismaService) {

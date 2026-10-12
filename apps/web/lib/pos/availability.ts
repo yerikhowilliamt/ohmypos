@@ -1,20 +1,3 @@
-/**
- * OhMyPos — cart-aware makeable quantity (ADR-013, Phase 8c plan §3).
- *
- * `ProductWithHppResponse.makeableQuantity` answers "how many of this product
- * could I make if the cart were empty". It is computed per product in isolation
- * (`products.mapper.ts`), so when two products share a raw material their two
- * numbers are not jointly satisfiable. This module subtracts what the rest of the
- * cart already claims before reporting headroom.
- *
- * ADR-013 is explicit that this figure is advisory: "never authoritative, and
- * never reserved". Stock is a single centralized pool (ADR-004) that another
- * branch can decrement concurrently, so headroom can be stale the instant it
- * renders. The authoritative check is `assertSufficientStock` under row locks at
- * sale time (ADR-007); a 409 on submit is the real contract, not the exception.
- *
- * Pure: no React, no network.
- */
 import type {
   ProductWithHppResponse,
   RawMaterialResponse,
@@ -46,11 +29,7 @@ export interface CartAvailability {
   demand: Map<string, Fixed>;
   /** `currentStock - demand` per raw material. Negative means over-committed. */
   remaining: Map<string, Fixed>;
-  /**
-   * How many MORE of each product can be added given what the cart already
-   * claims. `null` for a product with no recipe (mirrors `calculateHpp`
-   * returning `null` rather than 0 — ADR-013).
-   */
+  /** How many more of each product fit, given the cart. `null` without a recipe. */
   headroom: Map<string, number | null>;
   /** Raw materials the cart already over-commits, in stable name order. */
   shortfalls: AvailabilityShortfall[];
@@ -72,17 +51,7 @@ export function computeCartAvailability({
   const productById = new Map(products.map((p) => [p.id, p]));
   const materialById = new Map(rawMaterials.map((rm) => [rm.id, rm]));
 
-  /**
-   * Sum every line's contribution at FULL precision, then round once per material
-   * at the end. This is the rule ADR-015 decision 3 sets for the server's
-   * `aggregateStockRequirements`: "rounding per line and then summing drifts, and
-   * the drift lands in RawMaterial.currentStock where it never washes out."
-   * Deviating here would make the client disagree with the server exactly at the
-   * boundary where the advice matters most.
-   *
-   * Note this is the OPPOSITE rule from sale totals, which round per line and
-   * then sum (see `cart-totals.ts`). Swapping them is the bug ADR-015 warns about.
-   */
+  /** Exact per-material sums, rounded once (as the server does); the opposite of sale-total rounding. */
   const exactDemand = new Map<string, Fixed>();
 
   for (const line of lines) {
@@ -112,11 +81,7 @@ export function computeCartAvailability({
 
   for (const [rawMaterialId, required] of demand) {
     const material = materialById.get(rawMaterialId);
-    /**
-     * A material we cannot see is treated as zero stock, not skipped — the same
-     * fail-closed choice `assertSufficientStock` makes ("failing open here would
-     * let a sale consume a material that no longer exists").
-     */
+    /** An unknown material counts as zero stock (fail closed, as on the server). */
     const available = material
       ? parseFixed(material.currentStock, QUANTITY_SCALE)
       : zero(QUANTITY_SCALE);
@@ -164,9 +129,7 @@ export function computeCartAvailability({
       const claimed = demand.get(item.rawMaterialId) ?? zero(QUANTITY_SCALE);
       const left = subFixed(stock, claimed);
 
-      // ADR-013's formula, evaluated against `remaining` rather than
-      // `currentStock`. Integer division on scaled BigInts, so the floor never
-      // flips at an exact boundary the way float division does.
+      // Floor of remaining / quantityUsed on scaled BigInts.
       const perItem = divFloorToInt(
         left,
         parseFixed(item.quantityUsed, QUANTITY_SCALE),
@@ -192,11 +155,7 @@ function formatQty(value: Fixed): string {
   return `${negative ? '-' : ''}${intPart}.${fracPart}`;
 }
 
-/**
- * Whether a product tile should offer an add action. Deliberately conservative
- * about the two cases the server would reject outright, and permissive about
- * headroom (which is advisory).
- */
+/** Whether a tile offers "add": strict on recipe/active (server rejects), lenient on headroom (advisory). */
 export function canAddProduct(
   product: ProductWithHppResponse,
   headroom: number | null | undefined,

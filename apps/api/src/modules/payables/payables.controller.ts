@@ -1,10 +1,3 @@
-/**
- * OhMyPos — Payables controller (ERD §3, System Design §5, Playbook §8).
- *
- * RBAC:
- * - List and detail viewing: OWNER and ADMIN.
- * - Settlements creation: OWNER only (decision 5: money leaving central account).
- */
 import {
   Body,
   Controller,

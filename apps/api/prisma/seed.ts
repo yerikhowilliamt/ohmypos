@@ -15,31 +15,8 @@ import { SalesService } from '../src/modules/sales/sales.service';
 import { ensureSystemRefs } from '../src/common/system-refs';
 
 /**
- * Synthetic seed data only — fictional branches and staff, never anything from
- * the real business (Handbook §6).
- *
- * Load-bearing entities:
- *  - the initial OWNER (ADR-011 §5);
- *  - system categories (ADR-012);
- *  - the system location `Umum`, flagged `isSystem` (ADR-014);
- *  - Phase 4 purchasing fixtures per §9.9 for hand verification and e2e testing;
- *  - Phase 5 sale fixture per plan §10.6.
- *
- * The Phase 4/5 fixtures go through `SupplierPurchasesService`, `PayablesService`
- * and `SalesService` rather than writing rows directly (Phase 4 plan §9.9,
- * Phase 5 plan §10.6). That is not ceremony: `remainingBalance`, `paymentStatus`
- * and `RawMaterial.currentStock` are denormalized balances whose correctness
- * rests on having exactly ONE writer each (Phase 4 plan §2 Option B). A seed
- * that wrote them by hand would be a second writer, and — because it lives
- * outside `apps/api/src` — one that the single-writer greps in the definition
- * of done cannot see. Hand-computing `4530.00` here would also silently desync
- * the moment a recipe or a raw material's cost changed. Every derived figure
- * below is produced by the same code the API runs; only the inputs are literals.
- *
- * The services are constructed directly instead of booting a Nest container:
- * they are plain classes, and `PrismaService` builds its own driver adapter
- * from `DATABASE_URL`, so manual wiring exercises the identical code path
- * without pulling in pino, throttling and config for a script.
+ * Development and e2e fixtures (synthetic data only). Never run against
+ * production. Derived figures go through the services; see prisma/README.md.
  */
 async function main() {
   // ADR-025 — the tenant and the platform admin exist OUTSIDE any tenant, so
@@ -89,11 +66,7 @@ async function main() {
     ledgerEntriesService,
   );
 
-  // System refs (ADR-014/ADR-015) come from the same function the production
-  // bootstrap uses, so the demo seed can never drift from a real install.
-  // Not captured in a variable on purpose: services resolve the system branch
-  // via `resolveLedgerBranchId`, and nothing here should be tempted to pass its
-  // id around as if it were an ordinary branch.
+  // System refs via the production bootstrap function, so the two cannot drift.
   await ensureSystemRefs(prisma);
 
   const branches = await Promise.all(
@@ -151,12 +124,7 @@ async function main() {
     }),
   ]);
 
-  // Required by ADR-012: system-generated ledger entries must have a category.
-  // Resolved by name inside the services (`resolvePurchaseCategoryId`), so no
-  // id is captured here for THOSE fixtures — but the reconciliation fixtures
-  // below write LedgerEntry rows directly (there is no service for a MANUAL
-  // entry's creation-with-category the way Purchases/Sales have one) and need
-  // the ids, hence capturing the upsert results here.
+  // Category ids are captured for the reconciliation fixtures, which write ledger entries directly.
   const categories = await Promise.all(
     [
       { name: 'Penjualan', type: 'INFLOW' as const },
@@ -231,10 +199,7 @@ async function main() {
     create: {
       name: 'Gula',
       unit: 'kg',
-      // Bought and stocked in the same unit — the 1:1 case every pre-ADR-024
-      // material was backfilled to. Deliberately left at 1 so the seeded HPP
-      // (0,25 kg × 12.000 + 0,018 kg × 85.000 = 4.530) that the Phase 4/5 e2e
-      // suites assert on does not move.
+      // 1:1 units, so the asserted HPP (4.530) does not move.
       purchaseUnit: 'kg',
       conversionFactor: '1.0000',
       unitCost: '12000.00',
@@ -257,11 +222,7 @@ async function main() {
     },
   });
 
-  // ADR-024 fixture — the material that actually exercises the purchase/stock
-  // unit split, so `db:seed` produces a database where the feature is visible.
-  // Bought per ekor, stocked and cooked per pcs, 1 ekor = 10 pcs. Deliberately
-  // has NO recipe and NO stock movement: it must not shift any figure the
-  // existing e2e suites assert on.
+  // ADR-024 fixture (1 ekor = 10 pcs). No recipe and no movements, so no asserted figure moves.
   await prisma.rawMaterial.upsert({
     where: { tenantId_name: { tenantId, name: 'Ayam' } },
     update: {},
@@ -277,14 +238,7 @@ async function main() {
     },
   });
 
-  // Phase 6 §11.13 — one OpeningStock declaration for the current month, so the
-  // Dashboard 4 and Dashboard 5 screens have something to render.
-  //
-  // Declared EQUAL to Gula's seeded currentStock on purpose: the delta is then
-  // exactly 0, the seeded balance is unchanged, and adding this fixture cannot
-  // shift the absolute stock numbers that the Phase 4 and Phase 5 e2e suites
-  // assert on. A seed that moved those balances is ERR-004 happening a third
-  // time.
+  // Opening stock declared equal to current stock: delta 0, so no asserted balance moves.
   const currentPeriodStart = new Date(
     Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
   );
@@ -355,9 +309,7 @@ async function main() {
     },
   });
 
-  // ---------------------------------------------------------------------------
-  // Phase 4: Suppliers, Purchases, Payables, Settlements & StockMovements (§9.9)
-  // ---------------------------------------------------------------------------
+  // Suppliers, purchases, payables, settlements
   const supplierSumberRejeki = await prisma.supplier.upsert({
     where: { tenantId_name: { tenantId, name: 'Toko Sumber Rejeki' } },
     update: {},
@@ -451,13 +403,7 @@ async function main() {
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Phase 5: Sales & the outbound half of StockMovement (plan §10.6)
-  // ---------------------------------------------------------------------------
-  // Sale S1 — Cabang Melati, 2 × Es Kopi Susu at the menu price, paid to Kas Tunai.
-  // hppAtSale (per unit) = 0.2500 × 12000.00 + 0.0180 × 85000.00 = 4530.00 —
-  // deliberately the same figure TASK-005 uses to demonstrate the toJSON() scale
-  // trap, so a decimal-serialization regression shows up in two suites at once.
+  // Sales. Sale S1: 2 × Es Kopi Susu; hppAtSale = 4530.00 (also the toJSON() scale trap).
   const existingSaleS1 = await prisma.sale.findFirst({
     where: {
       branchId: branches[0].id,
@@ -467,8 +413,7 @@ async function main() {
   });
 
   if (!existingSaleS1) {
-    // Server computes hppAtSale, totalAmount and the stock decrement — none of
-    // those are literals here, same discipline as the Phase 4 fixtures above.
+    // The service computes hppAtSale, totalAmount and the stock decrement.
     await salesService.create(
       {
         branchId: branches[0].id,
@@ -480,29 +425,9 @@ async function main() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Phase 8h/8j: Reconciliation fixtures (plan §9.2 E2E smoke needs something to
-  // click on). BankTransaction and LedgerEntry are written directly with
-  // `prisma` rather than through a service — unlike the Phase 4/5 fixtures
-  // above, nothing here is a denormalized balance a service derives; `status`
-  // is either a plain literal or left for `trg_check_allocation_sum`'s
-  // `sync_transaction_status` trigger to set the instant an Allocation row is
-  // inserted (docs/plannings/phase-8h-reconciliation.md §1.3) — exactly what
-  // happens through the real API, so writing the Allocation row directly here
-  // exercises the identical trigger path.
-  //
-  // Covers every `TransactionStatus` and gives `POST /matching/propose`
-  // (docs/plannings/phase-8h-reconciliation.md §1.4) one candidate of each
-  // `MatchType`:
-  //  - BT1 vs LE1: same amount, same day        -> EXACT
-  //  - BT2a + BT2b vs LE2: sum to LE2's amount   -> AGGREGATION
-  //  - BT3 vs LE3: same amount, 2 days apart     -> FUZZY (default tolerance 3d)
-  //  - BT4: pre-allocated 300,000 of 500,000     -> PARTIALLY_ALLOCATED
-  //  - BT5: pre-allocated exactly 45,000         -> MATCHED
-  //  - BT6: seeded already PENDING_REVIEW, no candidate in this session's
-  //    queue -> demonstrates the "candidates are not persisted" trap directly
-  //    (§1.4) without the operator having to reload mid-session to see it.
-  //  - BT7: no nearby ledger entry               -> UNRESOLVED, no candidate
+  // Reconciliation fixtures, written directly; statuses come from the real trigger.
+  // BT1 EXACT · BT2a+BT2b AGGREGATION · BT3 FUZZY · BT4 PARTIALLY_ALLOCATED ·
+  // BT5 MATCHED · BT6 PENDING_REVIEW, no candidate · BT7 UNRESOLVED.
   async function upsertReconTxn(input: {
     externalRef: string;
     txnDate: string;
@@ -693,7 +618,7 @@ async function main() {
     },
   });
 
-  // Phase 12 — Seed sample leave requests for UI inspection and verification
+  // Sample leave requests
   const ownerUser = await prisma.user.findUnique({
     where: { email: ownerEmail },
   });

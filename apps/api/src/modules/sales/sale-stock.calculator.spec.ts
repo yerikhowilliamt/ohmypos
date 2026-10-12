@@ -1,11 +1,3 @@
-/**
- * OhMyPos — unit tests for the sale stock fan-out calculator (ADR-007, ADR-015,
- * ADR-016, plan §10.7 Tier 1).
- *
- * The lock-ordering test is the one that pins ADR-016 without a database: it
- * is what the e2e concurrency case (plan §10.7 case 8) would otherwise be the
- * only thing proving.
- */
 import { Prisma } from '../../generated/prisma/client';
 import { aggregateStockRequirements } from './sale-stock.calculator';
 

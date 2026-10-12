@@ -1,19 +1,3 @@
-/**
- * OhMyPos — sale stock fan-out calculator (ADR-007, ADR-015, ADR-016, plan §10.2).
- *
- * Pure — no Prisma calls, no Nest DI, no database. Turns sale lines into the
- * per-raw-material quantity the sale consumes, and fixes the lock order
- * (ADR-016) by returning entries sorted ascending by rawMaterialId. The sort
- * lives here, not in the service, so the lock order is provable by a unit test
- * with no database.
- *
- * Rounding: sums the EXACT products quantity × recipeItem.quantityUsed across
- * every line that touches a material, then rounds the per-material total ONCE
- * to 4dp HALF_UP — because that total is what gets stored on
- * StockMovement.quantity and subtracted from currentStock. Rounding per line
- * and then summing gives a different, drifting answer; see the spec for a
- * worked example.
- */
 import { Prisma } from '../../generated/prisma/client';
 
 export interface SaleStockLineInput {
@@ -27,6 +11,10 @@ export interface StockRequirement {
   quantity: Prisma.Decimal;
 }
 
+/**
+ * Per-raw-material quantity a sale consumes, sorted ascending by id (the lock
+ * order). Each material's exact total is rounded once to 4dp, never per line.
+ */
 export function aggregateStockRequirements(
   lines: SaleStockLineInput[],
 ): StockRequirement[] {

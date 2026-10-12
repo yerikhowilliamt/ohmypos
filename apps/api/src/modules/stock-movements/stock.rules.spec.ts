@@ -1,10 +1,3 @@
-/**
- * OhMyPos — unit tests for the sale-time stock sufficiency rule (ADR-007, plan §10.7 Tier 1).
- *
- * Playbook §10 puts the Sale flow's stock check in the "must have thorough
- * tests" tier. The row lock that makes this hold under concurrency is covered
- * separately by the e2e concurrency cases (plan §10.7 cases 7-8).
- */
 import { Prisma } from '../../generated/prisma/client';
 import { InsufficientStockException } from './stock-movements.exceptions';
 import { assertSufficientStock } from './stock.rules';
@@ -104,11 +97,6 @@ describe('Stock Sufficiency Rule (stock.rules.ts)', () => {
     ).toThrow(InsufficientStockException);
   });
 
-  /**
-   * The POS maps shortfalls back to the cart lines that caused them, so the 409
-   * body has to carry the raw material ids — not just the human-readable message.
-   * `message` stays byte-identical to the string form the assertions above rely on.
-   */
   it('serialises a machine-readable shortfall payload alongside the message', () => {
     const available = new Map([['gula', new Prisma.Decimal('2.0000')]]);
 

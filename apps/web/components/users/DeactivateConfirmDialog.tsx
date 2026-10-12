@@ -20,12 +20,7 @@ interface DeactivateConfirmDialogProps {
   onConfirm: () => void;
 }
 
-/**
- * Labeled "Hapus" per the user-facing request, but calls
- * `PATCH /users/:id/deactivate` under the hood — `Sale.userId` is an audit
- * trail that must survive a staff member leaving (ADR-011, ERD §7 note 3),
- * so there is no hard-delete endpoint to call here.
- */
+/** Labelled "Hapus" but soft-deactivates: `Sale.userId` is an audit trail. */
 export function DeactivateConfirmDialog({
   open,
   onOpenChange,

@@ -1,11 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 
-/**
- * ADR-025 Fase 4. These messages are read by a platform operator, not by a shop
- * owner, but the two rules from `common/messages.ts` still apply: Indonesian,
- * and end with the action that unsticks the reader.
- */
-
 export class TenantSlugTakenException extends ConflictException {
   constructor(slug: string) {
     super(
@@ -15,12 +9,7 @@ export class TenantSlugTakenException extends ConflictException {
   }
 }
 
-/**
- * `users.email` is globally unique by decision, not by omission (ADR-025
- * Decision 6), so this collision can be against a user in ANY tenant. The
- * message says so, because "email sudah terdaftar" would otherwise send the
- * operator looking through the wrong tenant.
- */
+/** The email collides with a user in any tenant (ADR-025 Decision 6). */
 export class OwnerEmailTakenException extends ConflictException {
   constructor(email: string) {
     super(
@@ -30,12 +19,7 @@ export class OwnerEmailTakenException extends ConflictException {
   }
 }
 
-/**
- * TASK-131 — changing a tenant OWNER's login email on a tenant that has already
- * been used. Not forbidden: an operator may genuinely have to do it. But it is
- * a different act there than on a tenant provisioned five minutes ago, so the
- * refusal names what was found and tells the caller how to proceed anyway.
- */
+/** Owner email change on a non-pristine tenant without `acknowledgeExistingData`. */
 export class TenantHasDataUnacknowledgedException extends ConflictException {
   constructor(evidence: string[]) {
     super(
@@ -52,10 +36,7 @@ export class TenantNotFoundException extends NotFoundException {
   }
 }
 
-/**
- * Impersonation borrows a specific `User` row, so a tenant whose owner was
- * deactivated has nobody to borrow. Recoverable by the operator, so it says how.
- */
+/** Impersonation needs an active OWNER to act as. */
 export class TenantHasNoActiveOwnerException extends ConflictException {
   constructor() {
     super(

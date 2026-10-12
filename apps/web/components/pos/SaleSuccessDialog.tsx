@@ -20,14 +20,7 @@ interface SaleSuccessDialogProps {
   businessName?: string;
 }
 
-/**
- * The receipt summary, rendered from the 201 response.
- *
- * It must come from the POST body and nothing else: `GET /sales/:id` is
- * OWNER/ADMIN-only (sales.controller.ts), so a KASIR cannot refetch the sale they
- * just created. Nothing shown here is recomputed client-side — `totalAmount` is
- * the server's number.
- */
+/** Receipt from the 201 response only: a KASIR cannot `GET /sales/:id`. */
 export function SaleSuccessDialog({
   sale,
   onClose,
@@ -98,7 +91,7 @@ export function SaleSuccessDialog({
               <span className="text-sm font-medium text-text-primary">
                 Total
               </span>
-              {/* Flow Indicator — money in (DESIGN.md §12.2 Signature Flow Indicator). */}
+              {/* Flow Indicator — money in (design.md §12.2 Signature Flow Indicator). */}
               <span
                 data-testid="sale-success-total"
                 className="numeric font-mono text-lg font-semibold text-accent-inflow"

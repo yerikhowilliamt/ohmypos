@@ -1,18 +1,3 @@
-/**
- * OhMyPos — Sales domain exceptions (Playbook §6, plan §10.5).
- *
- * - SaleProductNotFoundException (404) — an id in the cart does not exist.
- * - InactiveProductException (409) — the product exists but is not sellable
- *   right now; a state conflict, same reasoning as PayableAlreadySettledException.
- * - RecipeIncompleteException (409) — Playbook §6 names this exception
- *   explicitly: "a product has no recipe defined, so HPP can't be computed".
- *   `calculateHpp([])` returns `null` by design (ADR-013); selling at
- *   `hppAtSale = 0` would silently report 100% margin forever.
- * - CentralBranchNotSellableException (400) — the payload names something that
- *   may never be named there, mirroring CentralBranchNotAssignableException.
- *
- * `this.name` is set on each, matching every other `*.exceptions.ts` in the repo.
- */
 import {
   BadRequestException,
   ConflictException,
@@ -47,11 +32,7 @@ export class RecipeIncompleteException extends ConflictException {
   }
 }
 
-/**
- * ADR-014/ADR-015: the system location is a ledger-attribution row, not a
- * till — there is no such thing as a central sale (ADR-004). A sale attributed
- * to it would appear in branch reports as an outlet that never sold anything.
- */
+/** The system branch is a ledger attribution, not a till; there is no central sale. */
 export class CentralBranchNotSellableException extends BadRequestException {
   constructor() {
     super(
@@ -70,14 +51,7 @@ export class BackdatedSaleException extends BadRequestException {
   }
 }
 
-/**
- * DEBT-009 remediation: a KASIR could previously submit any `unitPrice` with
- * no ceiling and no approval — a live path to move money out of the till
- * without the sale looking anomalous. KASIR no longer has this ability at
- * all; only ADMIN/OWNER may charge a price that differs from
- * Product.sellPrice (Playbook §8, RoleGuard is the authoritative check —
- * this exception is what a KASIR's own attempt surfaces as).
- */
+/** A KASIR tried to charge a price other than `Product.sellPrice` (DEBT-009). */
 export class PriceOverrideNotAllowedException extends BadRequestException {
   constructor(names: string[]) {
     super(
@@ -87,8 +61,7 @@ export class PriceOverrideNotAllowedException extends BadRequestException {
   }
 }
 
-/** DEBT-010 — a sale can only be voided once; the second attempt (including a
- * race against the first) is rejected, never silently accepted. */
+/** A sale can be voided only once, including under a race. */
 export class SaleAlreadyVoidedException extends BadRequestException {
   constructor() {
     super('Transaksi ini sudah dibatalkan sebelumnya.');
@@ -96,9 +69,7 @@ export class SaleAlreadyVoidedException extends BadRequestException {
   }
 }
 
-/** DEBT-010 — the minimal interim void guard is time-boxed, not open-ended
- * (plan §2): a sale older than the window needs a real refund workflow, not
- * this stop-gap. */
+/** The void window has passed. */
 export class SaleVoidWindowExpiredException extends BadRequestException {
   constructor(limitMinutes: number) {
     super(

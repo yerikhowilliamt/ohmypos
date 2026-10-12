@@ -1,11 +1,3 @@
-/**
- * OhMyPos — unit tests for the stock status badge (PRD §5.6, Phase 6 plan §12.1).
- *
- * Every row here is a boundary. The two that matter most: closing exactly AT
- * the threshold must read LOW (a threshold is the level at which the owner
- * wants warning, so reaching it must warn), and closing exactly 0 must read OUT
- * even when the threshold is its 0 default.
- */
 import { Prisma } from '../../generated/prisma/client';
 import { resolveStockStatus } from './stock-status';
 

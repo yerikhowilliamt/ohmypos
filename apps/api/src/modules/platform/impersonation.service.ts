@@ -13,22 +13,18 @@ import {
   TenantNotFoundException,
 } from './platform.exceptions';
 
-/**
- * ADR-025 Decision 8. Thirty minutes, no refresh token, read-only, and every
- * session recorded with a reason.
- *
- * The TTL is deliberately not configurable by env: an operator who needs longer
- * can start a second session, which produces a second audit record — which is
- * the behaviour worth encouraging.
- */
+/** Not env-configurable on purpose: a longer need means a second audited session. */
 const IMPERSONATION_TTL_SECONDS = 30 * 60;
 
+/**
+ * Read-only, 30-minute tenant sessions for platform operators (ADR-025 Decision 8).
+ * Every session is recorded with a reason.
+ */
 @Injectable()
 export class ImpersonationService {
   private readonly logger = new Logger(ImpersonationService.name);
 
-  // Unscoped: this service reads across tenants by definition, and it runs on a
-  // platform request where `scope.tenantId` is deliberately null.
+  // Unscoped: cross-tenant by definition.
   constructor(
     private readonly prisma: UnscopedPrismaService,
     private readonly jwtService: JwtService,
@@ -46,8 +42,7 @@ export class ImpersonationService {
       throw new TenantNotFoundException();
     }
 
-    // The oldest active OWNER — the account created with the tenant, which is
-    // the one an operator expects to be looking through.
+    // The oldest active OWNER: the account created with the tenant.
     const owner = await this.prisma.user.findFirst({
       where: { tenantId, role: 'OWNER', isActive: true },
       orderBy: { createdAt: 'asc' },
@@ -65,8 +60,7 @@ export class ImpersonationService {
       },
     });
 
-    // Written before the token is minted, so a crash between the two leaves an
-    // audit record with no session rather than a session with no record.
+    // Logged before minting, so a crash never leaves a token without a record.
     this.logger.warn(
       `Impersonation started: platformAdmin=${platformAdminId} tenant=${tenant.slug} actingAs=${owner.email} session=${session.id}`,
     );
@@ -81,9 +75,7 @@ export class ImpersonationService {
       imp: { sessionId: session.id, platformAdminId },
     };
 
-    // Signed with the TENANT secret, because it is presented to ordinary tenant
-    // endpoints and verified by `JwtAuthGuard` like any other access token. The
-    // `imp` claim is what `ImpersonationReadOnlyGuard` then keys on.
+    // Tenant secret: verified by JwtAuthGuard; `imp` triggers ImpersonationReadOnlyGuard.
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: this.getTenantSecret(),
       expiresIn: IMPERSONATION_TTL_SECONDS,
@@ -97,10 +89,8 @@ export class ImpersonationService {
   }
 
   /**
-   * Ends the platform admin's most recent open session.
-   *
-   * Scoped to the caller's own sessions on purpose: ending someone else's
-   * session would blank an audit record the other operator is still writing.
+   * Ends the caller's own most recent open session. The token stays valid
+   * until it expires; there is no revocation list.
    */
   async end(platformAdminId: string): Promise<ImpersonationSessionResponse> {
     const open = await this.prisma.impersonationSession.findFirst({
@@ -116,10 +106,6 @@ export class ImpersonationService {
       data: { endedAt: new Date() },
     });
 
-    // The token itself lives until it expires — there is no revocation list for
-    // impersonation tokens, and adding one would mean a database read on every
-    // tenant request. Thirty minutes read-only is the bound that makes that
-    // acceptable; see the handoff note in TASK-126.
     this.logger.warn(
       `Impersonation ended: platformAdmin=${platformAdminId} session=${session.id}`,
     );

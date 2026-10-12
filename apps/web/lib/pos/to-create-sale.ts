@@ -1,10 +1,4 @@
-/**
- * OhMyPos — cart → `POST /sales` request (ADR-010, Phase 8c plan §4).
- *
- * The mapping is never hand-typed: the object is built and then validated with
- * `CreateSaleSchema` itself, so a drift between this screen and the API surfaces
- * here rather than as a 400 the cashier cannot act on.
- */
+/** Builds the `POST /sales` body and validates it with `CreateSaleSchema`. */
 import { CreateSaleSchema, type CreateSale } from '@ohmypos/api-contracts';
 import { QUANTITY_SCALE, formatFixed, fromInt } from '@/lib/decimal';
 import type { CartLine } from './cart.reducer';
@@ -36,12 +30,7 @@ export function toCreateSale({
     items: lines.map((line) => ({
       productId: line.productId,
       quantity: formatFixed(fromInt(line.quantity, 0), QUANTITY_SCALE),
-      /**
-       * `unitPrice` is OMITTED, not null, when there is no override — the schema
-       * marks it `.optional()`, and omitting it is what tells the server to charge
-       * `Product.sellPrice` as of that moment and leave `isPriceOverridden` false.
-       * The server decides that flag; the client never sends it.
-       */
+      /** Omitted (not null) without an override, so the server charges `sellPrice`. */
       ...(line.overridePrice !== null && { unitPrice: line.overridePrice }),
     })),
   };

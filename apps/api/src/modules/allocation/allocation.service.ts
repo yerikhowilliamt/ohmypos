@@ -13,13 +13,8 @@ import { requireTenantId } from '../../common/prisma/tenant-context';
 import { Prisma } from '../../generated/prisma/client';
 
 /**
- * Ported from Kasync with the `userId` scoping removed (ERD §7 note 1).
- *
- * The allocation-sum invariant is enforced twice on purpose, exactly as in
- * Kasync: once here in the application (so the caller gets a clear 400), and
- * once by the `trg_check_allocation_sum` database trigger, which takes a
- * `FOR UPDATE` lock and is what actually closes the check-then-act race under
- * concurrency (Playbook §7). Removing either half is not a simplification.
+ * Allocates bank transactions to ledger entries. The sum caps are enforced here
+ * (for a clear 400) and by database triggers (which close the race). Keep both.
  */
 @Injectable()
 export class AllocationService {
@@ -41,9 +36,7 @@ export class AllocationService {
       const created = [];
 
       for (const [txnId, txnItems] of Object.entries(groupedItems)) {
-        // Lock the bank transaction row first — same guard the trigger uses.
-        // `id` is a TEXT column (Prisma String @id), so no ::uuid cast here —
-        // Postgres would reject the text = uuid comparison.
+        // Lock the bank transaction first, as the trigger does. TEXT id: no ::uuid.
         await tx.$queryRaw`SELECT id FROM bank_transactions WHERE id = ${txnId} AND tenant_id = ${requireTenantId()} FOR UPDATE`;
 
         const bankTransaction = await tx.bankTransaction.findUnique({
@@ -110,11 +103,7 @@ export class AllocationService {
         }
 
         for (const item of txnItems) {
-          // Kunci entri buku besar SESUDAH transaksi bank — lihat rencana
-          // TASK-083 §Jebakan. Membalik urutan ini membuat dua alokasi
-          // bersamaan yang menyentuh pasangan (txn, entry) yang bertukar bisa
-          // saling deadlock, dan Postgres membatalkan salah satunya dengan
-          // 40P01 yang tidak bisa ditindaklanjuti pemanggil.
+          // Lock ledger entries AFTER the bank transaction; reversing the order can deadlock.
           await tx.$queryRaw`SELECT id FROM ledger_entries WHERE id = ${item.ledgerEntryId} AND tenant_id = ${requireTenantId()} FOR UPDATE`;
 
           const ledgerEntry = await tx.ledgerEntry.findUnique({
@@ -141,10 +130,7 @@ export class AllocationService {
             }
           }
 
-          // DEF-A3: batas sisi-entri. Kembarannya di sisi transaksi bank ada di
-          // atas (baris ~100); trigger trg_check_ledger_allocation_sum
-          // menegakkan hal yang sama di basis data dan itulah yang menutup
-          // balapan. Dua-duanya disengaja (lihat komentar kepala berkas).
+          // Entry-side cap (DEF-A3); trg_check_ledger_allocation_sum enforces it too.
           const entryAllocations = await tx.allocation.findMany({
             where: { ledgerEntryId: item.ledgerEntryId, status: 'ACTIVE' },
           });
@@ -189,15 +175,7 @@ export class AllocationService {
         );
       }
 
-      // DEF-QA-02: lock the same parent rows `create()` locks, in the same
-      // order (bank_transactions then ledger_entries), before touching the
-      // allocation itself. Without this, a concurrent `create()` on the same
-      // transaction/entry pair can read the allocation-sum aggregate mid-
-      // revoke and either over-count a row that is about to disappear or
-      // under-count one that a rolled-back revoke never actually removed —
-      // exactly the TOCTOU race the trigger alone was not enough to close at
-      // the application layer. Matching `create()`'s lock order also means
-      // the two operations can never deadlock against each other.
+      // Same rows, same order as create(): closes the TOCTOU race and cannot deadlock.
       await tx.$queryRaw`SELECT id FROM bank_transactions WHERE id = ${target.bankTransactionId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM ledger_entries WHERE id = ${target.ledgerEntryId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM allocations WHERE id = ${id} FOR UPDATE`;
@@ -235,7 +213,7 @@ export class AllocationService {
     });
   }
 
-  /** Flattens Kasync's dual-shape request into a single list. */
+  /** Flattens the single-item and multi-item request shapes into one list. */
   private normaliseItems(dto: CreateAllocation): CreateSingleAllocation[] {
     if (dto.allocations && dto.allocations.length > 0) {
       return dto.allocations;

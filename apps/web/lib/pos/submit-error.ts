@@ -1,13 +1,4 @@
-/**
- * OhMyPos — mapping a failed `POST /sales` onto in-cart feedback
- * (Playbook §6, Phase 8c plan §5).
- *
- * The screen never shows a generic toast. Every failure resolves to a `CartError`
- * that names what went wrong in Indonesian and, where possible, which cart lines
- * are implicated.
- *
- * Pure: takes an already-thrown error plus the cart context, returns state.
- */
+/** Maps a failed `POST /sales` to in-cart feedback in Indonesian, naming the affected lines. Pure. */
 import {
   InsufficientStockErrorSchema,
   type ProductWithHppResponse,
@@ -27,13 +18,7 @@ export function mapSubmitError({
   lines,
   products,
 }: MapSubmitErrorInput): CartError {
-  /**
-   * Not an `ApiError` at all — `fetch` itself rejected, so the request may or may
-   * not have reached the server. There is no idempotency key on `POST /sales`
-   * (see DEBT entry), so a blind retry could double-write a `LedgerEntry` —
-   * exactly the risk ADR-016 names when it rejects optimistic retry. The cashier
-   * is sent to verify instead of being offered a retry button.
-   */
+  /** `fetch` rejected: the sale may or may not exist, so the cashier is sent to verify first. */
   if (!(error instanceof ApiError)) {
     return {
       kind: 'UNCERTAIN',
@@ -44,8 +29,7 @@ export function mapSubmitError({
     };
   }
 
-  // A 5xx is equally ambiguous: the transaction may have committed before the
-  // response was lost.
+  // A 5xx is equally ambiguous: the sale may have committed.
   if (error.status >= 500) {
     return {
       kind: 'UNCERTAIN',
@@ -75,8 +59,7 @@ export function mapSubmitError({
       );
       const productById = new Map(products.map((p) => [p.id, p]));
 
-      // Shortfalls are per raw material; cart lines are per product. The recipe
-      // fan-out is what bridges them (plan §1b).
+      // Shortfalls are per material; the recipe fan-out maps them to cart lines.
       const lineIds = lines
         .filter((line) =>
           productById
@@ -102,9 +85,7 @@ export function mapSubmitError({
       };
     }
 
-    // The other 409s — `InactiveProductException`, `RecipeIncompleteException`.
-    // The product grid already blocks both, so reaching here means the cached
-    // product list is stale; the caller invalidates it.
+    // Other 409s (inactive product, no recipe) mean the product cache is stale.
     return {
       kind: 'STALE_PRODUCT',
       message: `${error.message} Daftar produk telah disegarkan — periksa kembali keranjang.`,

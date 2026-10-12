@@ -36,23 +36,8 @@ interface MatchReviewQueueProps {
 }
 
 /**
- * The auto-match review queue (PRD §5.7).
- *
- * Three things about the backend shape this screen, and none of them are
- * cosmetic:
- *
- * 1. `POST /matching/propose` WRITES — it flips every matched transaction from
- *    UNRESOLVED to PENDING_REVIEW (matching.service.ts:70). So it runs only when
- *    the operator presses the button, never on mount and never on refocus.
- * 2. Candidates are NOT persisted; they exist only in that response. A reload
- *    empties the queue, and re-running propose will NOT re-propose the
- *    transactions it already moved to PENDING_REVIEW (matching.service.ts:19
- *    only selects UNRESOLVED). The way back is "Reset Status Pencocokan".
- * 3. "Abaikan" calls `POST /matching/reject/:bankTransactionId` once per
- *    `bankTransactionId` in the candidate (an AGGREGATION candidate can carry
- *    several) and only removes the candidate from the queue once every call
- *    succeeds — it returns that transaction's status to UNRESOLVED, it does
- *    NOT merely hide it locally (matching.service.ts `rejectMatch`).
+ * Auto-match review queue. Propose writes statuses, so it runs only on click.
+ * Candidates are not persisted; "Reset Status Pencocokan" is the way back.
  */
 export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
   const [candidates, setCandidates] = React.useState<MatchCandidate[] | null>(
@@ -82,9 +67,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
 
   // A filter change invalidates the queue: it was computed for the old scope.
   React.useEffect(() => {
-    // Resetting local queue state when the `accountId` filter prop changes,
-    // not synchronizing with an external system; there is no derivation that
-    // avoids the reset without restructuring this into a keyed remount.
+    // Reset local queue state when the account filter changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCandidates(null);
     setIsTruncated(false);
@@ -135,8 +118,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
       await createAllocations.mutateAsync(built.payload);
       setDismissed((prev) => new Set(prev).add(candidateKey(candidate)));
     } catch (caught) {
-      // The backend is the authority on the allocation-sum invariant — show its
-      // message verbatim rather than a paraphrase (Playbook §7).
+      // Show the server's message verbatim; it is the authority.
       setError(
         caught instanceof Error
           ? caught.message
@@ -145,14 +127,7 @@ export function MatchReviewQueue({ accountId }: MatchReviewQueueProps) {
     }
   };
 
-  /**
-   * "Abaikan" rejects EVERY bank transaction behind this candidate — an
-   * AGGREGATION candidate can span several (matching.schema.ts:20) and the
-   * reject endpoint is single-transaction. The candidate only leaves the queue
-   * once all of them succeed; a partial failure leaves it visible with an
-   * error so the operator can retry rather than silently losing track of a
-   * transaction that is still PENDING_REVIEW.
-   */
+  /** "Abaikan" rejects every transaction of the candidate; it leaves the queue only if all succeed. */
   const handleReject = async (candidate: MatchCandidate) => {
     setError(null);
     try {

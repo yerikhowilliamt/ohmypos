@@ -1,11 +1,7 @@
 import { HttpStatus } from '@nestjs/common';
 import { PostgresTriggerExceptionFilter } from './postgres-trigger-exception.filter';
 
-/**
- * ERR-046 — body di atas batas Express keluar sebagai 500 "an unexpected
- * error occurred". Tidak ada satu pun test yang memeriksa status untuk
- * respons non-2xx/4xx, jadi seluruh suite tetap hijau selama berbulan-bulan.
- */
+/** Regression test for ERR-046: an oversized body returned 500 instead of 413. */
 describe('PostgresTriggerExceptionFilter', () => {
   const json = jest.fn();
   const status = jest.fn(() => ({ json }));

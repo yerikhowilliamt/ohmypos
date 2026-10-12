@@ -3,12 +3,7 @@ import type { ImportResult } from '@ohmypos/api-contracts';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { BankParserFactory } from './bank-parser.factory';
 
-/**
- * Ported from Kasync with two changes: the `userId` scoping is gone
- * (ERD §7 note 1), and row validation no longer uses class-validator — the
- * parsers themselves already reject malformed rows, and ADR-010 removes
- * class-validator from the stack entirely.
- */
+/** Imports a bank statement into `BankTransaction`, idempotently. */
 @Injectable()
 export class ImportService {
   private readonly logger = new Logger(ImportService.name);
@@ -42,9 +37,7 @@ export class ImportService {
       return { imported: 0, skipped: 0, total: 0 };
     }
 
-    // `skipDuplicates` leans on the (accountId, externalRef) and
-    // (accountId, dedupHash) unique constraints — re-importing the same
-    // statement is a no-op rather than a duplicate ledger (ERD §6).
+    // Unique (accountId, externalRef|dedupHash) makes re-import a no-op.
     const result = await this.prisma.bankTransaction.createMany({
       data: rows.map((row) => ({
         accountId,
