@@ -10,19 +10,7 @@ import { PrismaService } from '../src/common/prisma/prisma.service';
 import { tenantScopedPrisma } from './tenant-fixture';
 import { resetDatabase } from './reset-database';
 
-/**
- * Backend addendum to the frontend Reconciliation screen
- * (docs/plannings/phase-8h-reconciliation.md), approved as a scope expansion
- * beyond the original frontend-only plan (ADR-019 §1.6, and the plan's own
- * §2.4/§2.3 decisions):
- *
- * 1. `POST /matching/reject/:bankTransactionId` — a real per-candidate reject,
- *    scoping `resetMatches`'s UNRESOLVED-return behaviour to one transaction
- *    instead of every PENDING_REVIEW row for an account.
- * 2. `GET /ledger-entries?startDate&endDate` — the date-range bound the split-
- *    allocation candidate picker needs, since `LedgerEntryQuerySchema` had no
- *    date filter before this addendum.
- */
+/** `POST /matching/reject/:id` (one transaction) and the ledger-entry date filter. */
 describe('Reconciliation backend addendum (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;

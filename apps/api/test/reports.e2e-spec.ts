@@ -1,21 +1,7 @@
 // e2e tests run against the compose Postgres (host port 5433). Loading .env here
 // keeps the connection string in one place rather than duplicated per suite.
 import 'dotenv/config';
-/**
- * OhMyPos — Reports E2E Tests, Dashboard 3 (PRD §5.4, ADR-005, ADR-006,
- * ADR-008, ADR-011, ADR-014, ADR-017, ADR-018, Playbook §10).
- *
- * Auth-aware end-to-end suite covering:
- * - a date range spanning a PARTIAL month, and the three boundary instants
- * - branch filter correctness, including ADR-014's central-branch attribution
- * - a payable SETTLED MID-PERIOD: cash moves, netProfit does not (ADR-006/017)
- * - the ADR-005 snapshot: a later unitCost change must not move a past report
- * - WIB day bucketing (ADR-018) — the case that fails under UTC bucketing
- * - cross-report invariants, RBAC, validation, and JSON serialization traps
- *
- * ISOLATION: reports aggregate globally, so every assertion is branch-filtered
- * onto this suite's own branches and historical windows (plan §8.1).
- */
+/** Reports aggregate globally, so every assertion is filtered to this suite's branches and windows. */
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
@@ -170,7 +156,7 @@ describe('Reports — Dashboard 3 (e2e)', () => {
       await prisma.supplier.create({ data: { name: 'RP Supplier' } })
     ).id;
 
-    // ── Sales, branch A (plan §8.2) ─────────────────────────────────────────
+    // Sales, branch A
     await postSale(branchAId, cashAccountId, '2025-03-05T10:00:00+07:00', [
       { productId: pKopiId, quantity: '2.0000' },
     ]);
@@ -1235,7 +1221,7 @@ describe('Reports — Dashboard 3 (e2e)', () => {
     });
 
     it.each(paths)('Case 26: ADMIN is rejected from /reports/%s', async (p) => {
-      // System Design §5/§6.6 — ADMIN has no reporting screen in v1.
+      // ADMIN has no reporting screen in v1.
       await getReport(p, march, admin.cookies).expect(403);
     });
 

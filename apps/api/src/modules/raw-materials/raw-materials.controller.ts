@@ -1,12 +1,3 @@
-/**
- * OhMyPos — RawMaterials controller (ADR-011, Playbook §8).
- *
- * Scoped by role: writes require OWNER or ADMIN role; reads allow any authenticated role
- * (including KASIR for POS stock/recipe reads).
- *
- * No BranchScopeGuard is applied here deliberately: RawMaterial is a centralized pool (ADR-004)
- * with no branchId column (§6).
- */
 import {
   Body,
   Controller,

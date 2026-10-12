@@ -1,11 +1,3 @@
-/**
- * OhMyPos — unit tests for the opening-stock delta calculator (Phase 6 plan
- * §3.2, §12.1).
- *
- * The mid-period and correction cases are the two traps this phase can ship
- * silently wrong (plan §11.10 traps 1 and 2). They are asserted here, with no
- * database, rather than left to the e2e suite alone.
- */
 import { Prisma } from '../../generated/prisma/client';
 import { computeOpeningDeltas } from './opening-stock.calculator';
 

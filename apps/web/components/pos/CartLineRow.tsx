@@ -23,12 +23,7 @@ interface CartLineRowProps {
   onPriceChange: (lineId: string, price: string | null) => void;
 }
 
-/**
- * DESIGN.md §11.4 Order Panel. The unit price is not a static figure here — it is the
- * PRD §5.2 price override, and per ADR-015 the only discount mechanism v1 has.
- * Rendering it as an editable field rather than as text plus a separate editor
- * keeps §24.1's "unit price" and the override the same control.
- */
+/** Order row; the unit price field is the per-line price override (ADR-015). */
 export function CartLineRow({
   line,
   photoUrl,

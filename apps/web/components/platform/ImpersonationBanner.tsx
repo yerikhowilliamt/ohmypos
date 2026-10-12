@@ -6,19 +6,8 @@ import { Eye } from 'lucide-react';
 import { Button } from '@ohmypos/ui/components/button';
 
 /**
- * ADR-025 Decision 8 — shown across the whole tenant app while a platform
- * operator is looking through an OWNER's account.
- *
- * Permanent and undismissable on purpose. The session is read-only, so the
- * failure it guards against is not a destructive click — the API refuses those
- * — but the operator forgetting whose numbers are on screen and reporting them
- * as another tenant's, or as their own. A dismissable banner is exactly the one
- * that gets dismissed in the first minute.
- *
- * "Keluar" clears the cookies and returns to the console. It cannot revoke the
- * token: there is no revocation list for impersonation tokens, and the JWT
- * stays valid on the API until its 30 minutes run out (TASK-126). Discarding
- * the credential IS the exit, which is why the button never claims more.
+ * Permanent, undismissable banner while impersonating (ADR-025 Decision 8).
+ * "Keluar" discards the cookies; the token itself cannot be revoked.
  */
 export function ImpersonationBanner({ label }: { label: string }) {
   const router = useRouter();
@@ -29,11 +18,7 @@ export function ImpersonationBanner({ label }: { label: string }) {
     try {
       await fetch('/api/platform/impersonation', { method: 'DELETE' });
     } catch {
-      // Swallowed on purpose, and caught rather than left to `finally`: an
-      // unhandled rejection here would surface as a console error on a path
-      // that is already handled. Sending the operator back to the console
-      // matters more than the cookie clear succeeding — leaving them inside a
-      // tenant believing they left is the worse of the two outcomes.
+      // Swallowed: returning the operator to the console matters more than the cookie clear.
     }
     router.push('/platform');
     router.refresh();

@@ -86,11 +86,7 @@ export function useUpdateTenant(id: string) {
   });
 }
 
-/**
- * TASK-130 — the operator's last-resort recovery for a tenant whose OWNER is
- * locked out. Nothing on screen changes as a result (a password appears in no
- * response), so nothing is invalidated; the server's message is the result.
- */
+/** Resets a tenant OWNER's password (TASK-130). Nothing on screen changes, so no invalidation. */
 export function useResetTenantOwnerPassword(id: string) {
   return useMutation({
     mutationFn: (data: ResetTenantOwnerPassword) =>
@@ -101,15 +97,7 @@ export function useResetTenantOwnerPassword(id: string) {
   });
 }
 
-/**
- * TASK-131 — correcting the address a tenant OWNER logs in with, for the case
- * where it was mistyped at provisioning and nobody inside the tenant can get in
- * to fix it.
- *
- * Unlike the password reset, this one DOES change what is on screen — the
- * detail header shows `ownerEmail`, and `isPristine` is read by the dialog — so
- * the platform queries are invalidated.
- */
+/** Corrects a tenant OWNER's email (TASK-131); invalidates tenant queries. */
 export function useUpdateTenantOwnerEmail(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -124,13 +112,7 @@ export function useUpdateTenantOwnerEmail(id: string) {
   });
 }
 
-/**
- * ADR-025 Decision 8 — starts a read-only session and hands the token to the
- * app's own route handler, which is what turns it into the `access_token`
- * cookie the tenant app reads. The console never holds the token in JS state
- * beyond this call: it goes straight into an HttpOnly cookie and the browser
- * is redirected.
- */
+/** Starts impersonation and hands the token to the route handler (HttpOnly cookie), then redirects. */
 export function useStartImpersonation(id: string) {
   return useMutation({
     mutationFn: async (data: StartImpersonation) => {

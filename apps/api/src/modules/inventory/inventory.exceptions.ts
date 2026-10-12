@@ -1,20 +1,3 @@
-/**
- * OhMyPos — Inventory domain exceptions (Playbook §6, Phase 6 plan §11.10).
- *
- * - OpeningStockRawMaterialNotFoundException (404) — an id in `entries` does
- *   not exist. It extends NotFoundException, and that is not incidental:
- *   ERR-005 records this exact exception family extending the wrong base class
- *   and returning 400 for a missing row.
- * - OpeningStockUnitPriceRequiredException / NotAllowed (400) — the payload is
- *   malformed against PRD §5.5's conditional rule; the client can fix it and
- *   retry, so it is a bad request, not a conflict.
- * - OpeningStockWouldGoNegativeException (409) — the payload is well-formed but
- *   conflicts with the current state of the stock pool, exactly like
- *   InsufficientStockException.
- * - FuturePeriodNotAllowedException / InvalidPeriodException (400).
- *
- * `this.name` is set on each, matching every other `*.exceptions.ts` in the repo.
- */
 import {
   BadRequestException,
   ConflictException,

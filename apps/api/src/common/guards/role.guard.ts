@@ -11,12 +11,8 @@ import type { JwtPayload } from '../types/jwt-payload.interface';
 import { SESSION_EXPIRED } from '../messages';
 
 /**
- * Checks the caller's role against the endpoint's `@Roles(...)` declaration
- * (ADR-011 §4, Playbook §8). Endpoints without the decorator allow any
- * authenticated role — the restriction is always explicit.
- *
- * This is the authoritative check. The frontend's role-based routing is a UX
- * convenience and is never trusted (System Design §5).
+ * Enforces `@Roles(...)`; endpoints without it allow any authenticated role.
+ * This is the authoritative check; frontend routing is never trusted.
  */
 @Injectable()
 export class RoleGuard implements CanActivate {

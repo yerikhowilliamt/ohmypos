@@ -6,21 +6,9 @@ import {
 } from '@/lib/impersonation';
 
 /**
- * ADR-025 Decision 8 — moves an impersonation token into the browser.
- *
- * `POST /platform/tenants/:id/impersonate` returns the token in its body, not
- * as a cookie, so this same-origin handler is what installs it as
- * `access_token`. It has to be a route handler rather than client code because
- * the cookie is HttpOnly by design.
- *
- * It does NOT mint or validate anything: whatever is stored here is still
- * checked by `JwtAuthGuard` on every tenant request, and reduced to `GET` by
- * `ImpersonationReadOnlyGuard`. Storing a bogus value simply produces 401s.
- *
- * `DELETE` clears both cookies. Note what it cannot do: the token stays valid
- * on the API until its 30 minutes run out — there is no revocation list for
- * impersonation tokens (see TASK-126). Leaving the console is therefore a
- * matter of discarding the credential, which is exactly what this does.
+ * Installs (POST) or clears (DELETE) the impersonation token as the HttpOnly
+ * `access_token` cookie (ADR-025 Decision 8). Validates nothing: the API does.
+ * DELETE cannot revoke the token, which stays valid until it expires.
  */
 
 interface StartBody {

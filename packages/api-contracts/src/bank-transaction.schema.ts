@@ -55,10 +55,7 @@ export type PaginatedBankTransactions = z.infer<
   typeof PaginatedBankTransactionsSchema
 >;
 
-/**
- * Statement formats `BankParserFactory` supports. Kept here so the API switch
- * and the web format picker read from one list instead of drifting apart.
- */
+/** Statement formats supported by `BankParserFactory`. */
 export const BankImportFormatSchema = z.enum([
   'BCA',
   'MANDIRI',
@@ -67,10 +64,7 @@ export const BankImportFormatSchema = z.enum([
 ]);
 export type BankImportFormat = z.infer<typeof BankImportFormatSchema>;
 
-/**
- * Presentation metadata for each format. `container` selects the upload route
- * and `accept` drives the file picker, so the UI needs no bank/file-type matrix.
- */
+/** Per-format upload route (`container`) and file-picker `accept`. */
 export const BANK_IMPORT_FORMATS = [
   {
     value: 'BCA',

@@ -10,11 +10,7 @@ export function signDeviceCookie(deviceId: string, secret: string): string {
   return `${deviceId}.${hmac}`;
 }
 
-/**
- * Returns the deviceId if the cookie's signature is valid, null otherwise
- * (missing separator, tampered value, or wrong secret). Uses a timing-safe
- * comparison so verification time doesn't leak how much of the HMAC matched.
- */
+/** The deviceId if the signature is valid, otherwise null. Timing-safe. */
 export function verifyDeviceCookie(
   cookieValue: string,
   secret: string,

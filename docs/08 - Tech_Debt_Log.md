@@ -39,6 +39,42 @@
 
 ## Log
 
+### DEBT-080 — The POS "Periksa transaksi terakhir" check returns 403 for a KASIR
+
+- **Date logged:** 2026-10-11
+- **Found during:** TASK-135 (moving web comments into docs; observed while reading, not changed)
+- **Description:** `useRecentSales` (`apps/web/hooks/usePos.ts`) calls `GET /sales?limit=5&sortBy=soldAt&page=1` with **no `branchId`**. Its comment claimed "`BranchScopeGuard` injects the KASIR's own branch", but the guard has failed closed on a missing branch since the Express 5 `req.query` fix (`apps/api/src/common/guards/branch-scope.guard.ts`): a `KASIR` without `query.branchId` gets 403 "Cabang wajib disertakan untuk peran Kasir." `OWNER`/`ADMIN` are unscoped and unaffected. Two related comments (`usePos.ts`, `lib/pos/submit-error.ts`) also said `POST /sales` has no idempotency key; the POS has sent one since TASK-082. Those comments were corrected in TASK-135; the code was not.
+- **Why deferred:** TASK-135 is documentation-only, verified as comment-only by AST comparison.
+- **Impact if unaddressed:** After an uncertain submit (network drop or 5xx), the cashier is told to check recent transactions before retrying. For a `KASIR`, the role this affordance exists for, the check fails with 403, so they cannot confirm whether the sale landed. The idempotency key makes a retry safe, but the UI does not offer that path, so the cashier is stuck.
+- **Trigger condition:** Next change to the POS submit flow, or the first cashier report of an error while checking recent transactions.
+- **Proposed resolution:** Pass the cashier's `branchId` (already in `PosScreen` as `selectedBranchId`) to `useRecentSales` and include it in the query key. Add a web test asserting the request carries `branchId`, and an e2e case for a `KASIR` `GET /sales?branchId=<own>` (200) vs. no `branchId` (403). Consider offering "Coba lagi" after an uncertain submit, now that the sale carries an idempotency key.
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-079 — Deleting a system-generated ledger entry returns 500 instead of a clean 409
+
+- **Date logged:** 2026-10-11
+- **Found during:** TASK-135 (moving code comments into module READMEs; observed while reading, not changed)
+- **Description:** `LedgerEntriesService.remove` (`apps/api/src/modules/ledger-entries/ledger-entries.service.ts`) checks only for active allocations before deleting. Unlike `update`, which refuses any entry whose `sourceType` is not `MANUAL` with a 409, `remove` does not look at `sourceType` at all. A `DELETE /ledger-entries/:id` on an entry written by a sale, purchase or settlement is therefore stopped only by the `Restrict` foreign keys from `Sale`, `SupplierPurchase` and `PayableSettlement`. Prisma raises `P2003`, which `PostgresTriggerExceptionFilter` does not map, so the caller gets a generic 500. `SALE_VOID` entries have no such foreign key back to them, so one of those **would actually be deleted**, leaving a voided sale with no reversal in the cash ledger.
+- **Why deferred:** Out of scope for TASK-135, which was documentation-only and verified as comment-only by AST comparison. The route is `OWNER`/`ADMIN` only, so it is reachable by trusted roles only.
+- **Impact if unaddressed:** An OWNER or ADMIN who tries to delete a system entry sees "An unexpected error occurred" with no explanation, and the attempt logs at error level. For a `SALE_VOID` entry the delete succeeds, so the P&L cash view no longer nets the voided sale to zero.
+- **Trigger condition:** Next change to `ledger-entries`, or the first report of a 500 on deleting a ledger entry, whichever comes first.
+- **Proposed resolution:** In `remove`, reject `existing.sourceType !== 'MANUAL'` with the same 409 that `update` throws, before the allocation check. Add an e2e case for deleting a `SALE` entry (expect 409) and a `SALE_VOID` entry (expect 409, row still present).
+- **Priority:** Medium
+- **Status:** Open
+
+### DEBT-078 — A sale void values its reversal stock movement with a unit cost read before the row lock
+
+- **Date logged:** 2026-10-11
+- **Found during:** TASK-135 (moving code comments into module READMEs; observed while reading, not changed)
+- **Description:** In `SalesService.void` (`apps/api/src/modules/sales/sales.service.ts`), `tx.rawMaterial.findMany(...)` reads each material's `unitCost` into `materialById`, and only afterwards does `applyInbound` take the `FOR UPDATE` locks (ADR-016). The variable is named `lockedMaterials`, but at that point the rows are not locked. `create()` does it in the right order (lock, then read). A purchase committing between the read and the lock can reprice the material (the latest-cost write-back, ADR-024), and the void's `IN` movement is then recorded at the pre-repricing `unitCostAtMovement`.
+- **Why deferred:** Out of scope for TASK-135 (documentation-only). The window is narrow: a void, which is ADMIN/OWNER-only within 30 minutes of the sale, has to race a purchase of the same material.
+- **Impact if unaddressed:** `currentStock` stays correct, because quantities are applied under the lock. Only the valuation on the reversal `StockMovement` row can be stale, which affects any report that values movements by `unitCostAtMovement`. Small but silent.
+- **Trigger condition:** Next change to the void flow, or before voids are widened beyond the 30-minute interim window (DEBT-010 follow-up).
+- **Proposed resolution:** Call `stockMovementsService.lockRawMaterialsInIdOrder(tx, requirements.map(r => r.rawMaterialId))` before the `findMany`, mirroring `create()`. Re-locking inside `applyInbound` is a no-op. Add a unit or e2e assertion that the void reads cost after locking.
+- **Priority:** Low
+- **Status:** Open
+
 ### DEBT-076 — Platform writes are recorded only in the application log, not an audit table
 
 - **Date logged:** 2026-08-30

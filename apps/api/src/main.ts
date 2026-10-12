@@ -19,7 +19,7 @@ Sentry.init({
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
-  // Security headers & trusted reverse proxy (TASK-093 / DEF-A11)
+  // Security headers; trust one reverse-proxy hop.
   app.use(helmet());
   const expressApp = app.getHttpAdapter().getInstance() as Express;
   expressApp.set('trust proxy', 1);
@@ -39,8 +39,7 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
   app.setGlobalPrefix('api/v1');
   app.useGlobalFilters(new PostgresTriggerExceptionFilter());
-  // Required for onModuleDestroy (PrismaService.$disconnect) to actually run
-  // on SIGTERM/SIGINT — without this, Nest never calls it (Phase 14 E-9).
+  // Without this, onModuleDestroy never runs on SIGTERM/SIGINT.
   app.enableShutdownHooks();
 
   const config = new DocumentBuilder()
@@ -48,9 +47,7 @@ async function bootstrap() {
     .setDescription('POS & back-office for a multi-branch F&B business')
     .setVersion('1.0')
     .build();
-  // cleanupOpenApiDoc lets @nestjs/swagger render the Zod-derived DTOs, keeping
-  // packages/api-contracts the single source of truth for the spec (Playbook §11).
-  // TASK-095: Swagger only outside production.
+  // Swagger from Zod DTOs, outside production only.
   if (process.env.NODE_ENV !== 'production') {
     SwaggerModule.setup(
       'docs',
@@ -63,10 +60,7 @@ async function bootstrap() {
   await app.listen(port);
 
   const logger = app.get(Logger);
-  // Phase 14 E-9: the previous version had no `.catch` (a rejected close()
-  // never exited) and no timeout guard (a hung close() hung forever, forcing
-  // the orchestrator to SIGKILL). `shuttingDown` stops a second signal from
-  // racing a second close() against the first.
+  // Single-flight graceful shutdown with a 10s forced-exit fallback.
   let shuttingDown = false;
   const shutdown = (signal: string) => {
     if (shuttingDown) return;

@@ -1,20 +1,10 @@
-// OhMyPos — schema for the modules ported from Kasync (ADR-001, ADR-012).
-//
-// Ported tables follow Kasync's literal schema as their baseline; OhMyPos's own
-// requirements are layered on top and marked "OhMyPos" below. See ERD v3 §2 for
-// the field-by-field reconciliation and §7 for the porting notes.
-//
-// New domain models (Product, Sale, RawMaterial, …) arrive in Phase 3.
-// The User model arrives in Phase 2 (ADR-011).
+// OhMyPos schema. Design notes: prisma/README.md and docs/03 - ERD.md.
 
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 
-  // Prisma 7 emits TypeScript into the source tree. These two options make the
-  // emitted imports compile under this app's CommonJS tsconfig; without them the
-  // generated files import with explicit `.ts` extensions, which `moduleResolution:
-  // node` rejects.
+  // Required for the generated TypeScript to compile under CommonJS.
   moduleFormat        = "cjs"
   importFileExtension = ""
 }
@@ -24,9 +14,7 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
-// Enums — verbatim from Kasync unless marked. Do not rename: the SQL triggers
-// write TransactionStatus literals, and AllocationService/MatchingEngine compare
-// TransactionType across BankTransaction and LedgerEntry (ADR-012).
+// Enums — Kasync's literal names. Do not rename (ADR-012).
 // ---------------------------------------------------------------------------
 
 enum AccountType {
@@ -52,36 +40,30 @@ enum AllocationStatus {
   REVOKED
 }
 
-/// OhMyPos — the three staff roles (ADR-011). `CASHIER` from the v1-draft ERD is
-/// superseded and must not be reintroduced (Playbook §18).
+/// Staff roles (ADR-011). Never reintroduce `CASHIER`.
 enum UserRole {
   KASIR
   ADMIN
   OWNER
 }
 
-/// OhMyPos — distinguishes Kasync's manual entries from system-generated ones.
+/// What generated a LedgerEntry.
 enum LedgerSourceType {
   MANUAL
   SALE
   PURCHASE
   PAYABLE_SETTLEMENT
-  /// DEBT-010: the reversal LedgerEntry a void writes. Kept distinct from
-  /// SALE for audit-trail legibility only — report correctness comes from
-  /// the Sale.status exclusion (see reports.service.ts / report-filters.ts),
-  /// not from this value.
+  /// The reversal entry a sale void writes (DEBT-010). For audit legibility only.
   SALE_VOID
 }
 
-/// DEBT-010 — minimal interim void guard (no partial refund; System Design
-/// §6.1 note on the void endpoint).
+/// Sale status (DEBT-010 interim void; no partial refund).
 enum SaleStatus {
   COMPLETED
   VOIDED
 }
 
-/// OhMyPos — ERD §3. PARTIALLY_PAID is never a creation-time value (ADR-006);
-/// the settlement flow writes it (plan §4).
+/// PARTIALLY_PAID is written only by settlements, never at creation (ADR-006).
 enum PaymentStatus {
   PAID
   UNPAID
@@ -101,8 +83,7 @@ enum StockDirection {
   OUT
 }
 
-/// OhMyPos — ERD §3. PURCHASE (Phase 4) and SALE (Phase 5) are written; OPENING
-/// arrives in Phase 6. ADJUSTMENT has no writer yet, deliberately.
+/// ADJUSTMENT has no writer yet, deliberately.
 enum StockReferenceType {
   SALE
   PURCHASE
@@ -117,12 +98,7 @@ enum StockReferenceType {
 model Account {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -147,16 +123,10 @@ model Account {
 model Category {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  /// Kasync's unique is (userId, name); with multi-tenancy dropped it collapses to name.
   name String
 
   /// OhMyPos — Kasync's Category is id/name only.
@@ -174,12 +144,7 @@ model Category {
 model Branch {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -187,14 +152,10 @@ model Branch {
   /// OhMyPos.
   address String?
 
-  /// ADR-014 ledger-attribution row: a scope ("not tied to any one store"),
-  /// not a place. Exactly one row carries this, created only by
-  /// `ensureSystemRefs` — never from a request. It is the LOOKUP KEY, which is
-  /// why the row's name is free to change.
+  /// The system branch (ADR-014): one per tenant, the lookup key (not the name).
   isSystem Boolean @default(false) @map("is_system")
 
-  /// The Owner's first store. Exactly one non-system branch carries this,
-  /// enforced by a partial unique index (see the migration).
+  /// The main store; one per tenant (partial unique index).
   isMainStore Boolean @default(false) @map("is_main_store")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -214,24 +175,16 @@ model Branch {
 model LedgerEntry {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  /// OhMyPos, required — Kasync's LedgerEntry has no account link at all.
-  /// System Design §6.1 tags each sale's entry with the payment method's Account.
+  /// Required: the account the money moved through.
   accountId String @map("account_id")
 
-  /// Required, matching Kasync. Consequence: the seed must supply system
-  /// categories, since sale/settlement entries cannot be uncategorised (ADR-012).
+  /// Required, so system categories must exist (ensureSystemRefs).
   categoryId String @map("category_id")
 
-  /// Already present in Kasync — not an OhMyPos addition (ERD v3 corrects v2 here).
   branchId String @map("branch_id")
 
   entryDate DateTime        @map("entry_date")
@@ -254,8 +207,7 @@ model LedgerEntry {
 
   allocations Allocation[]
 
-  /// Three optional 1-1 back-relations. A given entry is generated by at most one
-  /// of these; `sourceType` says which (ERD §2).
+  /// At most one of these generated the entry; `sourceType` says which.
   supplierPurchase  SupplierPurchase?
   payableSettlement PayableSettlement?
   sale              Sale?
@@ -274,12 +226,7 @@ model LedgerEntry {
 model BankTransaction {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -289,11 +236,11 @@ model BankTransaction {
   type        TransactionType @default(OUTFLOW)
   description String
 
-  /// Raw reference/ID from the bank statement — half of the import de-duplication.
+  /// Bank-side reference; one of the two import de-duplication keys.
   externalRef String? @map("external_ref")
   dedupHash   String? @map("dedup_hash")
 
-  /// Stored, trigger-synced denormalized field (unchanged pattern from Kasync).
+  /// Synced by trg_sync_transaction_status.
   status TransactionStatus @default(UNRESOLVED)
 
   importedAt DateTime @default(now()) @map("imported_at")
@@ -315,12 +262,7 @@ model BankTransaction {
 model Allocation {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -351,12 +293,7 @@ model Allocation {
 model User {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -369,21 +306,16 @@ model User {
 
   role UserRole
 
-  /// Required when role = KASIR, null for ADMIN/OWNER (ADR-011 §2). Prisma cannot
-  /// express a conditional constraint, so this is enforced in Zod and the service
-  /// layer, raising InvalidRoleBranchAssignmentException (Playbook §6).
+  /// Required for KASIR, null for ADMIN/OWNER (enforced in Zod and the service, ADR-011).
   branchId String? @map("branch_id")
 
-  /// Phase 10b, ADR-020 — reverses ERD §7 note 4's original "no Cloudinary"
-  /// decision. A Cloudinary secure_url, never a locally-stored file (Playbook).
+  /// Cloudinary secure_url (ADR-020).
   photoUrl String? @map("photo_url")
 
-  /// ADR-011 §5 — OWNER-only deactivation. Soft, never a row delete, so the
-  /// Sale.userId audit trail survives a staff member leaving.
+  /// Soft deactivation; users are never deleted (Sale.userId audit trail).
   isActive Boolean @default(true) @map("is_active")
 
-  /// Ported from Kasync — immediate session revocation on logout, password
-  /// change, or deactivation.
+  /// Tokens issued before this are rejected (session revocation).
   tokenValidFrom DateTime @default(now()) @map("token_valid_from")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -391,20 +323,14 @@ model User {
 
   branch      Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
   sales       Sale[]  @relation("SaleCashier")
-  /// DEBT-010 — sales this user voided (ADMIN/OWNER only, per RoleGuard on
-  /// POST /sales/:id/void). Separate from `sales` (the cashier relation)
-  /// since a User can appear on both sides for different rows.
+  /// Sales this user voided; separate from `sales` (the cashier relation).
   voidedSales Sale[]  @relation("SaleVoidedBy")
 
-  /// Phase 11 — the two device relations below are separate: a User can
-  /// activate zero or more devices (as OWNER) and separately generate zero or
-  /// more of their own attendance records (as KASIR). No User is ever on both
-  /// sides for the same row, but Prisma still needs both fields declared.
+  /// Devices activated (as OWNER) and own attendance records (as KASIR).
   activatedDevices  Device[]
   attendanceRecords AttendanceRecord[]
 
-  /// Phase 12 — two distinct relations: requests a User filed themselves, and
-  /// (OWNER only, in practice) requests a User reviewed as approver.
+  /// Leave requests filed, and leave requests reviewed.
   leaveRequests         LeaveRequest[] @relation("LeaveRequestUser")
   reviewedLeaveRequests LeaveRequest[] @relation("LeaveRequestReviewer")
 
@@ -414,58 +340,29 @@ model User {
   @@map("users")
 }
 
-/// OhMyPos — ERD §3. Stock lives here and nowhere else (ADR-004).
+/// Raw material: the only place stock lives (ADR-004).
 model RawMaterial {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   name String
 
-  /// STOCK/RECIPE base unit — ml, gram, pcs. Free text (ERD §3), not an enum.
-  ///
-  /// Everything quantity-shaped in this system is in THIS unit: `currentStock`,
-  /// `lowStockThreshold`, `RecipeItem.quantityUsed`, `StockMovement.quantity`,
-  /// `OpeningStock.quantity`, and stock opname (ADR-024).
-  ///
-  /// IMMUTABLE once any StockMovement exists for this material — changing it
-  /// would silently re-scale the running balance, every recipe line, and the
-  /// append-only movement history. Enforced in RawMaterialsService.update.
+  /// Stock/recipe base unit; every quantity is in it. Immutable once movements exist (ADR-024).
   unit String
 
-  /// PURCHASE unit — the pack the supplier actually sells (ekor, liter, kg,
-  /// pack). Exactly one active purchase form per material in v1 (ADR-024); it
-  /// may be edited when packaging changes, and historical purchase lines keep
-  /// their own snapshot so nothing already recorded moves.
+  /// The pack the supplier sells. Editable; purchase lines keep a snapshot (ADR-024).
   purchaseUnit String @map("purchase_unit")
 
-  /// How many `unit` are in one `purchaseUnit`: 1 ekor = 10 pcs → 10.
-  /// Strictly positive (enforced in Zod). Default 1 means "bought in the stock
-  /// unit", which is what every row backfilled by the ADR-024 migration says.
+  /// `unit` per `purchaseUnit` (1 ekor = 10 pcs → 10). Strictly positive.
   conversionFactor Decimal @default(1) @map("conversion_factor") @db.Decimal(18, 4)
 
-  /// Current cost per STOCK unit. Written by the latest applicable purchase —
-  /// newest `purchaseDate`, `createdAt`/`id` as tie-breakers — inside the
-  /// purchase transaction (ADR-024, closes DEBT-006). Editing it changes every
-  /// dependent product's live HPP by design (ADR-005), and never rewrites
-  /// history (SaleItem.hppAtSale).
-  ///
-  /// Decimal(18,6), not (18,2): this is a RATE, not an amount. Normalizing a
-  /// total purchase price over a stock quantity (Rp10.000 / 3.000 gram) does
-  /// not land on 2dp, and rounding it there understates HPP on every gram/ml
-  /// material (ADR-024). Amounts that reach the ledger stay Decimal(18,2).
+  /// Cost per stock unit (a rate, hence 6dp), set by the latest purchase (ADR-024).
   unitCost Decimal @map("unit_cost") @db.Decimal(18, 6)
 
-  /// Denormalized running balance, only ever written inside the same transaction
-  /// as the StockMovement that justifies it, under FOR UPDATE (ADR-007, ERD §6).
-  /// NOT writable through this module's CRUD.
+  /// Running balance, written only with its StockMovement under FOR UPDATE (ADR-007).
   currentStock Decimal @default(0) @map("current_stock") @db.Decimal(18, 4)
 
   lowStockThreshold Decimal @default(0) @map("low_stock_threshold") @db.Decimal(18, 4)
@@ -482,18 +379,11 @@ model RawMaterial {
   @@map("raw_materials")
 }
 
-/// OhMyPos — ERD §3. No `hpp` column: HPP is computed live from RecipeItem +
-/// RawMaterial.unitCost (ADR-005), and no stock column: makeable quantity is
-/// derived, never stored (ADR-013).
+/// Product. No stored HPP or stock: both are derived (ADR-005, ADR-013).
 model Product {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -501,12 +391,7 @@ model Product {
   sellPrice Decimal @map("sell_price") @db.Decimal(18, 2)
   isActive  Boolean @default(true) @map("is_active")
 
-  /// Waste/susut allowance for THIS product, in percent (0–100, enforced in
-  /// Zod). An HPP allowance ONLY (ADR-024): it is applied after the recipe sum,
-  ///   hpp = round2(Σ(quantityUsed × unitCost) × (1 + wastePercent / 100))
-  /// and never increases physical stock deduction — `RecipeItem.quantityUsed`
-  /// is what a sale consumes, and this column does not touch it.
-  /// Default 0 keeps every pre-ADR-024 product's HPP byte-identical.
+  /// Waste allowance in percent; affects HPP only, never stock deduction (ADR-024).
   wastePercent Decimal @default(0) @map("waste_percent") @db.Decimal(5, 2)
 
   photoUrl String? @map("photo_url")
@@ -521,17 +406,11 @@ model Product {
   @@map("products")
 }
 
-/// OhMyPos — bill of materials (ERD §3). The product's recipe is this set of
-/// rows; there is deliberately no separate Recipe table.
+/// Bill of materials; a product's recipe is its set of rows.
 model RecipeItem {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -545,8 +424,7 @@ model RecipeItem {
 
   // Cascade: a recipe has no meaning without its product.
   product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
-  // Restrict: deleting a raw material still used by a recipe must fail loudly,
-  // not silently empty out a product's cost basis.
+  // Restrict: a raw material used by a recipe cannot be deleted.
   rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
 
   @@unique([productId, rawMaterialId])
@@ -556,58 +434,29 @@ model RecipeItem {
   @@map("recipe_items")
 }
 
-/// OhMyPos — ERD §3, System Design §6.1, PRD §5.2, ADR-015.
-///
-/// A sale ALWAYS has a branch: unlike SupplierPurchase there is no central sale,
-/// because a sale happens at an outlet by definition (ADR-004). The seeded
-/// `Pusat (Dapur Sentral)` branch is a ledger-attribution row, not a till, and is
-/// rejected at the service layer (ADR-014, plan §6).
-///
-/// `ledgerEntryId` is required and unique — like PayableSettlement's, unlike
-/// SupplierPurchase's. ADR-006's money-sometimes-moves asymmetry is a purchasing
-/// rule; at the moment of sale money always moves, so a sale with no income entry
-/// would be cash arriving with no record of it.
+/// A sale: always at a real branch, always with its income ledger entry.
 model Sale {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   branchId      String @map("branch_id")
-  /// Payment method (System Design §6.1) — cash, transfer, QRIS, e-wallet all
-  /// resolve to an Account.
+  /// Payment method.
   accountId     String @map("account_id")
-  /// The cashier. Taken from the JWT, never the request body (plan §7.3): a
-  /// client-supplied cashier id is a forgeable audit trail. Users are
-  /// deactivated, never deleted (ADR-011 §5), so this reference always resolves.
+  /// The cashier, from the JWT.
   userId        String @map("user_id")
   ledgerEntryId String @unique @map("ledger_entry_id")
 
-  /// = Σ SaleItem.lineTotal, and nothing else. No tax, no discount columns in v1
-  /// — the per-line price override is the discount mechanism (PRD §5.2, ADR-015,
-  /// DEBT-004). Every Phase 7 report reads this as the definition of revenue.
+  /// Σ SaleItem.lineTotal; no tax or discount (ADR-015).
   totalAmount Decimal  @map("total_amount") @db.Decimal(18, 2)
   soldAt      DateTime @map("sold_at")
 
-  /// Kunci idempotensi yang dibuat klien (TASK-082, menutup DEBT-017 dan
-  /// DEF-A1/A2/A5). Nullable: baris sebelum TASK-082 tidak punya kunci, dan
-  /// Postgres mengizinkan NULL berulang pada indeks unik, jadi tidak ada
-  /// backfill. Polanya menyalin Allocation.idempotencyKey — indeks unik-lah
-  /// yang benar-benar menegakkan deduplikasi di bawah balapan; cek di service
-  /// hanya membuat kasus umum murah.
+  /// Client idempotency key (TASK-082); the unique index enforces dedup.
   idempotencyKey String? @map("idempotency_key")
 
-  /// DEBT-010 — minimal interim void guard. Defaults COMPLETED so every
-  /// existing row backfills with no data migration. A void never deletes or
-  /// mutates the original sale/items/ledger entry (financial history, same
-  /// Restrict-everywhere rule as the rest of this model) — it writes a
-  /// reversal LedgerEntry + inbound StockMovement and flips this flag.
+  /// A void flips this and writes reversal rows; the sale is never edited (DEBT-010).
   status         SaleStatus @default(COMPLETED) @map("status")
   voidedAt       DateTime?  @map("voided_at")
   voidedByUserId String?    @map("voided_by_user_id")
@@ -615,8 +464,7 @@ model Sale {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Restrict everywhere: a sale is financial history and must not vanish because
-  // a branch, account, user or ledger row was deleted.
+  // Restrict: a sale is financial history.
   branch       Branch      @relation(fields: [branchId], references: [id], onDelete: Restrict)
   account      Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
   user         User        @relation("SaleCashier", fields: [userId], references: [id], onDelete: Restrict)
@@ -637,23 +485,11 @@ model Sale {
   @@map("sales")
 }
 
-/// OhMyPos — ERD §3, ADR-005, ADR-015.
-///
-/// Deliberately NOT unique on (saleId, productId): the same product may appear
-/// twice in one cart at two different prices, which is exactly what the per-line
-/// override exists for (plan §8.2). This is the opposite of SupplierPurchaseItem's
-/// (supplierPurchaseId, rawMaterialId) unique — there the constraint is what made
-/// the lock set unambiguous; here the fan-out is aggregated across lines first
-/// (ADR-015 §3), which achieves the same thing without restricting the cart.
+/// A sale line. Not unique per product: one product may appear at two prices.
 model SaleItem {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -662,27 +498,20 @@ model SaleItem {
 
   quantity Decimal @db.Decimal(18, 4)
 
-  /// What the customer actually paid per unit — the master price unless
-  /// overridden (PRD §5.2).
+  /// Charged unit price: master price unless overridden.
   unitPriceAtSale   Decimal @map("unit_price_at_sale") @db.Decimal(18, 2)
-  /// True only when the charged price DIFFERS from Product.sellPrice at sale
-  /// time. Sending the master price explicitly is not an override (plan §10.2).
+  /// True only when the charged price differs from Product.sellPrice.
   isPriceOverridden Boolean @default(false) @map("is_price_overridden")
 
-  /// PER-UNIT HPP frozen at the moment of sale (ADR-005, ADR-015) — the same
-  /// number Product.hpp shows live, from the same calculateHpp call. COGS for
-  /// this line is hppAtSale × quantity; this column is NOT the line-extended
-  /// cost. Never recomputed: that is the whole point of ADR-005.
+  /// Per-unit HPP frozen at sale time; never recomputed (ADR-005, ADR-015).
   hppAtSale Decimal @map("hpp_at_sale") @db.Decimal(18, 2)
 
   lineTotal Decimal @map("line_total") @db.Decimal(18, 2)
 
-  /// Append-only, like SupplierPurchaseItem and Allocation — no updatedAt. A
-  /// sale line is never edited. (ERD §3 lists one; Phase 4 set this precedent.)
+  /// Append-only: no updatedAt.
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Cascade: a line has no meaning without its sale. Restrict on product: a
-  // product that has been sold is referenced by financial history.
+  // Cascade with the sale; Restrict on product (financial history).
   sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
@@ -696,18 +525,12 @@ model SaleItem {
 model Supplier {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   name    String
-  /// Free text — phone, WhatsApp, or a person's name. Not validated as a phone
-  /// number: Indonesian supplier contacts are not reliably one format.
+  /// Free text (phone, WhatsApp or a name).
   contact String?
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -720,22 +543,11 @@ model Supplier {
   @@map("suppliers")
 }
 
-/// OhMyPos — ERD §3, System Design §6.2.
-///
-/// `branchId = null` means CENTRAL PURCHASE (ADR-004, PRD §8.4) — the canonical
-/// and only marker for it. `ledgerEntryId` is set at creation only when the
-/// purchase was PAID up front; an unpaid purchase gets a `Payable` instead and
-/// never a ledger entry (ADR-006). The two are mutually exclusive at creation
-/// time (ERD §6).
+/// A supplier purchase. `branchId = null` is a central purchase; PAID gets a ledger entry, UNPAID a Payable (ADR-006).
 model SupplierPurchase {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -746,8 +558,7 @@ model SupplierPurchase {
   purchaseDate  DateTime      @map("purchase_date")
   paymentStatus PaymentStatus @map("payment_status")
 
-  /// Set at creation iff paymentStatus = PAID. Stays null forever otherwise —
-  /// a settled payable's expense lives on the settlements' entries, not here.
+  /// Set at creation iff PAID; otherwise null forever.
   ledgerEntryId String? @unique @map("ledger_entry_id")
 
   note String?
@@ -758,14 +569,12 @@ model SupplierPurchase {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Restrict everywhere: a purchase is financial history and must not vanish
-  // because a supplier or branch row was deleted.
+  // Restrict: a purchase is financial history.
   supplier    Supplier     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   branch      Branch?      @relation(fields: [branchId], references: [id], onDelete: Restrict)
   ledgerEntry LedgerEntry? @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
 
-  // Cascade: a purchase line has no meaning without its purchase (same rule as
-  // RecipeItem → Product).
+  // Cascade with the purchase.
   items   SupplierPurchaseItem[]
   payable Payable?
 
@@ -779,43 +588,29 @@ model SupplierPurchase {
   @@map("supplier_purchases")
 }
 
-/// OhMyPos — ERD §3. `lineTotal` is a STORED column, so it is rounded per line
-/// to 2dp and `SupplierPurchase.totalAmount` is the sum of those rounded values
-/// (plan §9.3). This is deliberately different from HPP's round-once rule.
+/// A purchase line: what was bought (snapshot) and what stock received.
 model SupplierPurchaseItem {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   supplierPurchaseId String @map("supplier_purchase_id")
   rawMaterialId      String @map("raw_material_id")
 
-  /// WHAT THE USER BOUGHT — quantity in the material's purchase unit at the
-  /// time of recording ("2" for 2 liter). Snapshotted alongside the unit and
-  /// factor below so a later packaging edit cannot move this row (ADR-024).
+  /// Quantity in the purchase unit, as recorded (snapshot, ADR-024).
   purchaseQuantity Decimal @map("purchase_quantity") @db.Decimal(18, 4)
   /// Snapshot of RawMaterial.purchaseUnit as it was when this line was recorded.
   purchaseUnit     String  @map("purchase_unit")
   /// Snapshot of RawMaterial.conversionFactor as it was when this line was recorded.
   conversionFactor Decimal @map("conversion_factor") @db.Decimal(18, 4)
 
-  /// WHAT STOCK RECEIVED — the normalized quantity in the material's STOCK
-  /// unit: purchaseQuantity × conversionFactor. This is the figure applyInbound
-  /// increments and StockMovement.quantity records; its meaning is unchanged
-  /// from before ADR-024.
+  /// Stock received: purchaseQuantity × conversionFactor, in the stock unit.
   quantity  Decimal @db.Decimal(18, 4)
-  /// Normalized cost per STOCK unit: lineTotal ÷ quantity. Decimal(18,6) for
-  /// the same reason as RawMaterial.unitCost — it is a rate, not an amount.
+  /// lineTotal ÷ quantity, per stock unit (a rate, 6dp).
   unitCost  Decimal @map("unit_cost") @db.Decimal(18, 6)
-  /// TOTAL price paid for this line. Entered by the user (ADR-024), no longer
-  /// derived from quantity × unitCost; it is the input the other two come from.
+  /// Total price paid for the line, entered by the user (ADR-024).
   lineTotal Decimal @map("line_total") @db.Decimal(18, 2)
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -823,8 +618,7 @@ model SupplierPurchaseItem {
   supplierPurchase SupplierPurchase @relation(fields: [supplierPurchaseId], references: [id], onDelete: Cascade)
   rawMaterial      RawMaterial      @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
 
-  /// One line per material per purchase — makes the FOR UPDATE lock set and the
-  /// stock increment unambiguous. Also enforced in Zod (§7.2).
+  /// One line per material per purchase.
   @@unique([supplierPurchaseId, rawMaterialId])
   @@index([supplierPurchaseId])
   @@index([rawMaterialId])
@@ -832,28 +626,15 @@ model SupplierPurchaseItem {
   @@map("supplier_purchase_items")
 }
 
-/// OhMyPos — ERD §3, ADR-006. Utang to a supplier for an unpaid purchase.
-///
-/// `remainingBalance` is a denormalized running balance in the same sense as
-/// RawMaterial.currentStock (System Design §7): the settlement rows are the
-/// source of truth, this column is the fast-read balance. It is written by
-/// exactly ONE code path — PayablesService.settle — inside a transaction that
-/// holds a FOR UPDATE lock on this row (plan §2 Option B, §9.6).
+/// Utang for an unpaid purchase. `remainingBalance` is written only by PayablesService.settle under a row lock.
 model Payable {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  /// Unique: one payable per unpaid purchase (ERD §3), never a rolled-up
-  /// per-supplier balance. The per-supplier figure PRD §5.3 asks for is a SUM
-  /// over these rows (GET /payables/summary).
+  /// One payable per unpaid purchase.
   supplierPurchaseId String @unique @map("supplier_purchase_id")
   supplierId         String @map("supplier_id")
 
@@ -874,25 +655,17 @@ model Payable {
   @@map("payables")
 }
 
-/// OhMyPos — ERD §3, ADR-006. The moment money actually leaves the account, and
-/// therefore the only moment an unpaid purchase produces a LedgerEntry.
+/// A payment against a Payable: when money leaves the account (ADR-006).
 model PayableSettlement {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   payableId     String @map("payable_id")
   accountId     String @map("account_id")
-  /// Required and unique: every settlement generates exactly one expense entry.
-  /// Unlike SupplierPurchase.ledgerEntryId this is NOT nullable — a settlement
-  /// with no ledger entry would be money moving with no record of it.
+  /// Exactly one expense entry per settlement.
   ledgerEntryId String @unique @map("ledger_entry_id")
 
   amount    Decimal  @db.Decimal(18, 2)
@@ -902,8 +675,7 @@ model PayableSettlement {
   /// Kunci idempotensi klien (TASK-082).
   idempotencyKey String? @map("idempotency_key")
 
-  /// Append-only, like Allocation — a settlement is corrected by recording
-  /// another movement, never by editing history.
+  /// Append-only.
   createdAt DateTime @default(now()) @map("created_at")
 
   payable     Payable     @relation(fields: [payableId], references: [id], onDelete: Restrict)
@@ -916,33 +688,23 @@ model PayableSettlement {
   @@map("payable_settlements")
 }
 
-/// OhMyPos — ERD §3, System Design §7. The append-only log that justifies every
-/// change to RawMaterial.currentStock. Written only inside the transaction that
-/// changes the balance, under FOR UPDATE (ADR-007).
+/// Append-only log behind every change to RawMaterial.currentStock (ADR-007).
 model StockMovement {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   rawMaterialId String  @map("raw_material_id")
-  /// Attribution only — which branch triggered it. Null for central events
-  /// (a central purchase, an OPENING). Never a partitioning key (ADR-004).
+  /// Attribution only; null for central events (ADR-004).
   branchId      String? @map("branch_id")
 
   direction StockDirection
   quantity  Decimal        @db.Decimal(18, 4)
 
   referenceType StockReferenceType @map("reference_type")
-  /// Points at the SupplierPurchase / Sale / OpeningStock that caused this.
-  /// Deliberately NOT a foreign key: it is polymorphic across three tables,
-  /// exactly like LedgerEntry.sourceId (ERD §2).
+  /// Polymorphic source row (no foreign key).
   referenceId   String?            @map("reference_id")
 
   /// Decimal(18,6) — a per-unit rate, matching RawMaterial.unitCost (ADR-024).
@@ -957,10 +719,7 @@ model StockMovement {
 
   /// Drives Dashboard 5's inventory summary (ERD §6).
   @@index([rawMaterialId, movementDate])
-  /// Covers InventorySummaryService's unbounded `priorBuckets` groupBy
-  /// (WHERE movementDate < periodStart, GROUP BY rawMaterialId, direction) —
-  /// DEBT-013: that query has no lower date bound and scans all history, so
-  /// this is a covering index, not a query-shape fix (ADR-008 still applies).
+  /// Covering index for the inventory summary's carry-forward groupBy (DEBT-013).
   @@index([rawMaterialId, movementDate, direction])
   @@index([referenceType, referenceId])
   @@index([branchId])
@@ -968,41 +727,23 @@ model StockMovement {
   @@map("stock_movements")
 }
 
-/// OhMyPos — PRD §5.5 "Dashboard 4", ERD §3, System Design §6.4.
-///
-/// The monthly stock-take DECLARATION. The balance change it causes is a
-/// StockMovement (referenceType = OPENING) written in the same transaction, for
-/// the SIGNED DIFFERENCE between the declared figure and what the ledger already
-/// carried into the period (plan §3.2). The movement ledger stays the single
-/// source of truth; this table records what a human counted.
+/// A monthly stock-take declaration; its correction is an OPENING StockMovement.
 model OpeningStock {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   rawMaterialId String @map("raw_material_id")
 
-  /// First day of the month this applies to. @db.Date, not a timestamp: a month
-  /// is a calendar fact, and storing an instant here would invite a timezone
-  /// question the column cannot answer (plan §9). It is also what keeps the
-  /// unique constraint below undefeatable by a differing time-of-day.
+  /// First day of the month (a calendar date, not an instant).
   periodMonth DateTime @map("period_month") @db.Date
 
-  /// The declared physical count at the START of the period — NOT a delta.
-  /// The delta is derived and lives on StockMovement (plan §3.2).
+  /// Physical count at the start of the period, not a delta.
   quantity Decimal @db.Decimal(18, 4)
 
-  /// Valuation for this declaration. Required IFF no PURCHASE movement exists
-  /// for this material in this period (PRD §5.5, plan §5); null otherwise, in
-  /// which case RawMaterial.unitCost is snapshotted onto the OPENING movement's
-  /// unitCostAtMovement instead. Nullable deviates from ERD v3 §3 — plan §10.4.
+  /// Required iff no purchase this period (PRD §5.5); otherwise null.
   unitPrice Decimal? @map("unit_price") @db.Decimal(18, 6)
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -1010,8 +751,7 @@ model OpeningStock {
 
   rawMaterial RawMaterial @relation(fields: [rawMaterialId], references: [id], onDelete: Restrict)
 
-  /// ERD §6 — one declaration per material per month; also what makes the PUT
-  /// upsert idempotent (plan §6).
+  /// One declaration per material per month.
   @@unique([rawMaterialId, periodMonth])
   @@index([periodMonth])
   @@index([tenantId])
@@ -1025,21 +765,11 @@ enum AttendanceViolationReason {
   DEVICE_INACTIVE
 }
 
-/// Phase 11 — one physical terminal per row, scoped to a Branch (Context
-/// section: a branch shares 1-3 tablets across whichever KASIR works there,
-/// so this is not per-User). Activation is a one-time Owner action performed
-/// physically at the terminal (Context section) — activationCode/
-/// activationCodeExpiresAt exist only between creation and activation, then
-/// both go back to null.
+/// A POS terminal at a branch. The activation code exists only until activation (ADR-021).
 model Device {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -1051,8 +781,7 @@ model Device {
   activatedByUserId String?   @map("activated_by_user_id")
   activatedAt       DateTime? @map("activated_at")
 
-  /// Single-use, expiring code proving physical intent to activate. Unique so
-  /// DevicesService.activate can look a device up by code alone.
+  /// Single-use, expiring activation code.
   activationCode          String?   @unique @map("activation_code")
   activationCodeExpiresAt DateTime? @map("activation_code_expires_at")
 
@@ -1068,20 +797,11 @@ model Device {
   @@map("devices")
 }
 
-/// Phase 11 — one row per login attempt, not per session (ERD-style append-
-/// only audit log). Written from AuthService.login(), only for role = KASIR
-/// (Context section — ADMIN/OWNER are not branch-scoped and are excluded).
-/// Login always succeeds regardless of isValid (Context section) — this table
-/// is informational/monitoring, never an access gate.
+/// One row per KASIR login; informational only, never an access gate.
 model AttendanceRecord {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -1093,8 +813,7 @@ model AttendanceRecord {
 
   violationReason AttendanceViolationReason? @map("violation_reason")
 
-  /// Informational only, never used to determine isValid (Context section,
-  /// option 2 rejection — IP/UA are unreliable as a primary signal).
+  /// Informational; never used for isValid.
   ipAddress String? @map("ip_address")
   userAgent String? @map("user_agent")
 
@@ -1115,19 +834,11 @@ enum LeaveRequestStatus {
   REJECTED
 }
 
-/// Phase 12 — cuti/leave requests, full approve/reject workflow by OWNER
-/// (Context section — user upgraded this from a passive note during
-/// planning). startDate/endDate are calendar days (@db.Date), same pattern as
-/// OpeningStock.periodMonth — a leave request is a date range, not an instant.
+/// Leave (cuti) request, approved or rejected by an OWNER. Dates are calendar days.
 model LeaveRequest {
   id String @id @default(uuid())
 
-  /// Supplied at runtime by the Prisma tenant extension (ADR-025), never by a
-  /// caller. `@default("")` exists ONLY to make it optional in Prisma's create
-  /// input types, so the 25 existing modules did not have to thread a tenant
-  /// argument through every write. The empty string is not a valid tenant id
-  /// and no row ever holds it: an insert that somehow escaped the extension
-  /// fails loudly on `<table>_tenant_id_fkey` instead of landing anywhere.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId String @default("") @map("tenant_id")
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -1145,8 +856,7 @@ model LeaveRequest {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  /// Two distinct relations to User from the same model — named to disambiguate
-  /// (Prisma requires this whenever more than one relation targets the same model).
+  /// Requester and reviewer: two named relations to User.
   user       User  @relation("LeaveRequestUser", fields: [userId], references: [id], onDelete: Cascade)
   reviewedBy User? @relation("LeaveRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
@@ -1160,8 +870,7 @@ model LeaveRequest {
 model BusinessProfile {
   id String @id @default(uuid())
 
-  /// See the note on the other 22 models — `@default("")` is a typing device,
-  /// not a real default.
+  /// Set by the tenant extension (ADR-025). `@default("")` is a typing device only; see prisma/README.md.
   tenantId  String   @unique @default("") @map("tenant_id")
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   name      String   @default("OhMyPos")
@@ -1182,15 +891,13 @@ enum TenantStatus {
   SUSPENDED
 }
 
-/// v2 (ADR-025) — one row per business. Holds what the platform operator owns
-/// (slug, status); what a tenant edits about itself stays in BusinessProfile.
+/// One row per business (ADR-025). Tenant-edited details live in BusinessProfile.
 model Tenant {
   id String @id @default(uuid())
 
   name String
 
-  /// How a super admin recognises a tenant. NOT a routing key — the tenant is
-  /// resolved from the User record, never from the client (ADR-025 Decision 2).
+  /// Human-readable identifier, never a routing key.
   slug   String       @unique
   status TenantStatus @default(ACTIVE)
 
@@ -1225,8 +932,7 @@ model Tenant {
   @@map("tenants")
 }
 
-/// v2 (ADR-025 Decision 5) — the platform operator. Deliberately NOT a row in
-/// `users`, so User.tenantId can be NOT NULL with no exception carved out.
+/// Platform operator; not a User, so User.tenantId stays NOT NULL (ADR-025).
 model PlatformAdmin {
   id String @id @default(uuid())
 
@@ -1247,8 +953,7 @@ model PlatformAdmin {
   @@map("platform_admins")
 }
 
-/// v2 (ADR-025 Decision 8) — the impersonation audit trail. Append-only apart
-/// from `endedAt`.
+/// Impersonation audit trail; append-only apart from `endedAt`.
 model ImpersonationSession {
   id String @id @default(uuid())
 

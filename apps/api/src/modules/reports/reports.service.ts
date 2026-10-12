@@ -1,23 +1,3 @@
-/**
- * OhMyPos — Reporting service, Dashboard 3 (PRD §5.4, ADR-005, ADR-008,
- * ADR-014, ADR-017, ADR-018, System Design §6.6/§11).
- *
- * READ ONLY. Every method is a SELECT. There is no $transaction anywhere in
- * this file and there must never be one — Playbook §7 governs writes, and this
- * module performs none.
- *
- * COGS ALWAYS comes from `sale_items.hpp_at_sale`, the per-unit snapshot frozen
- * at sale time (ADR-005, ADR-015). This file must never import calculateHpp,
- * never read RawMaterial.unitCost, and never touch RecipeItem — doing so makes
- * historical reports change retroactively when a material's price changes,
- * which is the exact bug AGENTS.md's Troubleshooting table warns about.
- *
- * Aggregation happens in Postgres, not in Node: `SUM(hpp_at_sale * quantity)`
- * over a month is ~80k rows that must never cross the wire (plan §5).
- *
- * ALIAS CONTRACT (report-filters.ts): ledger_entries AS le, sales AS s,
- * sale_items AS si, products AS p, accounts AS a.
- */
 import { Injectable } from '@nestjs/common';
 import type {
   CashBalanceResponse,
@@ -67,31 +47,24 @@ import type {
   TopProductsQueryDto,
 } from './reports.dto';
 
-/**
- * The ORDER BY per ranking metric, as pre-built SQL fragments.
- *
- * A lookup object, NOT string interpolation of `query.rankBy` — even though Zod
- * has already constrained the value to three literals. An ORDER BY built from a
- * request string is the one place in this module where a future edit could turn
- * a validated enum into injected SQL.
- */
+/** Pre-built ORDER BY per metric. Never interpolate `rankBy` into SQL. */
 const PRODUCT_ORDER_BY: Record<ProductRankBy, Prisma.Sql> = {
   quantity: Prisma.sql`SUM(si.quantity) DESC`,
   revenue: Prisma.sql`ROUND(SUM(si.line_total), 2) DESC`,
   profit: Prisma.sql`(ROUND(SUM(si.line_total), 2) - ROUND(SUM(si.hpp_at_sale * si.quantity), 2)) DESC`,
 };
 
+/**
+ * Dashboard 3 reports, aggregated in Postgres at query time. Read-only.
+ *
+ * COGS always comes from `sale_items.hpp_at_sale` (ADR-005); never from
+ * current material costs. See `README.md`.
+ */
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Resolves the range and the branch label shared by all five reports.
-   *
-   * An unknown branchId is NOT a 404 (plan decision 10): a filter matching
-   * nothing is an empty result set, so the report returns zeros with
-   * `branchName: null`.
-   */
+  /** Resolves the range and branch label. An unknown branchId yields zeros, not 404. */
   private async resolveContext(query: ReportRangeQueryDto) {
     const range = resolveReportRange(query.startDate, query.endDate);
     const branch = query.branchId
@@ -108,7 +81,7 @@ export class ReportsService {
     };
   }
 
-  /** ADR-017 §2 — the margin view and the cash view, computed in two passes. */
+  /** Margin view and cash view for the period (ADR-017). */
   async profitLoss(query: ReportRangeQueryDto): Promise<ProfitLossResponse> {
     const { range, period } = await this.resolveContext(query);
     const ledgerWhere = ledgerScope(range, query.branchId);
@@ -144,14 +117,7 @@ export class ReportsService {
     return toProfitLossResponse(period, moneyRows[0], cogsRows[0]);
   }
 
-  /**
-   * The shared product aggregate behind BOTH product-profit and top-products —
-   * the two reports differ only in ORDER BY and LIMIT.
-   *
-   * `SUM(si.hpp_at_sale * si.quantity)` is the expression Prisma's groupBy
-   * cannot express, and the reason this module uses raw SQL at all (plan §4).
-   * The sum is exact and rounded ONCE (plan §2).
-   */
+  /** Per-product aggregate shared by product-profit and top-products. */
   private async productAggregate(
     range: ReportRange,
     branchId: string | undefined,
@@ -160,7 +126,6 @@ export class ReportsService {
   ): Promise<ProductAggregateRow[]> {
     const saleWhere = saleScope(range, branchId);
     const orderBy = PRODUCT_ORDER_BY[rankBy];
-    // A bound LIMIT parameter, or no LIMIT clause at all for the full report.
     const limitClause =
       limit === null ? Prisma.empty : Prisma.sql`LIMIT ${limit}`;
 
@@ -205,11 +170,7 @@ export class ReportsService {
     return toTopProductsResponse(period, query.rankBy, rows);
   }
 
-  /**
-   * Grouped from `ledger_entries`, not from `sales`, so this report's total
-   * equals ProfitLossResponse.totalIncome by construction — manual income
-   * entries carry an account too (plan decision 4).
-   */
+  /** Income per account, from the ledger so the total equals P&L `totalIncome`. */
   async incomeByPaymentMethod(
     query: ReportRangeQueryDto,
   ): Promise<IncomeByPaymentMethodResponse> {
@@ -236,18 +197,7 @@ export class ReportsService {
     return toIncomeByPaymentMethodResponse(period, rows);
   }
 
-  /**
-   * Buckets by WIB calendar day (ADR-018). Days with no income are absent from
-   * the SQL result and are zero-filled in TypeScript so a trend chart gets a
-   * continuous series (plan §6.7).
-   */
-  /**
-   * Merges three independently-grouped day-bucketed aggregates (income from
-   * ledger INFLOW, COGS from sale_items/sales, operating expenses from ledger
-   * OUTFLOW) so the response can carry `netProfit` per day alongside `income`
-   * — the same `netProfit` definition as `profitLoss()`, just per-day instead
-   * of per-period.
-   */
+  /** Income, COGS and net profit per WIB day, gap-filled across the range. */
   async dailyIncome(query: ReportRangeQueryDto): Promise<DailyIncomeResponse> {
     const { range, period } = await this.resolveContext(query);
     const ledgerWhere = ledgerScope(range, query.branchId);
@@ -289,8 +239,7 @@ export class ReportsService {
     const opexByDay = new Map(
       opexRows.map((row) => [row.day, row.operating_expenses]),
     );
-    // A day can have a MANUAL expense with zero sales — merging only over
-    // incomeRows' days would silently drop that expense from netProfit.
+    // Union of all days: an expense-only day must still reach netProfit.
     const allDays = new Set([
       ...incomeByDay.keys(),
       ...cogsByDay.keys(),
@@ -311,12 +260,8 @@ export class ReportsService {
   }
 
   /**
-   * Running balance, not a range report: opening balance plus every ledger
-   * movement strictly before `asOfDate`'s exclusive WIB boundary. Deliberately
-   * NOT built on `ledgerScope` (report-filters.ts) — that helper assumes a
-   * bounded [from, to) window and a `branchId` filter; this query has neither
-   * a lower bound nor a branch filter, so it is written out in full here
-   * rather than forcing an unbounded query through a bounded-range helper.
+   * Per-account running balance as of the start of `asOfDate` (WIB). Not a range
+   * report, so it does not use `ledgerScope`.
    */
   async cashBalance(query: CashBalanceQueryDto): Promise<CashBalanceResponse> {
     const asOfDate = query.asOfDate ?? todayWib(new Date());

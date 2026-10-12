@@ -1,6 +1,4 @@
 /**
- * OhMyPos — unit tests for the sale totals calculator (ERD §3, ADR-005, ADR-015, plan §10.7 Tier 1).
- *
  * Two rules under test that are easy to "harmonise" the wrong way:
  * - `lineTotal` rounds per line and sums the rounded values (like purchase-totals.ts).
  * - `totalHpp` sums exact products and rounds ONCE at the end (like hpp.calculator.ts) —

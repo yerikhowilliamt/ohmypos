@@ -1,12 +1,8 @@
 import * as React from 'react';
 
 /**
- * Radix `*.Portal` primitives mount into `document.body` by default, which
- * sits outside any `data-theme` scope on a shell wrapper. Back-office dark
- * mode provides this context so its portals render inside the themed
- * subtree instead; every other caller leaves it at the default `null`, which
- * makes each primitive fall back to Radix's own `document.body` behavior —
- * unchanged from today.
+ * Where Radix portals mount. Back-office dark mode provides its themed subtree;
+ * the default `null` keeps Radix's `document.body`.
  */
 export const PortalContainerContext = React.createContext<HTMLElement | null>(
   null,

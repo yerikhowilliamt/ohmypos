@@ -19,12 +19,7 @@ interface ProductGridProps {
   onAdd: (product: ProductWithHppResponse) => void;
 }
 
-/**
- * DESIGN.md §11.2 Product Grid & Cards: a fixed-column grid — 4 columns at desktop, 3 at tablet, 2 at
- * mobile (§41.3) — whose first cell is the Add New Product affordance (§21.1).
- * Filtering and search live in `PosScreen`, which owns the state the §22 filter
- * row and this grid share.
- */
+/** Product grid: 4/3/2 columns by breakpoint, first cell is "Add New Product". */
 export function ProductGrid({
   products,
   headroom,

@@ -8,17 +8,9 @@ import Link from 'next/link';
 import type { Theme } from '@/lib/theme';
 
 interface TopbarProps {
-  /**
-   * `'default'` renders the 52px Backoffice strip from DESIGN.md §10 Application Shell & Navigation, §10.3 Topbar Specifications.
-   * `'pos'` renders only the mobile hamburger row — §15 is explicit that POS
-   * has no separate horizontal topbar.
-   */
+  /** `default`: the 52px back-office strip. `pos`: only the mobile hamburger row. */
   variant?: 'default' | 'pos';
-  /**
-   * Current-page orientation (§17), e.g. `["Data Master", "Bahan Baku"]`.
-   * Desktop-only — mobile has no room next to the hamburger + logo row, and
-   * the page's own header (§18) already carries the title there.
-   */
+  /** Breadcrumb segments; desktop only. */
   breadcrumb?: string[];
   /** Back-office-only dark mode toggle — never passed for POS or shared
    * routes, so the button structurally cannot render there. */

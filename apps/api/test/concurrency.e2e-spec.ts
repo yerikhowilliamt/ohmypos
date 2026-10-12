@@ -10,17 +10,9 @@ import { tenantFixture } from './tenant-fixture';
 import Decimal from 'decimal.js';
 
 /**
- * Phase 14 finding (B2 investigation): `Promise.all` on 50+ concurrent
- * supertest requests short-circuits on the FIRST rejected promise — one slow
- * response under real lock-queue depth reads as a socket-level failure
- * (ECONNRESET) to the client even though the server keeps processing it. The
- * other in-flight requests are then abandoned mid-test rather than awaited,
- * so their writes land AFTER the test's own cleanup already ran, orphaning
- * rows a later deleteMany() can't remove — the actual cause of the FK
- * violations seen chasing this. `Promise.allSettled` waits for every request
- * to actually finish (success or network failure) before assertions run, and
- * a network-level rejection is itself asserted to be zero, same as the "zero
- * 5xx" checks — it is the same category of failure (plan §5.2).
+ * Uses `Promise.allSettled`, not `Promise.all`: `all` abandons in-flight
+ * requests on the first rejection, and their late writes then orphan rows
+ * after cleanup. Network-level rejections are asserted to be zero, like 5xx.
  */
 async function settleAllChunked<T>(
   factories: Array<() => Promise<T>>,
@@ -76,9 +68,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
     });
     branchId = branch.id;
 
-    // Workstream B (Phase 14 plan §5.3, B2) needs a genuine second branch
-    // sharing the same centralized stock pool (ADR-007) — the scenario ADR-007
-    // is actually about, which the pre-existing single-branch tests never hit.
+    // A second branch sharing the one stock pool: the scenario ADR-007 is about.
     const branchB = await prisma.branch.create({
       data: { name: 'Concurrency Test Branch B' },
     });
@@ -436,9 +426,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
     });
   });
 
-  // Phase 14 plan §5.3 — B1-B5. Extends this suite in place (not a separate
-  // file) so these cases run in the normal test:e2e gate and share the
-  // fixtures/cleanup above, per the plan's Workstream B design decision.
+  // B1–B5 stress cases, sharing this suite's fixtures and cleanup.
 
   describe('B1: lock-ordering / deadlock probe (ADR-016)', () => {
     it('40 concurrent sales, recipes declared in opposite material order, never deadlock', async () => {
@@ -563,12 +551,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
         },
       });
 
-      // B5 (plan §5.3): per-request timing, feeding DEBT-002/DEBT-008(lock
-      // batching) — neither of those debt entries has a measured number today.
-      // Interleaved (i % 2), not split by index range — chunking (below) fires
-      // in windows of 20, and a range split would put a whole branch's 25
-      // requests in one window, letting it exhaust the shared stock before the
-      // other branch's window even starts (masking ADR-007's actual scenario).
+      // B5: per-request timing. Interleaved (i % 2) so both branches compete in every window.
       const timings: number[] = [];
       const requestFactories = Array.from({ length: 50 }, (_, i) => {
         const cookies = i % 2 === 0 ? kasirCookies : kasirBCookies;
@@ -704,8 +687,7 @@ describe('Concurrency & Integrity Harness (e2e - DEF-006, P0-3, P0-4)', () => {
       expect(purchaseResults.filter((r) => r.status >= 500)).toHaveLength(0);
       expect(purchaseResults.filter((r) => r.status === 201)).toHaveLength(5);
 
-      // Deliberately non-deterministic: whatever interleaving occurs, the
-      // ledger and balance must still reconcile exactly (plan §5.3 B3).
+      // Non-deterministic on purpose: any interleaving must still reconcile exactly (B3).
       const n = saleResults.filter((r) => r.status === 201).length;
       expect(n).toBeGreaterThanOrEqual(1);
       expect(n).toBeLessThanOrEqual(10);

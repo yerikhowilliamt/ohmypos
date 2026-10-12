@@ -18,21 +18,16 @@ import {
 } from '../messages';
 
 /**
- * Ported from Kasync. Registered globally, so every endpoint is authenticated
- * unless it opts out with `@Public()` — an endpoint added without a guard fails
- * closed rather than open (Playbook §8).
- *
- * Beyond signature verification it checks two things the token alone cannot
- * express: that the session has not been revoked since it was issued
- * (`tokenValidFrom`), and that the user is still active (ADR-011 §5).
+ * Global tenant authentication; opt out with `@Public()`. Verifies the token,
+ * rejects revoked sessions and inactive users, and establishes the tenant
+ * scope from the user row.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
-    // Unscoped on purpose: this guard is what ESTABLISHES the tenant, so it
-    // cannot itself run inside a tenant filter.
+    // Unscoped: this guard establishes the tenant.
     private readonly prisma: UnscopedPrismaService,
   ) {}
 
@@ -58,8 +53,7 @@ export class JwtAuthGuard implements CanActivate {
 
     const secret = process.env.JWT_SECRET;
     if (!secret) {
-      // An operator's problem, not the caller's — and naming the variable
-      // to an anonymous caller leaks deployment detail.
+      // Never name the missing variable to the caller.
       throw new UnauthorizedException(SERVER_MISCONFIGURED);
     }
 
@@ -79,8 +73,6 @@ export class JwtAuthGuard implements CanActivate {
         isActive: true,
         role: true,
         branchId: true,
-        // ADR-025 — the tenant rides along on the round-trip this guard already
-        // makes, so establishing it costs nothing extra.
         tenantId: true,
       },
     });
@@ -89,24 +81,11 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
-    // A deactivated user's existing token must stop working immediately.
     if (!user.isActive) {
       throw new UnauthorizedException(ACCOUNT_DEACTIVATED);
     }
 
-    // Reject tokens issued before tokenValidFrom.
-    //
-    // The 1000ms allowance is not clock-skew slack — it is exactly the
-    // resolution of the JWT `iat` claim, which is whole seconds. A token minted
-    // at 10:00:00.900 carries iat = 10:00:00, so comparing raw would wrongly
-    // reject it against a tokenValidFrom of 10:00:00.500.
-    //
-    // Kasync used 2000ms to absorb Node-vs-PostgreSQL clock drift as well; that
-    // is no longer needed, because every write of this column now comes from the
-    // application clock (see UsersService.create). The consequence to be aware
-    // of: revocation is precise to the second, so a token minted within the same
-    // second as a logout may survive it. Acceptable at this scale, and far
-    // tighter than the access token's own lifetime.
+    // Revocation check. 1000ms = `iat` resolution (whole seconds), not clock-skew slack.
     const IAT_RESOLUTION_MS = 1000;
     if (
       payload.iat !== undefined &&
@@ -115,8 +94,7 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
-    // Trust the database over the token for role and branch, so a change to
-    // either takes effect without waiting for the access token to expire.
+    // Role and branch come from the database, so changes apply immediately.
     request.user = {
       ...payload,
       role: user.role,
@@ -124,13 +102,10 @@ export class JwtAuthGuard implements CanActivate {
       tenantId: user.tenantId,
     };
 
-    // ADR-025 Decision 2 — the tenant comes from the User row, never from the
-    // client. TenantScopeMiddleware opened this scope; the guard fills it.
+    // The tenant comes from the user row, never the client (ADR-025).
     const scope = tenantStorage.getStore();
     if (!scope) {
-      // The middleware did not run. Fail closed rather than let the request
-      // through with no tenant, which the Prisma extension would then reject
-      // deep inside a service with a far less legible error.
+      // TenantScopeMiddleware did not run; fail closed.
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
     scope.tenantId = user.tenantId;

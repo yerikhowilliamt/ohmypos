@@ -54,14 +54,7 @@ function AccordionContent({
   children,
   ...props
 }: React.ComponentProps<typeof AccordionPrimitive.Content>) {
-  // No open/close transition: the codebase has no `accordion-down`/
-  // `accordion-up` keyframes defined anywhere (checked
-  // `packages/ui/src/styles/globals.css` and both `package.json` files for a
-  // `tailwindcss-animate`/`tw-animate-css` plugin — neither exists). Radix's
-  // `Accordion.Content` shows/hides correctly without one; it just snaps
-  // instead of animating. Do not add animation utility classes here without
-  // first adding the plugin that defines them (a new-dependency governance
-  // event, out of scope for this phase).
+  // No transition: no accordion keyframes or animation plugin exist in this repo.
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"

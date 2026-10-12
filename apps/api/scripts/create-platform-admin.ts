@@ -4,18 +4,7 @@ import * as bcrypt from 'bcrypt';
 import * as readline from 'readline';
 import { UnscopedPrismaService } from '../src/common/prisma/prisma.service';
 
-/**
- * ADR-025 Fase 3 — bootstrap for the platform console.
- *
- * There is no `POST /platform/admins` endpoint and this script is the only way
- * a platform admin comes into existence, deliberately: the first one cannot be
- * created through an authenticated API, and an unauthenticated one would be the
- * single worst endpoint in the system. Shell access is the authentication.
- *
- * Mirrors `create-owner.ts` (interactive prompts, bcrypt 10 rounds) with one
- * structural difference: it never opens a tenant scope and only ever touches
- * `UnscopedPrismaService`, because a platform admin belongs to no tenant.
- */
+/** Creates a platform admin; the only way one comes into existence. See scripts/README.md. */
 
 function askQuestion(query: string, hideText = false): Promise<string> {
   const rl = readline.createInterface({

@@ -6,15 +6,8 @@ interface ScopeHintProps {
 }
 
 /**
- * A muted one-line note explaining the "Umum" scope wherever it sits next to
- * "Semua Cabang".
- *
- * The two read as synonyms to an Owner ("semua cabang" = "umum") but mean
- * nearly opposite things: `Umum` is the ADR-014 ledger-attribution row —
- * transactions charged to no single branch — while `Semua Cabang` is the
- * absence of a branch filter, so it is the SUPERSET that already contains
- * Umum. Only the styling is shared; each call site writes its own sentence
- * because the noun changes (pengeluaran, pembelian, transaksi).
+ * One-line note shown beside "Semua Cabang": `Umum` is the system branch (no
+ * single branch), while "Semua Cabang" means no filter and already includes Umum.
  */
 export function ScopeHint({ children }: ScopeHintProps) {
   return (

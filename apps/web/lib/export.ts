@@ -1,28 +1,9 @@
-/**
- * OhMyPos — XLSX export helpers.
- *
- * `exceljs` is dynamic-imported so it never lands in the initial bundle —
- * only pages with an Export button pay for it, and only once clicked.
- * Workbook-building is split from the download side-effect so the former
- * stays unit-testable without a DOM.
- */
+/** XLSX export. `exceljs` is loaded on first click; building is separate from downloading for tests. */
 
 /**
- * Sufiks nama berkas untuk rentang tanggal laporan (DEBT-025).
- *
- * Nama berkas harus menyebut periode DATANYA, bukan tanggal saat tombol ditekan.
- * Dua ekspor rentang berbeda di hari yang sama akan saling menimpa di folder
- * Unduhan, dan penerimanya (akuntan, payroll) membuka berkas itu tanpa konteks
- * layar — nama berkas adalah satu-satunya keterangan periode yang ia punya.
- *
- * Tanpa rentang, jatuh kembali ke tanggal hari ini: itu benar untuk data yang
- * memang berupa keadaan saat ini (mis. utang pemasok), bukan rentang.
- *
- * Tanggal fallback-nya LOKAL, bukan UTC. `toISOString()` memberi tanggal UTC,
- * dan di WIB (UTC+7) itu berarti setiap ekspor antara 00:00 dan 07:00 diberi
- * nama tanggal KEMARIN — terlihat saat verifikasi browser TASK-073 pukul 04:00.
- * `startDate`/`endDate` sendiri datang dari date picker sebagai tanggal lokal,
- * jadi mencampur keduanya membuat dua penamaan yang tidak sebanding.
+ * Filename suffix for the data's date range, or today's LOCAL date when there
+ * is no range (DEBT-025). `toISOString()` would name early-morning WIB exports
+ * after yesterday.
  */
 export function rangeSuffix(startDate?: string, endDate?: string): string {
   // 'sv-SE' memberi format YYYY-MM-DD di zona waktu lokal.
@@ -38,8 +19,7 @@ export interface ExportColumn<T> {
 const MAX_COLUMN_WIDTH = 40;
 const MIN_COLUMN_WIDTH = 10;
 
-/** Builds the workbook in memory — split out from the download side-effect
- * so it's directly unit-testable without a DOM. */
+/** Builds the workbook in memory (unit-testable). */
 export async function buildWorkbook<T>(
   columns: ExportColumn<T>[],
   rows: T[],
@@ -108,11 +88,7 @@ export async function exportRowsToXlsx<T>(
   await downloadWorkbook(workbook, filename);
 }
 
-/**
- * Exports a matrix (e.g. staff × day-of-month) to a single-sheet `.xlsx`
- * file — the first column holds `rowLabels`, one column per `columnLabels`
- * entry, cells computed by `cellFn(rowIndex, columnIndex)`.
- */
+/** Exports a matrix (e.g. staff × day) with `cellFn(row, col)` per cell. */
 export async function exportMatrixToXlsx(
   filename: string,
   cornerLabel: string,

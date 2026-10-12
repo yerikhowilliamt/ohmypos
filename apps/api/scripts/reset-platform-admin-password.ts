@@ -4,21 +4,7 @@ import * as bcrypt from 'bcrypt';
 import * as readline from 'readline';
 import { UnscopedPrismaService } from '../src/common/prisma/prisma.service';
 
-/**
- * TASK-130 Bagian B2 — the last recovery floor for the platform console.
- *
- * `PATCH /platform/auth/password` requires the CURRENT password, which is
- * exactly what the person running this does not have. And unlike every other
- * account in the system, a platform admin has nobody above them: staff are
- * reset by their OWNER, an OWNER by a platform admin, and a platform admin by
- * this script. Database access is the authentication, the same way it is for
- * `create-platform-admin.ts`, whose prompts and bcrypt cost this mirrors.
- *
- * NOT shipped in the production image — the runtime stage of `Dockerfile`
- * copies `dist`, `prisma`, `src/generated`, `package.json` and `node_modules`,
- * not `scripts/`. Run it from a local machine with `DATABASE_URL` pointed at
- * the deployed database; see `docs/runbooks/platform-admin-recovery.md`.
- */
+/** Resets a platform admin's password from the CLI. Not shipped in the image; see scripts/README.md. */
 
 function askQuestion(query: string, hideText = false): Promise<string> {
   const rl = readline.createInterface({

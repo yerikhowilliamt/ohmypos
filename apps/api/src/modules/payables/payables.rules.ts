@@ -6,17 +6,17 @@ import {
 } from './payables.exceptions';
 
 /**
- * Pure — no database, no Nest DI (plan §9.6).
- * Playbook §10 puts the Payable/PayableSettlement flow in the "must have thorough tests"
- * tier; keeping the rule pure is what makes exhaustive tests fast and isolated.
+ * Validates a settlement against the payable's current state.
+ *
+ * @throws PayableAlreadySettledException
+ * @throws SettlementExceedsPayableException
  */
 export function assertSettlable(
   status: PayableStatus,
   remainingBalance: Prisma.Decimal,
   amount: Prisma.Decimal,
 ): void {
-  // Checked before the amount comparison: "already settled" is a more precise
-  // diagnosis than "amount exceeds 0" and deserves its own 409.
+  // Checked first: "already settled" is the more precise 409.
   if (status === 'SETTLED' || remainingBalance.lessThanOrEqualTo(0)) {
     throw new PayableAlreadySettledException();
   }

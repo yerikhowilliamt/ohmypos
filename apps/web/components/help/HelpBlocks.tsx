@@ -2,15 +2,7 @@ import * as React from 'react';
 import { ArrowRight, Info, TriangleAlert } from 'lucide-react';
 import type { HelpBlock } from '@/lib/help-content';
 
-/**
- * A left-to-right chain of labelled boxes.
- *
- * Deliberately built from DOM nodes rather than a screenshot or an image: this
- * repo renames user-facing labels often (`Pusat (Dapur Sentral)` → `Umum`
- * changed five files in one day), and a picture would keep showing the old
- * word with nothing in lint, typecheck or CI able to notice. Text in a box can
- * at least be grepped. It also inherits the viewer's theme for free.
- */
+/** A flow of labelled boxes, built from DOM (not an image) so labels stay greppable and themed. */
 function FlowDiagram({
   nodes,
   caption,

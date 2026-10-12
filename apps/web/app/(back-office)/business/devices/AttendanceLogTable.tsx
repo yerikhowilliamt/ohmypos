@@ -53,12 +53,7 @@ interface AttendanceLogTableProps {
 
 const DEFAULT_PAGE_SIZE = 25;
 
-/**
- * Only these four are sortable server-side. Any other column id falls back to
- * `loginAt` rather than being forwarded — a column the API cannot order by
- * would otherwise be accepted and quietly ignored, which is the failure this
- * whole series of tasks exists to remove.
- */
+/** The API's sortable columns; any other id falls back to `loginAt`. */
 const SORTABLE_COLUMN_IDS: AttendanceSortBy[] = [
   'loginAt',
   'userName',

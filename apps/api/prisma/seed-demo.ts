@@ -17,60 +17,19 @@ import { ensureSystemRefs } from '../src/common/system-refs';
 import { Prisma } from '../src/generated/prisma/client';
 
 /**
- * DEMO SEED — provisions ONE self-contained showcase tenant, safe to run
- * against a production database.
+ * Production-safe demo tenant seed. See prisma/README.md for the rules and env.
  *
- * This is deliberately NOT `prisma/seed.ts`. That file is the development
- * fixture set and must never touch prod: it upserts the tenant with slug
- * `default` (so it attaches to the real business), creates a PlatformAdmin and
- * two staff users on the hardcoded password `ChangeMe123!`, and pins four
- * Accounts to hardcoded primary keys `00000000-…-0001..0004` — global PKs that
- * a second tenant would collide with outright.
+ *   DEMO_TENANT_SLUG=… DEMO_TENANT_NAME=… DEMO_OWNER_NAME=… DEMO_OWNER_EMAIL=… \
+ *   DEMO_OWNER_PASSWORD=… pnpm --filter api db:seed:demo -- --yes
  *
- * Everything here is different on all four counts:
- *
- *  1. The tenant is named by env (`DEMO_TENANT_SLUG`) and `default` is
- *     rejected, so the real business's tenant is unreachable from this script.
- *  2. No PlatformAdmin is ever written — prod's operator account belongs to
- *     `scripts/create-platform-admin.ts`.
- *  3. Every password comes from env with no fallback; the script exits rather
- *     than invent one.
- *  4. Every id is derived from the tenant slug (`uuidFrom`), so two demo
- *     tenants can coexist and a re-run is a no-op rather than a duplicate.
- *
- * Writes happen inside `runWithTenant`, so the ADR-025 extension stamps and
- * narrows every query — a cross-tenant write is not expressible here.
- *
- * Derived money and stock figures (`hppAtSale`, `currentStock`, `unitCost`,
- * `remainingBalance`, `paymentStatus`) go through the same services the API
- * runs, for the reason `seed.ts` documents: those columns have exactly one
- * legitimate writer, and a seed that computed them by hand would be a second.
- * Only the inputs below are literals.
- *
- * Usage:
- *   DEMO_TENANT_SLUG=demo-kopi-senja \
- *   DEMO_TENANT_NAME="Kopi Senja" \
- *   DEMO_OWNER_NAME="Budi Santoso" \
- *   DEMO_OWNER_EMAIL=budi@kopisenja.demo \
- *   DEMO_OWNER_PASSWORD='...' \
- *   pnpm --filter api db:seed:demo -- --yes
- *
- * Without `--yes` it prints what it would do and exits without writing.
+ * Without `--yes` it prints the plan and exits.
  */
 
 // ---------------------------------------------------------------------------
 // Determinism helpers
 // ---------------------------------------------------------------------------
 
-/**
- * A stable UUIDv5-shaped id from a seed string. Every row this script creates
- * is keyed by one, which is what makes a re-run an upsert instead of a
- * duplicate — including the service-created Sales and Purchases, whose
- * `idempotencyKey` must be a UUID (`IdempotencyKey = UuidString`).
- *
- * The tenant slug is folded into every seed so two demo tenants in the same
- * database never collide on `Device.activationCode`, which is globally unique.
- */
+/** Deterministic UUIDv5-shaped id from the tenant slug plus `seed`, so re-runs upsert. */
 function makeUuidFactory(slug: string) {
   return function uuidFrom(seed: string): string {
     const bytes = createHash('sha1')
@@ -91,11 +50,7 @@ function makeUuidFactory(slug: string) {
   };
 }
 
-/**
- * Seeded PRNG (mulberry32). The sale mix must be identical on every run or the
- * idempotency keys would name different sales each time and a second run would
- * double the demo's revenue.
- */
+/** Seeded PRNG (mulberry32) so the sale mix, and its idempotency keys, repeat exactly. */
 function makeRandom(slug: string): () => number {
   let state = createHash('sha1').update(slug).digest().readUInt32LE(0);
   return function random(): number {
@@ -220,14 +175,7 @@ const EXTRA_CATEGORIES = [
   { name: 'Pendapatan Lain', type: 'INFLOW' as const },
 ] as const;
 
-/**
- * ADR-024 throughout: every material is BOUGHT in one unit and STOCKED in
- * another, which is the realistic case and the one the demo should show. The
- * `unitCost` below is only the opening estimate — the first purchase's
- * latest-cost write-back replaces it with `lineTotal / (purchaseQuantity ×
- * conversionFactor)`, and the purchase lines further down are priced so that
- * recomputed figure lands exactly on these numbers.
- */
+/** Bought in one unit, stocked in another (ADR-024). Purchases below reproduce these unit costs. */
 const MATERIALS = [
   { key: 'kopi', name: 'Biji Kopi Arabika', unit: 'gram', purchaseUnit: 'kg', conversionFactor: '1000', unitCost: '180.000000', lowStockThreshold: '500' },
   { key: 'susu', name: 'Susu UHT Full Cream', unit: 'ml', purchaseUnit: 'liter', conversionFactor: '1000', unitCost: '18.000000', lowStockThreshold: '5000' },
@@ -244,12 +192,7 @@ const MATERIALS = [
 
 type MaterialKey = (typeof MATERIALS)[number]['key'];
 
-/**
- * Every product carries a recipe on purpose. `SalesService` rejects a
- * recipeless product outright (ADR-013, `RecipeIncompleteException`), so a
- * product without one would sit on the demo menu and fail the moment a
- * prospect tried to ring it up.
- */
+/** Every product has a recipe: a recipeless product cannot be sold (ADR-013). */
 const PRODUCTS: ReadonlyArray<{
   key: string;
   name: string;
@@ -290,12 +233,7 @@ const SUPPLIERS = [
   { key: 'kemasanJaya', name: 'UD Kemasan Jaya', contact: '0857-5555-6666' },
 ] as const;
 
-/**
- * Restock history. Line prices are chosen so the latest-cost write-back
- * (ADR-024, `lineTotal / (purchaseQuantity × conversionFactor)`) reproduces
- * each material's `unitCost` above exactly — e.g. 5 kg for Rp900.000 over
- * 5 × 1000 gram is Rp180/gram. Change one side and the demo's HPP moves.
- */
+/** Line prices reproduce each `unitCost` exactly under the latest-cost write-back. */
 interface PurchasePlan {
   key: string;
   supplier: (typeof SUPPLIERS)[number]['key'];
@@ -319,14 +257,7 @@ interface PurchasePlan {
   };
 }
 
-/**
- * The shelf-stable half: bought once, in bulk, before the sales window opens.
- *
- * Line prices reproduce each material's `unitCost` exactly under the
- * latest-cost write-back (ADR-024, `lineTotal / (purchaseQuantity ×
- * conversionFactor)`) — 4 kg for Rp720.000 over 4 × 1000 gram is Rp180/gram.
- * Change one side and the demo's HPP moves.
- */
+/** Shelf-stable materials: bought once, in bulk, before the sales window. */
 const BULK_PURCHASES: ReadonlyArray<PurchasePlan> = [
   { key: 'P1', supplier: 'kopiNusantara', branch: null, daysAgo: 45, paymentStatus: 'PAID', account: 'bca',
     note: 'Restock bahan kopi & bubuk (pusat)', items: [
@@ -347,16 +278,7 @@ const BULK_PURCHASES: ReadonlyArray<PurchasePlan> = [
       { material: 'keju', purchaseQuantity: '12', lineTotal: '324000.00' } ] },
 ];
 
-/**
- * The perishable half, bought WEEKLY across the sales window rather than once
- * up front.
- *
- * This is not decoration. With a single opening restock the simulated stock
- * only ever falls, so the last days of the window run dry and the demo's sale
- * rate decays — the dashboard's default "hari ini" view then lands on the
- * thinnest day of the whole dataset. A weekly cycle keeps the rate flat to the
- * final day, and is also how a coffee shop actually buys milk and ice.
- */
+/** Perishables: restocked weekly so the sale rate stays flat to the last day. */
 const WEEKLY_RESTOCK_DAYS = [42, 35, 28, 21, 14, 7] as const;
 const WEEKLY_RESTOCK_ITEMS = [
   { material: 'susu', purchaseQuantity: '20', lineTotal: '360000.00' },
@@ -387,22 +309,8 @@ const PURCHASES: ReadonlyArray<PurchasePlan> = [
 ];
 
 /**
- * Manual operating costs and other income — the non-sale half of the P&L.
- *
- * Two rules this list learned the hard way, both invisible until the daily
- * chart was actually drawn (the dashboard plots `income` and `netProfit` on ONE
- * shared Y axis, so a single outlier flattens every other day to nothing):
- *
- *  1. **A cash deposit is not income.** The first version booked "Setoran tunai
- *     kasir ke bank" as a 3.000.000 INFLOW under `Penjualan`. That is a
- *     transfer between two Accounts, and the sales behind it had ALREADY
- *     written their own INFLOW entries — so it double-counted revenue and put a
- *     9x spike on one day of a chart whose median day is ~390.000. This product
- *     has no transfer concept, so the entry must simply not exist.
- *  2. **Monthly costs land on different days.** Payroll and rent booked to the
- *     same date produced one -5.279.035 day against days of ~+300.000. Rent at
- *     the start of the month and payroll in two fortnightly runs is both more
- *     readable and closer to how a café actually pays.
+ * Manual costs and other income. No cash-deposit "income" (it double-counts
+ * sales), and rent and payroll on different days (one outlier flattens the chart).
  */
 const MANUAL_ENTRIES = [
   { key: 'sewa', category: 'Sewa Tempat', type: 'OUTFLOW' as const, amount: '2000000.00', daysAgo: 31, account: 'bca' as const, branch: 'dago' as const, note: 'Sewa tempat cabang Dago' },
@@ -415,21 +323,8 @@ const MANUAL_ENTRIES = [
 ];
 
 /**
- * Reconciliation fixtures on the Bank BCA account, covering every
- * `TransactionStatus` and giving `POST /matching/propose` one candidate of each
- * `MatchType`. Every amount stays near the daily trading scale on purpose, so a
- * reconciliation fixture cannot distort the income chart:
- *   BT1 vs `listrik`               — same amount, same day        -> EXACT
- *   BT2A + BT2B vs `internet`      — sum to the entry's amount     -> AGGREGATION
- *   BT3 vs `sewaEvent`             — same amount, 2 days apart     -> FUZZY
- *   BT4  — 1.400.000 with 600.000 pre-allocated to `konsinyasi`    -> PARTIALLY_ALLOCATED
- *   BT5  — 2.000.000 fully pre-allocated to `sewa`                 -> MATCHED
- *   BT6  — seeded PENDING_REVIEW with no candidate this session    -> shows that
- *          proposed candidates are not persisted
- *   BT7  — nothing nearby                                          -> UNRESOLVED
- *
- * `status` is left to `sync_transaction_status` for BT4/BT5: inserting the
- * Allocation row directly fires the same trigger the real API path fires.
+ * Reconciliation fixtures: every TransactionStatus and one candidate per
+ * MatchType (see prisma/README.md). Statuses come from the real trigger.
  */
 const BANK_TXNS: ReadonlyArray<{
   key: string;
@@ -454,15 +349,7 @@ const BANK_TXNS: ReadonlyArray<{
 // ---------------------------------------------------------------------------
 
 /** Unclamped — the only caller that needs a future date is the pending leave request. */
-/**
- * The business day in this product is **Asia/Jakarta**, not UTC — ADR-018, and
- * `report.schema.ts` pins every report range to `z.literal('Asia/Jakarta')`.
- *
- * So trading hours have to be generated as WIB wall-clock times and converted
- * back to instants. The first version of this seed set them with
- * `setUTCHours(8..20)`, which put the demo's opening hours on screen as
- * 15:00-03:00 WIB and split each day's takings across two report days.
- */
+/** Builds instants from WIB wall-clock times (ADR-018); UTC hours split days across reports. */
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 const OPEN_HOUR_WIB = 8;
 const CLOSE_HOUR_WIB = 21;
@@ -490,15 +377,7 @@ function atOffsetDays(now: Date, daysAgo: number, hour = 10, minute = 0): Date {
   return d;
 }
 
-/**
- * `DEMO_VOLUME` scales the restock quantities and the daily sale count TOGETHER
- * — they are two halves of one number and must never move apart, or the demo
- * runs out of stock partway through its own history.
- *
- * Every literal quantity and price above is a whole number of purchase units,
- * so an integer multiple stays exact (no floating-point drift into the
- * `Decimal(18,4)` / `Decimal(18,2)` columns).
- */
+/** `DEMO_VOLUME` scales restocks and daily sales together; all literals stay whole units. */
 function scaleQuantity(value: string, volume: number): string {
   return String(Number(value) * volume);
 }
@@ -887,14 +766,7 @@ async function seedTenant(args: SeedTenantArgs): Promise<void> {
     }
   }
 
-  // --- Sales ---------------------------------------------------------------
-  //
-  // The mix is planned in memory FIRST, against the quantities the purchases
-  // above bring in — not against the database's live `currentStock`. That is
-  // what keeps a re-run idempotent: reading live stock would produce a
-  // different (already-depleted) plan on the second run, so a sale skipped the
-  // first time would be created the second under a fresh key, and the demo's
-  // revenue would climb every time someone re-ran the seed.
+  // Sales: planned against literal purchase quantities, not live stock, so re-runs are idempotent.
   const conversionByKey = new Map<MaterialKey, number>(
     MATERIALS.map((m) => [m.key, Number(m.conversionFactor)]),
   );
@@ -918,12 +790,7 @@ async function seedTenant(args: SeedTenantArgs): Promise<void> {
     MATERIALS.map((m) => [m.key, 0]),
   );
 
-  // An ABSOLUTE safety stock, deliberately not a share of cumulative purchases.
-  // The share version rose with every restock, so each new delivery raised the
-  // floor as fast as it raised the ceiling and the later weeks starved. Keyed
-  // off `lowStockThreshold` — the column that already means "do not go below
-  // this" — at 60%, so the busiest materials finish just under it and the
-  // low-stock warning has something real to show.
+  // Absolute safety stock (60% of lowStockThreshold), not a share of purchases.
   const safetyStock = new Map<MaterialKey, number>(
     MATERIALS.map((m) => [m.key, Number(m.lowStockThreshold) * 0.6]),
   );
@@ -1051,9 +918,7 @@ async function seedTenant(args: SeedTenantArgs): Promise<void> {
   }
 
   for (const [index, sale] of plannedSales.entries()) {
-    // No `role` argument on purpose: the 3-day backdate limit and the
-    // price-override ban are KASIR rules (TASK-087, DEBT-009), and this seed is
-    // writing history on the Owner's behalf, not ringing up a till.
+    // No `role`: backdate and price-override limits are KASIR rules.
     await salesService.create(
       {
         branchId: branchByKey.get(sale.branchKey)!.id,
@@ -1141,16 +1006,7 @@ async function seedTenant(args: SeedTenantArgs): Promise<void> {
     });
   }
 
-  // --- Opening stock for the current month ---------------------------------
-  //
-  // Written directly rather than through `OpeningStockService.upsert`: that
-  // method applies the DELTA between the declaration and live stock as an
-  // `OPENING` StockMovement, which is right when an Owner counts the shelf but
-  // wrong here — the figure below is DERIVED from the movements this seed just
-  // created, so pushing it back through the service would double-count it.
-  // The WIB month, not the UTC one: between 17:00 and 24:00 UTC on the last day
-  // of a month the two disagree, and every report period in this product is
-  // Asia/Jakarta (ADR-018).
+  // Opening stock, written directly (the service would double-count the derived figure), WIB month.
   const wibNow = new Date(now.getTime() + WIB_OFFSET_MS);
   const periodStart = new Date(
     Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), 1),

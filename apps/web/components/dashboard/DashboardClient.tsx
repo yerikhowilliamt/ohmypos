@@ -54,14 +54,7 @@ function toDateString(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/**
- * The chart's range: `TREND_WINDOW_DAYS` calendar days ending today, inclusive.
- *
- * Exported so the invariant that actually matters can be asserted — the window
- * must never collapse to a single day, whatever the date. That is the whole
- * point of ERR-051, and it cannot be checked by rendering: Recharts needs a
- * measured container that jsdom does not provide.
- */
+/** Trend window: `TREND_WINDOW_DAYS` days ending today, never a single day (ERR-051). */
 export function trendWindowRange(now: Date): {
   startDate: string;
   endDate: string;
@@ -105,17 +98,7 @@ export function DashboardClient() {
     () => ({ startDate: monthStart, endDate: today }),
     [monthStart, today],
   );
-  /**
-   * The trend chart runs on a ROLLING window, not on `monthRange` — see
-   * ERR-051. A calendar-month range holds a single day on the 1st of every
-   * month, and a one-point line has no segment to draw, so the panel called
-   * "Tren" showed no trend at all for that whole day. Thirty days always has a
-   * shape, on any date, and early in a month the tail of the previous month is
-   * the useful comparison rather than noise.
-   *
-   * The month-to-date figure above the chart is unaffected: it comes from
-   * `profitLoss.totalIncome`, which this dashboard already fetches.
-   */
+  /** Rolling trend window, not month-to-date, so the chart has a shape on the 1st (ERR-051). */
   const trendRange = React.useMemo(() => trendWindowRange(new Date()), []);
 
   const { data: profitLoss, isLoading: isProfitLossLoading } =

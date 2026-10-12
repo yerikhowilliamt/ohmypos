@@ -9,11 +9,7 @@ import type {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LeaveRequestAlreadyReviewedException } from './leave-requests.exceptions';
 
-/**
- * Cuti / leave requests (Phase 12, ADR-021). Creation and self-listing are open
- * to any authenticated role; approve/reject/list-all are OWNER-only, enforced
- * by RoleGuard on the controller.
- */
+/** Leave requests (cuti). Approve/reject/list-all are OWNER-only (ADR-021). */
 @Injectable()
 export class LeaveRequestsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -64,10 +60,7 @@ export class LeaveRequestsService {
     const where: Prisma.LeaveRequestWhereInput = {
       ...(status ? { status } : {}),
       ...(userId ? { userId } : {}),
-      // Overlap, not containment: a request is "in" the window when it starts
-      // on or before the window ends AND ends on or after the window begins.
-      // Leave running 28 Feb -> 3 Mar therefore appears in both months, which a
-      // gte/lte on startDate alone would silently drop from March.
+      // Overlap, not containment, so leave spanning two months shows in both.
       ...(overlapsTo ? { startDate: { lte: new Date(overlapsTo) } } : {}),
       ...(overlapsFrom ? { endDate: { gte: new Date(overlapsFrom) } } : {}),
     };

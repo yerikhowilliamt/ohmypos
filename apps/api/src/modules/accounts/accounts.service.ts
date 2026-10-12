@@ -7,10 +7,6 @@ import type {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
 
-/**
- * Ported from Kasync. The `userId` scoping parameter present on every Kasync
- * method is gone — OhMyPos is single-business (ADR-011, ERD §7 porting note 1).
- */
 @Injectable()
 export class AccountsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -29,11 +25,7 @@ export class AccountsService {
     return this.prisma.account.findMany({ orderBy: { name: 'asc' } });
   }
 
-  /**
-   * POS payment-method list. `select` — not a mapper — is what keeps
-   * `openingBalance` off the wire, so a widened role on the route below cannot
-   * accidentally leak Kas Awal to a cashier.
-   */
+  /** POS payment methods. `select` keeps `openingBalance` (Kas Awal) off the wire. */
   async findPaymentMethods(): Promise<PaymentMethodResponse[]> {
     return this.prisma.account.findMany({
       select: { id: true, name: true, type: true },

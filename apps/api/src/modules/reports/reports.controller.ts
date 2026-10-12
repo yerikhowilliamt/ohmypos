@@ -1,21 +1,3 @@
-/**
- * OhMyPos — Reports controller, Dashboard 3 (PRD §5.4, System Design §5/§6.6,
- * ADR-011, Playbook §8).
- *
- * OWNER ONLY, on all six endpoints. System Design §5 gives ADMIN master-data
- * and reconciliation routes only, and §6.6 states outright that the reports
- * screen is OWNER-only in v1. Widening this is a documentation change first
- * (AGENTS.md), not a decorator edit.
- *
- * NO BranchScopeGuard — deliberate, not an omission. RoleGuard rejects KASIR
- * before branch scoping could ever apply, and `branchId` here is an optional
- * FILTER over historical data, not an attribution on a write. Same reasoning as
- * GET /supplier-purchases/:id and GET /sales/:id.
- *
- * `@Roles('OWNER')` is repeated on every handler rather than relying on a class
- * default, so `grep -rn "@Roles" src/modules/reports/` is a complete access
- * inventory (repo convention — sales.controller.ts:39).
- */
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -26,6 +8,10 @@ import {
 } from './reports.dto';
 import { ReportsService } from './reports.service';
 
+/**
+ * Dashboard 3 reports, `OWNER` only. No `BranchScopeGuard`: `branchId` is a
+ * read filter, not a write attribution.
+ */
 @Controller('reports')
 @UseGuards(RoleGuard)
 export class ReportsController {

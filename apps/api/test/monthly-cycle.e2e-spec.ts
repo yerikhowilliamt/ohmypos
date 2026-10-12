@@ -27,32 +27,9 @@ import { Prisma } from '../src/generated/prisma/client';
 import { resetDatabase } from './reset-database';
 
 /**
- * OhMyPos — the PRD §9 success criterion, as an executable test.
- *
- * "At least one full monthly cycle (opening stock -> sales -> purchases ->
- * closing stock) runs end-to-end without manual data correction."
- *
- * TWO RULES FOR ANYONE EDITING THIS FILE:
- *
- * 1. Every cycle ACTION goes through HTTP. Prisma appears only in beforeAll
- *    (master-data fixtures) and in assertions (reading state back). A stage
- *    stitched together with prisma.sale.create proves nothing about the product.
- *
- * 2. Every expected figure is a hand-computed literal, derived independently
- *    from the PRD/ADR definitions — never by calling the code under test. The
- *    arithmetic is written out in docs/plannings/2026-08-21-phase-14-verification-hardening.md
- *    section 4.3.
- *
- * Month is 2026-07 because CreateSaleSchema rejects a future soldAt
- * (sale.schema.ts:47) and "today" is well into 2026-08. Do not "modernise"
- * these dates.
- *
- * Stage 8's numbers assume Phase 14 Gate 1 has landed (ADR-023 — inventory
- * period boundaries resolve in Asia/Jakarta, delegating to common/period.ts,
- * the same as every report). Before that fix, this stage fails on the July
- * 31 23:30 WIB sale (S6): reports place it in July, inventory places it in
- * August. That failure IS the finding the plan's §2.1 documents — it is not
- * a bug in this test.
+ * PRD §9's success criterion as a test: one full monthly cycle with no manual
+ * correction. Rules: every cycle action goes through HTTP, and every expected
+ * figure is a hand-computed literal. See test/README.md before editing.
  */
 jest.setTimeout(120_000);
 
@@ -1073,14 +1050,8 @@ describe('Monthly financial cycle (e2e) — PRD §9', () => {
   // ──────────────────────────────────────────────────────────────────────
   describe('Stage 10 — no manual correction attestation', () => {
     it('completed the cycle with every mutation routed through HTTP', () => {
-      // 1 (opening stock) + 3 (purchases) + 2 (expenses) + 6 (sales)
-      // + 2 (settlements T1, T2) + 2 (CSV import x2) + 4 (allocations) = 20.
-      //
-      // This is a cheap tripwire, not a proof: its only job is to fail loudly
-      // the first time someone "fixes" a stage with a Prisma call instead of
-      // an HTTP request. Failed probes (T3's 409, the 5th allocation's 400)
-      // and Stage 9's master-data edit are intentionally excluded — they are
-      // not cycle actions PRD §9 is describing.
+      // Tripwire, not proof: fails when a stage is "fixed" with Prisma instead of HTTP.
+      // 1 opening + 3 purchases + 2 expenses + 6 sales + 2 settlements + 2 imports + 4 allocations = 20.
       const EXPECTED_HTTP_MUTATIONS = 20;
       expect(httpMutationCount).toBe(EXPECTED_HTTP_MUTATIONS);
     });

@@ -25,32 +25,22 @@ export interface PdfTextItem {
   str: string;
 }
 
-/**
- * A 5 MB PDF can still hold thousands of pages, and parsing runs synchronously
- * in the request thread. Real statements are single-digit page counts.
- */
+/** Parsing is synchronous in the request thread; real statements are a few pages. */
 const MAX_PAGES = 100;
 
 /** `%PDF-` — the file signature every PDF starts with. */
 const PDF_MAGIC = '%PDF-';
 
-/**
- * Content-based PDF detection. The multipart mimetype is client-supplied and
- * routinely wrong (browsers send `application/octet-stream` for both .csv and
- * .pdf), so the file signature is the only dependable signal.
- */
+/** Detects a PDF by file signature; the client-supplied mimetype is unreliable. */
 export function isPdfBuffer(buffer: Buffer): boolean {
   return buffer.subarray(0, PDF_MAGIC.length).toString('latin1') === PDF_MAGIC;
 }
 
 /**
- * Extracts positioned text runs, one array per page.
+ * Extracts positioned text runs, one array per page, decrypting with
+ * `options.password` when given.
  *
- * Positions are kept rather than flattened to strings because bank statements
- * are tables: the reliable way to read one is to slice by column x-range, not
- * to regex a line whose columns were joined by a heuristic.
- *
- * Uses `pdfjs-dist` (legacy/node build) and supports optional password decryption.
+ * @throws BadRequestException for a non-PDF, locked, corrupt or oversized file.
  */
 export async function extractPdfPages(
   fileBuffer: Buffer,

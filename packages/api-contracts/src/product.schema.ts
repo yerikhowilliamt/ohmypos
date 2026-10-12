@@ -1,9 +1,3 @@
-/**
- * Product schemas (ERD §3, ADR-005, ADR-010, ADR-013).
- *
- * Product has no stored HPP or stock fields. HPP is computed live from recipe items,
- * and makeable quantity is derived on read queries (ADR-013).
- */
 import { z } from 'zod';
 import {
   MoneyString,
@@ -15,13 +9,7 @@ import {
 export const CreateProductSchema = z.object({
   name: z.string().trim().min(1).max(120),
   sellPrice: MoneyString,
-  /**
-   * Waste/susut allowance for this product, 0–100 percent (ADR-024).
-   *
-   * An HPP allowance ONLY: it is applied after the recipe sum and never changes
-   * how much stock a sale deducts. Defaults to '0', so a product created by a
-   * client that predates this field behaves exactly as before.
-   */
+  /** Waste allowance, 0–100%. Affects HPP only, never stock (ADR-024). Defaults to 0. */
   wastePercent: WastePercentString.default('0'),
   isActive: z.boolean().default(true),
 });
@@ -43,15 +31,7 @@ export const ProductResponseSchema = z.object({
 });
 export type ProductResponse = z.infer<typeof ProductResponseSchema>;
 
-/**
- * Recipe fan-out for a product, exposed on read.
- *
- * `makeableQuantity` above is computed per product in isolation, so two products
- * sharing a raw material each report a maximum that is not jointly satisfiable.
- * The POS needs the fan-out to subtract what the rest of the cart already claims
- * before it can show an honest number (ADR-013 — advisory only; the authoritative
- * check is the row-locked sufficiency test at sale time, ADR-007).
- */
+/** Recipe fan-out so the POS can compute cart-aware makeable quantities (advisory, ADR-013). */
 export const ProductRecipeItemSchema = z.object({
   rawMaterialId: UuidString,
   quantityUsed: QuantityString,
@@ -59,11 +39,7 @@ export const ProductRecipeItemSchema = z.object({
 export type ProductRecipeItem = z.infer<typeof ProductRecipeItemSchema>;
 
 export const ProductWithHppResponseSchema = ProductResponseSchema.extend({
-  /**
-   * The recipe sum BEFORE the waste allowance. Returned alongside `hpp` so the
-   * UI can show the uplift instead of a single number the user cannot check
-   * against the recipe lines (ADR-024).
-   */
+  /** Recipe sum before waste, so the UI can show the uplift (ADR-024). */
   baseHpp: MoneyString.nullable(),
   /** baseHpp × (1 + wastePercent/100), rounded once, HALF_UP (ADR-005). */
   hpp: MoneyString.nullable(),

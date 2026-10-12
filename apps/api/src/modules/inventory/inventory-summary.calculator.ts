@@ -1,31 +1,3 @@
-/**
- * OhMyPos — Inventory Summary arithmetic (PRD §5.6, ADR-004, ADR-008,
- * Phase 6 plan §2.1, §4.1).
- *
- * Pure — no Prisma client, no Nest DI, no database. This file is the entire
- * arithmetic of Dashboard 5, kept out of the service so the identity below can
- * be hammered by unit tests with no database at all.
- *
- * The identity every row must satisfy:
- *
- *   closing = opening + in − out
- *           ≡ Σ signed(movement) over every movement dated before periodEnd
- *
- * where opening = carryForward (everything strictly before periodStart)
- *                 + this period's OPENING movements.
- *
- * Bucketing is by DIRECTION, not by referenceType (plan §4.1). In v1 the two
- * are provably equal — PURCHASE is the only other IN writer, SALE the only OUT
- * writer, ADJUSTMENT has no writer — but they diverge the moment an ADJUSTMENT
- * writer appears, and under referenceType bucketing that adjustment would fall
- * into NO bucket and silently break the identity. Under direction bucketing it
- * lands in `in` or `out` and the identity survives.
- *
- * No rounding happens anywhere in this file, deliberately. Every input is
- * already Decimal(18,4) and Decimal addition of 4dp values is exact; a
- * toDecimalPlaces call here is the one thing that could make the identity fail
- * by a hair, which is the hardest kind of failure to notice.
- */
 import type { StockStatus } from '@ohmypos/api-contracts';
 import { Prisma } from '../../generated/prisma/client';
 import { resolveStockStatus } from './stock-status';
@@ -62,18 +34,10 @@ export interface InventorySummaryEntry {
 }
 
 function zero(): Prisma.Decimal {
-  // A fresh instance per call: Prisma.Decimal is immutable, but sharing one
-  // module-level constant across two maps invites an accidental mutation in
-  // any future edit that stops being immutable.
   return new Prisma.Decimal(0);
 }
 
-/**
- * Nets a bucket list into one signed total per raw material: IN adds, OUT
- * subtracts. Exported because the opening-stock flow needs the identical
- * netting for its carry-forward, and two copies of it is two places to get the
- * sign wrong.
- */
+/** Nets buckets into one signed total per raw material: IN adds, OUT subtracts. */
 export function sumSignedByMaterial(
   buckets: SignedBucket[],
 ): Map<string, Prisma.Decimal> {
@@ -92,6 +56,12 @@ export function sumSignedByMaterial(
   return totals;
 }
 
+/**
+ * Builds one summary row per material satisfying
+ * `closing = opening + in − out`.
+ *
+ * Buckets by direction, not referenceType, and never rounds; see `README.md`.
+ */
 export function assembleInventorySummary(
   materials: SummaryMaterial[],
   prior: SignedBucket[],

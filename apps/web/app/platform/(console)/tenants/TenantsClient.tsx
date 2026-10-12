@@ -29,15 +29,7 @@ import {
 
 const DEFAULT_LIMIT = 25;
 
-/**
- * ADR-025 — the tenant list, and the only place a tenant is created.
- *
- * Creation is one form rather than a wizard because it is one transaction
- * (ADR-025 Decision 7): the tenant, its profile, its system refs and its first
- * OWNER all land together or not at all. A two-step flow would let an operator
- * produce a tenant nobody can log into, which is precisely what that decision
- * exists to prevent.
- */
+/** Tenant list and creation. One form, because creation is one transaction (ADR-025 Decision 7). */
 export function TenantsClient() {
   const [page, setPage] = React.useState(1);
   const [limit, setLimit] = React.useState(DEFAULT_LIMIT);

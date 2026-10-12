@@ -79,15 +79,7 @@ const DEFAULT_VALUES: CreateSupplierPurchase = {
   items: [],
 };
 
-/**
- * Cosmetic running total only — the server computes `totalAmount` from the
- * items and a client-sent total would be a money-correctness hole (the schema
- * deliberately has no `totalAmount` field).
- *
- * Since ADR-024 the user enters the line TOTAL directly, so this no longer
- * multiplies anything: the estimate is simply the sum of what was typed, which
- * is exactly what the server will store.
- */
+/** Display-only running total: the sum of typed line totals (the server computes the real one). */
 function computePurchaseTotal(items: { lineTotal?: string }[]): string {
   const total = items.reduce((sum, item) => {
     if (!item.lineTotal || !DECIMAL_INPUT.test(item.lineTotal)) return sum;
@@ -105,12 +97,7 @@ interface LinePreview {
   stockDelta: string;
 }
 
-/**
- * Mirrors the server's `normalizePurchaseLine` (ADR-024) purely to SHOW the
- * user what their nota converts to before they submit. The stored figures are
- * always the server's — this preview exists so "2 liter for Rp45.000" is
- * visibly "2.000 ml at Rp22,50/ml" at entry time, not a surprise afterwards.
- */
+/** Preview of the server's conversion, e.g. "2 liter = 2.000 ml at Rp22,50/ml" (ADR-024). */
 function computeLinePreview(
   material: RawMaterialResponse | undefined,
   purchaseQuantity: string | undefined,
@@ -137,8 +124,7 @@ function computeLinePreview(
       UNIT_COST_SCALE,
     );
     if (derived) {
-      // Trailing zeros trimmed: Rp22,50/ml reads better than Rp22,500000/ml,
-      // and the six stored decimals are the server's business, not the user's.
+      // Trailing zeros trimmed for display.
       unitCost = `${formatCurrency(formatFixed(derived, UNIT_COST_SCALE))}/${material.unit}`;
     }
   }
@@ -207,9 +193,7 @@ export function PurchaseEntryFormDialog({
     }
   }, [open, reset]);
 
-  // Clearing accountId when switching to UNPAID mirrors the schema's own
-  // superRefine (accountId forbidden when UNPAID) — kept in sync so a stale
-  // value never survives a toggle back to PAID → UNPAID → submit.
+  // UNPAID forbids accountId (schema superRefine), so clear it on toggle.
   React.useEffect(() => {
     if (!isPaid) setValue('accountId', undefined);
   }, [isPaid, setValue]);

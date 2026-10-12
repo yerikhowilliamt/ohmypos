@@ -1,11 +1,3 @@
-/**
- * OhMyPos — product response mapper (ADR-005, ADR-013, ERD §3).
- *
- * Attaches computed `hpp`, `hasRecipe`, `margin`, and derived `makeableQuantity`
- * to Product entities. Ensures all Decimal values are formatted to strings with
- * explicit scale via `.toFixed(scale)` to prevent implicit Prisma.Decimal.toJSON()
- * scale truncation (§9.3).
- */
 import { Prisma } from '../../generated/prisma/client';
 import { calculateBaseHpp, calculateHpp } from './hpp.calculator';
 import type {
@@ -24,8 +16,7 @@ export function toProductWithHppResponse(
     quantityUsed: ri.quantityUsed,
     unitCost: ri.rawMaterial.unitCost,
   }));
-  // Both figures come from the same lines, so the uplift the UI shows is always
-  // exactly hpp − baseHpp (ADR-024).
+  // Same lines feed both, so the UI uplift is exactly hpp − baseHpp (ADR-024).
   const baseHpp = calculateBaseHpp(lines);
   const hpp = calculateHpp(lines, product.wastePercent);
   const hasRecipe = product.recipeItems.length > 0;
@@ -37,8 +28,7 @@ export function toProductWithHppResponse(
     wastePercent: product.wastePercent.toFixed(2),
     isActive: product.isActive,
     photoUrl: product.photoUrl ?? null,
-    // baseHpp is rounded for display only; the unrounded value is what fed the
-    // waste multiplication inside calculateHpp.
+    // Rounded for display only; calculateHpp uses the unrounded value.
     baseHpp: baseHpp
       ? baseHpp.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP).toFixed(2)
       : null,
@@ -48,9 +38,7 @@ export function toProductWithHppResponse(
     makeableQuantity: hasRecipe
       ? computeMakeableQuantity(product.recipeItems)
       : null,
-    // Fan-out for the POS's cart-aware makeable quantity (ADR-013). Comes from
-    // the `recipeItems` already eagerly included for the HPP calculation above —
-    // no extra query, no N+1.
+    // For the POS cart's makeable quantity; reuses the eager-loaded rows.
     recipeItems: product.recipeItems.map((ri) => ({
       rawMaterialId: ri.rawMaterialId,
       quantityUsed: ri.quantityUsed.toFixed(4),
@@ -85,15 +73,12 @@ export function toRecipeEnvelope(
         unit: ri.rawMaterial.unit,
         quantityUsed: ri.quantityUsed.toFixed(4),
         unitCost: ri.rawMaterial.unitCost.toFixed(6),
-        // Display only — never summed to produce HPP (§9.7a).
+        // Display only; never summed into HPP.
         lineCost: ri.quantityUsed
           .times(ri.rawMaterial.unitCost)
           .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
           .toFixed(2),
       })),
-      // Pre-waste subtotal, the product's waste, then the final HPP — so the
-      // per-line `lineCost` values visibly add up to `baseHpp`, and the uplift
-      // to `hpp` is shown rather than silently folded in (ADR-024).
       baseHpp: productResponse.baseHpp,
       wastePercent: productResponse.wastePercent,
       hpp: productResponse.hpp,

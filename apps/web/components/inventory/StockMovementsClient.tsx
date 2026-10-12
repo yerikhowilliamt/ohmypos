@@ -80,11 +80,7 @@ export function StockMovementsClient() {
   const rawMaterials = useRawMaterials();
   const branches = useBranches();
 
-  // Page 1 is claimed at KEYSTROKE time, not when the debounced value lands: a
-  // new keyword usually yields a shorter result set, and page 7 of the old one
-  // is past the end of the new one — an out-of-range page renders as "nothing
-  // found". Doing it here rather than in an effect on the debounced value also
-  // avoids one wasted request with the new keyword and the old page number.
+  // Reset to page 1 on keystroke, before the debounce, so a stale page is never requested.
   const handleSearchChange = React.useCallback((value: string) => {
     setSearchInput(value);
     setPage(1);

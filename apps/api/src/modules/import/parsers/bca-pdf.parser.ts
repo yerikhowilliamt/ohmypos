@@ -7,17 +7,7 @@ import {
 } from '../interfaces/bank-parser.interface';
 import { extractPdfPages, PdfTextItem } from './pdf-text.util';
 
-/**
- * Column x-ranges of the BCA "Laporan Mutasi Rekening" table, in PDF points.
- * Verified against a 7-page, 63-transaction August statement: every row
- * extracted, and the parsed CR/DB totals reconcile exactly with the statement's
- * own `MUTASI CR` / `MUTASI DB` summary block.
- *
- * BCA's grid differs from Mandiri's in three ways that shape the code below:
- * there is no row-number column to key rows off, the direction lives in a
- * one-word `DB` marker rather than a sign on the amount, and the date cell
- * carries no year.
- */
+/** Column x-ranges in PDF points. Re-derive against a real sample before changing (see README). */
 const COLUMN = {
   date: (x: number) => x >= 40 && x < 85,
   /** The transaction-type line, e.g. `TRSF E-BANKING DB`. Always one line. */
@@ -30,29 +20,10 @@ const COLUMN = {
   flag: (x: number) => x >= 440 && x < 460,
 };
 
-/**
- * How far below its date marker the *last* row on a page may reach.
- *
- * Unlike Mandiri's fixed-pitch grid, a BCA row is as tall as its detail text —
- * one line for `BIAYA ADM`, five for a GoPay top-up — so a row claims
- * everything down to the next date marker, with no cap: the next marker is the
- * true boundary, and clamping short of it truncates tall rows. Only the last
- * row on a page has no marker beneath it, and 60pt comfortably clears the
- * tallest observed row (48.5pt).
- */
+/** Max height of the last row on a page, which has no next marker (tallest observed: 48.5pt). */
 const MAX_ROW_HEIGHT = 60;
 
-/**
- * Labels of the closing totals block that follows the last row of the final
- * page. Its amounts are right-aligned into the CBG column and its transaction
- * counts into the MUTASI column, so a last row that swallowed it would gain a
- * junk branch code — or, on an amount-less row, an invented amount.
- *
- * `MAX_ROW_HEIGHT` alone does not keep it out: the block sits ~68pt below the
- * marker of a three-line last row but only ~44pt below a single-line one, and
- * a fee or interest row at the foot of a statement is routinely single-line.
- * Matching the block explicitly makes the floor independent of row height.
- */
+/** Closing totals block labels; the last row must never absorb this block. */
 const SUMMARY_LABELS = new Set([
   'SALDO AWAL',
   'MUTASI CR',
@@ -63,16 +34,10 @@ const SUMMARY_LABELS = new Set([
 /** The carry-over footer on every page but the last. */
 const CONTINUATION_PATTERN = /^Bersambung ke halaman/i;
 
-/**
- * Smallest x at which a `SALDO AWAL` cell belongs to the totals block rather
- * than to a real opening-balance row, whose label sits in the KETERANGAN column.
- */
+/** A `SALDO AWAL` at or right of this x is the totals block, not the opening-balance row. */
 const SUMMARY_LABEL_MIN_X = 190;
 
-/**
- * The y below which a page carries only trailing furniture, or null when the
- * page has none. Rows never reach past it, whatever `MAX_ROW_HEIGHT` allows.
- */
+/** The y below which a page holds only trailing furniture, or null if none. */
 function pageTrailerY(
   items: PdfTextItem[],
   lastMarkerY: number,
@@ -135,11 +100,8 @@ export interface BcaPdfRow {
 }
 
 /**
- * Reads `PERIODE : AGUSTUS 2026` off a page header.
- *
- * The label and its value are separated by a colon cell, so the value is found
- * by scanning right along the label's baseline rather than by x-range — the
- * header block is right-aligned and shifts with the account number's width.
+ * Reads `PERIODE : AGUSTUS 2026` off a page header. The value is found along
+ * the label's baseline, because the header's x-position varies.
  */
 export function extractBcaPeriod(items: PdfTextItem[]): BcaPeriod | null {
   const label = items.find((item) => item.str.toUpperCase() === 'PERIODE');
@@ -163,14 +125,8 @@ export function extractBcaPeriod(items: PdfTextItem[]): BcaPeriod | null {
 }
 
 /**
- * Groups a page's text runs into rows, keyed off the `DD/MM` cell in the date
- * column. A row owns everything from its own baseline down to the next date
- * marker, which is what makes variable-height rows work: the detail lines hang
- * below the marker, so a midpoint rule would cut a tall row in half.
- *
- * Page furniture falls out on position alone, with no blocklist: the header
- * sits above the first marker, and the footer and closing summary block sit
- * below the floor the last row is clamped to.
+ * Groups a page's text runs into rows keyed off the `DD/MM` date marker. Each
+ * row owns everything from its marker down to the next one.
  */
 export function extractBcaRows(items: PdfTextItem[]): BcaPdfRow[] {
   const markers = items
@@ -225,15 +181,9 @@ function parseAmount(raw: string): Decimal | null {
 }
 
 /**
- * `13/08` plus the statement period → midnight UTC, or null if the row is not a
- * real calendar day or does not belong to the statement.
- *
- * A statement occasionally carries a row from the tail of the previous month
- * across a year boundary (a December row on a January statement), so that one
- * case rolls the year back. Any other month mismatch is a row this parser
- * cannot date confidently, and an undatable row is dropped rather than guessed
- * at — a missing row surfaces as an unreconciled gap, a misdated one silently
- * lands in the wrong period.
+ * `13/08` plus the statement period → midnight UTC, or null if the row cannot
+ * be dated confidently. Only a December row on a January statement rolls the
+ * year back.
  */
 function parseDate(raw: string, period: BcaPeriod): Date | null {
   const match = DATE_PATTERN.exec(raw);
@@ -258,13 +208,7 @@ function parseDate(raw: string, period: BcaPeriod): Date | null {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-/**
- * Turns extracted rows into transactions. Malformed rows are skipped rather
- * than guessed at — the same posture as the CSV parsers and `MandiriPdfParser`.
- *
- * The `SALDO AWAL` opening-balance row needs no special case: it carries no
- * `MUTASI` amount, so it falls out with every other amount-less row.
- */
+/** Turns extracted rows into transactions, skipping any malformed row. */
 export function parseBcaRows(
   rows: BcaPdfRow[],
   period: BcaPeriod,
@@ -281,17 +225,13 @@ export function parseBcaRows(
     const money = parseAmount(row.mutasi);
     if (!money) continue;
 
-    // Direction is carried by a marker column, not by a sign: `DB` is an
-    // outflow and an empty cell is an inflow. Anything else means the column
-    // was misread, so the row is dropped rather than defaulted to inflow.
+    // `DB` = outflow, empty = inflow; anything else is a misread, so drop the row.
     const flag = row.flag.toUpperCase().trim();
     if (flag !== '' && flag !== 'DB') continue;
     const type =
       flag === 'DB' ? TransactionType.OUTFLOW : TransactionType.INFLOW;
 
-    // `keterangan` names the transaction type, `detail` carries the
-    // counterparty and reference; `cbg` is the originating branch code, kept
-    // because it is the only thing distinguishing some same-day fee rows.
+    // `cbg` is kept: it is the only thing distinguishing some same-day fee rows.
     const description = [row.keterangan, row.detail, row.cbg]
       .filter((part): part is string => Boolean(part && part.trim() !== ''))
       .join(' ')
@@ -302,9 +242,7 @@ export function parseBcaRows(
 
     const amount = money.toFixed(2);
 
-    // Counted duplicates keep byte-identical rows distinct without letting a
-    // re-import of an overlapping statement collide, exactly as in
-    // `MandiriPdfParser`. Nothing page-relative goes into the hash.
+    // Occurrence count keeps identical rows distinct; nothing page-relative is hashed.
     const baseSignature = `${txnDate.toISOString()}_${description}_${amount}_${type}`;
     const count = signatureCounts.get(baseSignature) ?? 0;
     signatureCounts.set(baseSignature, count + 1);
@@ -319,8 +257,6 @@ export function parseBcaRows(
       amount,
       type,
       description,
-      // Reference numbers live inside the detail text with no column of their
-      // own, so there is nothing dependable to key on.
       externalRef: null,
       dedupHash,
     });
@@ -329,11 +265,7 @@ export function parseBcaRows(
   return parsed;
 }
 
-/**
- * Parses a BCA "Laporan Mutasi Rekening" e-Statement PDF (PRD §5.7, ADR-022).
- *
- * Supports password-protected statements via `options.password`.
- */
+/** Parses a BCA "Laporan Mutasi Rekening" e-statement PDF (ADR-026). */
 export class BcaPdfParser implements BankParser {
   async parse(
     fileBuffer: Buffer,
@@ -341,9 +273,7 @@ export class BcaPdfParser implements BankParser {
   ): Promise<ParsedTransaction[]> {
     const pages = await extractPdfPages(fileBuffer, options);
 
-    // Every page repeats the header, but the first one that yields a period is
-    // enough — and without a year no row can be dated, so there is nothing to
-    // salvage from a statement whose header is missing or unrecognised.
+    // Without the header's year no row can be dated.
     let period: BcaPeriod | null = null;
     for (const page of pages) {
       period = extractBcaPeriod(page);

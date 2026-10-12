@@ -18,18 +18,8 @@ interface PosOrderSheetProps {
 }
 
 /**
- * DESIGN.md §13.2 POS Behaviour by Breakpoint, mobile (<768px): the Order Panel becomes a bottom sheet,
- * collapsed by default to a slim bar showing item count and Total payment plus
- * a "View Order" affordance. Tapping the bar expands the full panel content,
- * scrollable inside the sheet.
- *
- * The sheet renders the *same* `CartPanel` instance the wider layouts render,
- * passed as `children` — there is deliberately no mobile copy of the panel to
- * drift out of sync.
- *
- * The collapsed bar is not rendered when the cart is empty: §27's empty state
- * belongs in the panel, and a bar reading "0 item" would occupy the bottom of
- * every screen for no purpose.
+ * Mobile order panel as a bottom sheet (DESIGN.md §13.2), wrapping the same
+ * `CartPanel` instance. The collapsed bar is hidden when the cart is empty.
  */
 export function PosOrderSheet({
   itemCount,

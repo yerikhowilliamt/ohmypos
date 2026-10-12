@@ -8,43 +8,24 @@ import {
 } from './primitives';
 import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
 
-/**
- * OhMyPos — Sale contracts (ERD §3, System Design §6.1, PRD §5.2, ADR-005, ADR-015).
- */
 export const SaleItemInputSchema = z.object({
   productId: UuidString,
-  // Strictly positive: a zero-quantity line writes a no-op StockMovement and a
-  // zero lineTotal (mirrors SupplierPurchaseItemInputSchema).
+  // Strictly positive.
   quantity: QuantityString.refine(
     (v) => Number(v) > 0,
     'Harus lebih besar dari 0',
   ),
-  /**
-   * Per-line price override — PRD §5.2's mechanism for "discounts or negotiated
-   * prices", and the ONLY discount mechanism in v1 (ADR-015, DEBT-004). Omitted
-   * means charge Product.sellPrice as of this moment.
-   */
+  /** Per-line price override, the only discount mechanism in v1 (ADR-015). Omitted = `sellPrice`. */
   unitPrice: MoneyString.optional(),
 });
 export type SaleItemInput = z.infer<typeof SaleItemInputSchema>;
 
-/**
- * Deliberately NO duplicate-productId check, unlike CreateSupplierPurchaseSchema's
- * duplicate-rawMaterialId refinement. The same product may legitimately appear
- * twice at two different prices — one at the menu price, one discounted — and
- * that is exactly what the per-line override is for. The stock fan-out
- * aggregation (sale-stock.calculator.ts) is what keeps the lock set unambiguous
- * here, so the constraint that Phase 4 needed is unnecessary in this direction.
- */
+/** The same product may appear twice (e.g. at two prices); there is no duplicate check. */
 export const CreateSaleSchema = z
   .object({
-    /**
-     * REQUIRED, NOT nullable — unlike SupplierPurchase.branchId. There is no such
-     * thing as a central sale: a sale happens at an outlet (ADR-004). The seeded
-     * system location (`Branch.isSystem`) is rejected server-side (ADR-014).
-     */
+    /** Required: there is no central sale (ADR-004). */
     branchId: UuidString,
-    /** The payment method used — Account, per ERD §3 and System Design §6.1. */
+    /** The payment account. */
     accountId: UuidString,
     soldAt: DateTimeString.refine((v) => {
       const d = new Date(v).getTime();
@@ -53,18 +34,10 @@ export const CreateSaleSchema = z
       const minDate = new Date('2024-01-01T00:00:00.000Z').getTime();
       return d <= nowWithTolerance && d >= minDate;
     }, 'soldAt cannot be in the future or before 2024'),
-    /**
-     * Bounded at 50 lines. Every line adds round trips inside a transaction that
-     * holds row locks (ADR-016), and the bound is what keeps the lock-hold window
-     * and the transaction timeout predictable.
-     */
+    /** At most 50 lines, to bound the lock-holding transaction (ADR-016). */
     items: z.array(SaleItemInputSchema).min(1).max(50),
     idempotencyKey: IdempotencyKey.optional(),
-    // NOTE: no `userId` — it comes from the JWT (RoleGuard/@ReqUser), never the
-    // body: a client-supplied cashier id is a forgeable audit trail. No
-    // `totalAmount`, no `hppAtSale` — the server computes both; a client-supplied
-    // total is a money-correctness hole and a client-supplied HPP is a
-    // margin-reporting hole.
+    // No userId, totalAmount or hppAtSale: the server derives all three.
   })
   .superRefine((dto, ctx) => {
     // Number.MAX_SAFE_INTEGER = 9_007_199_254_740_991 (~9 * 10^15), safe in JS numbers
@@ -140,13 +113,8 @@ export const SaleResponseSchema = z.object({
 export type SaleResponse = z.infer<typeof SaleResponseSchema>;
 
 /**
- * The 409 body thrown by `InsufficientStockException` (Playbook §6).
- *
- * Shortfalls are per RAW MATERIAL, not per sale line — one short material can be
- * reached through several products (ADR-015 decision 3 aggregates the fan-out the
- * same way). A client maps them back to cart lines through the products'
- * `recipeItems`. Parse with `safeParse`: a 409 may also be `InactiveProduct` or
- * `RecipeIncomplete`, which carry no `details`.
+ * The 409 body of `InsufficientStockException`. Shortfalls are per raw material,
+ * not per cart line. Use `safeParse`: other 409s carry no `details`.
  */
 export const StockShortfallSchema = z.object({
   rawMaterialId: UuidString,
@@ -170,11 +138,7 @@ export const SaleSortBySchema = z.enum(['soldAt', 'totalAmount', 'createdAt']);
 export type SaleSortBy = z.infer<typeof SaleSortBySchema>;
 
 export const SaleQuerySchema = PaginationQuerySchema.extend({
-  /**
-   * Free-text search over transaction id, branch name, cashier name and account
-   * name — exactly the columns the toolbar used to filter client-side, which
-   * only ever saw the page on screen (DEBT-059).
-   */
+  /** Searches transaction id, branch, cashier and account names (DEBT-059). */
   search: z.string().trim().optional(),
   branchId: UuidString.optional(),
   accountId: UuidString.optional(),

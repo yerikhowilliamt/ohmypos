@@ -1,6 +1,3 @@
-/**
- * OhMyPos — SupplierPurchases controller (ERD §3, System Design §6.2, Playbook §8).
- */
 import {
   Body,
   Controller,
@@ -28,13 +25,7 @@ export class SupplierPurchasesController {
     private readonly supplierPurchasesService: SupplierPurchasesService,
   ) {}
 
-  /**
-   * Central-purchase policy (PRD §8.4, plan §6.6b):
-   * - ADMIN / OWNER bypass BranchScopeGuard and may create central purchases (branchId: null)
-   *   or branch-scoped purchases.
-   * - KASIR is checked by BranchScopeGuard: null, undefined, or other branch IDs fail closed
-   *   with 403 Forbidden. Kasir can only record incidental purchases for their own assigned branch.
-   */
+  /** KASIR may record purchases for their own branch only; central (null) is ADMIN/OWNER. */
   @Post()
   @UseGuards(BranchScopeGuard)
   @BranchScoped('body.branchId')
@@ -52,13 +43,7 @@ export class SupplierPurchasesController {
     return this.supplierPurchasesService.findAll(query);
   }
 
-  /**
-   * GET /supplier-purchases/:id is role-restricted to OWNER and ADMIN (plan §6.6a).
-   * A detail route carries params.id (the purchase ID), not a branchId.
-   * BranchScopeGuard cannot inspect the branch without an extra DB lookup.
-   * KASIR lists their branch purchases via GET /supplier-purchases?branchId=<own>,
-   * which includes full line item details.
-   */
+  /** OWNER/ADMIN only: an id route cannot be branch-scoped without a lookup. */
   @Get(':id')
   @UseGuards(RoleGuard)
   @Roles('OWNER', 'ADMIN')

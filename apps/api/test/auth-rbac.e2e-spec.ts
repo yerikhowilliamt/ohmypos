@@ -9,15 +9,7 @@ import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-t
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { tenantFixture } from './tenant-fixture';
 
-/**
- * RoleGuard, BranchScopeGuard and the JWT lifecycle are all in Playbook §10's
- * "must have thorough tests" tier — they are the only thing standing between a
- * cashier and another branch's money.
- *
- * Every assertion here goes through real HTTP with real cookies. A unit test of
- * the guard classes would pass even if they were never wired to a controller,
- * which is precisely the failure mode worth catching.
- */
+/** Guards and the JWT lifecycle, through real HTTP and cookies (a unit test would miss unwired guards). */
 describe('Auth & role-based access control (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -108,20 +100,13 @@ describe('Auth & role-based access control (e2e)', () => {
   async function cleanup() {
     await prisma.allocation.deleteMany({});
     await prisma.bankTransaction.deleteMany({});
-    // Phase 4's purchasing rows must go first. `SupplierPurchase.ledgerEntry`
-    // and `PayableSettlement.ledgerEntry` are `onDelete: Restrict` on purpose
-    // (plan §8.4d — financial history must never vanish because a parent row
-    // was deleted), so the wipe below hits
-    // `supplier_purchases_ledger_entry_id_fkey` on any database that has been
-    // seeded. Order, not scope, is what fixes it.
+    // Purchasing rows first: their ledger FKs are Restrict, so order matters on a seeded DB.
     await prisma.payableSettlement.deleteMany({});
     await prisma.payable.deleteMany({});
     await prisma.supplierPurchaseItem.deleteMany({});
     await prisma.supplierPurchase.deleteMany({});
     await prisma.stockMovement.deleteMany({});
-    // Phase 5's Sale.ledgerEntryId is `onDelete: Restrict` too (plan §9.1) —
-    // saleItem/sale must go before the ledgerEntry wipe below, same reasoning
-    // as the purchasing rows above (ERR-004's lesson, again).
+    // Sales before ledger entries, for the same reason.
     await prisma.saleItem.deleteMany({});
     await prisma.sale.deleteMany({});
     await prisma.ledgerEntry.deleteMany({});
@@ -294,8 +279,7 @@ describe('Auth & role-based access control (e2e)', () => {
     });
 
     it('rejects an ADMIN', async () => {
-      // Managing users is OWNER-only with no exceptions (ADR-011 §5), and
-      // handing out someone else's credential is squarely user management.
+      // User management is OWNER-only (ADR-011).
       await request(app.getHttpServer())
         .patch(`/api/v1/users/${staffId}/password`)
         .set('Cookie', admin.cookies)
@@ -331,7 +315,7 @@ describe('Auth & role-based access control (e2e)', () => {
         .set('Cookie', owner.cookies)
         .send({ newPassword: NEW_PASSWORD })
         .expect(200);
-      // Playbook §9. The response carries a message and nothing else.
+      // The response carries a message and nothing else (Playbook §9).
       expect(JSON.stringify(res.body)).not.toContain(NEW_PASSWORD);
     });
 

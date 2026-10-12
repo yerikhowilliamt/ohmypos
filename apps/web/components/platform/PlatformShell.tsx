@@ -30,22 +30,9 @@ import { getInitials } from '@/components/shell/SidebarAccountCard';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 
 /**
- * ADR-025 — the platform console's shell.
- *
- * **Why this is not `AppShell`.** The plan called for reusing it, and that read
- * well until the two identities were laid side by side. `AppShell` is typed on
- * `UserResponse` and threads `user.role` into `Sidebar` (nav), `Topbar`
- * (breadcrumbs) and `SidebarAccountCard` (avatar, role label); it also carries
- * a dark-mode toggle, nav search, collapsible groups and a `/profile` link. A
- * platform admin has no role, no branch, no photo and no profile page, so
- * reuse would have meant either passing a counterfeit `UserResponse` — which
- * renders an OWNER's tenant nav, links and all — or widening four shared
- * components that every existing tenant route depends on, for a console with
- * three flat destinations. This composes the same `packages/ui` sidebar
- * primitives and the same design tokens instead, so the two shells stay
- * visually identical without the tenant app taking on the risk.
- *
- * No new primitives were added (plan §5, "Pakai ulang packages/ui sepenuhnya").
+ * Platform console shell. Not `AppShell`, which is built around a tenant
+ * `UserResponse` (role, branch, profile); it composes the same `packages/ui`
+ * primitives instead.
  */
 export function PlatformShell({
   admin,

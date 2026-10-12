@@ -15,11 +15,7 @@ interface CartContextValue {
 
 const CartContext = React.createContext<CartContextValue | null>(null);
 
-/**
- * Holds the cart for the POS route only. A context (rather than prop-drilling)
- * keeps product tiles and cart rows free of plumbing — they dispatch and render,
- * nothing else. All the logic lives in the pure reducer.
- */
+/** Cart context for the POS route; logic lives in the pure reducer. */
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = React.useReducer(cartReducer, initialCartState);
   const value = React.useMemo(() => ({ state, dispatch }), [state]);

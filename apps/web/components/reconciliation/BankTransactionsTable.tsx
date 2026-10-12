@@ -38,11 +38,7 @@ interface BankTransactionsTableProps {
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
   pagination: DataTablePagination;
-  /**
-   * Raw (un-debounced) search text and its setter, owned by
-   * ReconciliationClient alongside the page/filter state — and deliberately
-   * never forwarded to the summary query.
-   */
+  /** Raw search text, owned by ReconciliationClient; never sent to the summary. */
   search: string;
   onSearchChange: (value: string) => void;
   /** Whole filtered set for Export — `transactions` is one page (DEBT-048). */

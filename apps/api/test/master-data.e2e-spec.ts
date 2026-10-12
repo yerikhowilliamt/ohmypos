@@ -1,9 +1,3 @@
-/**
- * OhMyPos — Master Data E2E Tests (PRD §5.1, ADR-005, ADR-011, ADR-013, Playbook §10).
- *
- * Auth-aware end-to-end tests verifying RBAC permissions, decimal scale formatting,
- * HPP calculation, makeable quantity, recipe replacement (Option R1), and integrity constraints.
- */
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
@@ -84,17 +78,11 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
   async function cleanup() {
     await prisma.recipeItem.deleteMany({});
-    // Phase 5's SaleItem → Product is `onDelete: Restrict` (plan §9.4 decision
-    // 8) — the ERR-004 fallout, predicted this time. `saleItem`/`sale` must go
-    // before `product.deleteMany({})` below or that wipe hits
-    // `sale_items_product_id_fkey` on any seeded database.
+    // Sales before products: SaleItem → Product is Restrict.
     await prisma.saleItem.deleteMany({});
     await prisma.sale.deleteMany({});
     await prisma.product.deleteMany({});
-    // Phase 4's purchasing rows must go first. `SupplierPurchaseItem` and
-    // `StockMovement` both reference `RawMaterial` with `onDelete: Restrict`
-    // (plan §8.4d), so the raw-material wipe below hits
-    // `supplier_purchase_items_raw_material_id_fkey` on any seeded database.
+    // Purchasing rows before raw materials: their FKs are Restrict.
     await prisma.openingStock.deleteMany({});
     await prisma.payableSettlement.deleteMany({});
     await prisma.payable.deleteMany({});
@@ -426,7 +414,7 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
 
       const putBody = putRes.body as RecipeEnvelopeResponse;
 
-      // Assert literal scale strings (§9.3)
+      // Literal scale strings
       expect(putBody.product.sellPrice).toBe('18000.00');
       expect(putBody.product.hpp).toBe('4530.00');
       expect(putBody.product.margin).toBe('13470.00'); // 18000 - 4530 = 13470.00
@@ -443,7 +431,7 @@ describe('Master Data (RawMaterial / Product / Recipe) (e2e)', () => {
         { rawMaterialId: kopi.id, quantityUsed: '0.0180' },
       ]);
 
-      // Verify GET returns identical envelope (§9.7a)
+      // GET returns the identical envelope
       const getRes = await request(app.getHttpServer())
         .get(`/api/v1/products/${esKopi.id}/recipe`)
         .set('Cookie', kasir.cookies)

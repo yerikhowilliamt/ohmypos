@@ -1,9 +1,3 @@
-/**
- * OhMyPos — HPP calculator unit tests (ADR-005, ADR-013, Playbook §10).
- *
- * Exhaustive unit tests for pure `calculateHpp` arithmetic, decimal precision,
- * rounding rules, and empty recipe handling.
- */
 import { Prisma } from '../../generated/prisma/client';
 import { calculateBaseHpp, calculateHpp } from './hpp.calculator';
 
@@ -23,7 +17,6 @@ describe('calculateHpp', () => {
   });
 
   it('sums multiple recipe items correctly', () => {
-    // Es Kopi Susu recipe fixture (§9.8)
     const items = [
       {
         quantityUsed: new Prisma.Decimal('0.2500'), // Gula
@@ -95,7 +88,7 @@ describe('calculateHpp', () => {
     expect(result?.toFixed(2)).toBe('10000000000.00');
   });
 
-  // ── Product waste allowance (ADR-024) ──────────────────────────────────────
+  // Product waste allowance (ADR-024)
 
   it('leaves HPP byte-identical at 0% waste, the migration default', () => {
     const items = [

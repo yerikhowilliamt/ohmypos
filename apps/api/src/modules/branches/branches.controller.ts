@@ -45,7 +45,7 @@ export class BranchesController {
     return this.branchesService.findOne(id);
   }
 
-  // Declared BEFORE `@Patch(':id')` so the bare `:id` route cannot swallow it.
+  // Must stay above `@Patch(':id')`.
   @Patch(':id/main-store')
   @Roles('OWNER')
   @ApiOperation({ summary: 'Designate a branch as the main store' })

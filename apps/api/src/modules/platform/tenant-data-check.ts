@@ -1,16 +1,3 @@
-/**
- * TASK-131 — "has this tenant been used yet?", as a pure decision.
- *
- * Split out of `PlatformTenantsService` because the counting is trivial and the
- * judgement is not: what provisioning itself creates must NOT count as data, so
- * the interesting part is the set of exclusions, and a set of exclusions is
- * worth testing without a database. See `tenant-data-check.spec.ts`.
- *
- * Provisioning (`PlatformTenantsService.create`) leaves exactly: one Tenant,
- * one BusinessProfile, one system Branch, the two system Categories, and one
- * OWNER. Everything below is therefore counted against a baseline of zero,
- * except `users` (baseline 1) and branches (only non-system ones are counted).
- */
 export interface TenantDataCounts {
   /** Every user in the tenant, the provisioned OWNER included. */
   users: number;
@@ -37,10 +24,7 @@ export interface TenantDataSummary {
   evidence: string[];
 }
 
-/**
- * Ordered most-alarming-first: an operator who reads only the first item
- * should be reading the one that most argues against the change.
- */
+/** [count, label, baseline], ordered most-alarming first. */
 const LABELS: ReadonlyArray<[keyof TenantDataCounts, string, number]> = [
   ['sales', 'penjualan', 0],
   ['ledgerEntries', 'catatan kas', 0],
@@ -56,6 +40,7 @@ const LABELS: ReadonlyArray<[keyof TenantDataCounts, string, number]> = [
   ['users', 'pengguna tambahan', 1],
 ];
 
+/** Decides whether a tenant holds anything beyond what provisioning created. */
 export function summarizeTenantData(
   counts: TenantDataCounts,
 ): TenantDataSummary {

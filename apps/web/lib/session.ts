@@ -4,11 +4,7 @@ import { redirect } from 'next/navigation';
 import { API_BASE_URL } from './api';
 import { isTheme, THEME_COOKIE_NAME, type Theme } from './theme';
 
-/**
- * Server-side session lookup. The proxy only sees whether a cookie exists;
- * this asks the API who the caller actually is, which is the only answer that
- * can be trusted for role gating.
- */
+/** Server-side session lookup via the API (the proxy only sees the cookie). */
 export async function getSession(): Promise<SessionResponse | null> {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
@@ -28,11 +24,7 @@ export async function getSession(): Promise<SessionResponse | null> {
   }
 }
 
-/**
- * Gates a route group by role (System Design §5). This is a UX convenience:
- * the authoritative check is RoleGuard/BranchScopeGuard in apps/api, and this
- * function is never the only thing standing between a user and data.
- */
+/** Gates a route group by role. UX only: the API guards are the authority. */
 export async function requireRole(
   allowed: Array<UserResponse['role']>,
 ): Promise<SessionResponse> {

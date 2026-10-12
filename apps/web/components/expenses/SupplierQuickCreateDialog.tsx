@@ -28,11 +28,7 @@ interface SupplierQuickCreateDialogProps {
   onCreated: (supplier: SupplierResponse) => void;
 }
 
-/**
- * Minimum viable supplier entry for the Purchase Entry form's picker — name
- * and contact only, no edit/delete. Full Supplier CRUD (a Master Data
- * concern, not this screen's) is tracked as tech debt (see Tech_Debt_Log).
- */
+/** Quick supplier create (name, contact) for the purchase form; no edit or delete here. */
 export function SupplierQuickCreateDialog({
   open,
   onOpenChange,

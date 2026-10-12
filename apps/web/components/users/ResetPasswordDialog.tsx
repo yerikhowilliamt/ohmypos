@@ -21,11 +21,7 @@ import { Label } from '@ohmypos/ui/components/label';
 import { PasswordInput } from '@ohmypos/ui/components/password-input';
 import { useResetUserPassword } from '@/hooks/useUsers';
 
-/**
- * TASK-130 — an OWNER setting a staff member's password when they have
- * forgotten it. There is no "current password" field on purpose: the OWNER does
- * not know it, and that is the whole reason this dialog exists.
- */
+/** An OWNER sets a staff member's forgotten password; no current-password field (TASK-130). */
 const FormSchema = ResetUserPasswordSchema.extend({
   confirmPassword: z.string().min(1, 'Konfirmasi kata sandi wajib diisi'),
 }).refine((v) => v.newPassword === v.confirmPassword, {
@@ -58,11 +54,7 @@ export function ResetPasswordDialog({
     defaultValues: { newPassword: '', confirmPassword: '' },
   });
 
-  // No reset-on-open effect: the parent keys this component on the selected
-  // user, so opening the dialog mounts a fresh one with fresh defaults. That
-  // is both simpler and the only way a typed password is guaranteed not to
-  // survive a close (`react-hooks/set-state-in-effect` rejects the effect
-  // version, and it is right to).
+  // No reset effect: the parent keys this dialog on the user, so each opening is a fresh mount.
   const open = Boolean(user);
 
   const onSubmit = async (values: FormValues) => {

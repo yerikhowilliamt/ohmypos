@@ -1,7 +1,4 @@
 /**
- * OhMyPos — unit tests for the purchase conversion + totals calculator
- * (ERD §3, ADR-024).
- *
  * Two rules are under test, and both are the kind a later reader is likely to
  * "harmonise" away:
  *

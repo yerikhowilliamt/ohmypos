@@ -1,6 +1,3 @@
-/**
- * OhMyPos — Sales controller (ERD §3, System Design §6.1, Playbook §8, plan §7.3).
- */
 import {
   Body,
   Controller,
@@ -28,16 +25,7 @@ export class SalesController {
     private readonly metrics: MetricsService,
   ) {}
 
-  /**
-   * `@Roles` lists all three roles explicitly (plan §1 decision 6) — the effect
-   * equals the RoleGuard default, but Playbook §8's rule is that access is
-   * "verified, not assumed", and this makes `grep -rn "@Roles"` a complete
-   * inventory of who can do what.
-   *
-   * `userId` comes from the JWT, never the request body — CreateSaleSchema has
-   * no `userId` field at all, so a client cannot even attempt to attribute a
-   * sale to another cashier (Sale.userId is an audit trail per ADR-011).
-   */
+  /** The cashier is always the JWT subject; the body cannot name one. */
   @Post()
   @UseGuards(BranchScopeGuard, RoleGuard)
   @BranchScoped('body.branchId')
@@ -69,13 +57,7 @@ export class SalesController {
     return this.salesService.findAll(query);
   }
 
-  /**
-   * Role-restricted to OWNER and ADMIN, mirroring GET /supplier-purchases/:id
-   * (Phase 4 §6.6a): a detail route carries a sale id, not a branch id, so
-   * BranchScopeGuard cannot scope it without an extra lookup. A KASIR gets the
-   * full sale from the POST response and from GET /sales?branchId=<own>, so
-   * nothing they need is behind this route.
-   */
+  /** OWNER/ADMIN only: an id route cannot be branch-scoped without a lookup. */
   @Get(':id')
   @UseGuards(RoleGuard)
   @Roles('OWNER', 'ADMIN')
@@ -83,11 +65,7 @@ export class SalesController {
     return this.salesService.findOne(id);
   }
 
-  /**
-   * DEBT-010 — minimal interim void, ADMIN/OWNER only. `userId` comes from the
-   * JWT, same reasoning as `create()`'s cashier attribution: a client-supplied
-   * voider id would be a forgeable audit trail.
-   */
+  /** Voids a recent sale (DEBT-010). The voider is always the JWT subject. */
   @Post(':id/void')
   @UseGuards(RoleGuard)
   @Roles('ADMIN', 'OWNER')

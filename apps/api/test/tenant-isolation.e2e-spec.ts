@@ -14,25 +14,9 @@ import { tenantBoundExtension } from '../src/common/prisma/tenant.extension';
 import { resetDatabase } from './reset-database';
 
 /**
- * ADR-025 Decision 3(c) — the suite the whole multi-tenant conversion rests on.
- *
- * Three layers are supposed to keep tenants apart: the Prisma client extension,
- * the composite foreign keys, and hand-written `tenant_id` predicates in the
- * raw SQL the extension cannot see (`reports.service.ts`, DEBT-064). Only the
- * first two fail loudly on their own. This suite is the only thing standing
- * behind the third, and the only thing that checks all three from the outside.
- *
- * **Every fixture below is deliberately named identically in both tenants.**
- * That is not tidiness — it is half the test. A leak that returns "Cabang
- * Utama" when the other tenant also has a "Cabang Utama" is invisible to an
- * assertion on names, so every assertion here is on IDs. The duplicate names
- * simultaneously prove the eight global uniques really did become composite
- * (plan §1.3): if they had not, the second tenant's fixtures would not insert
- * at all and this suite would fail in `beforeAll`.
- *
- * The one name that is NOT duplicated is the owner's email, because
- * `users.email` stays globally unique by decision (ADR-025 Decision 6) — that
- * is what keeps the login page free of a tenant selector.
+ * Tenant isolation from the outside, across the extension, the composite FKs and
+ * raw SQL. Fixtures share names across tenants on purpose; assertions use ids.
+ * See test/README.md.
  */
 
 const PASSWORD = 'IsoPass123!';
@@ -207,8 +191,7 @@ describe('Tenant isolation (e2e)', () => {
   // --- the fixtures themselves prove the composite uniques -----------------
 
   it('let both tenants hold identically named rows', () => {
-    // If any of the eight uniques from plan §1.3 had stayed global, the second
-    // `buildWorld` would have thrown in `beforeAll` and nothing here would run.
+    // A global unique would have made the second `buildWorld` throw.
     expect(a.tenantId).not.toBe(b.tenantId);
     expect(a.branchId).not.toBe(b.branchId);
     expect(a.productId).not.toBe(b.productId);

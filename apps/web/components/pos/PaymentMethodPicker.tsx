@@ -15,20 +15,8 @@ interface PaymentMethodPickerProps {
 }
 
 /**
- * Payment method = `Account` (System Design §6.1, ERD §3).
- *
- * §24.3 specifies a dropdown. This stays a segmented tile control instead: §26
- * requires the payment path to remain visible, §43 forbids depending on precise
- * pointer positioning, and there are only a handful of `Account` rows, so a
- * dropdown would hide the choice behind an extra tap for no gain. §24.3's
- * placement (directly above the CTA) and visible label are both honoured.
- * Recorded as a deviation in the Phase 3 plan and the Tech Debt Log.
- *
- * Laid out as a fixed 2-column grid rather than a horizontally-scrolling row —
- * every tile is visible without scrolling, and the panel's fixed width bounds
- * the grid naturally. Tiles are deliberately compact (§41.5's 40px floor, not
- * the taller card the row version used) so a handful of accounts don't crowd
- * the summary/CTA below them.
+ * Payment method (= `Account`) as a 2-column tile grid, not the dropdown the
+ * design spec shows, so the choice stays visible (deviation recorded in the Tech Debt Log).
  */
 export function PaymentMethodPicker({
   methods,

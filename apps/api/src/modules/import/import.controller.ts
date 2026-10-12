@@ -62,8 +62,7 @@ export class ImportController {
     if (!format) {
       throw new BadRequestException('Pilih format berkas terlebih dahulu.');
     }
-    // Checked by signature rather than mimetype: a PDF fed to a CSV parser
-    // would otherwise import zero rows and look like an empty statement.
+    // A PDF here would silently import zero rows.
     if (isPdfBuffer(file.buffer)) {
       throw new BadRequestException(
         'File PDF tidak dapat diimpor sebagai CSV. Pilih format PDF.',
@@ -72,12 +71,6 @@ export class ImportController {
     return this.importService.importStatement(accountId, format, file.buffer);
   }
 
-  /**
-   * Kept separate from the CSV route so the existing CSV contract stays
-   * byte-for-byte unchanged and each container can reject the other's files.
-   * Role restrictions are inherited from the controller-level
-   * `RoleGuard`/`Roles` above.
-   */
   @Post('pdf/:accountId')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(
@@ -100,8 +93,6 @@ export class ImportController {
     @Query('format') format: string,
     @Query('password') password: string | undefined,
     @UploadedFile(
-      // The PDF signature is verified downstream in `extractPdfPages`, which
-      // rejects anything that is not a real PDF regardless of declared type.
       new ParseFilePipe({
         validators: [new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 })],
       }),

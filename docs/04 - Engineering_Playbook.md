@@ -134,3 +134,20 @@ Carried over from Kasync: write a new ADR when a decision is hard to reverse, af
 - Frontend: route groups as defined in System Design Section 5, component files colocated with the route unless shared via `packages/ui`.
 - Database: snake_case table/column names (Prisma's default mapping from camelCase models), consistent with Kasync's existing convention.
 - Roles: always `KASIR`, `ADMIN`, `OWNER` in code, docs, and UI copy — do not reintroduce `CASHIER` (the v1-draft ERD's original naming, superseded by ADR-011).
+
+## 19. Code Comments & Module Documentation
+
+Code says *what*; comments say *why*; the module README says *how it fits*. Reference implementation: `apps/api/src/modules/stock-movements/`. Entry points: `apps/api/src/modules/README.md` (catalog of every module; small modules are documented there in full) and `apps/api/src/common/README.md` (guards, tenant isolation, shared infrastructure).
+
+**Allowed in code:**
+- **TSDoc on exported API** (classes, public methods, exported functions, non-obvious interface fields): one-line summary, then contract-level facts only (preconditions, `@throws`, what it never does). No history, no narrative.
+- **Inline "why" comments** (1–2 lines) only where removing the line or changing it looks safe but is not: a lock, a deliberate `null`, a filter column choice. Cite the ADR if one exists.
+- **Tooling directives**: `eslint-disable`, `@ts-expect-error`, `prettier-ignore`. Keep the reason on the same line.
+- **SQL trigger/migration comments**: kept, since migrations are immutable history.
+- **`--` comments inside `$queryRaw` template strings** are part of the query text sent to Postgres, not TypeScript comments. Treat edits to them as code changes.
+
+**Not allowed in code:** file-header essays; phase/task history ("Phase 4 added…", "TASK-070 adds…"); `plan §x.y` references; comments that restate the code; anything longer than a short paragraph.
+
+**Where it goes instead:** `README.md` in the module folder, with these sections: *Overview*, *Public API* (methods + callers), *Invariants* (numbered, the rules whose violation corrupts data silently), domain-specific sections, *Errors*, *Testing*, *History*. Task-level narrative stays in `07 - Task_Log.md`; cross-module decisions stay in ADRs.
+
+**When changing a module:** update its README in the same PR when the change touches an invariant, a public method, a caller, or an error shape.

@@ -1,9 +1,3 @@
-/**
- * OhMyPos — RawMaterials service (ERD §3, ADR-004, ADR-010).
- *
- * Manages raw material master data. `currentStock` is not writable through CRUD;
- * it is altered only via StockMovement under FOR UPDATE (ADR-007).
- */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -18,11 +12,7 @@ import {
   RawMaterialUnitLockedException,
 } from './raw-materials.exceptions';
 
-/**
- * `isBaseUnitLocked` is derived from the movement count, so every read that
- * returns a material has to carry it. Selecting the count is one extra column
- * on the same query — never a second round trip, and never an N+1 in findAll.
- */
+/** `isBaseUnitLocked` comes from the movement count selected on the same query. */
 const WITH_MOVEMENT_COUNT = {
   _count: { select: { stockMovements: true } },
 } as const;
@@ -35,10 +25,6 @@ type RawMaterialWithMovementCount = Prisma.RawMaterialGetPayload<{
 export class RawMaterialsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Serializes Prisma RawMaterial model into RawMaterialResponse with explicit decimal scale
-   * formatting via `.toFixed(scale)` (§9.3).
-   */
   private toResponse(rm: RawMaterialWithMovementCount): RawMaterialResponse {
     return {
       id: rm.id,
@@ -46,8 +32,7 @@ export class RawMaterialsService {
       unit: rm.unit,
       purchaseUnit: rm.purchaseUnit,
       conversionFactor: rm.conversionFactor.toFixed(4),
-      // 6dp, not 2 — a per-unit cost is a rate (ADR-024). The UI rounds it for
-      // display; the wire carries what the arithmetic actually used.
+      // 6dp: a per-unit cost is a rate (ADR-024).
       unitCost: rm.unitCost.toFixed(6),
       currentStock: rm.currentStock.toFixed(4),
       lowStockThreshold: rm.lowStockThreshold.toFixed(4),
@@ -82,11 +67,7 @@ export class RawMaterialsService {
     }
   }
 
-  /**
-   * List all raw materials.
-   * Deliberately not paginated in Phase 3 (§9.7) — master data size is small;
-   * ordered by name ascending.
-   */
+  /** All raw materials by name. Unpaginated: master data is small. */
   async findAll(): Promise<RawMaterialResponse[]> {
     const materials = await this.prisma.rawMaterial.findMany({
       orderBy: { name: 'asc' },
@@ -114,9 +95,7 @@ export class RawMaterialsService {
   ): Promise<RawMaterialResponse> {
     const existing = await this.findOne(id);
 
-    // ADR-024. Only a REAL change is blocked: resubmitting the same unit (which
-    // is what a full-object PATCH from the edit form does on every save) must
-    // keep working, or the form becomes unusable the moment stock exists.
+    // Only a real change is blocked; the edit form resubmits the same unit.
     if (dto.unit !== undefined && dto.unit !== existing.unit) {
       if (existing.isBaseUnitLocked) {
         throw new RawMaterialUnitLockedException(existing.unit);
@@ -129,9 +108,7 @@ export class RawMaterialsService {
         data: {
           ...(dto.name !== undefined && { name: dto.name }),
           ...(dto.unit !== undefined && { unit: dto.unit }),
-          // Packaging IS editable — that is the whole point of splitting it out
-          // from the base unit. Historical purchase lines snapshot their own
-          // copy, so nothing already recorded moves (ADR-024).
+          // Packaging stays editable; purchase lines keep their own snapshot.
           ...(dto.purchaseUnit !== undefined && {
             purchaseUnit: dto.purchaseUnit,
           }),

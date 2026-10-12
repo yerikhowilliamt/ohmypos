@@ -1,8 +1,5 @@
 import Decimal from 'decimal.js';
 
-// Ported verbatim from Kasync — pure domain logic, no database or tenancy
-// coupling, so nothing needed adapting (ERD §7).
-
 export interface BankTransactionInput {
   id: string;
   amount: Decimal;
@@ -56,7 +53,7 @@ export class MatchingEngine {
     const opts = { ...this.defaultOptions, ...options };
     const candidates: MatchCandidate[] = [];
 
-    // Track bank transactions that are definitely matched via exact match to skip them in fuzzy/aggregation
+    // Transactions taken by an exact match are skipped by the later passes.
     const exactMatchedBankTxnIds = new Set<string>();
     const exactMatchedLedgerIds = new Set<string>();
 
@@ -125,12 +122,7 @@ export class MatchingEngine {
 
       if (availableTxns.length < 2) continue;
 
-      // Penyaring aritmetika (TASK-084 opsi B). Sebuah subset berukuran 2..N
-      // hanya bisa berjumlah antara (dua terkecil) dan (N terbesar). Entri di
-      // luar rentang itu TIDAK MUNGKIN cocok, jadi membangun subsetnya adalah
-      // kerja yang pasti terbuang. Inilah yang memangkas sebagian besar biaya
-      // pada data nyata, karena kebanyakan pengeluaran kecil dan kebanyakan
-      // subset besar.
+      // Skip entries outside [sum of two smallest, sum of N largest]: no subset can match.
       const sorted = [...availableTxns].sort((a, b) =>
         a.amount.comparedTo(b.amount),
       );
@@ -221,10 +213,7 @@ export class MatchingEngine {
     maxSize: number,
   ): BankTransactionInput[][] {
     const results: BankTransactionInput[][] = [];
-    // DEF-A17: pemotongan ini TIDAK diam-diam lagi — pemanggilnya melaporkan
-    // `truncated` saat anggaran habis. Batas 20 di sini tetap ada sebagai
-    // pengaman kombinatorik per-entri; kalau kolam kandidat > 20 secara rutin,
-    // itu sinyal untuk menyempitkan jendela tanggal, bukan menaikkan angka ini.
+    // Per-entry cap (DEF-A17): narrow the date window rather than raise it.
     const boundedArr = arr.length > 20 ? arr.slice(0, 20) : arr;
     const n = boundedArr.length;
     const limit = Math.min(maxSize, n);

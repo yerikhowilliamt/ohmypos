@@ -32,14 +32,7 @@ export const LeaveRequestSortBySchema = z.enum([
 ]);
 export type LeaveRequestSortBy = z.infer<typeof LeaveRequestSortBySchema>;
 
-/**
- * `overlapsFrom`/`overlapsTo` are deliberately NOT named `startDate`/`endDate`:
- * a leave request has columns by those names, so same-named query params would
- * read as "requests whose startDate falls in this window" — which is the wrong
- * test. A leave running 28 Feb to 3 Mar belongs to both months, so the filter is
- * an overlap (`startDate <= overlapsTo AND endDate >= overlapsFrom`), not
- * containment. The distinct names make that impossible to misread at a call site.
- */
+/** `overlapsFrom`/`overlapsTo` match by overlap, not containment. */
 export const LeaveRequestListQuerySchema = PaginationQuerySchema.extend({
   status: LeaveRequestStatus.optional(),
   userId: UuidString.optional(),
@@ -47,18 +40,7 @@ export const LeaveRequestListQuerySchema = PaginationQuerySchema.extend({
   overlapsTo: LeaveDate.optional(),
   sortBy: LeaveRequestSortBySchema.optional(),
   sortOrder: SortOrderSchema.optional(),
-  /**
-   * Menaikkan cap 100 milik PaginationQuerySchema, dengan alasan yang sama
-   * persis seperti AttendanceQuerySchema (device.schema.ts): kalender absensi
-   * meminta satu bulan penuh dalam satu halaman, dan cuti adalah overlay di
-   * atas kalender itu — keduanya harus muat di halaman yang sama atau
-   * overlay-nya tidak sejajar dengan barisnya.
-   *
-   * ERR-047: sebelum ini matriks mengirim `limit=500` ke endpoint yang
-   * dibatasi 100, jadi setiap render menghasilkan 400 dan kalender tidak
-   * pernah sekali pun menggambar cuti yang disetujui — tanpa pesan error,
-   * karena sel kosong terlihat sama saja dengan "tidak ada cuti".
-   */
+  /** Up to one month per page, aligned with the attendance calendar (ERR-047). */
   limit: z.coerce.number().int().min(1).max(500).default(50),
 });
 export type LeaveRequestListQuery = z.infer<typeof LeaveRequestListQuerySchema>;

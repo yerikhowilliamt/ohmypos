@@ -21,22 +21,8 @@ import {
 } from '@ohmypos/ui/components/chart';
 
 /**
- * OhMyPos — shared Recharts theme for Dashboard 3 (DESIGN.md §4 Information Density by Screen, §12.2 Signature Flow Indicator: "Charts
- * should be analytical, not decorative" and the Flow Indicator's "visual
- * treatment must remain consistent across screens"). One wrapper per chart
- * shape (bar / line) so every report view themes identically instead of each
- * view hand-rolling its own axis/tooltip/grid styling.
- *
- * Colors are read as CSS custom properties (packages/ui/src/styles/globals.css
- * `@theme` tokens) — Recharts accepts any valid CSS color string for
- * fill/stroke, so these stay in sync with the rest of the design system
- * without hardcoding hex values here.
- *
- * Chart row data is typed as a plain string/number record rather than a
- * caller-supplied generic — Recharts 3's `dataKey` typing (`TypedDataKey`) is
- * a conditional type that can't resolve against an unbound generic type
- * parameter, so keeping the row shape concrete here is what lets `xKey`/`yKey`
- * stay plain `string` instead of needing an `as` cast at every call site.
+ * Shared Recharts wrappers for Dashboard 3, themed from the CSS tokens. Row data
+ * is a concrete record type so `xKey`/`yKey` stay plain strings.
  */
 export type ChartRow = Record<string, string | number>;
 
@@ -150,20 +136,7 @@ export function ReportBarChart({
   );
 }
 
-/**
- * Recharts strokes the SEGMENTS between points, so a one-point series draws
- * nothing at all — and with `dot={false}` there is no marker either, leaving a
- * silently blank panel. That is not the same as "no data", which has its own
- * `<ChartEmptyState/>`: the value is real and simply invisible.
- *
- * The dashboard hits this on the 1st of every month. Its range is
- * "start of month → today" (`DashboardClient.tsx`), which on the 1st is a
- * single day, so every tenant's income chart renders empty for that whole day.
- *
- * Exported for the regression test: the branch is one expression inside JSX,
- * and Recharts needs a measured container that jsdom never gives it, so this is
- * the only layer where the rule can actually be asserted.
- */
+/** Dots for a one-point series, which would otherwise render as an empty panel (ERR-051). */
 export function lineDotFor(pointCount: number): { r: number } | false {
   return pointCount === 1 ? { r: 3 } : false;
 }
@@ -185,8 +158,7 @@ interface ReportLineChartProps {
   tooltipFormatter?: (value: number) => string;
 }
 
-/** Trend line(s) — daily income (PRD §5.4's literal "trend lines"), one or
- * more series sharing the same x-axis. */
+/** Trend line(s) sharing one x-axis. */
 export function ReportLineChart({
   data,
   xKey,

@@ -20,14 +20,7 @@ interface SaleSuccessDialogProps {
   businessName?: string;
 }
 
-/**
- * The receipt summary, rendered from the 201 response.
- *
- * It must come from the POST body and nothing else: `GET /sales/:id` is
- * OWNER/ADMIN-only (sales.controller.ts), so a KASIR cannot refetch the sale they
- * just created. Nothing shown here is recomputed client-side — `totalAmount` is
- * the server's number.
- */
+/** Receipt from the 201 response only: a KASIR cannot `GET /sales/:id`. */
 export function SaleSuccessDialog({
   sale,
   onClose,

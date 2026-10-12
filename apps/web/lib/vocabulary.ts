@@ -76,14 +76,7 @@ export function getFlowIndicatorClasses(
   return 'text-accent-outflow';
 }
 
-/**
- * Sign-based Flow Indicator (DESIGN.md §12.2 Signature Flow Indicator) for report figures that are
- * legitimately negative — grossProfit, netProfit, netCashFlow (ADR-017 §2) —
- * where there is no INFLOW/OUTFLOW literal to key off of, only a signed
- * amount. Same tokens as `getFlowIndicatorClasses`; a separate function so
- * that helper's existing direction-based signature and call sites (Inventory,
- * POS) are untouched.
- */
+/** Sign-based Flow Indicator classes for signed report figures (profit, net cash flow). */
 export function getFlowIndicatorClassesForAmount(
   amount: string | number,
 ): string {

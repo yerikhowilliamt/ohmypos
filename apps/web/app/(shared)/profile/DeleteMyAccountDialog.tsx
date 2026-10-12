@@ -18,11 +18,7 @@ interface DeleteMyAccountDialogProps {
   onConfirm: () => void;
 }
 
-/**
- * Labeled "Hapus" per the user-facing request, but calls
- * `PATCH /auth/deactivate` under the hood — soft-deactivate only, same rule as
- * `apps/web/components/users/DeactivateConfirmDialog.tsx` (ERD §7 note 3).
- */
+/** Labelled "Hapus" but soft-deactivates via `PATCH /auth/deactivate`. */
 export function DeleteMyAccountDialog({
   open,
   onOpenChange,

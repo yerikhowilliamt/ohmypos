@@ -7,15 +7,7 @@ import {
   UuidString,
 } from './primitives';
 
-/**
- * OhMyPos — Dashboard 3 report contracts (PRD §5.4, ADR-005, ADR-008,
- * ADR-017 P&L composition, ADR-018 report period timezone).
- *
- * Dates here are CALENDAR DAYS in Asia/Jakarta, not instants: a report range is
- * a calendar concept and the business runs on WIB (ADR-018). Both ends are
- * INCLUSIVE; the server resolves them to a half-open UTC instant range in
- * `apps/api/src/common/period.ts`.
- */
+/** Report dates are inclusive WIB calendar days (ADR-018). */
 
 /** `YYYY-MM-DD`. Rejects `2026-3-5` and `2026-02-30`. */
 const ReportDate = z.iso.date();
@@ -44,13 +36,7 @@ export const ReportPeriodSchema = z.object({
 });
 export type ReportPeriod = z.infer<typeof ReportPeriodSchema>;
 
-/**
- * P&L — ADR-017. Two views, each internally consistent, neither derived from
- * the other. `netProfit` subtracts COGS (the ADR-005 snapshot) but NOT material
- * purchases; `cash.netCashFlow` subtracts every outflow but no COGS.
- * Subtracting both would count raw material twice — once when bought (ADR-006)
- * and once when sold (ADR-005).
- */
+/** P&L (ADR-017): `netProfit` subtracts COGS, never purchases; `cash` subtracts outflows, never COGS. */
 export const ProfitLossResponseSchema = z.object({
   period: ReportPeriodSchema,
   salesRevenue: MoneyString,
@@ -146,8 +132,7 @@ export const DailyIncomeRowSchema = z.object({
   income: MoneyString,
   /** Σ (SaleItem.hppAtSale × quantity) for sales sold that WIB day. */
   cogs: MoneyString,
-  /** income − cogs − operating expenses that day — same definition as
-   * ProfitLossResponse.netProfit, just per day. Can go negative. */
+  /** income − COGS − operating expenses that day. Can be negative. */
   netProfit: SignedMoneyString,
   entryCount: z.number().int(),
 });
@@ -162,14 +147,7 @@ export const DailyIncomeResponseSchema = z.object({
 });
 export type DailyIncomeResponse = z.infer<typeof DailyIncomeResponseSchema>;
 
-/**
- * Cash Balance — a running total, not a query-time range. `Account.openingBalance`
- * (Kas Awal, centralized, ADR-004/glossary) plus every LedgerEntry INFLOW minus
- * OUTFLOW strictly before `asOfDate`'s exclusive WIB day boundary. No branchId
- * filter: neither Account nor its opening balance carries a branch (ERD §3), and
- * branch-scoping only the ledger side while leaving opening balance unscoped
- * would silently misstate the total — deliberate omission, not an oversight.
- */
+/** Running balance per account before `asOfDate` (WIB). No branch filter by design. */
 export const CashBalanceQuerySchema = z.object({
   /** WIB calendar day, inclusive cutoff. Omitted = today in WIB. */
   asOfDate: ReportDate.optional(),

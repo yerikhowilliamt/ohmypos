@@ -45,11 +45,7 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
-  // ADR-025 Fase 3 — the platform console signs with its own pair, so a
-  // tenant token can never verify against a platform route and vice versa.
-  // Required, not optional: an absent secret would leave PlatformAuthGuard
-  // throwing SERVER_MISCONFIGURED on every call, which is a boot-time
-  // deployment error worth failing on rather than a runtime 401.
+  // Separate platform key pair (ADR-025); required so a missing one fails at boot.
   PLATFORM_JWT_SECRET: z.string().min(32),
   PLATFORM_JWT_REFRESH_SECRET: z.string().min(32),
   DEVICE_COOKIE_SECRET: z.string().min(32),
@@ -75,19 +71,11 @@ const EnvSchema = z.object({
           process.env.NODE_ENV !== 'production'
             ? { target: 'pino-pretty' }
             : undefined,
-        // Never log request/response bodies — they carry financial data (Playbook §9).
+        // Never log bodies: they carry financial data (Playbook §9).
         autoLogging: true,
         redact: ['req.headers.authorization', 'req.headers.cookie'],
         serializers: {
-          // Phase 14 E-5 audit finding: `password` on POST
-          // /import/pdf/:accountId?password=... (import.controller.ts) is a
-          // query-string field, not a header — pino's default `req`
-          // serializer logs the full URL including the query string, so
-          // `redact` above (which only reaches header paths) never touched
-          // it. A locked statement's unlock password was going to the log
-          // in plaintext on every import. Wraps the standard serializer
-          // (rather than replacing it) so headers/remoteAddress/etc. are
-          // still logged exactly as before — only `url` is touched.
+          // Redact the PDF unlock `?password=` from logged URLs (`redact` covers headers only).
           req: pino.stdSerializers.wrapRequestSerializer((req) => {
             const url = new URL(req.raw.url ?? '', 'http://internal');
             if (url.searchParams.has('password')) {
@@ -99,11 +87,7 @@ const EnvSchema = z.object({
         },
       },
     }),
-    // `limit` is env-configurable, defaulting to the unchanged production
-    // value of 100. Phase 14's concurrency e2e suite (B1-B4) legitimately
-    // fires well over 100 requests from one IP inside a 60s window — the
-    // e2e-only .env.test raises THROTTLE_LIMIT so those tests measure lock
-    // contention and pool exhaustion, not this guard.
+    // THROTTLE_LIMIT is raised only in .env.test for the concurrency suite.
     ThrottlerModule.forRoot([
       { ttl: 60000, limit: Number(process.env.THROTTLE_LIMIT ?? 100) },
     ]),
@@ -138,27 +122,19 @@ const EnvSchema = z.object({
 
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    // Registered globally so every endpoint is authenticated by default; an
-    // endpoint opts out only with an explicit @Public() (Playbook §8).
+    // Order matters: this array's order is execution order (see common/README.md).
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    // ADR-025 Decision 8 — before TenantStatusGuard, because that guard's
-    // impersonation exemption is only safe once this one has reduced the token
-    // to GET. Both sit after JwtAuthGuard, which is what puts `user` on the
-    // request; the APP_GUARD array's order is its execution order.
+    // Must precede TenantStatusGuard, whose impersonation exemption relies on it.
     { provide: APP_GUARD, useClass: ImpersonationReadOnlyGuard },
     { provide: APP_GUARD, useClass: TenantStatusGuard },
-    // Registered globally so every endpoint checks @Roles(...) declarations (ADR-011).
     { provide: APP_GUARD, useClass: RoleGuard },
-    // Every request body/query is validated against its Zod schema from
-    // packages/api-contracts before it reaches a service (ADR-010, Playbook §4).
+    // Validates every body/query against its Zod schema (ADR-010).
     { provide: APP_PIPE, useClass: ZodValidationPipe },
   ],
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
-    // TenantScopeMiddleware must open the AsyncLocalStorage scope before any
-    // guard runs; in NestJS middleware always precedes guards, so ordering
-    // against CorrelationIdMiddleware does not matter, only that both run.
+    // Middleware always runs before guards, so the tenant scope is open for JwtAuthGuard.
     consumer
       .apply(TenantScopeMiddleware, CorrelationIdMiddleware)
       .forRoutes('*');

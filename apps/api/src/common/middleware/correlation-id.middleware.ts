@@ -2,12 +2,7 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { NextFunction, Request, Response } from 'express';
 
-/**
- * Ported from Kasync (Playbook §9 — structured logging, correlation IDs).
- * Phase 14 (E-7) adds echoing the id back on the response: previously it was
- * only ever generated/read for the log line, so a caller had no way to quote
- * it back when reporting an error — the log and the caller had no shared key.
- */
+/** Reads or generates `x-correlation-id` and echoes it on the response. */
 @Injectable()
 export class CorrelationIdMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {

@@ -1,14 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
- * ADR-025 Decision 2 — the tenant is resolved on the server from the User
- * record, never sent by the client.
- *
- * The store is deliberately MUTABLE. In NestJS middleware always runs before
- * guards, so `TenantScopeMiddleware` opens the scope and `JwtAuthGuard` fills
- * it in once it has read the user from the database. Re-entering
- * `tenantStorage.run(...)` from the guard would close the scope again the
- * moment the guard returned.
+ * Per-request scope. Mutable on purpose: the middleware opens it and the guard
+ * fills it in later (ADR-025 Decision 2).
  */
 export interface RequestScope {
   tenantId: string | null;
@@ -22,9 +16,9 @@ export function currentTenantId(): string | null {
 }
 
 /**
- * For raw SQL, which the Prisma extension never sees. Throws rather than
- * returning null: an unscoped raw query is the failure mode ADR-025 exists to
- * prevent, and a silent one is worse than a 500.
+ * The current tenant id, for raw SQL.
+ *
+ * @throws Error when no tenant is in scope.
  */
 export function requireTenantId(): string {
   const tenantId = currentTenantId();
@@ -36,14 +30,7 @@ export function requireTenantId(): string {
   return tenantId;
 }
 
-/**
- * Fills in the tenant on a scope the middleware already opened.
- *
- * Used by `JwtAuthGuard` and by the two `@Public()` auth entry points, which
- * identify their user before any guard could have. A no-op outside a request
- * scope: the Prisma extension is the fail-closed layer, and duplicating that
- * check here would only move the error further from where it matters.
- */
+/** Sets the tenant on the open request scope; a no-op outside one. */
 export function adoptTenantScope(tenantId: string): void {
   const scope = tenantStorage.getStore();
   if (scope) {
@@ -55,23 +42,12 @@ export function currentPlatformAdminId(): string | null {
   return tenantStorage.getStore()?.platformAdminId ?? null;
 }
 
-/**
- * Enters a tenant scope for the REST of the current execution context, with no
- * callback to wrap.
- *
- * Scripts only — the seed, `seed-volume`, and `scripts/*`. A request must use
- * the middleware + guard pair instead: `enterWith` has no natural end, which is
- * exactly what makes it wrong for anything concurrent and fine for a script
- * that does one thing and exits.
- */
+/** Enters a tenant scope for the rest of the execution context. Scripts only. */
 export function enterTenantScope(tenantId: string): void {
   tenantStorage.enterWith({ tenantId, platformAdminId: null });
 }
 
-/**
- * Opens a scope for work that runs outside a request — the seed, the bootstrap
- * scripts, and the platform module when it deliberately acts as one tenant.
- */
+/** Runs `fn` inside a tenant scope, for work outside a request. */
 export function runWithTenant<T>(tenantId: string, fn: () => T): T {
   return tenantStorage.run({ tenantId, platformAdminId: null }, fn);
 }

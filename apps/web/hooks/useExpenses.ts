@@ -32,10 +32,7 @@ import type {
 } from '@ohmypos/api-contracts';
 import { apiFetch } from '@/lib/api';
 
-/**
- * Matches `PayablesTab`'s own `DEFAULT_PAGE_SIZE`, so the three tabs of the
- * Pengeluaran screen do not each stop at a different row count.
- */
+/** Same page size as `PayablesTab`. */
 export const DEFAULT_EXPENSES_PAGE_SIZE = 10;
 
 export const EXPENSES_QUERY_KEYS = {
@@ -49,10 +46,7 @@ export const EXPENSES_QUERY_KEYS = {
   payablesSummary: ['payables', 'summary'] as const,
 };
 
-// --- Reference data (categories / accounts / branches) ---
-// None of these has a dedicated hook file yet — the only existing touch point
-// is usePos.ts's narrow `/accounts/payment-methods` projection, which omits
-// openingBalance and isn't reusable for a form that needs the full Account.
+// Reference data (categories, accounts, branches)
 
 export function useCategories() {
   return useQuery({
@@ -122,32 +116,21 @@ export function useBranches() {
   });
 }
 
-// --- General Expenses (manual LedgerEntry, type=OUTFLOW, sourceType=MANUAL) ---
+// General expenses (manual LedgerEntry)
 
 export interface LedgerEntryFilterParams {
   page?: number;
   limit?: number;
   sortBy?: LedgerEntrySortBy;
   sortOrder?: SortOrder;
-  /**
-   * Filter by transaction direction.
-   * - 'OUTFLOW' (default) — Pengeluaran Umum screen behaviour.
-   * - 'INFLOW' — inflow entries only.
-   * - 'ALL' — no type filter; returns both directions (used by dashboard feed).
-   */
+  /** Direction filter: OUTFLOW (default), INFLOW, or ALL (dashboard feed). */
   type?: 'INFLOW' | 'OUTFLOW' | 'ALL';
 }
 
-/**
- * `type=OUTFLOW` is not a parameter: it is what the Pengeluaran Umum screen
- * *is*, not something the operator chose. Everything the operator can change
- * goes through the params object so the on-screen query and the Export loop
- * cannot diverge (see `buildPayableQuery` for the same reasoning).
- */
+/** Builds the query shared by the hook and Export, so both see the same set. */
 function buildLedgerEntryQuery(params: LedgerEntryFilterParams): string {
   const searchParams = new URLSearchParams();
-  // 'ALL' → omit type param so API returns both directions.
-  // Default (type absent or 'OUTFLOW') → OUTFLOW, preserving Pengeluaran Umum screen.
+  // 'ALL' omits the type; otherwise OUTFLOW unless INFLOW is asked for.
   const effectiveType = params.type ?? 'OUTFLOW';
   if (effectiveType !== 'ALL') {
     searchParams.set('type', effectiveType);
@@ -206,7 +189,7 @@ export function useUpdateLedgerEntry() {
   });
 }
 
-// --- Suppliers (read + quick-create only — full CRUD deferred, see Tech Debt Log) ---
+// Suppliers (read and quick-create only)
 
 export function useSuppliers() {
   return useQuery({
@@ -234,7 +217,7 @@ export function useCreateSupplier() {
   });
 }
 
-// --- Supplier Purchases ---
+// Supplier purchases
 
 export interface SupplierPurchaseFilterParams {
   page?: number;
@@ -295,7 +278,7 @@ export function useCreateSupplierPurchase() {
   });
 }
 
-// --- Payables / Settlements ---
+// Payables and settlements
 
 export interface PayableFilterParams {
   supplierId?: string;
@@ -306,11 +289,7 @@ export interface PayableFilterParams {
   sortOrder?: SortOrder;
 }
 
-/**
- * The query key keeps `['payables']` as its prefix so the settlement mutation's
- * `invalidateQueries({ queryKey: EXPENSES_QUERY_KEYS.payables })` still matches
- * every filtered/paged variant — TanStack invalidates by key prefix.
- */
+/** Keyed under `['payables']` so prefix invalidation reaches every variant. */
 function buildPayableQuery(params: PayableFilterParams): string {
   const searchParams = new URLSearchParams();
   if (params.supplierId) searchParams.set('supplierId', params.supplierId);
@@ -322,11 +301,7 @@ function buildPayableQuery(params: PayableFilterParams): string {
   return searchParams.toString();
 }
 
-/**
- * One page, outside React Query — the Export button's `fetchAllPages` loop needs
- * it (DEBT-048). It shares `buildPayableQuery` with the hook so the exported set
- * can never drift from the one on screen.
- */
+/** One page outside React Query, for Export (DEBT-048). */
 export function fetchPayablesPage(params: PayableFilterParams) {
   return apiFetch<{ data: PayableResponse[]; meta: PaginationMeta }>(
     `/payables?${buildPayableQuery(params)}`,

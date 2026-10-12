@@ -1,9 +1,3 @@
-/**
- * OhMyPos — Recipes service (ERD §3, ADR-005, ADR-013).
- *
- * Implements atomic recipe replacement (Option R1) inside a single transaction.
- * Imports products.mapper.ts as a pure file (not a provider) to prevent Nest dependency cycles (§6).
- */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -16,10 +10,7 @@ import { UnknownRawMaterialException } from './recipes.exceptions';
 export class RecipesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Reads a product's recipe, returning the canonical { recipe, product } envelope.
-   * A product with no recipe returns items: [], hpp: null, hasRecipe: false (200 OK, §9.7a).
-   */
+  /** A product's recipe. No recipe returns `items: []`, `hpp: null` with 200. */
   async getRecipe(productId: string): Promise<RecipeEnvelopeResponse> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -33,15 +24,13 @@ export class RecipesService {
     return toRecipeEnvelope(product);
   }
 
-  /**
-   * Atomically replaces a product's recipe items inside a single database transaction.
-   */
+  /** Replaces a product's recipe atomically. */
   async replaceRecipe(
     productId: string,
     dto: ReplaceRecipeDto,
   ): Promise<RecipeEnvelopeResponse> {
     return this.prisma.$transaction(async (tx) => {
-      // ⚠️ Every call inside this transaction callback uses `tx`, never `this.prisma` (§9.5).
+      // Use `tx` only inside this callback.
       const product = await tx.product.findUnique({
         where: { id: productId },
       });

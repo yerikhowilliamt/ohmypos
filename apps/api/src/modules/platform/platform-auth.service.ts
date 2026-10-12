@@ -27,18 +27,14 @@ export interface PlatformTokens {
 const BCRYPT_ROUNDS = 10;
 
 /**
- * ADR-025 Fase 4 — the same dual-token, rotating-refresh, `tokenValidFrom`
- * pattern `AuthService` uses (ADR-011 §3), against `platform_admins` and the
- * platform key pair.
- *
- * Shorter lifetimes than the tenant session on purpose (TASK-125): one session
- * here reaches every tenant in the system.
+ * Platform admin sessions: the same dual-token, rotating-refresh,
+ * `tokenValidFrom` pattern as `AuthService`, on the platform key pair with
+ * shorter lifetimes.
  */
 @Injectable()
 export class PlatformAuthService {
   constructor(
-    // Unscoped throughout: `PlatformAdmin` has no tenant, and platform routes
-    // deliberately run with `scope.tenantId` null.
+    // Unscoped: `PlatformAdmin` has no tenant.
     private readonly prisma: UnscopedPrismaService,
     private readonly jwtService: JwtService,
   ) {}
@@ -50,8 +46,7 @@ export class PlatformAuthService {
       where: { email: dto.email },
     });
 
-    // Same dummy-hash comparison as AuthService.login, so a missing account and
-    // a wrong password take the same time.
+    // Dummy hash so a missing account and a wrong password take the same time.
     const hashToCompare =
       admin?.passwordHash ??
       '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTU1234567890';
@@ -101,8 +96,7 @@ export class PlatformAuthService {
       throw new UnauthorizedException(SESSION_EXPIRED);
     }
 
-    // Rotation, as on the tenant side: the presented token is replaced, so a
-    // stolen copy stops working the moment the real holder refreshes.
+    // Rotate: a stolen copy dies when the real holder refreshes.
     const tokens = await this.generateTokens(admin);
     await this.storeRefreshToken(admin.id, tokens.refreshToken);
 
@@ -111,8 +105,7 @@ export class PlatformAuthService {
 
   async logout(adminId: string): Promise<void> {
     try {
-      // Bumping tokenValidFrom kills the access token too, not just the
-      // refresh token — PlatformAuthGuard checks it on every request.
+      // Bumping tokenValidFrom also invalidates the current access token.
       await this.prisma.platformAdmin.update({
         where: { id: adminId },
         data: { refreshTokenHash: null, tokenValidFrom: new Date() },
@@ -139,14 +132,8 @@ export class PlatformAuthService {
   }
 
   /**
-   * TASK-130 — the exact mirror of `AuthService.changePassword` against
-   * `platform_admins`. The old password stays mandatory: it is what makes a
-   * stolen session insufficient to take the account over.
-   *
-   * A platform admin who has forgotten their password cannot use this, and
-   * nobody sits above them to reset it — that case is
-   * `pnpm --filter api reset:platform-admin-password`, documented in
-   * `docs/runbooks/platform-admin-recovery.md`.
+   * Changes the caller's password and revokes every session. Requires the old
+   * password. For a forgotten one, see `docs/runbooks/platform-admin-recovery.md`.
    */
   async changePassword(
     adminId: string,
@@ -171,15 +158,11 @@ export class PlatformAuthService {
       data: {
         passwordHash: await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS),
         refreshTokenHash: null,
-        // A credential change revokes every existing session (ADR-011 §3).
         tokenValidFrom: new Date(),
       },
     });
 
-    // Worded differently from the tenant version ('Kata sandi berhasil
-    // diperbarui.') because the bumped `tokenValidFrom` also kills the session
-    // making this very call: the caller lands on the login page on their next
-    // request, and this sentence is what keeps that from reading as a failure.
+    // Tells the caller to log in again: this call also revoked their own session.
     return {
       message: 'Kata sandi berhasil diperbarui. Silakan masuk kembali.',
     };
@@ -190,11 +173,7 @@ export class PlatformAuthService {
   ): Promise<PlatformTokens> {
     const payload: PlatformJwtPayload = { sub: admin.id, email: admin.email };
 
-    // The token lifetimes are derived from the cookie max-ages rather than read
-    // from env, so the two cannot drift apart — a cookie that outlives its
-    // token produces a session that looks live and 401s on every call. It also
-    // sidesteps the `${number}d` cast `AuthService` needs, because `expiresIn`
-    // takes a plain number of seconds.
+    // Lifetimes derive from the cookie max-ages so token and cookie cannot drift.
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.getSecret('PLATFORM_JWT_SECRET'),
@@ -224,8 +203,7 @@ export class PlatformAuthService {
   private getSecret(name: string): string {
     const secret = process.env[name];
     if (!secret) {
-      // Naming the variable to an anonymous caller is a leak and is not
-      // something they can act on (see the note in `common/messages.ts`).
+      // Never name the missing variable to the caller.
       throw new UnauthorizedException(SERVER_MISCONFIGURED);
     }
     return secret;
