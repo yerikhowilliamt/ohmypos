@@ -53,12 +53,7 @@ export function CreateUserDialog({
   );
   const { data: currentUser } = useCurrentUser();
   const createMutation = useCreateUser();
-  /**
-   * Set the moment the Owner types in the email field, so a later edit to the
-   * name never overwrites an address they chose themselves. State rather than
-   * a ref because the hint below the field renders off it — a ref flips
-   * silently and the hint would keep claiming the address is automatic.
-   */
+  /** Set once the Owner edits the email, so name changes stop overwriting it. */
   const [emailEdited, setEmailEdited] = React.useState(false);
   const ownerDomain = currentUser?.email ? domainOf(currentUser.email) : null;
 

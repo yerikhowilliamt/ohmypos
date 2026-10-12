@@ -88,13 +88,7 @@ const columns: ColumnDef<SupplierPurchaseResponse>[] = [
   },
 ];
 
-/**
- * The two column ids that exist as backend sort keys
- * (`SupplierPurchaseSortBySchema`). `supplierName`, `branchId` and
- * `paymentStatus` render plain headers: the server cannot order by them, and a
- * sortable header over one page reorders 10 rows while looking like it ordered
- * every purchase — same pattern as `StockMovementsTable`.
- */
+/** Only the backend's sort keys get sortable headers; others would sort one page only. */
 const SORTABLE_COLUMN_IDS: SupplierPurchaseSortBy[] = [
   'purchaseDate',
   'totalAmount',

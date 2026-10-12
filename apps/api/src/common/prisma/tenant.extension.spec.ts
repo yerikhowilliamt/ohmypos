@@ -1,12 +1,3 @@
-/**
- * ADR-025 Fase 2 — the tenant extension's contract, asserted without a database.
- *
- * `applyTenantScope` is the rule itself, called directly, so these tests
- * measure exactly one thing: what the extension does to `args` before Prisma
- * ever sees them. The isolation that matters end-to-end is
- * `test/tenant-isolation.e2e-spec.ts`'s job; this file is the fast guard on the
- * rule itself.
- */
 import { runWithTenant } from './tenant-context';
 import {
   applyTenantScope,

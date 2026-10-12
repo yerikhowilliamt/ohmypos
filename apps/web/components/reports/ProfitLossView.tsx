@@ -45,13 +45,7 @@ const exportColumns: ExportColumn<ProfitLossResponse>[] = [
 interface ProfitLossViewProps {
   data: ProfitLossResponse | undefined;
   isLoading: boolean;
-  /**
-   * The report's own date range, for the export filename (DEBT-025). Without
-   * it the file is named for the day it was exported, so two exports of
-   * different ranges on the same day overwrite each other in Downloads — and
-   * whoever opens the file later has no on-screen context to tell them which
-   * period it covers.
-   */
+  /** The report's date range, for the export filename (DEBT-025). */
   filters: ReportFilters;
 }
 
@@ -83,15 +77,7 @@ function KpiCard({
   );
 }
 
-/**
- * Dashboard 3 — Profit & Loss (PRD §5.4, ADR-017). Two views live on this
- * response and neither is derived from the other: `netProfit` is the margin
- * view (income − COGS − operating expenses, excludes material purchases
- * because those are already inside COGS when sold); the `cash` block is what
- * actually moved through the bank/cash accounts. Both are rendered, labelled
- * separately, so an owner never has to guess which figure answers which
- * question.
- */
+/** P&L with two separately labelled views: margin (`netProfit`) and cash (ADR-017). */
 export function ProfitLossView({
   data,
   isLoading,

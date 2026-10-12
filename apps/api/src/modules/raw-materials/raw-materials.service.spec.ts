@@ -1,14 +1,6 @@
 /**
- * OhMyPos — RawMaterialsService unit tests (ADR-024).
- *
- * The rule under test is the one with real blast radius: the STOCK/RECIPE base
- * unit is immutable once the material has movement history, while the PURCHASE
- * unit and conversion factor stay editable forever. Getting that backwards
- * either freezes packaging changes the business needs, or silently re-scales
- * every stored quantity in the system.
- *
- * Mocked Prisma, same shape as categories.service.spec.ts — this is a rule, not
- * a query, so it does not need a database.
+ * The base unit is immutable once movements exist; purchase unit and conversion
+ * factor stay editable (ADR-024).
  */
 import { Prisma } from '../../generated/prisma/client';
 import { RawMaterialsService } from './raw-materials.service';
@@ -45,11 +37,7 @@ describe('RawMaterialsService', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  /**
-   * `jest.fn()` types its recorded arguments as `any`, so reading them back
-   * without a cast is an eslint `no-unsafe-member-access`. Casting the whole
-   * calls array once, here, keeps the assertions below readable and typed.
-   */
+  /** Typed view of `jest.fn()` call args, which are otherwise `any`. */
   type MaterialWriteArgs = {
     data: {
       purchaseUnit?: string;

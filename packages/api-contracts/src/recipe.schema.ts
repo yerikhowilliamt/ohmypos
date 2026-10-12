@@ -1,9 +1,3 @@
-/**
- * Recipe schemas (ERD §3, ADR-005, ADR-010, ADR-013).
- *
- * Bill of materials for a product. A recipe full-replace update payload validates that
- * quantityUsed is strictly positive and that rawMaterialId values are unique per recipe.
- */
 import { z } from 'zod';
 import {
   MoneyString,
@@ -15,10 +9,7 @@ import { ProductWithHppResponseSchema } from './product.schema';
 
 export const RecipeItemInputSchema = z.object({
   rawMaterialId: UuidString,
-  /**
-   * Strictly positive: a zero-quantity line is meaningless and would break the
-   * makeable-quantity `min` calculation with a divide-by-zero (ADR-013).
-   */
+  /** Strictly positive (makeable quantity divides by it). */
   quantityUsed: QuantityString.refine(
     (v) => Number(v) > 0,
     'Harus lebih besar dari 0',
@@ -27,7 +18,7 @@ export const RecipeItemInputSchema = z.object({
 export type RecipeItemInput = z.infer<typeof RecipeItemInputSchema>;
 
 export const ReplaceRecipeSchema = z.object({
-  /** Empty array is legal and means "clear this product's recipe" (§9.7). */
+  /** An empty array clears the recipe. */
   items: z.array(RecipeItemInputSchema).superRefine((items, ctx) => {
     const seen = new Set<string>();
     for (const [index, item] of items.entries()) {
@@ -53,7 +44,7 @@ export const RecipeItemResponseSchema = z.object({
   unit: z.string(),
   quantityUsed: QuantityString,
   unitCost: UnitCostString,
-  /** Display only — never summed to produce HPP (§9.7a). */
+  /** Display only; never summed into HPP. */
   lineCost: MoneyString,
 });
 export type RecipeItemResponse = z.infer<typeof RecipeItemResponseSchema>;
@@ -61,11 +52,7 @@ export type RecipeItemResponse = z.infer<typeof RecipeItemResponseSchema>;
 export const RecipeResponseSchema = z.object({
   productId: UuidString,
   items: z.array(RecipeItemResponseSchema),
-  /**
-   * Recipe sum BEFORE the product's waste allowance — the figure the item
-   * `lineCost` values add up to. Exposed so the editor can show
-   * subtotal → waste → HPP and the uplift is auditable (ADR-024).
-   */
+  /** Recipe sum before waste (ADR-024). */
   baseHpp: MoneyString.nullable(),
   /** The product's waste allowance, echoed so the editor need not refetch it. */
   wastePercent: MoneyString,

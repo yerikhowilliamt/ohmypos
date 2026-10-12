@@ -1,13 +1,6 @@
 /**
- * OhMyPos — fixed-point decimal helpers for the POS screen.
- *
- * Playbook §5: money and stock quantities are never floating point. Money crosses
- * the wire as `MoneyString` (scale 2) and quantity as `QuantityString` (scale 4),
- * so a scaled-BigInt representation covers everything this screen needs without
- * adding a dependency.
- *
- * A `Fixed` is an exact rational-free value: `units` is the number scaled by
- * 10^`scale`. `{ units: 1250n, scale: 2 }` is 12.50.
+ * Fixed-point decimals for the client, backed by scaled BigInt: `{ units: 1250n, scale: 2 }`
+ * is 12.50. Money and quantities are never floating point (Playbook §5).
  */
 
 export interface Fixed {
@@ -24,12 +17,7 @@ function pow10(n: number): bigint {
   return 10n ** BigInt(n);
 }
 
-/**
- * Parses a decimal string (the wire format) at an explicit scale. Digits beyond
- * `scale` are truncated rather than rounded — the API always sends values already
- * at their declared scale, so extra digits mean a caller passed raw input, and
- * silently rounding it would hide that.
- */
+/** Parses a wire decimal at `scale`; extra digits are truncated, not rounded. */
 export function parseFixed(value: string, scale: number): Fixed {
   const trimmed = value.trim();
   if (!/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
@@ -73,13 +61,7 @@ export function subFixed(a: Fixed, b: Fixed): Fixed {
   return { units: rescale(a, scale).units - rescale(b, scale).units, scale };
 }
 
-/**
- * Exact product. The result's scale is the sum of the operands' scales, so no
- * precision is lost here — rounding is a separate, explicit step via
- * `roundHalfUp`. Keeping them separate is what lets the caller choose
- * round-per-line (sale totals) or round-once (stock fan-out), which ADR-015
- * deliberately makes opposite rules.
- */
+/** Exact product (scales add). Rounding is a separate, explicit `roundHalfUp` step. */
 export function mulFixed(a: Fixed, b: Fixed): Fixed {
   return { units: a.units * b.units, scale: a.scale + b.scale };
 }
@@ -94,19 +76,13 @@ export function roundHalfUp(value: Fixed, scale: number): Fixed {
 
   const quotient = magnitude / divisor;
   const remainder = magnitude % divisor;
-  // `remainder * 2 >= divisor` is exactly "the dropped tail is >= 0.5 ulp",
-  // computed in integers so there is no .005 representation trap.
+  // Integer HALF_UP test: dropped tail >= 0.5 ulp.
   const rounded = remainder * 2n >= divisor ? quotient + 1n : quotient;
 
   return { units: negative ? -rounded : rounded, scale };
 }
 
-/**
- * Integer floor of `a / b`, used for makeable quantity (ADR-013's `floor`).
- * Returns `null` when `b` is zero — a recipe line with `quantityUsed = 0` is
- * rejected by `RecipeItemInputSchema`, so this is a defensive guard, not a
- * reachable branch.
- */
+/** Integer floor of `a / b` (makeable quantity); `null` when `b` is zero. */
 export function divFloorToInt(a: Fixed, b: Fixed): number | null {
   if (b.units === 0n) return null;
 
@@ -119,22 +95,11 @@ export function divFloorToInt(a: Fixed, b: Fixed): number | null {
   return Number(numerator / denominator);
 }
 
-/**
- * Exact division at an explicit result scale, rounded HALF_UP — the client-side
- * mirror of the API's `lineTotal ÷ quantity` normalization (ADR-024). Used only
- * to PREVIEW the derived per-stock-unit cost in the purchase form; the value
- * that is stored is always the one the server derives.
- *
- * Returns `null` when `b` is zero, for the same reason `divFloorToInt` does: a
- * zero divisor is rejected at the contract edge, so reaching it here means the
- * form is mid-typing, not that a cost of Infinity should be rendered.
- */
+/** `a / b` at `scale`, HALF_UP. Preview only (purchase unit cost); `null` when `b` is zero. */
 export function divFixed(a: Fixed, b: Fixed, scale: number): Fixed | null {
   if (b.units === 0n) return null;
 
-  // Scale the numerator up by the target scale (plus one guard digit) BEFORE
-  // dividing, so the integer division keeps the digits the result needs instead
-  // of truncating them away.
+  // Scale up first (plus one guard digit) so integer division keeps the needed digits.
   const common = Math.max(a.scale, b.scale);
   const numerator = rescale(a, common).units * pow10(scale + 1);
   const denominator = rescale(b, common).units;
@@ -144,8 +109,7 @@ export function divFixed(a: Fixed, b: Fixed, scale: number): Fixed | null {
     (numerator < 0n ? -numerator : numerator) /
     (denominator < 0n ? -denominator : denominator);
 
-  // One guard digit was added above; rounding it off is what makes this
-  // HALF_UP rather than truncating.
+  // Rounding off the guard digit makes this HALF_UP.
   return roundHalfUp(
     { units: negative ? -magnitude : magnitude, scale: scale + 1 },
     scale,

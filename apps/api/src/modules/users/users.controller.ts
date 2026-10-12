@@ -22,11 +22,7 @@ import {
   UpdateUserDto,
 } from './users.dto';
 
-/**
- * OWNER-only, with no exceptions and no approval workflow (ADR-011 §5).
- * The guard is applied at controller level so a method added later inherits the
- * restriction rather than silently defaulting to open.
- */
+/** OWNER only, at class level so new routes inherit it (ADR-011). */
 @ApiTags('users')
 @Controller('users')
 @UseGuards(RoleGuard)
@@ -78,10 +74,6 @@ export class UsersController {
     return this.usersService.reactivate(id);
   }
 
-  /**
-   * TASK-130. `@Roles('OWNER')` is not repeated here — it is on the class
-   * above, which is why a route added later inherits it.
-   */
   @Patch(':id/password')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60000, limit: 10 } })

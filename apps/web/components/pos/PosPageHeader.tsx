@@ -10,19 +10,11 @@ import { useTheme } from '@/lib/theme-context';
 interface PosPageHeaderProps {
   query: string;
   onQueryChange: (value: string) => void;
-  /**
-   * OWNER-only branch selector, built by `PosScreen` (which owns the branch
-   * list and selection state) and slotted in here so this component stays
-   * presentational. `undefined` for KASIR, who has no branch to pick.
-   */
+  /** OWNER-only branch selector built by `PosScreen`; `undefined` for KASIR. */
   branchPicker?: React.ReactNode;
 }
 
-/**
- * DESIGN.md §10.4 Page Header (POS variant), §11.2 Product Grid & Cards: page title, the current operating day
- * beneath it as tertiary text, and a first-class search control right-aligned
- * in the same row, above the category row and product grid.
- */
+/** POS page header: title, operating day and search (design.md §10.4). */
 export function PosPageHeader({
   query,
   onQueryChange,

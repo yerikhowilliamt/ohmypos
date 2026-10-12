@@ -11,16 +11,13 @@ import {
   SystemBranchProtectedException,
 } from './branches.exceptions';
 
-/** Ported from Kasync, with the `userId` scoping removed (ERD §7 porting note 1). */
 @Injectable()
 export class BranchesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateBranch) {
     try {
-      // The Owner's first store is the main store, with no switch to tick.
-      // Count and insert share one transaction so two concurrent creates cannot
-      // both read zero; `branches_single_main_store` is the backstop if they do.
+      // The first store becomes the main store; count and insert share one transaction.
       return await this.prisma.$transaction(async (tx) => {
         const mainStoreCount = await tx.branch.count({
           where: { isMainStore: true },
@@ -29,8 +26,7 @@ export class BranchesService {
           data: {
             name: dto.name,
             address: dto.address ?? null,
-            // Never settable from a request: the system row is created only by
-            // `ensureSystemRefs`.
+            // Never from a request: only ensureSystemRefs creates the system row.
             isSystem: false,
             isMainStore: mainStoreCount === 0,
           },
@@ -77,11 +73,7 @@ export class BranchesService {
     });
   }
 
-  /**
-   * Moves the main-store designation. Release and re-assign must be one
-   * transaction: between the two writes `branches_single_main_store` is
-   * satisfied by zero rows, and a crash in between would leave no main store.
-   */
+  /** Moves the main-store flag. Release and reassign must be one transaction. */
   async setMainStore(id: string) {
     const branch = await this.findOne(id);
     if (branch.isSystem) {
@@ -117,12 +109,7 @@ export class BranchesService {
     }
 
     if (branch.isMainStore) {
-      // Checked AFTER the staff guard: the main store is usually the one with
-      // staff on it, and "reassign these people first" is the more actionable
-      // message of the two. Deleting the last store is legitimate (a fresh
-      // install correcting a typo); deleting the main store while others remain
-      // is not — it leaves a business with stores and no main store, and
-      // nothing in the UI explains the missing badge.
+      // After the staff check (more actionable). The main store may go only if it is the last store.
       const otherStores = await this.prisma.branch.count({
         where: { id: { not: id }, isSystem: false },
       });

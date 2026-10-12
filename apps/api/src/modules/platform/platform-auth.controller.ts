@@ -30,15 +30,10 @@ import {
 } from './platform.dto';
 
 /**
- * ADR-025 Fase 4.
+ * Platform admin authentication.
  *
- * `@Public()` is what gets past the globally registered `JwtAuthGuard`, which
- * only understands tenant tokens. It does NOT mean unauthenticated: every route
- * here except login and refresh carries `@UseGuards(PlatformAuthGuard)`.
- *
- * That arrangement fails open if the guard is ever forgotten on a new route —
- * see DEBT-066 and `platform-auth.e2e-spec.ts`, which enumerates the router and
- * requires a 401 from every `/platform/*` path.
+ * `@Public()` only bypasses the tenant `JwtAuthGuard`. Every route except login
+ * and refresh must also carry `@UseGuards(PlatformAuthGuard)` (DEBT-066).
  */
 @ApiTags('platform-auth')
 @Controller('platform/auth')
@@ -48,8 +43,6 @@ export class PlatformAuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  // Same 10/60s as POST /auth/login. This endpoint guards more than any tenant
-  // login does, so it is not the place to be more generous.
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @ApiOperation({ summary: 'Log in as a platform admin' })
   @ApiResponse({
@@ -108,15 +101,7 @@ export class PlatformAuthController {
     return this.platformAuthService.getProfile(adminId);
   }
 
-  /**
-   * TASK-130 — `@Public()` + `PlatformAuthGuard` is the same pair `logout` and
-   * `me` above carry, and both halves are required: `@Public()` gets past the
-   * global tenant `JwtAuthGuard`, and the guard is what actually authenticates
-   * the platform admin. Dropping `@Public()` would make this reject every
-   * platform admin.
-   *
-   * Throttled because a wrong-old-password answer is a guessing oracle.
-   */
+  /** Throttled: a wrong-old-password answer is a guessing oracle. */
   @Public()
   @UseGuards(PlatformAuthGuard)
   @Patch('password')

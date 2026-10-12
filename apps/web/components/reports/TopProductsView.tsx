@@ -135,13 +135,7 @@ const RANK_METRIC_KEY: Record<
   profit: 'grossProfit',
 };
 
-/**
- * Dashboard 3 — Top 10 Best-Selling Products (PRD §5.4). The only report with
- * its own extra filter (rankBy/limit, Phase 7 §6.1 TopProductsQuerySchema) —
- * that's specific to this view, not the shared date/branch bar, so it owns
- * its own `useTopProducts` call rather than receiving data as a prop like the
- * other four views.
- */
+/** Top products; owns its query because of its extra `rankBy`/`limit` filters. */
 export function TopProductsView({ filters, enabled }: TopProductsViewProps) {
   const [rankBy, setRankBy] = React.useState<ProductRankBy>('quantity');
 

@@ -1,14 +1,7 @@
 import { Prisma } from '../../generated/prisma/client';
 import { currentTenantId } from './tenant-context';
 
-/**
- * Thrown when a tenant-scoped model is touched with no tenant in scope.
- *
- * This is a programming error, not a caller error — it means a request reached
- * a service without passing `JwtAuthGuard`, or a script forgot
- * `runWithTenant(...)`. Failing closed is the entire point of the extension:
- * the alternative is a query that quietly reads every tenant's rows.
- */
+/** A tenant-scoped model was touched with no tenant in scope (a programming error). */
 export class TenantContextMissingError extends Error {
   constructor(model: string, operation: string) {
     super(
@@ -18,11 +11,7 @@ export class TenantContextMissingError extends Error {
   }
 }
 
-/**
- * Models with no `tenant_id` column (ADR-025). Everything else is tenant-scoped
- * by default, so a model added later is enforced without anyone remembering to
- * add it here.
- */
+/** Models without `tenant_id`. Every other model is scoped by default. */
 export const PLATFORM_MODELS: ReadonlySet<string> = new Set([
   'Tenant',
   'PlatformAdmin',
@@ -60,11 +49,7 @@ type ScopedArgs = {
   create?: Record<string, unknown>;
 };
 
-/**
- * The nested-write verbs that INSERT rows. `connect`, `set`, `disconnect`,
- * `delete` and `update` are absent on purpose: they address rows that already
- * exist, and those already carry a tenant.
- */
+/** Nested-write verbs that insert rows; the others address existing rows. */
 const NESTED_CREATE_VERBS = [
   'create',
   'createMany',
@@ -84,8 +69,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function stampRows(value: unknown, tenantId: string): unknown {
   if (Array.isArray(value)) {
-    // Re-typed: `Array.isArray` narrows `unknown` to `any[]`, and mapping over
-    // that would launder an `any` back out of this function.
+    // Re-typed so `any[]` from Array.isArray does not leak out.
     const rows: unknown[] = value;
     return rows.map((row) =>
       isPlainObject(row) ? withTenant(row, tenantId) : row,
@@ -95,16 +79,8 @@ function stampRows(value: unknown, tenantId: string): unknown {
 }
 
 /**
- * Stamps the tenant onto NESTED relation writes.
- *
- * Without this, `product.create({ data: { name, recipeItems: { create: [...] }}})`
- * writes the parent with a tenant and the children with the schema's `@default("")`
- * — which fails on `recipe_items_tenant_id_fkey` rather than landing anywhere,
- * but fails at a call site nowhere near the cause.
- *
- * Relations are detected structurally, not from schema metadata: a value is a
- * nested write iff it is a plain object carrying one of the verbs above. No
- * column in this schema is a JSON object, so nothing else can match.
+ * Stamps the tenant onto nested relation creates. A nested write is detected
+ * structurally: a plain object carrying one of `NESTED_CREATE_VERBS`.
  */
 function stampNestedWrites(
   row: Record<string, unknown>,
@@ -151,20 +127,17 @@ function withTenant(
   tenantId: string,
 ): Record<string, unknown> {
   const nested = stampNestedWrites(row, tenantId);
-  // An explicit tenantId already on the payload wins — that is how the platform
-  // module seeds a brand-new tenant's system refs before anyone can log in.
+  // An explicit tenantId wins (used when provisioning a new tenant).
   return 'tenantId' in nested || 'tenant' in nested
     ? nested
     : { ...nested, tenantId };
 }
 
 /**
- * The whole rule, in one pure function: given a model, an operation and the
- * caller's args, return the args Prisma should actually run.
+ * Returns the args Prisma should run: `where` narrowed and `data` stamped with
+ * the current tenant. Pure, so it is unit-testable.
  *
- * Extracted from the extension because `Prisma.defineExtension` returns an
- * opaque callable, so this is the only way to unit-test the rule itself
- * (`tenant.extension.spec.ts`) without a database.
+ * @throws TenantContextMissingError
  */
 export function applyTenantScope<T>(
   model: string,
@@ -202,14 +175,8 @@ export function applyTenantScope<T>(
 }
 
 /**
- * ADR-025 Decision 1 — one `$allModels` rule with no per-model branches. The
- * uniform `tenantId` column on all 23 models (child tables included, however
- * redundant that looks) is what makes that possible; a special case here is
- * exactly where an isolation bug would hide.
- *
- * NOT covered, by construction: `$queryRaw` / `$executeRaw`, which the query
- * hook never sees. Those carry hand-written `tenant_id` predicates instead —
- * see `reports.service.ts` and DEBT-051.
+ * Applies `applyTenantScope` to every model and operation (ADR-025 Decision 1).
+ * Does not cover `$queryRaw` / `$executeRaw`.
  */
 export const tenantExtension = Prisma.defineExtension({
   name: 'tenant-scope',
@@ -222,19 +189,7 @@ export const tenantExtension = Prisma.defineExtension({
   },
 });
 
-/**
- * The same rule, but bound to one tenant id instead of reading the request
- * scope.
- *
- * For code that runs OUTSIDE an AsyncLocalStorage context and cannot open one:
- * chiefly e2e fixtures, because Jest invokes `beforeAll` and each `it` from
- * sibling async contexts, so a scope entered in a hook is simply not visible in
- * the test body (verified, not assumed).
- *
- * Deliberately the same `applyTenantScope` the production extension uses — a
- * second, test-only implementation of the filter would be a test that no longer
- * tests the thing that ships.
- */
+/** The same rule bound to a fixed tenant id, for code outside a request scope (e2e fixtures). */
 export function tenantBoundExtension(tenantId: string) {
   return Prisma.defineExtension({
     name: `tenant-scope(${tenantId})`,

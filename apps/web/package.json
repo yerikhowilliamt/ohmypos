@@ -4,7 +4,7 @@
   "description": "OhMyPos frontend — Next.js App Router, consumes apps/api via REST only (System Design §5)",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "node ../../scripts/prune-next-cache.mjs && next dev --port 3001",
     "build": "next build",
     "start": "next start --port 3001",
     "lint": "eslint",

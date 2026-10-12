@@ -55,14 +55,8 @@ function ActiveIndicator() {
 }
 
 /**
- * Renders only the nav links `role` can reach (System Design §5). This is UX
- * only — RoleGuard/BranchScopeGuard in apps/api are the real enforcement.
- *
- * One tree serves all three responsive states — desktop (≥1024px,
- * expanded), tablet rail (768–1023px, icon-only), and mobile (<768px,
- * rendered inside a Sheet by `SidebarPrimitive` itself) — instead of three
- * hand-maintained copies. `state`/`isMobile` come from `useSidebar()`
- * (`AppShell` supplies `open`/`isMobile` from `useIsRail()`/`useIsMobile()`).
+ * Role-filtered nav (UX only; the API enforces access). One tree for desktop,
+ * tablet rail and mobile sheet.
  */
 export function Sidebar({ user }: { user: UserResponse }) {
   const pathname = usePathname();
@@ -348,7 +342,7 @@ function ExpandedNavGroup({
 }
 
 /* ------------------------------------------------------------------ */
-/* Rail (768–1023px) — DESIGN.md §13.1 Sidebar Behaviour by Breakpoint                                 */
+/* Rail (768–1023px) — design.md §13.1 Sidebar Behaviour by Breakpoint                                 */
 /* ------------------------------------------------------------------ */
 
 function RailNavItem({ item, pathname }: { item: NavItem; pathname: string }) {

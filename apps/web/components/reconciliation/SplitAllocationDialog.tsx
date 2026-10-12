@@ -64,19 +64,8 @@ interface SplitAllocationDialogProps {
 }
 
 /**
- * Manual split allocation (PRD §5.7, DESIGN.md §12.3 Bank Reconciliation Split-Allocation).
- *
- * The running total is DECISION 1 Option A: the committed part is owned by the
- * server (GET /allocations/transaction/:id, ACTIVE rows only) and the draft part
- * is local state, combined by the pure `summariseDraft`. Submit is DISABLED
- * while `remaining` is negative — the operator is stopped before the request,
- * not corrected after a 400.
- *
- * This is a UX guard, never the enforcement. `AllocationService.create`'s
- * Decimal check and `trg_check_allocation_sum`'s FOR UPDATE check remain the
- * authority (Playbook §7); a concurrent allocation by another admin can still
- * make this dialog's base stale, and when it does the backend's message is
- * rendered verbatim in `serverError` below and the base is refetched.
+ * Manual split allocation (design.md §12.3). Blocks submit while over-allocated;
+ * the server stays the authority, and its error is shown verbatim if the base is stale.
  */
 export function SplitAllocationDialog({
   open,
@@ -99,10 +88,7 @@ export function SplitAllocationDialog({
 
   React.useEffect(() => {
     if (open) {
-      // Resetting the draft form's local state whenever the dialog opens for
-      // a (possibly new) transaction, not synchronizing with an external
-      // system; there is no derivation that avoids the reset without
-      // restructuring this into a keyed remount.
+      // Reset the draft whenever the dialog opens for a transaction.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLines([newLine()]);
       setEntryFilter('');
@@ -121,12 +107,7 @@ export function SplitAllocationDialog({
     [allocations],
   );
 
-  /**
-   * Nearest-date-first within the ±30-day window the hook already filtered
-   * server-side (ADR-019): the likely match is the one closest to the bank
-   * transaction's date. The hook fetches every page of that window, so this
-   * sort and the text filter below both see the complete candidate set.
-   */
+  /** Nearest date first within the ±30-day window (ADR-019). */
   const entryOptions = React.useMemo(() => {
     const candidates = entries ?? [];
     const anchor = transaction ? new Date(transaction.txnDate).getTime() : 0;
@@ -156,12 +137,7 @@ export function SplitAllocationDialog({
     [transaction, allocations, lines],
   );
 
-  /**
-   * Any edit rotates the line's idempotencyKey. Without this, resubmitting an
-   * edited line under its old key would return the ORIGINAL allocation and
-   * silently discard the edit (allocation.service.ts:67-100). `id` is left
-   * alone so React keeps the input mounted and focused.
-   */
+  /** Edits rotate the line's idempotencyKey so a retry is not deduplicated to the old amount. */
   const updateLine = (id: string, patch: Partial<DraftAllocationLine>) => {
     setLines((previous) =>
       previous.map((line) =>
@@ -181,8 +157,7 @@ export function SplitAllocationDialog({
       await createAllocations.mutateAsync(
         toCreateAllocationPayload(transaction.id, lines, summary.lineStates),
       );
-      // Partial splits are normal: the dialog stays open with fresh, empty
-      // lines so the operator can keep going against the refetched remainder.
+      // Partial splits are normal: keep the dialog open with fresh lines.
       setLines([newLine()]);
     } catch (caught) {
       setServerError(
@@ -220,7 +195,7 @@ export function SplitAllocationDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* DESIGN.md §12.3 Bank Reconciliation Split-Allocation: Bank Transaction / Allocated / Remaining, font-mono. */}
+          {/* design.md §12.3 Bank Reconciliation Split-Allocation: Bank Transaction / Allocated / Remaining, font-mono. */}
           <div className="mt-4 grid grid-cols-3 gap-2 rounded-sm border border-border-default bg-surface-muted/60 p-3 text-xs">
             <div>
               <span className="block text-[11px] text-text-tertiary">
@@ -317,7 +292,7 @@ export function SplitAllocationDialog({
             )}
           </div>
 
-          {/* Draft rows — DESIGN.md §12.3 Bank Reconciliation Split-Allocation's "allocation rows". */}
+          {/* Draft rows — design.md §12.3 Bank Reconciliation Split-Allocation's "allocation rows". */}
           <div className="mt-4 flex flex-col gap-3 rounded-sm border border-border-default bg-surface-muted/60 p-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
@@ -344,12 +319,7 @@ export function SplitAllocationDialog({
                         Catatan Pembukuan
                       </Label>
                       <Select
-                        // DEF-QA-04: always a defined string. `|| undefined`
-                        // made this Select uncontrolled at mount (empty draft
-                        // line) and controlled the moment an entry was picked
-                        // — exactly the transition React warns about. `''`
-                        // keeps it controlled throughout; SelectValue already
-                        // renders the placeholder for it.
+                        // Always a string, so the Select stays controlled (DEF-QA-04).
                         value={line.ledgerEntryId}
                         onValueChange={(value) =>
                           updateLine(line.id, { ledgerEntryId: value })

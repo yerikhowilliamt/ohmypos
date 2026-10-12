@@ -15,20 +15,8 @@ interface QuantityStepperProps {
 }
 
 /**
- * DESIGN.md §11.4 Order Panel: one bordered container holding [−][qty][+] so it reads as a
- * single control rather than three buttons.
- *
- * `disabled={quantity <= 1}` is deliberate. DESIGN.md §11.4 Order Panel now says removal
- * happens "via the row's dedicated delete icon, not by decrementing to zero",
- * but `cartReducer`'s DECREMENT still removes the line at quantity 1 (its
- * comment cites an earlier reading of §25). Disabling the button here makes the
- * UI follow the current §25 without touching a tested money-path reducer — the
- * remove-at-1 branch simply becomes unreachable from the stepper. See §1.1.
- *
- * The buttons are 32px inside a 32px-tall control, below §41.5's 40px minimum
- * on their own; the wrapper's `py-1 -my-1` hit-slop plus the row's vertical
- * padding brings the effective target to 40px without making the pill tall
- * enough to dominate the row.
+ * [−][qty][+] control. Minus is disabled at 1, so removal goes through the row's
+ * delete icon (the reducer's remove-at-1 branch stays, unreachable from here).
  */
 export function QuantityStepper({
   quantity,

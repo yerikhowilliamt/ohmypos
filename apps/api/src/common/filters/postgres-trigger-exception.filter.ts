@@ -13,17 +13,7 @@ import {
   extractPostgresError,
 } from '../errors/postgres-error';
 
-/**
- * Error dari `body-parser` saat body melewati batas ukuran. Ia bukan
- * `HttpException`, jadi tanpa penanganan khusus ia jatuh ke cabang 500 di
- * bawah — klien diberi tahu "an unexpected error occurred" untuk sesuatu yang
- * sepenuhnya salah dari sisi klien, dan setiap percobaan menulis satu baris
- * log level error.
- *
- * Dicocokkan lewat `type`, bukan `instanceof`: `body-parser` tidak mengekspor
- * kelasnya, dan `err.type === 'entity.too.large'` adalah kontrak yang memang
- * didokumentasikannya.
- */
+/** body-parser's oversized-body error, matched by its documented `type` (ERR-046). */
 function isPayloadTooLarge(exception: unknown): boolean {
   return (
     typeof exception === 'object' &&
@@ -33,13 +23,8 @@ function isPayloadTooLarge(exception: unknown): boolean {
 }
 
 /**
- * Translates database-trigger rejections into proper HTTP responses.
- *
- * Adapted from Kasync rather than ported verbatim: Kasync matched Prisma 5's
- * P2010/P2034 codes with the message inlined in `meta`, but Prisma 7 raises
- * P2039 and nests the PostgreSQL error under `meta.driverAdapterError.cause`
- * (see `postgres-error.ts`). Matching on the old shape would have let an
- * allocation-sum violation escape as a 500.
+ * Global exception filter: passes `HttpException`s through, maps oversized
+ * bodies to 413 and trigger rejections to 400, and logs anything else as 500.
  */
 @Catch()
 export class PostgresTriggerExceptionFilter implements ExceptionFilter {
@@ -55,11 +40,7 @@ export class PostgresTriggerExceptionFilter implements ExceptionFilter {
     }
 
     if (isPayloadTooLarge(exception)) {
-      // Level warn, bukan error: body kebesaran adalah klien yang salah, bukan
-      // server yang rusak. Body parsing berjalan di middleware Express sebelum
-      // ThrottlerGuard, jadi pemanggil tanpa kredensial bisa memicu ini
-      // sesering yang ia mau — mencatatnya di level error berarti menyerahkan
-      // kendali kebisingan log (dan kuota Sentry) kepada siapa pun di internet.
+      // warn, not error: anonymous callers can trigger this before the throttler.
       this.logger.warn(
         {
           correlationId: (
@@ -86,8 +67,7 @@ export class PostgresTriggerExceptionFilter implements ExceptionFilter {
     const pgError = extractPostgresError(exception);
 
     if (pgError?.code === PG_RAISE_EXCEPTION) {
-      // A domain invariant enforced in the database — the client's request was
-      // invalid, not the server. Currently only the allocation-sum trigger.
+      // A database-enforced invariant (currently only the allocation-sum trigger).
       const error = new AllocationExceededError({ message: pgError.message });
       return response.status(HttpStatus.BAD_REQUEST).json({
         statusCode: HttpStatus.BAD_REQUEST,
@@ -102,7 +82,7 @@ export class PostgresTriggerExceptionFilter implements ExceptionFilter {
       id?: string;
     }>();
 
-    // Log the entity/operation, never the payload (Playbook §9 — no PII in logs).
+    // Never log the payload (Playbook §9).
     this.logger.error(
       {
         err: exception,

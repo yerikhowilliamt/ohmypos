@@ -8,16 +8,7 @@ import { PostgresTriggerExceptionFilter } from '../src/common/filters/postgres-t
 import { PrismaService } from '../src/common/prisma/prisma.service';
 import { tenantScopedPrisma } from './tenant-fixture';
 
-/**
- * Phase 9 added `role`/`branchId` to `PATCH /users/:id`, so a caller can now
- * reassign a KASIR to a different branch or promote/demote a role without
- * hitting the request-body branchRule validation from `CreateUserSchema`
- * (that schema requires both fields together — a PATCH may send only one).
- * `UsersService.update` re-validates against the *merged* role/branchId
- * instead — these tests exist to prove that merge logic actually rejects the
- * invalid combinations it's meant to catch, not just the fields sent in the
- * same request.
- */
+/** `PATCH /users/:id` validates the merged role/branch state, not only the fields sent. */
 describe('User & branch management — role/branch reassignment (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;

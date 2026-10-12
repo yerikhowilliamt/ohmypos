@@ -1,10 +1,3 @@
-/**
- * OhMyPos — Health check (Phase 14 Workstream E, PRD §6).
- *
- * `@nestjs/terminus` was already a dependency (E-1 measured it unused —
- * 0 hits importing it anywhere in `src`). This is the first thing that
- * actually imports it.
- */
 import { Controller, Get } from '@nestjs/common';
 import {
   HealthCheck,

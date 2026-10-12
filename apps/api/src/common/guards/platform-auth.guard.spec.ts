@@ -11,14 +11,7 @@ import {
   SESSION_EXPIRED,
 } from '../messages';
 
-/**
- * ADR-025 Fase 3.
- *
- * These are the checks that stand between an anonymous request and every
- * tenant's data, and the guard has no e2e coverage until Fase 6 ships the
- * `/platform/*` routes it protects — so each rejection path is asserted here
- * individually rather than through one happy-path smoke test.
- */
+/** Each rejection path is asserted individually, not through one happy-path test. */
 
 const PLATFORM_SECRET = 'test-platform-secret-minimum-32-characters';
 const ADMIN_ID = 'admin-1';

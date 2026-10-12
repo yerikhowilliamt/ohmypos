@@ -1,15 +1,3 @@
-/**
- * OhMyPos — Purchasing & Payables E2E Tests (PRD §5.3, ADR-004, ADR-006, ADR-007, ADR-011, ADR-014, Playbook §10).
- *
- * Auth-aware end-to-end test suite testing:
- * - ADR-006 binary branch (PAID -> LedgerEntry XOR UNPAID -> Payable)
- * - Stock movement on all purchases under FOR UPDATE lock (ADR-007)
- * - Central purchase ledger attribution to Pusat (ADR-014)
- * - Settlement flow, over-settlement rejection, concurrency lock under Promise.allSettled
- * - Rollback guarantees across transactional operations
- * - RBAC & BranchScopeGuard enforcement
- * - Decimal scale preservation and balance integrity re-derivation
- */
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';

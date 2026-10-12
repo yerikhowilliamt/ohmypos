@@ -19,11 +19,7 @@ import { Label } from '@ohmypos/ui/components/label';
 import { PasswordInput } from '@ohmypos/ui/components/password-input';
 import { usePlatformChangePassword } from '@/hooks/usePlatformAuth';
 
-/**
- * The confirmation field is added here rather than in the shared contract,
- * exactly as `PasswordForm` in `app/(shared)/profile/ProfileClient.tsx` does:
- * it is a typo guard for one form, not part of the request the API validates.
- */
+/** The confirmation field is form-only, not part of the API contract. */
 const FormSchema = PlatformAdminChangePasswordSchema.extend({
   confirmPassword: z.string().min(1, 'Konfirmasi kata sandi wajib diisi'),
 }).refine((v) => v.newPassword === v.confirmPassword, {

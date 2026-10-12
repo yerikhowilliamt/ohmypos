@@ -29,12 +29,7 @@ interface ReportsClientProps {
   forcedTab?: TabId;
 }
 
-/**
- * Local calendar date as `YYYY-MM-DD` — NOT `date.toISOString().slice(0, 10)`,
- * which reads UTC and silently shifts a day backward in any positive-UTC-offset
- * timezone (WIB is UTC+7, ADR-018's whole point). Same fix DatePicker already
- * applies (packages/ui/src/components/ui/date-picker.tsx).
- */
+/** Local `YYYY-MM-DD`; `toISOString()` would shift a day in WIB. */
 function toIsoDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -72,12 +67,7 @@ const REPORT_TITLES: Record<TabId, { title: string; desc: string }> = {
   },
 };
 
-/**
- * Dashboard 3 (PRD §5.4) — OWNER-only reports, all backed by the read-only
- * Phase 7 endpoints (ADR-008: computed at query time, nothing recomputed
- * here). One shared filter bar drives all views; only the active tab's
- * query is enabled so switching pages doesn't fire five requests at once.
- */
+/** Dashboard 3: one filter bar, and only the active tab's query is enabled. */
 export function ReportsClient({ forcedTab }: ReportsClientProps) {
   const router = useRouter();
   const pathname = usePathname();

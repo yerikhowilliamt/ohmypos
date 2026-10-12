@@ -44,11 +44,7 @@ import { PosPageHeader } from './PosPageHeader';
 import { ProductGrid } from './ProductGrid';
 import { SaleSuccessDialog } from './SaleSuccessDialog';
 
-// ADR-014/015: the seeded central branch is an attribution-only ledger row,
-// never a till — the backend rejects any Sale against it
-// (`CentralBranchNotSellableException`, apps/api/src/modules/sales/sales.service.ts).
-// Excluded from the OWNER branch picker so it can never be selected only to
-// fail at submit.
+// The system branch is not a till (ADR-014); hidden from the OWNER branch picker.
 
 export function PosScreen({
   branchId,
@@ -94,11 +90,7 @@ function PosScreenInner({
     [rawMaterials.data],
   );
 
-  /**
-   * The cart-aware makeable quantity. Recomputed on every cart mutation and on
-   * every refetch of stock — it is derived state, never stored, so it can never
-   * disagree with the lines on screen.
-   */
+  /** Cart-aware makeable quantity, derived on every cart change and stock refetch. */
   const availability = React.useMemo(
     () =>
       computeCartAvailability({
@@ -120,12 +112,7 @@ function PosScreenInner({
     return counts;
   }, [state.lines]);
 
-  /**
-   * §24.1 wants a thumbnail per order row, but `CartLine` carries only the
-   * name and prices (cart.reducer.ts) — deliberately, so the cart never holds
-   * a stale copy of product data. Resolving the photo here, from the same list
-   * the grid renders, keeps the reducer untouched.
-   */
+  /** Cart row thumbnails resolved from the product list; the cart holds no product copies. */
   const productPhotos = React.useMemo(() => {
     const photos = new Map<string, string | null>();
     for (const product of productList) {
@@ -136,7 +123,7 @@ function PosScreenInner({
 
   const [query, setQuery] = React.useState('');
   const [bucket, setBucket] = React.useState<ProductBucket>('ALL');
-  /** DESIGN.md §11.2 Product Grid & Cards's active state — the most recently added product. */
+  /** The most recently added product (design.md §11.2 active state). */
   const [highlightedProductId, setHighlightedProductId] = React.useState<
     string | null
   >(null);
@@ -157,18 +144,10 @@ function PosScreenInner({
     [productList, availability.headroom, bucket, query],
   );
 
-  // ADR-011: only ADMIN/OWNER can reach /master-data, so only they see §21.1's
-  // Add New Product card. A KASIR tapping it would land on a 403.
+  // Only ADMIN/OWNER see "Add New Product"; KASIR cannot reach master data.
   const canCreateProducts = role === 'OWNER' || role === 'ADMIN';
 
-  /**
-   * KASIR always arrives with a fixed `branchId` (ADR-011 §2) — this state
-   * just carries it through unchanged. OWNER arrives with `null` and picks
-   * one via the header's `Select`; they can change it any time afterwards,
-   * including with lines already in the cart, since `branchId` on `Sale` is
-   * an attribution tag only (ADR-004) — stock/availability never depend on
-   * which branch is selected.
-   */
+  /** KASIR has a fixed branch; OWNER picks one. Branch is attribution only (ADR-004). */
   const [selectedBranchId, setSelectedBranchId] = React.useState<string | null>(
     branchId,
   );
@@ -195,21 +174,17 @@ function PosScreenInner({
 
   const handleSubmit = React.useCallback(() => {
     if (state.accountId === null) return;
-    // Only reachable for OWNER before they pick a branch — the grid/cart are
-    // not even rendered in that state (see `needsBranchSelection` below), so
-    // this is a defensive guard, not a real user-facing path.
+    // Defensive: OWNER without a branch never sees the cart.
     if (selectedBranchId === null) return;
 
-    // The reducer, not this callback, is what makes a double tap unreachable:
-    // SUBMIT_START is a no-op while a sale is already in flight.
+    // The reducer makes a double tap a no-op.
     if (state.submit.status === 'pending') return;
 
     const mapped = toCreateSale({
       branchId: selectedBranchId,
       accountId: state.accountId,
       lines: state.lines,
-      // Taken at submit, not at cart open: CreateSaleSchema rejects a soldAt more
-      // than five minutes ahead, and a cart can sit open longer than that.
+      // Taken at submit: the API rejects soldAt more than 5 minutes ahead.
       soldAt: new Date(),
       idempotencyKey: saleIdempotencyKey,
     });
@@ -243,8 +218,7 @@ function PosScreenInner({
           products: productList,
         });
 
-        // Refresh whatever the failure proves is stale, so the advisory numbers
-        // re-render against current truth before the cashier retries.
+        // Refetch whatever the failure shows is stale before the retry.
         if (cartError.kind === 'INSUFFICIENT_STOCK') {
           queryClient.invalidateQueries({
             queryKey: MASTER_DATA_QUERY_KEYS.rawMaterials,
@@ -355,8 +329,7 @@ function PosScreenInner({
           />
 
           {needsBranchSelection ? (
-            // OWNER hasn't picked a branch yet — nothing to browse or sell
-            // against until they do (see `selectedBranchId` above).
+            // OWNER has not picked a branch yet.
             <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
               <span
                 aria-hidden

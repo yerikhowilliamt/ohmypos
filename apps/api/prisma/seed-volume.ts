@@ -10,22 +10,9 @@ import {
 import { tenantExtension } from '../src/common/prisma/tenant.extension';
 
 /**
- * OhMyPos — Phase 14 Workstream C volume seeder (plan §6.1 Option 1).
- *
- * Exists ONLY to time report queries against realistic volume. It writes
- * directly via `createMany`, bypassing every service (`SalesService`,
- * `StockMovementsService`, ...) — the report endpoints under test
- * (`/reports/*`, `/inventory/summary`) only ever read `sales`, `sale_items`,
- * `ledger_entries` and `stock_movements`, so this is a correct shortcut for
- * that purpose. `RawMaterial.currentStock` will NOT reconcile against the
- * movement ledger in this database, because nothing here goes through the
- * single-writer path (ADR-007). That is intentional and this database must
- * NEVER be used for anything except timing queries.
- *
- * HARD GUARD: refuses to run unless DATABASE_URL's database name ends in
- * `_volume`. This script deletes nothing on its own, but a `--months=36`
- * run inserts ~1.2M rows — pointed at the wrong database, that is not a
- * mistake you undo with a single DELETE.
+ * Bulk data for timing report queries ONLY; bypasses every service, so stock
+ * will not reconcile. Refuses to run unless the database name ends in `_volume`.
+ * See prisma/README.md.
  */
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -42,11 +29,7 @@ const unscopedPrisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: DATABASE_URL }),
 });
 
-/**
- * ADR-025 — the same tenant-filtered client the API uses, so `createMany` gets
- * `tenantId` injected and this script does not become a second, divergent
- * definition of what a tenant-scoped write looks like.
- */
+/** Tenant-filtered client, so scoping is defined in one place. */
 const prisma = unscopedPrisma.$extends(
   tenantExtension,
 ) as unknown as PrismaClient;
@@ -148,9 +131,7 @@ async function ensureMasterData() {
     create: { name: 'Pembelian Bahan Baku', type: 'OUTFLOW' },
   });
 
-  // Fixed bcrypt hash of "VolumeTest123!" — for logging into the volume
-  // database's server instance to time /reports/* and /inventory/summary
-  // over real HTTP (plan §6.3). Never used outside this disposable database.
+  // Fixed bcrypt hash of "VolumeTest123!" for this disposable database only.
   const ownerPasswordHash =
     '$2b$10$iPE0aB1eqchEKk2CjqPtCeDMpbZrLu/xxA0UUXnffNnUEe3Kczn.2';
   await prisma.user.upsert({

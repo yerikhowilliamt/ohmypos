@@ -7,7 +7,7 @@ import {
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import './globals.css';
 
-// DESIGN.md: Cormorant Garamond for luxury display/brand headings,
+// design.md: Cormorant Garamond for luxury display/brand headings,
 // Plus Jakarta Sans for all UI text, JetBrains Mono for every
 // numeric/tabular value (prices, HPP, stock quantities, totals).
 const cormorantGaramond = Cormorant_Garamond({

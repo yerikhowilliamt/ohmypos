@@ -1,10 +1,3 @@
-/**
- * OhMyPos — Products service (ERD §3, ADR-005, ADR-010, ADR-013).
- *
- * Manages product master data. Always eager-loads recipeItems.rawMaterial and maps through
- * `toProductWithHppResponse` so `hpp`, `hasRecipe`, `margin`, and `makeableQuantity` are computed
- * consistently (§9.3).
- */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -34,8 +27,7 @@ export class ProductsService {
         data: {
           name: dto.name,
           sellPrice: new Prisma.Decimal(dto.sellPrice),
-          // Waste allowance, ADR-024. Defaults to 0 so a client that predates
-          // the field creates a product whose HPP is exactly the recipe sum.
+          // Defaults to 0: HPP equals the recipe sum (ADR-024).
           wastePercent: new Prisma.Decimal(dto.wastePercent ?? '0'),
           isActive: dto.isActive ?? true,
         },
@@ -53,11 +45,7 @@ export class ProductsService {
     }
   }
 
-  /**
-   * List all products.
-   * Deliberately not paginated in Phase 3 (§9.7) — master data size is small;
-   * ordered by name ascending.
-   */
+  /** All products by name. Unpaginated: master data is small. */
   async findAll(): Promise<ProductWithHppResponse[]> {
     const products = await this.prisma.product.findMany({
       orderBy: { name: 'asc' },
@@ -116,10 +104,7 @@ export class ProductsService {
     await this.findOne(id);
 
     try {
-      // onDelete: Cascade on RecipeItem means deleting a product cleans up its
-      // recipe items. onDelete: Restrict on SaleItem → Product (Phase 5, plan
-      // §9.4 decision 8) means a sold product hits P2003 instead — mapped below
-      // rather than left as a raw 500.
+      // Recipe items cascade; a sold product hits P2003 (Restrict), mapped below.
       await this.prisma.product.delete({
         where: { id },
       });

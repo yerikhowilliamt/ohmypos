@@ -26,19 +26,10 @@ import type {
 } from '@ohmypos/api-contracts';
 import { apiFetch } from '@/lib/api';
 
-/**
- * Reconciliation data access (PRD §5.7, System Design §6.5). Every endpoint
- * here is ADMIN/OWNER-only server-side (RoleGuard on the import, matching,
- * allocation and reconciliation controllers, ADR-011 §6) — these hooks add no
- * authorization logic of their own and must not try to.
- */
+// Every endpoint here is ADMIN/OWNER-only server-side; these hooks add no authorization.
 
 export interface ReconciliationFilters {
-  /**
-   * Transactions list ONLY. `summaryFilters` drops it on the way to the summary
-   * endpoint: it matches bank descriptions and nothing on the ledger side, so
-   * letting it through would skew `variance`.
-   */
+  /** Transactions list only; never sent to the summary (it would skew `variance`). */
   search?: string;
   accountId?: string;
   status?: TransactionStatus;
@@ -73,12 +64,7 @@ export const RECONCILIATION_QUERY_KEYS = {
     ] as const,
 };
 
-/**
- * `includeSort` is false for the summary endpoint: it takes the same DTO but
- * ignores ordering entirely (it only calls buildWhereClause), so sending the
- * sort would make the summary refetch on every sort-header click for an
- * identical response.
- */
+/** `includeSort` is false for the summary, which ignores ordering. */
 function buildQuery(
   filters: ReconciliationFilters,
   includeSort = true,
@@ -97,13 +83,10 @@ function buildQuery(
   return params.toString();
 }
 
-/** The subset of the filters the summary actually varies on. Keeping the sort
- * out of its query key is what stops the pointless refetch described above.
- *
- * `search` is omitted for a harder reason than efficiency: it only matches bank
- * descriptions, so passing it would shrink the bank side of `variance` while
- * the ledger side stayed whole. Built by listing fields rather than by
- * spreading + deleting, so a new filter has to be added here on purpose. */
+/**
+ * The filters the summary varies on, listed explicitly. Excludes sort (no
+ * effect) and `search` (would skew `variance`).
+ */
 function summaryFilters(filters: ReconciliationFilters): ReconciliationFilters {
   return {
     accountId: filters.accountId,
@@ -113,22 +96,11 @@ function summaryFilters(filters: ReconciliationFilters): ReconciliationFilters {
   };
 }
 
-/**
- * Upper bound on the paging loop below: 20 pages x limit 100 = 2000 rows. This
- * is a guard against a runaway loop if `meta.totalPages` were ever wrong, not a
- * real ceiling — both call sites are narrowly filtered and nowhere near it.
- */
+/** Runaway-loop guard for the paging loop (20 × 100 rows), not a real ceiling. */
 const MAX_LOOKUP_PAGES = 20;
 const LOOKUP_PAGE_SIZE = 100;
 
-/**
- * Fetches EVERY page of a paginated endpoint, not just the first.
- *
- * Both call sites below are lookups, not display lists — truncating them does
- * not show the operator less, it makes the screen wrong (TASK-068). At v1
- * volumes this issues exactly one request, the same request as before; it only
- * costs more when correctness requires it.
- */
+/** Fetches every page. Both callers are lookups that must be complete (TASK-068). */
 async function fetchAllPages<T>(
   buildPath: (page: number) => string,
 ): Promise<T[]> {
@@ -148,7 +120,7 @@ async function fetchAllPages<T>(
   return rows;
 }
 
-// --- Read side (reconciliation module) ---
+// Read side
 
 export function useReconciliationSummary(filters: ReconciliationFilters) {
   const scoped = summaryFilters(filters);
@@ -161,11 +133,7 @@ export function useReconciliationSummary(filters: ReconciliationFilters) {
   });
 }
 
-/**
- * One page, outside React Query — the Export button's `fetchAllPages` loop needs
- * it (DEBT-048). Shares `buildQuery` with the hook so the exported set can never
- * drift from the one on screen.
- */
+/** One page outside React Query, for Export (DEBT-048). Shares `buildQuery` with the hook. */
 export function fetchReconciliationTransactionsPage(
   filters: ReconciliationFilters,
 ) {
@@ -183,25 +151,8 @@ export function useReconciliationTransactions(filters: ReconciliationFilters) {
 }
 
 /**
- * The transactions the match queue needs the amounts of. `MatchCandidate`
- * carries no per-transaction amount (matching.schema.ts:20) and propose() has
- * just flipped every matched transaction to PENDING_REVIEW
- * (matching.service.ts:70), so this is the list to resolve them against.
- *
- * `enabled` is off until the operator has actually run propose — this must not
- * fire on mount.
- */
-/**
- * Returns a plain array, not `{ data, meta }`, because after TASK-068 there is
- * no page to report — the shape change is deliberate, so no caller can mistake
- * one page for the whole set.
- *
- * Completeness is not a nicety here. `MatchReviewQueue` resolves every
- * candidate's amounts through this list; a transaction missing from it produces
- * "Data transaksi bank untuk usulan ini belum termuat. Jalankan ulang
- * pencocokan otomatis." — advice that cannot work, because propose() only
- * selects UNRESOLVED (matching.service.ts:19) and these are already
- * PENDING_REVIEW. Truncating this list dead-ends the operator.
+ * Every PENDING_REVIEW transaction, as a complete array (not a page), so the
+ * match queue can resolve candidate amounts. Disabled until propose has run.
  */
 export function usePendingReviewTransactions(
   accountId: string | undefined,
@@ -236,20 +187,10 @@ export function useTransactionAllocations(txnId: string | null) {
   });
 }
 
-/**
- * How many days on either side of the anchor bank transaction's `txnDate` the
- * ledger-entry candidate picker searches (ADR-019 / `LedgerEntryQuerySchema`'s
- * `startDate`/`endDate`, `ledger-entry.schema.ts`). Deliberately wider than the
- * matching engine's `dateToleranceDays` default of 3 days
- * (`matching.service.ts:34`) — a human manually hunting for a stray entry
- * should be able to find one further out than the auto-matcher would ever
- * propose.
- */
+/** Day window around the anchor transaction for the manual ledger-entry picker; wider than auto-matching (ADR-019). */
 const LEDGER_CANDIDATE_WINDOW_DAYS = 30;
 
-/** Formats a Date as `YYYY-MM-DD` using LOCAL components, not `toISOString()`,
- * which reads UTC and would shift the boundary backward a day in any
- * positive-UTC-offset timezone — including WIB (ADR-018), this app's target. */
+/** `YYYY-MM-DD` from local date parts; `toISOString()` would shift a day in WIB. */
 function toDateOnly(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -269,15 +210,7 @@ function ledgerCandidateWindow(txnDate: string | Date): {
   return { startDate: toDateOnly(start), endDate: toDateOnly(end) };
 }
 
-/**
- * Ledger entries offered as split targets. `type` is a hard server-side filter
- * because a direction mismatch is a guaranteed 400
- * (allocation.service.ts:123). `accountId` narrows sensibly, and
- * `startDate`/`endDate` window the search to ±30 days around the anchor
- * transaction's date server-side (ADR-019) — every page of that window is
- * fetched, and the dialog then applies a client-side nearest-date-first sort as
- * a secondary refinement.
- */
+/** Ledger entries of the same type within ±30 days of the anchor, every page (ADR-019). */
 export function useLedgerEntryCandidates(
   type: TransactionType | null,
   accountId: string | null,
@@ -294,12 +227,7 @@ export function useLedgerEntryCandidates(
       window?.endDate ?? '',
     ),
     queryFn: () =>
-      // Every page, not the first 100. `/ledger-entries` orders by entryDate
-      // DESC, so a truncated window drops its OLDEST entries — which is exactly
-      // where the nearest-date match sits when the anchor transaction is early
-      // in its own ±30-day window. The dialog's client-side nearest-date sort
-      // and its text filter both operate on whatever this returns, so a short
-      // list makes the operator conclude an entry does not exist.
+      // Every page: the API orders by entryDate DESC, so truncation drops the oldest (often nearest) entries.
       fetchAllPages<LedgerEntryResponse>((page) => {
         const params = new URLSearchParams({
           limit: String(LOOKUP_PAGE_SIZE),
@@ -318,14 +246,9 @@ export function useLedgerEntryCandidates(
   });
 }
 
-// --- Write side ---
+// Write side
 
-/**
- * Invalidates everything a money write can move: the transaction list, the
- * summary counts/variance, the pending-review lookup, and (when known) that
- * transaction's allocations. Status is trigger-derived
- * (sync_transaction_status), so it is refetched, never predicted client-side.
- */
+/** Invalidates everything a money write can change. Status is trigger-derived, so it is refetched. */
 function useReconciliationInvalidation() {
   const queryClient = useQueryClient();
   return (txnIds: string[] = []) => {
@@ -352,9 +275,7 @@ export function useImportBankStatement() {
       file: File;
       password?: string;
     }) => {
-      // Field name `file` and the multipart shape come from
-      // import.controller.ts (FileInterceptor('file')); apiFetch omits the
-      // JSON Content-Type for a FormData body so the browser sets the boundary.
+      // Multipart field `file`; apiFetch leaves Content-Type to the browser for FormData.
       const body = new FormData();
       body.append('file', file);
       // CSV and PDF are separate routes so each can validate its own file type.
@@ -374,12 +295,7 @@ export function useImportBankStatement() {
   });
 }
 
-/**
- * NOTE: this is a mutation, not a query, and that is deliberate — propose()
- * WRITES, flipping every matched transaction from UNRESOLVED to PENDING_REVIEW
- * (matching.service.ts:70). Behind a useQuery it would silently mutate status
- * on mount and on every window refocus. It must stay behind an explicit action.
- */
+/** A mutation, not a query: propose writes statuses and must only run on an explicit action. */
 export function useProposeMatches() {
   const invalidate = useReconciliationInvalidation();
   return useMutation({
@@ -405,13 +321,7 @@ export function useResetMatches() {
   });
 }
 
-/**
- * Rejects a single proposed match, returning that one bank transaction from
- * PENDING_REVIEW to UNRESOLVED (POST /matching/reject/:bankTransactionId,
- * matching.controller.ts). Unlike `useResetMatches`, this is scoped to one
- * transaction — the correct granularity for a per-candidate "Abaikan" action
- * (see MatchReviewQueue).
- */
+/** Rejects one proposed match ("Abaikan"), returning it to UNRESOLVED. */
 export function useRejectMatch() {
   const invalidate = useReconciliationInvalidation();
   return useMutation({

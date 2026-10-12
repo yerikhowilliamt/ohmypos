@@ -1,12 +1,3 @@
-/**
- * OhMyPos — Sale response mapper (ERD §3, ADR-005, ADR-015, plan §8.3).
- *
- * `totalHpp` and `grossMargin` are computed here from the stored per-unit
- * `hppAtSale` snapshots — never recomputed from a live recipe (that is what
- * ADR-005 exists to prevent) — and are what makes the per-unit convention of
- * ADR-015 observable and assertable at the API boundary, not just implied by
- * the database column name.
- */
 import type { SaleItemResponse, SaleResponse } from '@ohmypos/api-contracts';
 import { Prisma } from '../../generated/prisma/client';
 import { calculateTotalHpp } from './sale-totals';
@@ -24,6 +15,7 @@ export type SaleWithRelations = Prisma.SaleGetPayload<{
   };
 }>;
 
+/** `totalHpp` and `grossMargin` come from stored `hppAtSale` snapshots, never live recipes. */
 export function toSaleResponse(sale: SaleWithRelations): SaleResponse {
   const items: SaleItemResponse[] = sale.items.map((item) => ({
     id: item.id,

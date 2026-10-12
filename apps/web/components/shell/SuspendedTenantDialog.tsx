@@ -15,19 +15,8 @@ import { PauseCircle } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
 /**
- * TASK-132 — what a suspended tenant's user sees.
- *
- * Before this existed, a suspended business could log in and was then bounced
- * straight back to the login screen by every page, because `GET /auth/me`
- * answered 403 and `getSession()` cannot tell that apart from "not signed in".
- * The owner saw a login form that accepted their password and then asked for it
- * again — with no statement anywhere that the business had been switched off.
- *
- * Deliberately not dismissable: no close button, no click-outside, no Escape.
- * Nothing behind it works — `TenantStatusGuard` rejects every endpoint except
- * logout and `/auth/me` — so a modal that could be dismissed would only leave
- * the reader looking at an application that silently refuses everything. The
- * one action is the one action that still functions.
+ * Shown to a suspended tenant's users (TASK-132). Not dismissable: everything
+ * behind it is refused by the API, and logout is the one action that works.
  */
 export function SuspendedTenantDialog() {
   const router = useRouter();

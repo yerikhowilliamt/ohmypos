@@ -1,9 +1,3 @@
-/**
- * OhMyPos — Formatting Helpers
- *
- * Centralizes currency, quantity, and percentage formatting across frontend screens (DESIGN.md §5 Typography, §12.2 Signature Flow Indicator, §20 Data Formatting & Locale).
- */
-
 const IDR_FORMATTER = new Intl.NumberFormat('id-ID', {
   style: 'currency',
   currency: 'IDR',
@@ -52,23 +46,14 @@ export function formatQuantity(
   return unit ? `${formatted} ${unit}` : formatted;
 }
 
-/**
- * Trims a decimal string for use as a FORM VALUE — "5000.0000" -> "5000",
- * "0.5000" -> "0.5". Deliberately locale-free.
- *
- * `formatQuantity` must NEVER seed an editable field. It renders id-ID, where
- * the thousands separator is a dot, so "5000.0000" becomes "5.000" — and that
- * string is submitted verbatim as a `QuantityString`, which the API reads back
- * as five. Displaying a number and editing one are different jobs.
- */
+/** Trims a decimal for a form value ("5000.0000" → "5000"). Locale-free: never seed inputs with `formatQuantity`. */
 export function toQuantityInputValue(
   quantity: string | null | undefined,
 ): string {
   if (quantity === null || quantity === undefined || quantity === '') {
     return '';
   }
-  // Anything that is not a plain decimal is handed back untouched rather than
-  // mangled — the field's own validation should be the one to complain.
+  // Non-decimals pass through for the field's own validation.
   if (!/^-?\d+(\.\d+)?$/.test(quantity)) {
     return quantity;
   }
@@ -106,13 +91,7 @@ export function formatMarginPercentage(
   return `${margin.toFixed(1)}%`;
 }
 
-/**
- * Formats an already-computed percentage (report marginPct / sharePct /
- * netMarginPct — DailyIncome, ProductProfit, IncomeByPaymentMethod, ProfitLoss
- * response fields) as an Indonesian-locale string. `null` means the API
- * couldn't compute it (zero denominator, PRD §5.2) — never NaN, so `null` is
- * the only falsy case that returns the fallback dash.
- */
+/** Formats an API percentage; `null` (zero denominator) renders the fallback dash. */
 export function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return '—';
@@ -170,13 +149,7 @@ const LONG_DATE_FORMATTER = new Intl.DateTimeFormat('id-ID', {
   year: 'numeric',
 });
 
-/**
- * "Kamis, 20 Agustus 2026" — the operating day in WIB, not in the browser's
- * local zone. The business day is Asia/Jakarta everywhere else in the product
- * (report.schema.ts pins every range to it), so a POS header that says
- * "yesterday" to a cashier on a device with a stale timezone would be wrong
- * about which day their sales land on.
- */
+/** "Kamis, 20 Agustus 2026" for the operating day in WIB, not the browser's zone. */
 export function formatLongDate(date: Date): string {
   return LONG_DATE_FORMATTER.format(date);
 }

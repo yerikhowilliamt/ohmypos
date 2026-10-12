@@ -3,11 +3,7 @@ import { AllocationStatus } from './enums';
 import { LedgerEntryResponseSchema } from './ledger-entry.schema';
 import { MoneyString, UuidString } from './primitives';
 
-/**
- * One allocation line. Kasync accepted `amountPortion` as either a number or a
- * numeric string; OhMyPos accepts only the string form, because a JSON number
- * cannot carry a rupiah amount safely (Playbook §5).
- */
+/** One allocation line. `amountPortion` is a string only. */
 export const CreateSingleAllocationSchema = z.object({
   bankTransactionId: UuidString,
   ledgerEntryId: UuidString,
@@ -18,10 +14,7 @@ export type CreateSingleAllocation = z.infer<
   typeof CreateSingleAllocationSchema
 >;
 
-/**
- * Accepts either a single allocation inline or a batch under `allocations`,
- * preserving Kasync's dual-shape request. Exactly one form must be supplied.
- */
+/** A single inline allocation or a batch under `allocations`, not both. */
 export const CreateAllocationSchema = z
   .object({
     bankTransactionId: UuidString.optional(),
@@ -53,12 +46,7 @@ export const AllocationResponseSchema = z.object({
 });
 export type AllocationResponse = z.infer<typeof AllocationResponseSchema>;
 
-/**
- * `GET /allocations/transaction/:txnId` includes the related `ledgerEntry`
- * on every row (allocation.service.ts's `findByTransaction`) — this is that
- * composed shape, so both sides of the API boundary describe it the same
- * way instead of the frontend hand-composing an intersection type (DEBT-022).
- */
+/** Allocation with its ledger entry, as returned by the by-transaction list (DEBT-022). */
 export const AllocationWithLedgerEntrySchema = AllocationResponseSchema.extend({
   ledgerEntry: LedgerEntryResponseSchema,
 });

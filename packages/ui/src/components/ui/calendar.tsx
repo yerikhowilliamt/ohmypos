@@ -78,9 +78,7 @@ export function Calendar({
 
   const cells: React.ReactNode[] = [];
 
-  // Equal cell sizing for every cell so a month with 5 or 6 weeks never
-  // changes the calendar's total height. Fixed 6-week grid: header row +
-  // 6 × 7 day cells = 49 cells (like the major date-picker libraries).
+  // Fixed 6-week grid (49 cells) so the calendar height never changes.
   const cellClass =
     'flex h-6 w-6 items-center justify-center rounded-sm text-sm';
 
@@ -132,9 +130,7 @@ export function Calendar({
     );
   }
 
-  // Trailing empty cells to always fill 6 full weeks. Without these, the
-  // grid's row count (and therefore the calendar's height) varies 5 vs 6
-  // weeks between months, which breaks the fixed-size popover positioning.
+  // Trailing empty cells to fill 6 weeks.
   const totalWeekCells = 7 * 6; // header row excluded below
   const dayCellCount = firstDayOfWeek + daysInMonth;
   for (let i = dayCellCount; i < totalWeekCells; i++) {

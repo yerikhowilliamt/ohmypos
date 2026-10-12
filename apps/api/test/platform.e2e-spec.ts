@@ -17,16 +17,8 @@ import { tenantFixture } from './tenant-fixture';
 import { resetDatabase } from './reset-database';
 
 /**
- * ADR-025 Fase 4 — the platform console.
- *
- * The first describe block is the one that matters most. Platform controllers
- * must be `@Public()` to get past the global `JwtAuthGuard`, so authentication
- * is opt-in for exactly the routes that reach every tenant in the system
- * (DEBT-066). Rather than list those routes by hand — a list that goes stale
- * the moment someone adds a route, which is the failure being guarded against —
- * they are enumerated from `PlatformModule`'s own `controllers` metadata. A
- * controller has to be registered there to be routed at all, so the enumeration
- * cannot miss one.
+ * Platform console. The first block enumerates every route from
+ * `PlatformModule`'s controllers and requires 401 without a session (DEBT-066).
  */
 describe('Platform console (e2e)', () => {
   let app: INestApplication<App>;
@@ -485,10 +477,7 @@ describe('Platform console (e2e)', () => {
     });
 
     it('gives the new tenant its own system refs, not the existing tenant’s', async () => {
-      // The subtle failure ADR-025 §2.6 warns about: seeding through an
-      // unfiltered client would find the e2e tenant's `isSystem` branch and
-      // skip creating one, silently attaching the new tenant's central ledger
-      // entries to another business.
+      // Seeding through an unfiltered client would reuse another tenant's system branch.
       const own = await unscoped.branch.findMany({
         where: { isSystem: true },
         select: { tenantId: true },
@@ -499,7 +488,7 @@ describe('Platform console (e2e)', () => {
     });
 
     it('lets two tenants hold a product with the SAME name', async () => {
-      // Proof that the global uniques really did become composite (§1.3).
+      // The global uniques are now composite.
       const other = unscoped.$extends(
         tenantBoundExtension(createdTenantId),
       ) as unknown as PrismaService;

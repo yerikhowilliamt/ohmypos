@@ -5,15 +5,9 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 /**
- * Shared ESLint baseline for every workspace (Playbook §2, §13).
+ * Shared ESLint baseline (Kasync's rules; `no-explicit-any` is an error).
  *
- * Rule set carried over from Kasync's `eslint.config.mjs` so ported code lints
- * against the config it was written for. `no-explicit-any` is an error rather
- * than a warning because AGENTS.md states the `any` type is never permitted.
- *
- * @param {string} tsconfigRootDir absolute path to the consuming workspace,
- *   normally `import.meta.dirname`. Typed linting needs this to resolve the
- *   right tsconfig per package rather than one at the repo root.
+ * @param {string} tsconfigRootDir the consuming workspace, normally `import.meta.dirname`
  */
 export function baseConfig(tsconfigRootDir) {
   return tseslint.config(
@@ -26,11 +20,9 @@ export function baseConfig(tsconfigRootDir) {
         'node_modules/**',
         '**/*.config.mjs',
         '**/*.config.js',
-        // Emitted declarations are never linted — they aren't in any tsconfig's
-        // include, so typed linting cannot resolve them.
+        // Emitted declarations are in no tsconfig, so typed linting cannot resolve them.
         '**/*.d.ts',
-        // Generated code is never hand-edited, so linting it only produces
-        // noise. Prisma 7 emits its client as TypeScript into the source tree.
+        // Generated Prisma client.
         '**/generated/**',
       ],
     },

@@ -14,21 +14,12 @@ interface ProductCardProps {
   /** Cart-aware makeable quantity — how many MORE can be added (ADR-013). */
   headroom: number | null | undefined;
   inCartQuantity: number;
-  /** DESIGN.md §11.2 Product Grid & Cards: the most recently added product carries a brand border. */
+  /** design.md §11.2 Product Grid & Cards: the most recently added product carries a brand border. */
   isHighlighted: boolean;
   onAdd: (product: ProductWithHppResponse) => void;
 }
 
-/**
- * DESIGN.md §11.2 Product Grid & Cards: image edge-to-edge at the top, name below, price below that,
- * a large touch area, and no secondary clutter. The one piece of supporting
- * information is the advisory makeable quantity — see §33 ("POS may display
- * derived advisory makeable quantity"), never a per-product stock count, which
- * does not exist (ADR-013).
- *
- * No discount tag (§21.2): `Product` has no discount field and ADR-015 gave v1
- * none — the per-line price override in the cart is the whole mechanism.
- */
+/** Product tile with advisory makeable quantity; no stock count and no discount tag (ADR-013, ADR-015). */
 export function ProductCard({
   product,
   headroom,

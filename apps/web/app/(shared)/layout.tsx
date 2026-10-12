@@ -2,14 +2,7 @@ import { AppShell } from '@/components/shell/AppShell';
 import { getImpersonationLabel } from '@/lib/impersonation';
 import { getInitialTheme, requireRole } from '@/lib/session';
 
-/**
- * Routes reachable by every authenticated role — self-service profile (Phase
- * 10a) and the help page (Phase 13). Neither `(back-office)`
- * (`requireRole(['ADMIN', 'OWNER'])`) nor `(pos)` (`requireRole(['KASIR'])`)
- * admits all three roles, so a page every role needs cannot live in either
- * without excluding someone — this third group is `requireRole` with every
- * role listed, which is exactly "any authenticated user."
- */
+/** Routes for every authenticated role (profile, help). */
 export default async function SharedLayout({
   children,
 }: {

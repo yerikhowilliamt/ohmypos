@@ -133,15 +133,7 @@ const exportColumns: ExportColumn<InventorySummaryRow>[] = [
   { header: 'Status', accessor: (row) => formatStockStatus(row.status) },
 ];
 
-/**
- * Dashboard 5 (PRD §5.6) — read-only inventory summary table.
- *
- * Every number comes from the server (GET /inventory/summary) — nothing is
- * recomputed client-side. Search and sort are provided by the shared DataTable
- * (shadcn pattern); in/out columns carry the Flow Indicator motif
- * (DESIGN.md §12.2 Signature Flow Indicator) and the status column uses the shared stock-status badge
- * (DESIGN.md §16 Status Badges, vocabulary.ts).
- */
+/** Dashboard 5 summary table; every figure comes from the server. */
 export function InventorySummaryTable({
   rows,
   isLoading = false,

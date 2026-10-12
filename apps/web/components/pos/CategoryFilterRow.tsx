@@ -10,15 +10,7 @@ interface CategoryFilterRowProps {
   onSelect: (bucket: ProductBucket) => void;
 }
 
-/**
- * DESIGN.md §11.3 Category Filter Row. The cards are bordered, radius.md, surface.raised, and carry a
- * count in tertiary text — not pill tabs, which §11/§22 reserve for badges and
- * tags. §41.3 keeps this a single row that scrolls horizontally on mobile
- * rather than wrapping.
- *
- * On the buckets themselves — availability rather than menu categories — see
- * the "Decision on record" section of the Phase 2 plan.
- */
+/** Availability filter cards (design.md §11.3); one horizontally scrolling row on mobile. */
 export function CategoryFilterRow({
   buckets,
   selected,

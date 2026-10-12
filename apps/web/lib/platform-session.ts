@@ -3,16 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { API_BASE_URL } from './api';
 
-/**
- * ADR-025 Decision 5 — the platform console's mirror of `lib/session.ts`.
- *
- * Deliberately a separate file with a separate return type rather than a
- * `role: 'SUPER_ADMIN'` branch inside `getSession()`. A platform admin is not a
- * `User`, has no tenant and no branch, and the single most common multi-tenant
- * leak is a code path where "no tenant" quietly means "every tenant". Keeping
- * the two lookups apart means that path cannot be written by accident here
- * either.
- */
+/** Platform admin session lookup, kept separate from `getSession()` (a platform admin is not a `User`). */
 export async function getPlatformSession(): Promise<PlatformAdminResponse | null> {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
@@ -32,11 +23,7 @@ export async function getPlatformSession(): Promise<PlatformAdminResponse | null
   }
 }
 
-/**
- * Gates the `/platform` console. As with `requireRole`, this is a UX
- * convenience: `PlatformAuthGuard` in `apps/api` is the authoritative check,
- * and this function is never the only thing between an operator and the data.
- */
+/** Gates `/platform` pages. UX only: `PlatformAuthGuard` is the authority. */
 export async function requirePlatformAdmin(): Promise<PlatformAdminResponse> {
   const admin = await getPlatformSession();
 

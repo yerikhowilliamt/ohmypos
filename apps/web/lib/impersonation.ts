@@ -1,29 +1,15 @@
 import { cookies } from 'next/headers';
 
 /**
- * ADR-025 Decision 8 — browsing a tenant as its OWNER, from the platform
- * console.
- *
- * The API hands the impersonation token back in the RESPONSE BODY rather than
- * as a cookie, because it is minted by a platform route while the token it
- * mints is a tenant one. Something has to move it into the `access_token`
- * cookie the tenant app reads, and that something cannot be browser JavaScript:
- * the cookie is HttpOnly. `app/api/platform/impersonation/route.ts` does it
- * server-side instead.
+ * Impersonation from the platform console (ADR-025 Decision 8). The token comes
+ * back in the response body; `app/api/platform/impersonation/route.ts` moves it
+ * into the HttpOnly `access_token` cookie server-side.
  */
 export const ACCESS_TOKEN_COOKIE = 'access_token';
 
 /**
- * A SECOND, deliberately non-HttpOnly cookie set beside the token, purely so
- * the tenant shell knows to render the banner.
- *
- * It is a UI hint and nothing more. The read-only enforcement lives in
- * `ImpersonationReadOnlyGuard` in `apps/api`, keyed on the signed `imp` claim
- * inside the token — which is why it does not matter that this marker is
- * forgeable. The worst a user can do by setting it themselves is show
- * themselves a banner. The alternative — decoding the JWT here — would mean
- * shipping the tenant signing secret to the web app, which is a genuinely bad
- * trade for a piece of chrome.
+ * Non-HttpOnly marker that only tells the shell to show the banner. Forgeable
+ * by design: read-only is enforced by the API on the signed `imp` claim.
  */
 export const IMPERSONATION_COOKIE = 'ohmypos_impersonation';
 

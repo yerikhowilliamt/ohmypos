@@ -25,12 +25,7 @@ export type AttendanceFilterParams = {
   search?: string;
   branchId?: string;
   violationOnly?: boolean;
-  /**
-   * Both bounds filter `loginAt` server-side. The calendar matrix sends the
-   * month it is displaying; before these existed it fetched the N most recent
-   * logins globally and filtered client-side, so every month but the newest
-   * rendered blank.
-   */
+  /** Both bounds filter `loginAt` server-side. */
   startDate?: string;
   endDate?: string;
   sortBy?: AttendanceSortBy;
@@ -66,11 +61,7 @@ function buildAttendanceQuery(params?: AttendanceFilterParams): string {
   return query.toString();
 }
 
-/**
- * One page, outside React Query — the Export button's `fetchAllPages` loop needs
- * it (DEBT-048). Shares `buildAttendanceQuery` with the hook so the exported set
- * can never drift from the one on screen.
- */
+/** One page outside React Query, for Export (DEBT-048). */
 export function fetchAttendanceRecordsPage(params?: AttendanceFilterParams) {
   const queryString = buildAttendanceQuery(params);
   return apiFetch<AttendanceListResponse>(

@@ -16,10 +16,7 @@ import {
 
 const ACTIVATION_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
-/**
- * Device registry for attendance tracking (Phase 11, ADR-021).
- * Every endpoint that reaches this service is OWNER-only, enforced by RoleGuard on the controller.
- */
+/** Registry of POS terminals for attendance tracking (ADR-021). OWNER only. */
 @Injectable()
 export class DevicesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -53,11 +50,7 @@ export class DevicesService {
     return devices.map((device) => this.toResponse(device));
   }
 
-  /**
-   * The "ceremony" (Context section): must be called by an authenticated
-   * OWNER, standing at the physical terminal whose browser this response's
-   * cookie gets set on by the controller.
-   */
+  /** Activates the terminal whose browser receives the device cookie (OWNER, in person). */
   async activate(
     code: string,
     activatingUserId: string,
@@ -103,8 +96,7 @@ export class DevicesService {
     const movingBranch =
       dto.branchId !== undefined && dto.branchId !== existing.branchId;
 
-    // Only a REAL move is rejected. Resubmitting the same branchId has to stay
-    // legal, or the edit form would break the moment a device is activated.
+    // Only a real move is rejected; the edit form resubmits the same branchId.
     if (movingBranch && existing.isActive) {
       throw new DeviceBranchLockedException();
     }
@@ -129,12 +121,7 @@ export class DevicesService {
     return this.toResponse(device);
   }
 
-  /**
-   * Hard delete, refused once the terminal has logins — see
-   * DeviceHasAttendanceHistoryException for why a silent success would be the
-   * worse outcome. A never-used device (wrong label, test registration) is the
-   * case people actually want to delete, and that one goes through.
-   */
+  /** Hard delete, refused once the terminal has logins. */
   async remove(id: string): Promise<DeviceResponse> {
     const existing = await this.prisma.device.findUnique({ where: { id } });
     if (!existing) {

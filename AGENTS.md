@@ -2,7 +2,7 @@
 
 **Depends on:** PRD v1.1, System Design v4, ADR-001–012, ERD v3, Engineering Playbook v3
 
-Context for any AI agent (or future-you) working in this repo. Read this alongside the [Engineering Playbook](./docs/04%20-%20Engineering_Playbook.md) before making changes — the Playbook is the technical rulebook, this doc is the domain/project context that doesn't fit there.
+Context for any AI agent (or future-you) working in this repo. Read this alongside the [Engineering Playbook](./docs/guide.md) before making changes — the Playbook is the technical rulebook, this doc is the domain/project context that doesn't fit there.
 
 ---
 
@@ -12,9 +12,9 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 
 - Kasync's source is available at a **local path**, sibling to this repo: `../kasync` (i.e. `~/projects/kasync`, alongside `~/projects/ohmypos`).
 - Key locations inside it: `../kasync/prisma/schema.prisma` (schema + enums), `../kasync/prisma/migrations/` (raw SQL triggers), `../kasync/src/modules/` (service/controller/repository code per module), `../kasync/test/` (existing test suites to adapt). `../kasync/kasync-state-export.md` is a prior audit summary — useful for orientation, but read the actual source files before porting anything, per the note below.
-- Read the actual files there (`schema.prisma`, `src/modules/*`, `prisma/migrations/*`) — do not guess or reconstruct Kasync's logic from `03 - ERD.md` or `02 - ADR.md` alone; those documents summarize Kasync's design but are not a substitute for the literal source when porting code (see ERD §7, Open Item).
+- Read the actual files there (`schema.prisma`, `src/modules/*`, `prisma/migrations/*`) — do not guess or reconstruct Kasync's logic from `erd.md` or `adrs/` alone; those documents summarize Kasync's design but are not a substitute for the literal source when porting code (see ERD §7, Open Item).
 - Kasync's live deployment (`https://kasync.onrender.com`) is a reference for confirming the API is up, not a data source for porting — never call it from OhMyPos code or tests.
-- **Read `03 - ERD.md` §7 (Porting Notes) before porting anything.** That source read has already been done once (ADR-012) and §7 records the traps that aren't visible from the schema alone — the multi-tenant `userId` scoping threaded through every ported service method, and the Kasync endpoints (self-registration, self-deletion, Cloudinary photo upload) that must **not** come across because they contradict ADR-011.
+- **Read `erd.md` §7 (Porting Notes) before porting anything.** That source read has already been done once (ADR-012) and §7 records the traps that aren't visible from the schema alone — the multi-tenant `userId` scoping threaded through every ported service method, and the Kasync endpoints (self-registration, self-deletion, Cloudinary photo upload) that must **not** come across because they contradict ADR-011.
 
 ## AI Gatekeeper & Governance (CRITICAL)
 
@@ -35,7 +35,7 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 | Kas Awal | Opening cash — the starting cash balance, centralized (not per-branch) |
 | Reconciliation | Matching bank statement transactions against `LedgerEntry` records via `Allocation` — restricted to `ADMIN`/`OWNER` (ADR-011) |
 | Central Purchase | A `SupplierPurchase` with `branchId = null` — bought centrally, not by one branch |
-| Flow Indicator | The signature UI motif for any inflow/outflow number [DESIGN.md](./docs/DESIGN.md) |
+| Flow Indicator | The signature UI motif for any inflow/outflow number [design.md](./docs/design.md) |
 | Ported module | A module copied and adapted from Kasync, unchanged in responsibility |
 | Kasir | Cashier role — branch-scoped access only (`User.branchId` required), cannot create users or perform reconciliation matching (ADR-011) |
 | Admin | Staff role with all-branch data access, reconciliation-matching permission, and Master Data + Reconciliation frontend routes only — cannot create users (ADR-011, System Design v4 §5) |
@@ -61,10 +61,11 @@ OhMyPos ports modules from Kasync (ADR-001) — it does **not** call Kasync's li
 4.  **ADRs:** New ADRs follow the trigger criteria in Playbook §17. When superseding, mark "Superseded," don't delete (like ADR-009 → ADR-010 → ADR-011).
 5.  **Testing Requirement:** If a task or phase requires testing, you MUST write unit tests. For critical features, write e2e tests as well. After writing tests, run them (`turbo run lint typecheck test`) locally before pushing.
 6.  **E2E Frontend Testing (MCP Playwright):** For UI smoke tests and user-flow verification, use the Playwright MCP server directly from the agent — no spec files needed. Read the skill at `.agents/skills/e2e-playwright/SKILL.md` before starting any E2E session. Seed credentials, proven selectors, and known gotchas (especially CurrencyInput formatting behavior) are documented there.
-7.  **Documentation Log:** After tests pass and the task is complete, you MUST document the work in the respective logs under `docs/`: `06 - Error_Log.md`, `07 - Task_Log.md`, and/or `08 - Tech_Debt_Log.md`.
+7.  **Documentation Log:** After tests pass and the task is complete, you MUST document the work under `docs/logs/` — `tasks/`, `errors/` and/or `tech-debts/` — as one file per entry plus a new row at the **top** of that folder's `README.md` index (rules in `docs/logs/README.md`).
 8.  **Database Changes:** Run `pnpm --filter api prisma migrate dev --name <name>` to migrate, then `pnpm --filter api db:seed` to reset synthetic data. Remember: schema/migration changes require approval first (see Governance above).
 9.  **Code generation & Types:** Zod schemas drive both API validation and TS types. Do not manually type request/response objects if a Zod schema exists. **NEVER use the `any` type.**
 10. **Plan Closure Verification:** When a remediation/task plan is marked done, the commit or PR description MUST explicitly enumerate which plan items it closes (by ID, e.g. "Closes DEBT-009, DEBT-013"), cross-checked against the actual diff before committing — a plan item is not "closed" until its corresponding file changes are actually present in the diff. (Added after ERR-029: a previously approved remediation plan was believed shipped but was never actually executed, leaving a live defect in place until a second audit caught it.)
+11. **Local-only docs:** `docs/logs/`, `docs/plannings/` and `docs/screenshoots/` are never committed (`.gitignore` covers `docs/plannings/`; `docs/logs` and `docs/screenshoots` are listed in `.git/info/exclude`, which is per clone — add them there in a fresh clone). Never name or link these paths in any committed file other than this one. State the fact itself or cite its ID instead, for example "tracked as DEBT-064" or "contrast pairs measured in TASK-053".
 
 ## Troubleshooting
 

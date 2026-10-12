@@ -1,9 +1,3 @@
-/**
- * OhMyPos — Suppliers controller (ERD §3, PRD §5.3, Playbook §8).
- *
- * RBAC: Write endpoints restricted to OWNER and ADMIN.
- * Read endpoints accessible to any authenticated user (KASIR picks supplier when recording purchase).
- */
 import {
   Body,
   Controller,

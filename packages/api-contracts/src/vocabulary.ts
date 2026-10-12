@@ -11,12 +11,7 @@ import type {
   TransactionType,
 } from './enums';
 
-/**
- * OhMyPos Indonesian Vocabulary Mappings (DEBT-003).
- *
- * Centralizes the translation between backend schema enums (mirroring Kasync
- * conventions per ADR-012) and user-facing Indonesian presentation terms (PRD §5).
- */
+/** Backend enum values → Indonesian UI labels (DEBT-003). */
 
 export const TRANSACTION_TYPE_LABELS: Readonly<
   Record<TransactionType, string>

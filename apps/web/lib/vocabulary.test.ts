@@ -99,7 +99,7 @@ describe('Indonesian Vocabulary Translation (DEBT-003)', () => {
     });
   });
 
-  describe('Visual Flow Indicator and Badge Classes (DESIGN.md motif)', () => {
+  describe('Visual Flow Indicator and Badge Classes (design.md motif)', () => {
     it('returns green inflow text for INFLOW and IN', () => {
       expect(getFlowIndicatorClasses('INFLOW')).toBe('text-accent-inflow');
       expect(getFlowIndicatorClasses('IN')).toBe('text-accent-inflow');

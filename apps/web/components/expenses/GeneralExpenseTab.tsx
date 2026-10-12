@@ -121,13 +121,7 @@ function buildColumns(
   ];
 }
 
-/**
- * The two column ids that exist as backend sort keys (`LedgerEntrySortBySchema`).
- * `note` and `sourceType` deliberately render a plain header instead of a
- * `SortableHeader`: with one page in `data`, a sortable header the server
- * cannot honour would reorder 10 rows while looking like it ordered the whole
- * ledger — same pattern as `StockMovementsTable`.
- */
+/** Only the backend's sort keys get sortable headers; others would sort one page only. */
 const SORTABLE_COLUMN_IDS: LedgerEntrySortBy[] = ['entryDate', 'amount'];
 
 function toLedgerEntrySortBy(columnId: string | undefined): LedgerEntrySortBy {

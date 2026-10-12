@@ -15,12 +15,7 @@ import { RoleGuard } from '../../common/guards/role.guard';
 import { AllocationService } from './allocation.service';
 import { CreateAllocationDto } from './allocation.dto';
 
-/**
- * Reconciliation matching — restricted to ADMIN and OWNER; KASIR is rejected
- * outright (ADR-011 §6, Playbook §8). The guard sits on the controller so the
- * read endpoints are covered too: a cashier has no reason to inspect how bank
- * money was allocated across branches.
- */
+/** Reconciliation matching: `ADMIN`/`OWNER` only, reads included (ADR-011). */
 @ApiTags('allocations')
 @Controller('allocations')
 @UseGuards(RoleGuard)

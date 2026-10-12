@@ -1,29 +1,12 @@
-/**
- * OhMyPos — report period resolution (ADR-018, PRD §5.4).
- *
- * THE single definition of "what calendar range does this report cover" for the
- * whole repository. Phase 6's Inventory Summary must import from here rather
- * than writing its own month resolver — two definitions would make Dashboard 3
- * and Dashboard 5 disagree by seven hours at every boundary.
- *
- * Pure: no Prisma, no Nest DI, no `Date.now()`. Unit-tested with no database
- * (same shape as modules/sales/sale-totals.ts).
- *
- * Storage is UNAFFECTED: soldAt / entryDate / movementDate remain UTC instants
- * serialized with toISOString(). Only report BOUNDARIES and BUCKETS are WIB.
- */
 import { InvalidReportRangeException } from './errors/invalid-report-range.error';
 
 /** Postgres timezone name. Bound as a query parameter, never concatenated. */
 export const REPORT_TIMEZONE = 'Asia/Jakarta';
 
-/** WIB is a fixed UTC+7 offset with no DST — no ambiguous or skipped local times. */
+/** WIB is a fixed UTC+7 offset with no DST. */
 export const REPORT_UTC_OFFSET = '+07:00';
 
-/**
- * A daily-income response carries one row per day, so an unbounded range is an
- * unbounded response and an unbounded scan. 366 covers a full leap year.
- */
+/** Caps response size and scan length; 366 covers a leap year. */
 export const MAX_REPORT_RANGE_DAYS = 366;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -67,9 +50,9 @@ function wibMidnight(isoDate: string): Date {
 }
 
 /**
- * Resolves two INCLUSIVE WIB calendar dates into a half-open UTC instant range.
- * The upper bound is exclusive so a sale at 23:59:59.999 on the end day is
- * inside the range and one at 00:00:00.000 the next day is not.
+ * Resolves two inclusive WIB dates into a half-open `[from, to)` UTC range.
+ *
+ * @throws InvalidReportRangeException on a bad date, reversed range, or too long a span.
  */
 export function resolveReportRange(
   startDate: string,
@@ -96,12 +79,8 @@ export function resolveReportRange(
 }
 
 /**
- * Every WIB calendar day in the range, ascending, as `YYYY-MM-DD`.
- *
- * `from` is WIB midnight = 17:00 UTC on the previous day; adding 7h lands on
- * UTC midnight of the same WIB day, so `toISOString().slice(0, 10)` yields the
- * WIB date regardless of the Node process timezone. Do not replace this with
- * `toLocaleDateString` — that reintroduces the process-timezone dependency.
+ * Every WIB day in the range, ascending, as `YYYY-MM-DD`. Independent of the
+ * process timezone; do not switch to `toLocaleDateString`.
  */
 export function eachWibDay(range: ReportRange): string[] {
   const days: string[] = [];
@@ -114,13 +93,7 @@ export function eachWibDay(range: ReportRange): string[] {
   return days;
 }
 
-/**
- * The WIB calendar day containing `now`, as `YYYY-MM-DD`.
- *
- * `now` is a parameter, not `Date.now()` — this file stays pure/testable (see
- * file header). Callers needing "today" pass `new Date()` explicitly; this
- * function must never call `Date.now()` itself.
- */
+/** The WIB day containing `now`, as `YYYY-MM-DD`. Takes `now` to stay pure. */
 export function todayWib(now: Date): string {
   return new Date(now.getTime() + WIB_OFFSET_MS).toISOString().slice(0, 10);
 }

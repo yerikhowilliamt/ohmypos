@@ -3,9 +3,7 @@ import { RoleGuard } from '../../common/guards/role.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { MetricsService } from './metrics.service';
 
-/**
- * TASK-095: Secured to OWNER only, eliminating information leak of business metrics.
- */
+/** OWNER only: business metrics are not public. */
 @Controller('metrics')
 @UseGuards(RoleGuard)
 export class MetricsController {

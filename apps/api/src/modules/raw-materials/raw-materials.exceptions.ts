@@ -1,6 +1,3 @@
-/**
- * OhMyPos — domain exceptions for the RawMaterials module (Playbook §6, ERD §3).
- */
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
 export class RawMaterialNameTakenException extends ConflictException {
@@ -20,14 +17,9 @@ export class RawMaterialInUseException extends ConflictException {
 }
 
 /**
- * ADR-024. The STOCK/RECIPE base unit is immutable once the material has any
- * stock history.
- *
- * Changing it would silently re-scale `currentStock`, every
- * `RecipeItem.quantityUsed`, every `OpeningStock.quantity`, and every row of the
- * append-only `StockMovement` log — i.e. it rewrites history, which is exactly
- * what the purchase-unit/conversion split exists to avoid. A packaging change
- * is a `purchaseUnit`/`conversionFactor` edit, and those stay freely editable.
+ * The stock/recipe base unit cannot change once the material has stock
+ * history; that would rescale every stored quantity (ADR-024). Packaging stays
+ * editable.
  */
 export class RawMaterialUnitLockedException extends BadRequestException {
   constructor(unit: string) {

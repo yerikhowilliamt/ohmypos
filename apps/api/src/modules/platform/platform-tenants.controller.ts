@@ -29,9 +29,9 @@ import {
 } from './platform.dto';
 
 /**
- * ADR-025 Fase 4. `@Public()` bypasses the tenant `JwtAuthGuard`;
- * `PlatformAuthGuard` at class level is what actually authenticates every route
- * here. Both decorators are required — see DEBT-066.
+ * Platform operator API. `@Public()` bypasses the tenant guard; the class-level
+ * `PlatformAuthGuard` authenticates every route. Add new platform routes here
+ * so they inherit the guard (DEBT-066).
  */
 @ApiTags('platform')
 @Controller('platform')
@@ -44,8 +44,7 @@ export class PlatformTenantsController {
     private readonly impersonationService: ImpersonationService,
   ) {}
 
-  // Declared before `tenants/:id` so the literal path cannot be captured by the
-  // parameterised one.
+  // Must stay above `tenants/:id`.
   @Get('metrics/overview')
   @ApiOperation({ summary: 'Cross-tenant totals for the platform dashboard' })
   getMetrics() {
@@ -105,17 +104,6 @@ export class PlatformTenantsController {
     return this.impersonationService.start(platformAdminId, id, dto);
   }
 
-  /**
-   * TASK-130. Added to THIS controller rather than a new one on purpose:
-   * DEBT-066 records that a platform controller is authenticated only if
-   * somebody remembers to write `@UseGuards(PlatformAuthGuard)`. This class
-   * already carries it, so a route added here inherits the guard instead of
-   * betting on a memory.
-   *
-   * 5 per minute rather than the usual 10: there is no legitimate reason to
-   * reset five owner passwords in a minute, and the tighter number costs
-   * nobody anything.
-   */
   @Post('tenants/:id/reset-owner-password')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60000, limit: 5 } })
@@ -136,19 +124,6 @@ export class PlatformTenantsController {
     );
   }
 
-  /**
-   * TASK-131. Same controller and same reasoning as the password reset above:
-   * the class already carries `PlatformAuthGuard`, so a route added here is
-   * authenticated by inheritance rather than by somebody remembering.
-   *
-   * PATCH, not POST, because it changes one field of an existing row —
-   * `reset-owner-password` is a POST because setting a credential is an action,
-   * not an edit.
-   *
-   * 5 per minute, matching the password reset: correcting a mistyped owner
-   * address is a once-per-tenant event, and a rate that allows five a minute is
-   * already far past any honest use.
-   */
   @Patch('tenants/:id/owner-email')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { ttl: 60000, limit: 5 } })

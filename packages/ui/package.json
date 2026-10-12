@@ -2,7 +2,7 @@
   "name": "@ohmypos/ui",
   "version": "0.0.1",
   "private": true,
-  "description": "Shared shadcn/ui component wrappers + design tokens from DESIGN.md (System Design §2)",
+  "description": "Shared shadcn/ui component wrappers + design tokens from design.md (System Design §2)",
   "exports": {
     "./globals.css": "./src/styles/globals.css",
     "./lib/*": "./src/lib/*.ts",

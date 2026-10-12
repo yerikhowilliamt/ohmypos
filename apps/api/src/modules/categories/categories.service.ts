@@ -20,7 +20,6 @@ function toCategoryResponse(category: Category): CategoryResponse {
   };
 }
 
-/** Ported from Kasync, with the `userId` scoping removed (ERD §7 porting note 1). */
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}

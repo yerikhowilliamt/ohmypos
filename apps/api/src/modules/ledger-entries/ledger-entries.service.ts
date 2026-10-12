@@ -17,27 +17,14 @@ import type { JwtPayload } from '../../common/types/jwt-payload.interface';
 import { resolveLedgerBranchId } from '../../common/system-refs';
 import { OTHER_BRANCH_FORBIDDEN } from '../../common/messages';
 
-/**
- * Ported from Kasync with the ERD v3 extensions: `accountId` (required),
- * `sourceType` and `sourceId`. The `userId` scoping is gone (ERD §7 note 1).
- *
- * Entries created through this module are always `sourceType = MANUAL`; the
- * SALE / PURCHASE / PAYABLE_SETTLEMENT variants are written by their own
- * modules inside a transaction in Phase 3/4/5 (Playbook §7).
- */
+/** Ledger entries. Entries created here are always `MANUAL`. */
 @Injectable()
 export class LedgerEntriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Creates a system-generated entry inside the CALLER'S transaction (Playbook §3,
-   * §7). New modules must not write `ledger_entries` directly; they call this.
-   *
-   * Takes `tx`, never `this.prisma` — a Sale, a Purchase and a Settlement each
-   * need the entry to commit or roll back with the rest of their flow.
-   *
-   * `sourceType` is never MANUAL here: MANUAL is what `create()` below produces,
-   * and `update()` refuses to edit anything that is not MANUAL (TASK-003 note 7).
+   * Creates a system-generated (non-`MANUAL`) entry inside the caller's
+   * transaction. The only way other modules may write `ledger_entries`.
    */
   async createSystemEntry(
     tx: Prisma.TransactionClient,
@@ -119,11 +106,7 @@ export class LedgerEntriesService {
     };
   }
 
-  /**
-   * `user` is only passed by the controller's `GET :id` route (DEF-QA-01) —
-   * `update`/`remove` call this internally after their own OWNER/ADMIN-only
-   * guard has already run, so no branch check is needed there.
-   */
+  /** Pass `user` to enforce KASIR branch ownership (only `GET :id` does). */
   async findOne(id: string, user?: JwtPayload) {
     const entry = await this.prisma.ledgerEntry.findUnique({ where: { id } });
     if (!entry) {
@@ -194,7 +177,7 @@ export class LedgerEntriesService {
     return this.prisma.ledgerEntry.delete({ where: { id } });
   }
 
-  /** Fails fast with a 404 rather than letting Prisma raise a foreign-key error. */
+  /** 404 instead of a foreign-key error. */
   private async assertReferencesExist(
     tx: Prisma.TransactionClient,
     accountId?: string,

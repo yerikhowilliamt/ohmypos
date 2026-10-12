@@ -1,27 +1,12 @@
 /**
- * OhMyPos — staff login address suggestion.
- *
- * An Owner at `venty@lospollos.id` creating "Novi" gets `novi@lospollos.id`,
- * so every staff login lives on the business's own domain without the Owner
- * retyping it. User creation is OWNER-only (ADR-011), so "the creator's
- * domain" is always unambiguous.
- *
- * This is a SUGGESTION, never a rule. Nothing in `CreateUserSchema` constrains
- * the domain, and it should not: an outside bookkeeper on their own domain is
- * a legitimate account. The field stays editable and the Owner's own edit wins.
+ * Suggests a staff login on the Owner's domain ("Novi" → `novi@lospollos.id`).
+ * A suggestion only: the field stays editable and nothing enforces the domain.
  */
 
 /** Combining marks, which NFD splits off the base letters. */
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
 
-/**
- * First name, folded to something usable left of the `@`.
- * "Novi Andriani" → "novi", "O'Brien" → "obrien", "José" → "jose".
- *
- * Returns '' when nothing survives — a name written in a script with no ASCII
- * letters folds to nothing, and an empty local part is not a suggestion worth
- * making.
- */
+/** First name folded to ASCII ("José" → "jose"); '' when nothing survives. */
 export function toEmailLocalPart(name: string): string {
   const firstWord = name
     .normalize('NFD')
@@ -37,10 +22,7 @@ export function domainOf(email: string): string | null {
   return domain ? domain : null;
 }
 
-/**
- * `null` rather than a guess whenever either half is unusable, so the caller
- * leaves the field alone instead of writing something wrong into it.
- */
+/** `null` when either half is unusable, so the caller leaves the field alone. */
 export function suggestStaffEmail(
   name: string,
   ownerEmail: string | undefined | null,

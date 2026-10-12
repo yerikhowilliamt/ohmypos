@@ -1,11 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
-/**
- * Domain exceptions for the User module (Playbook §6). Raised instead of bare
- * framework exceptions so the rule being broken is named at the throw site.
- */
-
-/** ADR-011 §2 — branchId is required for KASIR and forbidden for ADMIN/OWNER. */
+/** `branchId` is required for KASIR and forbidden for ADMIN/OWNER (ADR-011). */
 export class InvalidRoleBranchAssignmentException extends BadRequestException {
   constructor(message: string) {
     super(message);

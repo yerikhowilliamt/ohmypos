@@ -14,7 +14,7 @@ import {
   MatchingEngine,
 } from './matching-engine';
 
-/** Ported from Kasync with the `userId` scoping removed (ERD §7 note 1). */
+/** Proposes and resets reconciliation matches. */
 @Injectable()
 export class MatchingService {
   constructor(private readonly prisma: PrismaService) {}
@@ -22,21 +22,11 @@ export class MatchingService {
   async proposeMatches(dto?: ProposeMatches) {
     return this.prisma.$transaction(
       async (tx) => {
-        // DEF-QA-03: lock the UNRESOLVED rows this call is about to propose
-        // against, before reading them, and skip any a concurrent propose is
-        // already holding. Without this, two admins opening Reconciliation at
-        // the same time both read the same UNRESOLVED set, both compute
-        // candidates against it, and both race the terminal `updateMany` below
-        // — one reviewer's queue silently contains transactions the other one
-        // just proposed against too.
+        // Lock this call's UNRESOLVED rows, skipping ones a concurrent propose holds (DEF-QA-03).
         const accountFilter = dto?.accountId
           ? Prisma.sql` AND account_id = ${dto.accountId}`
           : Prisma.empty;
-        // ADR-025: the tenant predicate is NOT optional here. Without it this
-        // query locks every tenant's UNRESOLVED rows — the follow-up findMany
-        // is tenant-filtered so nothing leaks into the response, but one
-        // tenant's Reconciliation page would hold locks across the whole
-        // platform for the length of this transaction.
+        // tenant_id is required here, or this would lock every tenant's rows.
         const lockedIds = await tx.$queryRaw<{ id: string }[]>(
           Prisma.sql`SELECT id FROM bank_transactions WHERE tenant_id = ${requireTenantId()} AND status = 'UNRESOLVED'${accountFilter} FOR UPDATE SKIP LOCKED`,
         );
@@ -49,8 +39,6 @@ export class MatchingService {
           where: { id: { in: lockedIds.map((row) => row.id) } },
         });
 
-        // Scope ledger entries to a window around the bank transactions rather
-        // than loading all history.
         const tolerance = dto?.dateToleranceDays ?? 3;
         const dates = bankTxns.map((t) => new Date(t.txnDate).getTime());
         const minDate = new Date(Math.min(...dates));
@@ -58,11 +46,7 @@ export class MatchingService {
         minDate.setUTCDate(minDate.getUTCDate() - tolerance);
         maxDate.setUTCDate(maxDate.getUTCDate() + tolerance);
 
-        // TASK-084: jendela ini dulu tak berbatas — rentang min-ke-maks SELURUH
-        // transaksi UNRESOLVED. Satu transaksi lama yang tidak pernah
-        // direkonsiliasi menarik setahun entri ke dalam memori dan ke dalam
-        // enumerasi subset. `take` memberi batas atas yang bisa dihitung; urutan
-        // menaik `entryDate` membuat potongannya deterministik, bukan sembarang.
+        // Bounded, deterministic window of ledger entries around the transactions (TASK-084).
         const MAX_LEDGER_WINDOW = 5000;
 
         const ledgerEntries = await tx.ledgerEntry.findMany({
@@ -112,9 +96,7 @@ export class MatchingService {
 
         return {
           candidates,
-          // `true` berarti: pencarian berhenti sebelum selesai. UI wajib
-          // mengatakannya kepada pengguna — "tidak ada kandidat lain" dan "kami
-          // berhenti mencari" adalah dua kalimat yang berbeda.
+          // The UI must say "we stopped searching", not "no other candidates".
           truncated: truncated || ledgerEntries.length === MAX_LEDGER_WINDOW,
         };
       },
@@ -122,17 +104,7 @@ export class MatchingService {
     );
   }
 
-  /**
-   * Rejects a single proposed match, returning that one bank transaction to
-   * UNRESOLVED. Frontend Reconciliation screen's "Abaikan" action
-   * (docs/plannings/phase-8h-reconciliation.md §6.2) — unlike `resetMatches`,
-   * this scopes to exactly one transaction rather than every PENDING_REVIEW
-   * row for an account.
-   *
-   * Only valid from PENDING_REVIEW: that is the only status `proposeMatches`
-   * ever writes, and the only status a "reject one candidate" action makes
-   * sense against.
-   */
+  /** Returns one PENDING_REVIEW transaction to UNRESOLVED ("Abaikan"). */
   async rejectMatch(bankTransactionId: string) {
     const transaction = await this.prisma.bankTransaction.findUnique({
       where: { id: bankTransactionId },

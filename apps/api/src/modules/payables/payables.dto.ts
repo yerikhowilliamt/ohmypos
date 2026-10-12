@@ -4,9 +4,6 @@ import {
   PayableQuerySchema,
 } from '@ohmypos/api-contracts';
 
-/**
- * OhMyPos — Payable DTOs (ADR-010).
- */
 export class CreatePayableSettlementDto extends createZodDto(
   CreatePayableSettlementSchema,
 ) {}

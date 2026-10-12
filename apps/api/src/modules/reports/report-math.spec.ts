@@ -1,6 +1,3 @@
-/**
- * OhMyPos — unit tests for the report math helpers (plan §6.8).
- */
 import { Prisma } from '../../generated/prisma/client';
 import {
   averagePerDay,

@@ -2,12 +2,7 @@ import { z } from 'zod';
 import { DateTimeString, UuidString } from './primitives';
 import { PaginationQuerySchema, SortOrderSchema } from './pagination.schema';
 
-/**
- * OhMyPos — Supplier contracts (ERD §3, PRD §5.3).
- *
- * Contact is free-text (phone, WhatsApp, or contact person name) and is not
- * validated as a strict phone format because Indonesian supplier contacts vary.
- */
+/** `contact` is free text; Indonesian supplier contacts vary too much to validate. */
 export const CreateSupplierSchema = z.object({
   name: z
     .string()

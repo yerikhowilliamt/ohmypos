@@ -6,12 +6,6 @@ export const BRANCH_SCOPE_KEY = 'branchScope';
 export type BranchScopeSource =
   'body.branchId' | 'query.branchId' | 'params.branchId' | 'params.id';
 
-/**
- * Marks an endpoint as branch-attributable and states exactly where its branch
- * id lives (Playbook §8). Naming the location is deliberate: a guard that
- * scanned the request for any `branchId` could not tell "this endpoint has no
- * branch" from "the branch field was forgotten", and would let the second case
- * through.
- */
+/** Marks an endpoint for `BranchScopeGuard` and names where its branch id lives. */
 export const BranchScoped = (source: BranchScopeSource) =>
   SetMetadata(BRANCH_SCOPE_KEY, source);

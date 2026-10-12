@@ -1,14 +1,3 @@
-/**
- * OhMyPos — Dashboard 3 response mappers and raw-row types (plan §7.1).
- *
- * The raw-row interfaces live here, next to the code that consumes them, the
- * same way SaleWithRelations lives in sales.mapper.ts. Field names are the SQL
- * column ALIASES in snake_case — `$queryRaw` returns exactly what the query
- * named, with no camelCase conversion.
- *
- * Serialization boundary: money `.toFixed(2)`, quantity `.toFixed(4)`, applied
- * HERE and nowhere else (repo convention — raw-materials.service.ts, sales.mapper.ts).
- */
 import type {
   CashBalanceResponse,
   DailyIncomeResponse,
@@ -41,7 +30,7 @@ export interface ProfitLossMoneyRow {
 
 export interface ProfitLossCogsRow {
   cogs: Prisma.Decimal;
-  /** `::int` in SQL — a bare COUNT(*) arrives as BigInt and breaks JSON (plan §4). */
+  /** Cast `::int` in SQL; a bare COUNT(*) arrives as BigInt. */
   sale_count: number;
 }
 
@@ -80,8 +69,7 @@ export interface DailyOperatingExpenseQueryRow {
   operating_expenses: Prisma.Decimal;
 }
 
-/** One row per Account — a LEFT JOIN, so an account with zero ledger activity
- * still appears with total_inflow = total_outflow = 0. */
+/** One row per account, including accounts with no ledger activity. */
 export interface CashBalanceRow {
   account_id: string;
   account_name: string;
@@ -107,9 +95,8 @@ export function toReportPeriod(
 }
 
 /**
- * ADR-017. `netProfit` subtracts COGS and operating expenses only; material
- * cash outflow is reported in the `cash` block and is NOT subtracted, because
- * that same cost is already inside `cogs` for whatever has been sold.
+ * `netProfit` subtracts COGS and operating expenses only. Material cash outflow
+ * is reported in `cash` and never subtracted, since it is already in COGS (ADR-017).
  */
 export function toProfitLossResponse(
   period: ReportPeriod,

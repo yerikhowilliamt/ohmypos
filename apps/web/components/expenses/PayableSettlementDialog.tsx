@@ -91,16 +91,7 @@ export function PayableSettlementDialog({
 
   const watchedAmount = useWatch({ control, name: 'amount' });
 
-  /**
-   * UX-only guard: warns and disables submit when the entered amount would
-   * exceed `remainingBalance`, computed with the same `lib/decimal.ts` fixed-
-   * point helpers used everywhere else in this codebase for money — never
-   * `Number()` arithmetic. This is NOT the source of truth: the backend's
-   * `SettlementExceedsPayableException` is what actually enforces the cap
-   * (`assertSettlable`, `payables.service.ts`), and its error still surfaces
-   * through `serverError` below if this client check is ever bypassed or
-   * stale (e.g. two settlements racing against the same payable).
-   */
+  /** UX guard against over-settlement (fixed-point); the API's 400 stays the authority. */
   const overage = React.useMemo(() => {
     if (!payable || !watchedAmount || !isValidMoneyString(watchedAmount)) {
       return null;

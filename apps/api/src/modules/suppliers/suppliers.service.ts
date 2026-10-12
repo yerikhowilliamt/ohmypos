@@ -1,9 +1,3 @@
-/**
- * OhMyPos — Suppliers service (ERD §3, PRD §5.3, ADR-010).
- *
- * Manages raw material suppliers. Supplier names are unique.
- * Deletion is restricted if referenced by SupplierPurchase or Payable.
- */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';

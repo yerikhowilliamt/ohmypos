@@ -23,18 +23,9 @@ import {
 } from '@ohmypos/ui/components/tooltip';
 
 /**
- * Port of shadcn/ui's Sidebar (ui.shadcn.com/docs/components/sidebar),
- * adapted for OhMyPos:
- *
- * - `isMobile` is a required `SidebarProvider` prop instead of an internal
- *   breakpoint hook — the app already has `useIsRail`/`useIsMobile`
- *   (`apps/web/hooks/useMediaQuery.ts`) as the single source of truth for
- *   these breakpoints; this file must not reimplement a second one.
- * - `open`/`onOpenChange` are always controlled by the caller and never
- *   persisted to a cookie — this project's rail/expanded switch is
- *   breakpoint-forced (`!isRail`), never a user preference to remember.
- * - No desktop keyboard shortcut: nothing here lets the user toggle desktop
- *   collapse, so a shortcut for it would silently do nothing.
+ * shadcn/ui Sidebar, adapted: `isMobile` and `open` are controlled by the
+ * caller (breakpoints live in `apps/web/hooks/useMediaQuery.ts`), nothing is
+ * persisted, and there is no keyboard shortcut.
  */
 
 const SIDEBAR_WIDTH = '216px';

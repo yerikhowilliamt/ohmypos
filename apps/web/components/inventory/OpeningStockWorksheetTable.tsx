@@ -30,12 +30,7 @@ interface OpeningStockWorksheetTableProps {
   isSubmitting?: boolean;
 }
 
-/**
- * What to suggest in the physical-count field. The ledger's carry-forward is
- * only a sensible suggestion when it is positive — a negative one means goods
- * left before anything arrived (see "Sisa Periode Lalu", which still shows it
- * verbatim), and a physical count can never be negative.
- */
+/** Suggested count: the carry-forward when positive; a physical count cannot be negative. */
 function carryForwardPlaceholder(carryForward: string | undefined): string {
   const plain = toQuantityInputValue(carryForward);
   if (plain === '' || plain.startsWith('-')) return '0';

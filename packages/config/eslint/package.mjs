@@ -2,10 +2,7 @@
 import { baseConfig } from './base.mjs';
 
 /**
- * ESLint preset for framework-free workspaces (`packages/api-contracts`,
- * `packages/ui`). Currently the baseline unchanged — it exists so those
- * packages never import the Nest or Next preset by accident, and so
- * package-only rules have somewhere to go later.
+ * Preset for framework-free packages (`api-contracts`, `ui`).
  *
  * @param {string} tsconfigRootDir normally `import.meta.dirname`
  */

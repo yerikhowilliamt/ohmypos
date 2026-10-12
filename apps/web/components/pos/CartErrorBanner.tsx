@@ -16,11 +16,7 @@ interface CartErrorBannerProps {
   onDismiss: () => void;
 }
 
-/**
- * The in-cart error surface (Phase 8c plan §5). Sits inside the order panel,
- * beside the lines it refers to — never a toast, because the cashier needs to
- * read it while editing the quantities it names.
- */
+/** In-cart error beside the lines it names; never a toast. */
 export function CartErrorBanner({
   error,
   recentSales,

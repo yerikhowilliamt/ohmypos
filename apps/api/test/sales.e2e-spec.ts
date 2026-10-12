@@ -1,22 +1,6 @@
 // e2e tests run against the compose Postgres (host port 5433). Loading .env here
 // keeps the connection string in one place rather than duplicated per suite.
 import 'dotenv/config';
-/**
- * OhMyPos — Sales E2E Tests (PRD §5.2, ADR-005, ADR-007, ADR-011, ADR-014,
- * ADR-015, ADR-016, Playbook §10).
- *
- * Auth-aware end-to-end test suite testing:
- * - HPP snapshot (per-unit, ADR-015) and its immutability after a later
- *   raw-material cost change (ADR-005)
- * - Stock decrement under FOR UPDATE lock, aggregated per raw material (ADR-007, ADR-015)
- * - Concurrency: lock contention on a shared material, AND lock-ordering
- *   safety across overlapping carts (ADR-016) — the two cases this phase
- *   exists for
- * - Rollback guarantees across the transactional Sale flow (Playbook §7)
- * - RBAC & BranchScopeGuard enforcement (a sale is branch-attributed and
- *   KASIR-creatable but scoped to their own branch only)
- * - Decimal scale preservation and stock-balance integrity re-derivation
- */
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
@@ -45,8 +29,7 @@ describe('Sales (e2e)', () => {
   let centralBranchId: string;
   let accountId: string;
 
-  // Dedicated raw material / product pairs per scenario, so absolute stock
-  // assertions never depend on test execution order (plan §10.7).
+  // One material/product pair per scenario, so stock assertions are order-independent.
   let mBaseGulaId: string;
   let mBaseKopiId: string;
   let pBaseId: string;
@@ -358,9 +341,7 @@ describe('Sales (e2e)', () => {
   }
 
   async function cleanup() {
-    // SaleItem cascades from Sale, but deleted explicitly anyway to match the
-    // repo's established style (Phase 4's SupplierPurchaseItem does the same
-    // ahead of its Cascade parent).
+    // Deleted explicitly although it cascades, matching the repo's style.
     await prisma.saleItem.deleteMany({});
     await prisma.sale.deleteMany({});
     await prisma.ledgerEntry.deleteMany({
@@ -435,9 +416,7 @@ describe('Sales (e2e)', () => {
       expect(entries[0].branchId).toBe(branch1Id);
       expect(body.ledgerEntryId).toBe(entries[0].id);
 
-      // Case 3: exactly one StockMovement per material, aggregated (ADR-015 §3),
-      // with unitCostAtMovement matching the material's cost at sale time, and
-      // currentStock down by exactly the recipe-derived amount.
+      // One movement per material (aggregated), at the cost at sale time.
       const movements = await prisma.stockMovement.findMany({
         where: { referenceType: 'SALE', referenceId: body.id },
         orderBy: { rawMaterialId: 'asc' },
@@ -518,7 +497,7 @@ describe('Sales (e2e)', () => {
         where: { referenceType: 'SALE', referenceId: body.id },
       });
       expect(movements).toHaveLength(1);
-      // 2 lines × 0.2000 = 0.4000, summed — not two separate 0.2000 rows (ADR-015 §3).
+      // 2 lines × 0.2000 = 0.4000 in one row, not two.
       expect(movements[0].quantity.toFixed(4)).toBe('0.4000');
     });
 
@@ -632,7 +611,7 @@ describe('Sales (e2e)', () => {
         results.push(r1.status, r2.status);
       }
 
-      // Zero 500s — a deadlock (40P01) would surface as one here (plan §10.3a).
+      // Zero 500s: a deadlock (40P01) would show up here.
       expect(results.every((s) => s === 201)).toBe(true);
       expect(results).toHaveLength(20);
 
@@ -849,7 +828,7 @@ describe('Sales (e2e)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 5. Guards (ADR-011, Playbook §8, plan §7.3)
+  // 5. Guards (ADR-011, Playbook §8)
   // ---------------------------------------------------------------------------
   describe('Guards', () => {
     let branch1SaleId: string;
@@ -1006,9 +985,7 @@ describe('Sales (e2e)', () => {
   });
 
   describe('Price override restriction (DEBT-009)', () => {
-    // KASIR's 3-day backdate limit (see 'Backdate limit' above) runs before
-    // this check in Phase 1 — use "now", not a fixed historical date, so
-    // these cases actually exercise the override check, not the date guard.
+    // Use "now" so the KASIR backdate limit does not fire before the override check.
     it('rejects a KASIR sale with a per-line price that differs from the master price', async () => {
       const res = await postSale(kasir1.cookies, {
         branchId: branch1Id,

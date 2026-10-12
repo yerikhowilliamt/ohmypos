@@ -3,10 +3,7 @@ import { AttendanceStatusSchema } from './device.schema';
 import { TenantStatusSchema } from './tenant.schema';
 import { UserResponseSchema } from './user.schema';
 
-/**
- * Auth request/response shapes (ADR-011 §3). There is deliberately no register
- * schema: user creation is OWNER-only, with no self-registration (ADR-011 §5).
- */
+/** Auth shapes. There is no register schema: users are created by an OWNER (ADR-011). */
 export const LoginSchema = z.object({
   email: z.email().toLowerCase(),
   password: z.string().min(1, 'Kata sandi wajib diisi'),
@@ -19,49 +16,25 @@ export const ChangePasswordSchema = z.object({
 });
 export type ChangePassword = z.infer<typeof ChangePasswordSchema>;
 
-/**
- * Additive over UserResponseSchema (Phase 11) — `attendance` is null for
- * ADMIN/OWNER (not tracked, Context section) and for any login response that
- * isn't the login endpoint itself (GET /auth/me, PATCH /users/:id, etc. all
- * still return plain UserResponseSchema, not this). Frontend code that only
- * reads name/email/role from a login response is unaffected by this field.
- */
+/** Login response: `UserResponse` plus attendance (null for ADMIN/OWNER). */
 export const LoginResponseSchema = UserResponseSchema.extend({
   attendance: AttendanceStatusSchema.nullable(),
 });
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 
-/**
- * What `GET /auth/me` returns (TASK-132).
- *
- * `UserResponse` plus the one thing about the BUSINESS that the frontend has
- * to know before it renders anything: whether the tenant is suspended. A
- * suspended tenant's user can still authenticate — `TenantStatusGuard` blocks
- * the application, not the login — so without this field the app cannot tell
- * "signed out" from "signed in to a business that is switched off", and it
- * showed the login screen for both.
- *
- * Only on `/auth/me`. `PATCH /users/:id`, `PATCH /auth/me` and the rest still
- * return plain `UserResponse`: they answer questions about a person, and this
- * field is about the business.
- */
+/** `GET /auth/me`: `UserResponse` plus `tenantStatus` (TASK-132). */
 export const SessionResponseSchema = UserResponseSchema.extend({
   tenantStatus: TenantStatusSchema,
 });
 export type SessionResponse = z.infer<typeof SessionResponseSchema>;
 
-/**
- * Self-service profile update (Phase 10a). Deliberately name-only: email is
- * the login identifier and changing it is an OWNER-administered action via
- * `PATCH /users/:id`, not a self-service one — there is no self-service email
- * change in this plan.
- */
+/** Self-service profile update: name only. Email changes go through `PATCH /users/:id`. */
 export const UpdateSelfSchema = z.object({
   name: z.string().trim().min(1).max(120),
 });
 export type UpdateSelf = z.infer<typeof UpdateSelfSchema>;
 
-/** Response shape of POST /auth/me/photo (Phase 10b). */
+/** Response of `POST /auth/me/photo`. */
 export const UploadPhotoResponseSchema = z.object({
   photoUrl: z.string(),
 });

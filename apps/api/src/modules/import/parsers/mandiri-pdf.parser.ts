@@ -7,14 +7,7 @@ import {
 } from '../interfaces/bank-parser.interface';
 import { extractPdfPages, PdfTextItem } from './pdf-text.util';
 
-/**
- * Column x-ranges of the Mandiri e-Statement transaction table, in PDF points.
- * The layout is a fixed grid — `No` at x=20, date/time at x=52, description at
- * x=124, with `Nominal` and `Saldo` right-aligned — so slicing by column is far
- * more reliable than regexing a flattened line. Verified against a 6-page,
- * 57-transaction statement: every row extracted, and the running balance
- * reconciles from the opening to the closing balance.
- */
+/** Column x-ranges in PDF points. Re-derive against a real sample before changing (see README). */
 const COLUMN = {
   no: (x: number) => x < 40,
   date: (x: number) => x >= 40 && x < 120,
@@ -23,11 +16,7 @@ const COLUMN = {
   saldo: (x: number) => x >= 460,
 };
 
-/**
- * How far above/below its `No` marker a row's cells may sit. Rows are ~46pt
- * apart and the tallest observed row spans ~30pt, so this both captures a full
- * row and keeps the page header out of the first row's description.
- */
+/** How far above/below its `No` marker a row's cells may sit (rows are ~46pt apart). */
 const MAX_ROW_HALF_HEIGHT = 25;
 
 /** Mandiri renders month abbreviations in either language depending on locale. */
@@ -67,10 +56,8 @@ export interface MandiriPdfRow {
 }
 
 /**
- * Groups a page's text runs into rows, keyed off the sequential `No` marker in
- * the leftmost column. Each row claims the runs between the midpoints to its
- * neighbours, so page furniture (header, column titles, footer) and the
- * disclaimer page fall outside every row and are dropped without a blocklist.
+ * Groups a page's text runs into rows keyed off the `No` marker. Each row claims
+ * the runs between the midpoints to its neighbours.
  */
 export function extractMandiriRows(items: PdfTextItem[]): MandiriPdfRow[] {
   const markers = items
@@ -149,11 +136,7 @@ function parseDate(raw: string): Date | null {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-/**
- * Turns extracted rows into transactions. Malformed rows are skipped rather
- * than guessed at — the same posture as the CSV parsers, and the safe one for
- * money: a dropped row surfaces as an unreconciled gap, a wrong one does not.
- */
+/** Turns extracted rows into transactions, skipping any malformed row. */
 export function parseMandiriRows(rows: MandiriPdfRow[]): ParsedTransaction[] {
   const parsed: ParsedTransaction[] = [];
   const signatureCounts = new Map<string, number>();
@@ -176,12 +159,7 @@ export function parseMandiriRows(rows: MandiriPdfRow[]): ParsedTransaction[] {
     const amount = money.amount.toFixed(2);
     const time = row.time ?? '';
 
-    // The clock time is kept out of `txnDate` (day-only, matching the CSV
-    // parsers and the matching engine) but folded into the hash, where it makes
-    // same-day rows distinct. `no` is deliberately excluded: it restarts at 1
-    // in every statement, so including it would give the same transaction a
-    // different hash on an overlapping re-import and defeat the
-    // (accountId, dedupHash) unique constraint.
+    // Time goes into the hash, not txnDate. `no` must stay out: it restarts per statement.
     const baseSignature = `${txnDate.toISOString()}_${time}_${description}_${amount}_${money.type}`;
     const count = signatureCounts.get(baseSignature) ?? 0;
     signatureCounts.set(baseSignature, count + 1);
@@ -196,8 +174,6 @@ export function parseMandiriRows(rows: MandiriPdfRow[]): ParsedTransaction[] {
       amount,
       type: money.type,
       description,
-      // Reference numbers are embedded in the description text, with no column
-      // of their own, so there is nothing dependable to key on.
       externalRef: null,
       dedupHash,
     });
@@ -206,11 +182,7 @@ export function parseMandiriRows(rows: MandiriPdfRow[]): ParsedTransaction[] {
   return parsed;
 }
 
-/**
- * Parses a Mandiri Livin e-Statement PDF (PRD §5.7).
- *
- * Supports password-protected statements via `options.password`.
- */
+/** Parses a Mandiri Livin e-statement PDF (ADR-022). */
 export class MandiriPdfParser implements BankParser {
   async parse(
     fileBuffer: Buffer,

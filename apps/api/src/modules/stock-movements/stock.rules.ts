@@ -1,14 +1,3 @@
-/**
- * OhMyPos — sale-time stock sufficiency rule (ADR-007, plan §10.2).
- *
- * Pure — no database, no Nest DI (same shape as payables/payables.rules.ts).
- * Playbook §10 puts the Sale flow in the "must have thorough tests" tier;
- * keeping the rule pure is what makes the exhaustive cases fast and isolated.
- *
- * Checks EVERY requirement before throwing, so the exception names every short
- * material at once — a cashier fixing an order needs the whole list, not just
- * the first failure.
- */
 import { Prisma } from '../../generated/prisma/client';
 import { InsufficientStockException } from './stock-movements.exceptions';
 
@@ -18,6 +7,14 @@ export interface StockSufficiencyRequirement {
   quantity: Prisma.Decimal;
 }
 
+/**
+ * Throws if any requirement exceeds its available quantity, listing every
+ * shortfall at once.
+ *
+ * A material missing from `available` is treated as zero stock (fail closed).
+ *
+ * @throws InsufficientStockException
+ */
 export function assertSufficientStock(
   required: StockSufficiencyRequirement[],
   available: Map<string, Prisma.Decimal>,
@@ -25,8 +22,6 @@ export function assertSufficientStock(
   const shortfalls = required
     .map((r) => ({
       ...r,
-      // A material absent from `available` is a shortfall, not a skip — failing
-      // open here would let a sale consume a material that no longer exists.
       availableQuantity:
         available.get(r.rawMaterialId) ?? new Prisma.Decimal(0),
     }))

@@ -10,15 +10,7 @@ import { PrismaService } from '../src/common/prisma/prisma.service';
 import { tenantScopedPrisma } from './tenant-fixture';
 import { resetDatabase } from './reset-database';
 
-/**
- * The allocation-sum constraint is in Playbook §10's "must have thorough tests"
- * tier: it is the invariant the whole reconciliation module rests on, and it is
- * enforced in two places that must agree — the service's Decimal arithmetic and
- * the `trg_check_allocation_sum` trigger's FOR UPDATE check.
- *
- * These run against a real Postgres because the trigger is the point. Mocking
- * Prisma here would test nothing that matters.
- */
+/** Runs against real Postgres: the allocation-sum trigger is the point. */
 describe('Allocation sum constraint (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -27,8 +19,7 @@ describe('Allocation sum constraint (e2e)', () => {
   let categoryId: string;
   let branchId: string;
 
-  // Allocation endpoints are ADMIN/OWNER only (ADR-011 §6), so every request
-  // here carries a real session rather than bypassing the guard.
+  // Allocation endpoints are ADMIN/OWNER only, so requests carry a real session.
   const adminEmail = 'alloc-admin@test.local';
   const adminPassword = 'TestPass123!';
   let adminCookies: string[] = [];

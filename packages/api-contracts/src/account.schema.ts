@@ -23,11 +23,7 @@ export const AccountResponseSchema = z.object({
 });
 export type AccountResponse = z.infer<typeof AccountResponseSchema>;
 
-/**
- * POS payment-method projection (PRD §5.2 — "each sale is tied to a payment
- * method"). Deliberately omits `openingBalance` (Kas Awal): a KASIR needs to
- * name the account a sale was paid into, and nothing more (ADR-011).
- */
+/** POS payment-method projection; never includes `openingBalance` (ADR-011). */
 export const PaymentMethodResponseSchema = z.object({
   id: UuidString,
   name: z.string(),

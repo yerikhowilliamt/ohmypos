@@ -12,11 +12,6 @@ import type {
 } from '@ohmypos/api-contracts';
 import { apiFetch } from '@/lib/api';
 
-/**
- * Dashboard 3 (PRD §5.4) — OWNER-only, server-aggregated reports
- * (`apps/api/src/modules/reports`, ADR-008/ADR-017/ADR-018). Every hook here
- * mirrors the shared filter shape; nothing is recomputed client-side.
- */
 export interface ReportFilters {
   startDate: string;
   endDate: string;

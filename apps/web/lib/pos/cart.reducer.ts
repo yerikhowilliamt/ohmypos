@@ -1,17 +1,6 @@
-/**
- * OhMyPos — POS cart state (PRD §5.2, Phase 8c plan §2 Option A).
- *
- * Pure: no React, no network, no dates. Every rule that decides whether the cart
- * is submittable, or what happens after a failed submit, lives here so it can be
- * tested exhaustively — the same shape as the backend's `stock.rules.ts` and
- * `sale-stock.calculator.ts`.
- */
 import type { ProductWithHppResponse } from '@ohmypos/api-contracts';
 
-/**
- * Matches `CreateSaleSchema.items.max(50)`. Enforced client-side so the cashier
- * is stopped at the tile rather than by a 400 after they have built the order.
- */
+/** Matches `CreateSaleSchema`'s 50-line cap, enforced at the tile. */
 export const MAX_CART_LINES = 50;
 
 export interface CartLine {
@@ -21,10 +10,7 @@ export interface CartLine {
   productName: string;
   /** The product's master price at the time the line was created. */
   masterPrice: string;
-  /**
-   * What the customer is actually charged. `null` means "charge master price" and
-   * is what makes `to-create-sale.ts` omit `unitPrice` from the request entirely.
-   */
+  /** Charged price; `null` means master price (omitted from the request). */
   overridePrice: string | null;
   quantity: number;
 }
@@ -76,11 +62,7 @@ export const initialCartState: CartState = {
   submit: { status: 'idle', error: null },
 };
 
-/**
- * Any edit to the cart invalidates a previous failure: the numbers the server
- * rejected are no longer the numbers on screen. Returning to `idle` is also what
- * re-arms `SUBMIT_START`.
- */
+/** Any edit clears a previous failure and re-arms submit. */
 function afterEdit(state: CartState, lines: CartLine[]): CartState {
   return { ...state, lines, submit: { status: 'idle', error: null } };
 }
@@ -96,13 +78,7 @@ function mapLine(
 export function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'ADD_PRODUCT': {
-      /**
-       * Merge into an existing line only when that line is still at master price.
-       * A line carrying an override is a deliberate "this one is discounted"
-       * decision, so tapping the tile again must start a fresh line rather than
-       * silently sell another unit at the negotiated price. `CreateSaleSchema`
-       * allows duplicate `productId` for exactly this reason (sale.schema.ts:30-37).
-       */
+      /** Merge only into a line at master price; an overridden line stays separate. */
       const mergeable = state.lines.find(
         (line) =>
           line.productId === action.product.id && line.overridePrice === null,
@@ -145,8 +121,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
     case 'DECREMENT': {
       const target = state.lines.find((line) => line.id === action.lineId);
       if (!target) return state;
-      // Decrementing the last unit removes the line — DESIGN.md §11.4 Order Panel lists
-      // "remove item" as a quantity control, not a separate destructive action.
+      // Decrementing the last unit removes the line (design.md §11.4).
       if (target.quantity <= 1) {
         return afterEdit(
           state,
@@ -164,8 +139,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
 
     case 'SET_QUANTITY': {
       if (!Number.isInteger(action.quantity) || action.quantity < 1) {
-        // `SaleItemInputSchema.quantity` refines `> 0`; a zero-quantity line
-        // would be rejected server-side, so it is never allowed into state.
+        // Quantity must stay > 0, as the API requires.
         return state;
       }
       return afterEdit(
@@ -188,9 +162,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
         state,
         mapLine(state, action.lineId, (line) => ({
           ...line,
-          // An empty input clears the override rather than sending "0" — DEBT-009
-          // leaves overrides unrestricted, but an accidental free item is a
-          // different thing from a deliberate one.
+          // An empty input clears the override rather than charging 0.
           overridePrice:
             action.price === null || action.price === '' ? null : action.price,
         })),
@@ -204,15 +176,12 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       };
 
     case 'SUBMIT_START':
-      // The guard against double-submit. A second dispatch while a sale is in
-      // flight is dropped here, so it cannot depend on a button's disabled state
-      // winning a race with a double tap.
+      // Double-submit guard, independent of the button's disabled state.
       if (state.submit.status === 'pending') return state;
       return { ...state, submit: { status: 'pending', error: null } };
 
     case 'SUBMIT_OK':
-      // The ONLY action that clears the cart. Every failure path below leaves
-      // lines, quantities and overrides byte-identical so retry is one tap.
+      // The only action that clears the cart; failures keep it intact for retry.
       return { ...initialCartState, accountId: state.accountId };
 
     case 'SUBMIT_FAIL':
@@ -225,8 +194,7 @@ export function cartReducer(state: CartState, action: CartAction): CartState {
       };
 
     case 'DISMISS_ERROR':
-      // An uncertain submit is not dismissible: the cashier must confirm whether
-      // the sale landed before the cart is usable again (plan §5).
+      // An uncertain submit must be confirmed before the cart is usable again.
       if (state.submit.status === 'uncertain') return state;
       return { ...state, submit: { status: 'idle', error: null } };
 

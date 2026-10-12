@@ -17,13 +17,7 @@ import { ChartEmptyState, ReportBarChart } from './ReportChart';
 interface IncomeByPaymentMethodViewProps {
   data: IncomeByPaymentMethodResponse | undefined;
   isLoading: boolean;
-  /**
-   * The report's own date range, for the export filename (DEBT-025). Without
-   * it the file is named for the day it was exported, so two exports of
-   * different ranges on the same day overwrite each other in Downloads — and
-   * whoever opens the file later has no on-screen context to tell them which
-   * period it covers.
-   */
+  /** The report's date range, for the export filename (DEBT-025). */
   filters: ReportFilters;
 }
 
@@ -97,9 +91,7 @@ const exportColumns: ExportColumn<IncomeByPaymentMethodRow>[] = [
   { header: 'Jumlah Transaksi', accessor: (row) => row.entryCount },
 ];
 
-/** Dashboard 3 — Income by Payment Method (PRD §5.4). `total` here equals
- * ProfitLossResponse.totalIncome for the same range — a tested invariant on
- * the backend (Phase 7 §6.1); this view doesn't re-derive it. */
+/** Income by payment method; its total equals P&L `totalIncome` (tested on the API). */
 export function IncomeByPaymentMethodView({
   data,
   isLoading,

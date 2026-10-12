@@ -62,7 +62,6 @@ export class BcaCsvParser implements BankParser {
       } else if (typeStr === 'DB') {
         type = TransactionType.OUTFLOW;
       } else {
-        // Skip unrecognised / malformed transaction types (e.g. 'CREDIT', empty string)
         continue;
       }
 

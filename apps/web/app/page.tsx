@@ -1,11 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 
-/**
- * Sends each role to its own landing screen (System Design §5): KASIR to the
- * POS, OWNER to the Dashboard, ADMIN into Data Master (ADMIN has no dashboard
- * access — AGENTS.md's deliberate v1 scope boundary).
- */
+/** Role landing: KASIR → POS, OWNER → Dashboard, ADMIN → Data Master. */
 export default async function Home() {
   const user = await getSession();
 

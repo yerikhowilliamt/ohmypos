@@ -12,12 +12,7 @@ import {
   SortOrderSchema,
 } from './pagination.schema';
 
-/**
- * OhMyPos — StockMovement response contract (ERD §3, System Design §7, ADR-007).
- * No write endpoint exists — StockMovement is created exclusively via
- * transaction-participant services (StockMovementsService). TASK-070 added the
- * read half; there is still deliberately no create/update/delete contract.
- */
+/** Stock movement (read only; movements are written only by services). */
 export const StockMovementResponseSchema = z.object({
   id: UuidString,
   rawMaterialId: UuidString,
@@ -26,11 +21,7 @@ export const StockMovementResponseSchema = z.object({
   /** satuan — kg, liter, pcs. Free text on RawMaterial (ERD §3), not an enum. */
   rawMaterialUnit: z.string(),
   branchId: UuidString.nullable(),
-  /**
-   * Null for a central event — a central purchase or an OPENING stock-take.
-   * That is attribution being genuinely absent (ADR-004), not a failed join, so
-   * the UI renders it as "Pusat" rather than as a blank cell.
-   */
+  /** Null for a central event (central purchase, OPENING); shown as "Pusat". */
   branchName: z.string().nullable(),
   direction: StockDirection,
   quantity: QuantityString,
@@ -43,16 +34,7 @@ export const StockMovementResponseSchema = z.object({
 });
 export type StockMovementResponse = z.infer<typeof StockMovementResponseSchema>;
 
-/**
- * `rawMaterialName` is the one key here that is not a StockMovement column — it
- * lives on the related RawMaterial and needs a nested `orderBy`, exactly like
- * `supplierName` on `PayableSortBySchema`.
- *
- * `movementDate` and `createdAt` are BOTH offered and are genuinely different
- * dates: `applyOpening` stamps `movementDate` with the period start, which can
- * be weeks before the row was written. `movementDate` is the business date
- * (ADR-018) and therefore the default.
- */
+/** Sort keys. `movementDate` (the business date) is the default, not `createdAt`. */
 export const StockMovementSortBySchema = z.enum([
   'movementDate',
   'quantity',
@@ -70,7 +52,7 @@ export const StockMovementQuerySchema = PaginationQuerySchema.extend({
   branchId: UuidString.optional(),
   direction: StockDirection.optional(),
   referenceType: StockReferenceType.optional(),
-  /** Both bounds filter `movementDate`, never `createdAt` — see the note above. */
+  /** Both bounds filter `movementDate`, never `createdAt`. */
   startDate: DateTimeString.optional(),
   endDate: DateTimeString.optional(),
   sortBy: StockMovementSortBySchema.optional(),

@@ -21,11 +21,7 @@ export const POS_QUERY_KEYS = {
     ['sales', 'list', params] as const,
 };
 
-/**
- * The only `/accounts` route a KASIR may call. Payment methods are `Account`
- * records (System Design §6.1) and change about as often as master data, so the
- * default `staleTime` is generous enough.
- */
+/** Payment methods: the only `/accounts` route a KASIR may call. */
 export function usePaymentMethods() {
   return useQuery({
     queryKey: POS_QUERY_KEYS.paymentMethods,
@@ -35,13 +31,8 @@ export function usePaymentMethods() {
 }
 
 /**
- * A sale moves stock and money, so on success both caches are stale: raw material
- * balances fell, and every product's `makeableQuantity` moved with them (ADR-013).
- *
- * No `onError` handling here — the screen maps failures to in-cart state via
- * `mapSubmitError`, and a mutation that swallowed its own error would take that
- * away. Mutations do not retry (TanStack's default), which matters: `POST /sales`
- * has no idempotency key, so an automatic retry could double-write money.
+ * Creates a sale and invalidates stock and product caches. Errors are mapped by
+ * `mapSubmitError`; no automatic retry (the caller owns the idempotency key).
  */
 export function useCreateSale() {
   const queryClient = useQueryClient();
@@ -67,13 +58,7 @@ export interface PaginatedSales {
   meta: { total: number; page: number; limit: number; totalPages: number };
 }
 
-/**
- * Backs the "Periksa transaksi terakhir" affordance after an uncertain submit
- * (plan §5). `enabled: false` — it is fetched on demand, never on mount.
- *
- * No `branchId` is sent: `BranchScopeGuard` injects the KASIR's own branch, and
- * sending it explicitly would only create a way to get it wrong.
- */
+/** Last sales for "Periksa transaksi terakhir"; fetched on demand only. Sends no branchId (see DEBT-080). */
 export function useRecentSales() {
   return useQuery({
     queryKey: POS_QUERY_KEYS.recentSales,
@@ -99,8 +84,7 @@ export interface SalesFilterParams {
 
 export function useSales(params: SalesFilterParams = {}) {
   const searchParams = new URLSearchParams();
-  // Falsy guard, not `!== undefined`: an empty string means "no filter", and
-  // sending `search=` would make the query key differ for an identical result.
+  // Falsy guard so an empty search does not change the query key.
   if (params.search) searchParams.set('search', params.search);
   if (params.branchId) searchParams.set('branchId', params.branchId);
   if (params.accountId) searchParams.set('accountId', params.accountId);
@@ -117,8 +101,7 @@ export function useSales(params: SalesFilterParams = {}) {
   return useQuery({
     queryKey: POS_QUERY_KEYS.salesList(params as Record<string, unknown>),
     queryFn: () => apiFetch<PaginatedSales>(path),
-    // Paging replaces the whole result set; without this the table flashes its
-    // loading skeleton on every page click.
+    // Keep the previous page visible while the next one loads.
     placeholderData: keepPreviousData,
   });
 }

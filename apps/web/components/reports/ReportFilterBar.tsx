@@ -28,13 +28,7 @@ interface ReportFilterBarProps {
   disabled?: boolean;
 }
 
-/**
- * Shared date-range + branch filter for every Dashboard 3 report view
- * (PRD §5.4: "support filtering by date range and (where applicable)
- * branch"). One instance sits above the report Tabs in ReportsClient — every
- * report reads the same {startDate, endDate, branchId} rather than each view
- * carrying its own filter UI.
- */
+/** The shared date-range and branch filter for every report tab. */
 export function ReportFilterBar({
   startDate,
   endDate,

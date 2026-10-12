@@ -18,17 +18,8 @@ import { useForm } from 'react-hook-form';
 import { apiFetch } from '@/lib/api';
 
 /**
- * ADR-025 — the platform console's front door.
- *
- * Deliberately plainer than `/login`, and not by neglect. The tenant login is
- * a marketing surface a shop owner sees every morning; this one is an internal
- * door that must never be mistaken for it. An operator who lands here expecting
- * the tenant app should notice within a second, which is what the warning strip
- * and the stripped-back layout are for.
- *
- * It lives at `app/platform/login/` — OUTSIDE the `(console)` group — so it is
- * not wrapped by the layout that calls `requirePlatformAdmin()`, which would
- * bounce an unauthenticated visitor straight back here in a loop.
+ * Platform console login, deliberately plainer than the tenant login. Lives
+ * outside `(console)` so its auth layout cannot redirect it into a loop.
  */
 export default function PlatformLoginPage() {
   const router = useRouter();

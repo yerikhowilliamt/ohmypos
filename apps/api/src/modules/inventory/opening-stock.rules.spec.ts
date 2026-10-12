@@ -1,7 +1,3 @@
-/**
- * OhMyPos — unit tests for the opening-stock validation rules (PRD §5.5,
- * Phase 6 plan §5, §3.4).
- */
 import { Prisma } from '../../generated/prisma/client';
 import {
   assertOpeningStockNotNegative,

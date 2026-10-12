@@ -24,11 +24,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { apiFetch } from '@/lib/api';
 
-/**
- * Split-Screen Editorial Luxury Login (DESIGN.md)
- * Validates with Zod schema from @ohmypos/api-contracts (ADR-010).
- * HttpOnly cookies managed by backend.
- */
+/** Tenant login; validated with the shared `LoginSchema`. */
 export default function LoginPage() {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);

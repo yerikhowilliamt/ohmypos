@@ -43,15 +43,8 @@ interface AttendanceCalendarMatrixProps {
 }
 
 /**
- * One page big enough to hold a whole month of logins: 8 kasir x 2 logins x 31
- * days = 496. Matches the `limit` ceiling on AttendanceQuerySchema.
- *
- * Angka yang sama juga dipakai untuk daftar cuti, dan itu HANYA sah karena
- * LeaveRequestListQuerySchema juga di-cap di 500. Keduanya harus bergerak
- * bersama — ERR-047 terjadi tepat ketika keduanya tidak. Kalau salah satu cap
- * diubah, konstanta ini harus dipecah, bukan diikutkan.
- *
- * Sebulan melewati angka ini dilaporkan di layar, tidak pernah dipotong diam-diam.
+ * One page per month (8 kasir × 2 logins × 31 days = 496). Shared with the leave
+ * query, whose cap must move with it (ERR-047). Overflow is reported on screen.
  */
 const MATRIX_PAGE_LIMIT = 500;
 
@@ -99,17 +92,7 @@ export function AttendanceCalendarMatrix({
     );
   }, [allUsers, selectedBranchId]);
 
-  /**
-   * The bounds of the month on screen, in local time. `endOfMonth` is the last
-   * day at 23:59:59.999 rather than midnight — a midnight bound would drop
-   * every login on the final day of every month.
-   *
-   * These are what makes the prev/next buttons above actually navigate. Before
-   * they were sent, the query fetched the 200 most recent logins globally and
-   * this component filtered them to `month` client-side, so any month older
-   * than those 200 rows spanned rendered every cell blank — which on this
-   * screen reads as "nobody came to work".
-   */
+  /** Month bounds in local time; `endOfMonth` is 23:59:59.999 so the last day is included. */
   const { startOfMonth, endOfMonth, monthStartDay, monthEndDay } =
     React.useMemo(() => {
       const start = new Date(year, month, 1, 0, 0, 0, 0);
@@ -136,12 +119,7 @@ export function AttendanceCalendarMatrix({
     () => attendancePage?.data ?? [],
     [attendancePage],
   );
-  /**
-   * A month bigger than one page must say so. Silently rendering the rows that
-   * fit would blank the rest of the cells, and a blank cell here is not "not
-   * loaded" — it is "absent". That is the exact defect this task removed, so it
-   * is not allowed back in a new shape.
-   */
+  /** Rows beyond one page must be reported: a blank cell reads as "absent". */
   const omittedCount = Math.max(
     0,
     (attendancePage?.meta.total ?? 0) - attendanceRecords.length,
@@ -155,11 +133,7 @@ export function AttendanceCalendarMatrix({
     limit: MATRIX_PAGE_LIMIT,
   });
   const leaveRequests = React.useMemo(() => leavePage?.data ?? [], [leavePage]);
-  /**
-   * Sama persis dengan `omittedCount` di atas, dan untuk alasan yang sama: sel
-   * tanpa penanda cuti terbaca sebagai "masuk kerja", bukan sebagai "datanya
-   * belum termuat". Bulan yang lebih besar dari satu halaman harus mengatakannya.
-   */
+  /** Same for leave: a missing marker reads as "worked". */
   const omittedLeaveCount = Math.max(
     0,
     (leavePage?.meta.total ?? 0) - leaveRequests.length,

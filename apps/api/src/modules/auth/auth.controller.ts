@@ -38,11 +38,7 @@ import { ChangePasswordDto, LoginDto, UpdateSelfDto } from './auth.dto';
 import { ProfilePhotoService } from './profile-photo.service';
 import { InvalidImageFileException } from './profile-photo.exceptions';
 
-/**
- * There is no `register` endpoint. User creation is OWNER-only and lives on
- * `POST /users` (ADR-011 §5) — Kasync's public self-registration is exactly
- * what that ADR rules out.
- */
+/** No `register` endpoint: users are created by an OWNER via `POST /users` (ADR-011). */
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {

@@ -1,8 +1,7 @@
 // @ts-check
 
 /**
- * Shared Prettier config (Playbook §13). Values carried over from Kasync's
- * `.prettierrc` so ported files reformat to the same shape they already have.
+ * Shared Prettier config (values from Kasync).
  *
  * @type {import('prettier').Config}
  */
